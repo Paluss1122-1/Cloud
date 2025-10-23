@@ -209,43 +209,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        suspend fun uploadFileWithProgress(uri: Uri, fileName: String) {
-            showUploadProgress = true
-            uploadProgress = 0f
-            try {
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bytes = inputStream?.readBytes()
-                inputStream?.close()
-
-                if (bytes != null) {
-                    // Simuliere Upload-Progress in Chunks
-                    val chunkSize = bytes.size / 10
-                    for (i in 0..10) {
-                        uploadProgress = i / 10f
-                        kotlinx.coroutines.delay(100) // Simulation
-                    }
-
-                    withContext(Dispatchers.IO) {
-                        storage.from(SupabaseConfig.SUPABASE_BUCKET).upload(fileName, bytes)
-                    }
-                    uploadProgress = 1f
-
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "✅ Upload abgeschlossen!", Toast.LENGTH_SHORT)
-                            .show()
-                    }
-                    loadFiles()
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_LONG).show()
-                }
-            } finally {
-                kotlinx.coroutines.delay(500)
-                showUploadProgress = false
-            }
-        }
-
         val filteredFileList =
             remember(fileList, selectedFilter, refreshTrigger) { // refreshTrigger hinzufügen
                 when (selectedFilter) {
@@ -584,7 +547,7 @@ class MainActivity : ComponentActivity() {
                                                                         } catch (e: Exception) {
                                                                             val clipboard =
                                                                                 context.getSystemService(
-                                                                                    Context.CLIPBOARD_SERVICE
+                                                                                    CLIPBOARD_SERVICE
                                                                                 ) as ClipboardManager
                                                                             val clip =
                                                                                 ClipData.newPlainText(
@@ -882,7 +845,7 @@ class MainActivity : ComponentActivity() {
                                                             context.startActivity(openIntent)
                                                         } catch (e: Exception) {
                                                             val clipboard =
-                                                                context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                                context.getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
                                                             val clip =
                                                                 ClipData.newPlainText(
                                                                     "code",
