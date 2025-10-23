@@ -72,6 +72,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.time.Duration.Companion.seconds
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 
 @Suppress("DEPRECATION")
 class MainActivity : ComponentActivity() {
@@ -106,12 +108,13 @@ class MainActivity : ComponentActivity() {
         var isUploading by remember { mutableStateOf(false) }
         var isDownloading by remember { mutableStateOf<String?>(null) }
         var selectedFilter by remember { mutableStateOf("Alle") }
-        var refreshTrigger by remember { mutableStateOf(0) } // NEU!
+        var refreshTrigger by remember { androidx.compose.runtime.mutableIntStateOf(0) } // NEU!
         var sortOption by remember { mutableStateOf("A-Z") }
-        var uploadProgress by remember { mutableStateOf(0f) }
-        var downloadProgress by remember { mutableStateOf(0f) }
+        var uploadProgress by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+        var downloadProgress by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
         var showUploadProgress by remember { mutableStateOf(false) }
         var showDownloadProgress by remember { mutableStateOf(false) }
+        var favoriteFiles by remember { mutableStateOf<Set<String>>(emptySet()) }
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
 
@@ -228,7 +231,8 @@ class MainActivity : ComponentActivity() {
                     uploadProgress = 1f
 
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "✅ Upload abgeschlossen!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "✅ Upload abgeschlossen!", Toast.LENGTH_SHORT)
+                            .show()
                     }
                     loadFiles()
                 }
@@ -293,7 +297,7 @@ class MainActivity : ComponentActivity() {
                         .padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    listOf("Alle", "Dateien", "Bilder").forEach { filter ->
+                    listOf("Alle", "Dateien", "Bilder", "Favoriten").forEach { filter ->
                         FilterChip(
                             selected = selectedFilter == filter,
                             onClick = { selectedFilter = filter },
@@ -361,13 +365,15 @@ class MainActivity : ComponentActivity() {
                         selectedFilter,
                         searchQuery,
                         sortOption,
-                        refreshTrigger
+                        refreshTrigger,
+                        favoriteFiles
                     ) {
                         val filtered = fileList.filter { file ->
                             val fileName = file.substringBefore("|")
                             val matchesFilter = when (selectedFilter) {
                                 "Bilder" -> isImageFile(fileName)
                                 "Dateien" -> !isImageFile(fileName)
+                                "Favoriten" -> favoriteFiles.contains(fileName)
                                 else -> true
                             }
                             val matchesSearch = fileName.contains(searchQuery, ignoreCase = true)
@@ -465,6 +471,8 @@ class MainActivity : ComponentActivity() {
                                                             fileExistsInDCIM(fileName)
                                                         val imageAlreadyDownloaded =
                                                             localImageFile != null
+                                                        val isFavorite =
+                                                            favoriteFiles.contains(fileName)
 
 
                                                         val sizeBytes =
@@ -490,6 +498,22 @@ class MainActivity : ComponentActivity() {
                                                             color = Color.White,
                                                             maxLines = 3
                                                         )
+                                                        IconButton(
+                                                            onClick = {
+                                                                favoriteFiles = if (isFavorite) {
+                                                                    favoriteFiles - fileName
+                                                                } else {
+                                                                    favoriteFiles + fileName
+                                                                }
+                                                            },
+                                                            modifier = Modifier.size(32.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
+                                                                contentDescription = "Favorit",
+                                                                tint = if (isFavorite) Color.Yellow else Color.White
+                                                            )
+                                                        }
                                                         if (!imageAlreadyDownloaded) {
                                                             IconButton(
                                                                 onClick = {
@@ -501,13 +525,22 @@ class MainActivity : ComponentActivity() {
                                                                         try {
                                                                             // Simuliere Progress
                                                                             for (i in 0..10) {
-                                                                                downloadProgress = i / 10f
-                                                                                kotlinx.coroutines.delay(100)
+                                                                                downloadProgress =
+                                                                                    i / 10f
+                                                                                kotlinx.coroutines.delay(
+                                                                                    100
+                                                                                )
                                                                             }
 
-                                                                            val data = withContext(Dispatchers.IO) {
-                                                                                storage.from(SupabaseConfig.SUPABASE_BUCKET)
-                                                                                    .downloadAuthenticated(fileName)
+                                                                            val data = withContext(
+                                                                                Dispatchers.IO
+                                                                            ) {
+                                                                                storage.from(
+                                                                                    SupabaseConfig.SUPABASE_BUCKET
+                                                                                )
+                                                                                    .downloadAuthenticated(
+                                                                                        fileName
+                                                                                    )
                                                                             }
                                                                             val dcimDir =
                                                                                 Environment.getExternalStoragePublicDirectory(
@@ -568,8 +601,11 @@ class MainActivity : ComponentActivity() {
                                                                             )
                                                                         } finally {
                                                                             isDownloading = null
-                                                                            kotlinx.coroutines.delay(500)
-                                                                            showDownloadProgress = false
+                                                                            kotlinx.coroutines.delay(
+                                                                                500
+                                                                            )
+                                                                            showDownloadProgress =
+                                                                                false
                                                                         }
                                                                     }
                                                                 },
@@ -671,6 +707,24 @@ class MainActivity : ComponentActivity() {
                                                 fontSize = 14.sp,
                                                 color = Color.Gray
                                             )
+                                            val isFavorite = favoriteFiles.contains(fileName)
+                                            // Favoriten-Button
+                                            IconButton(
+                                                onClick = {
+                                                    favoriteFiles = if (isFavorite) {
+                                                        favoriteFiles - fileName
+                                                    } else {
+                                                        favoriteFiles + fileName
+                                                    }
+                                                },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
+                                                    contentDescription = "Favorit",
+                                                    tint = if (isFavorite) Color.Yellow else Color.White
+                                                )
+                                            }
                                         }
 
                                         Row(
