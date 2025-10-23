@@ -339,7 +339,8 @@ class MainActivity : ComponentActivity() {
 
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()  // <- NUR fillMaxWidth!
+                        .weight(1f)
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -741,7 +742,7 @@ class MainActivity : ComponentActivity() {
                                                                     )
                                                             }
 
-                                                            val isImage = isImageFile(file)
+                                                            val isImage = isImageFile(fileName)
 
                                                             val targetDir = if (isImage) {
                                                                 val dcimDir =
