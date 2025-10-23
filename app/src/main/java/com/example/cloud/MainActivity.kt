@@ -1,5 +1,7 @@
 package com.example.cloud
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -104,7 +106,7 @@ class MainActivity : ComponentActivity() {
         var isUploading by remember { mutableStateOf(false) }
         var isDownloading by remember { mutableStateOf<String?>(null) }
         var selectedFilter by remember { mutableStateOf("Alle") }
-        var selectedImageForPreview by remember { mutableStateOf<Pair<String, String>?>(null) }
+        var refreshTrigger by remember { mutableStateOf(0) } // NEU!
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
 
@@ -134,9 +136,10 @@ class MainActivity : ComponentActivity() {
                 val files = withContext(Dispatchers.IO) {
                     storage.from(SupabaseConfig.SUPABASE_BUCKET).list()
                 }
+
                 fileList = files
                     .filter { it.name != ".emptyFolderPlaceholder" }
-                    .map { "${it.name}|${it.updatedAt}" } // Datum anhängen
+                    .map { "${it.name}|${it.updatedAt}|${it.metadata?.get("size") ?: 0}" }
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
@@ -198,27 +201,29 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        val filteredFileList = remember(fileList, selectedFilter) {
-            when (selectedFilter) {
-                "Bilder" -> fileList.filter {
-                    val fileName = it.substringBefore("|")
-                    isImageFile(fileName)
-                }
+        val filteredFileList =
+            remember(fileList, selectedFilter, refreshTrigger) { // refreshTrigger hinzufügen
+                when (selectedFilter) {
+                    "Bilder" -> fileList.filter {
+                        val fileName = it.substringBefore("|")
+                        isImageFile(fileName)
+                    }
 
-                "Dateien" -> fileList.filter {
-                    val fileName = it.substringBefore("|")
-                    !isImageFile(fileName)
-                }
+                    "Dateien" -> fileList.filter {
+                        val fileName = it.substringBefore("|")
+                        !isImageFile(fileName)
+                    }
 
-                else -> fileList
+                    else -> fileList
+                }
             }
-        }
 
         LaunchedEffect(Unit) { loadFiles() }
 
         fun fileExistsInDCIM(fileName: String): File? {
             val dcimDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
-            val file = File(dcimDir, fileName)
+            val appFolder = File(dcimDir, "Cloud") // z.B. "CloudApp"
+            val file = File(appFolder, fileName)
             return if (file.exists()) file else null
         }
 
@@ -268,353 +273,529 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                LazyColumn(
+                var searchQuery by remember { mutableStateOf("") }
+
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (selectedFilter == "Bilder") {
-                        items(filteredFileList.chunked(2)) { rowFiles ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                rowFiles.forEach { file ->
-                                    val fileName = file.substringBefore("|")
-                                    val fileDate = file.substringAfter("|").replace("T", " ")
-                                        .substringBefore(".")
-                                    Card(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .aspectRatio(1f),
-                                        onClick = {
-                                            // Zeige Bildvorschau an
-                                            val publicUrl = runBlocking {
-                                                storage.from(SupabaseConfig.SUPABASE_BUCKET)
-                                                    .createSignedUrl(fileName, (60 * 10).seconds)
-                                            }
-                                            selectedImageForPreview = Pair(publicUrl, fileName)
-                                        }
-                                    ) {
-                                        Box(modifier = Modifier.fillMaxSize()) {
-                                            val publicUrl = remember(fileName) {
-                                                runBlocking {
-                                                    storage.from(SupabaseConfig.SUPABASE_BUCKET)
-                                                        .createSignedUrl(
-                                                            fileName,
-                                                            (60 * 10).seconds
-                                                        )
-                                                }
-                                            }
-                                            Image(
-                                                painter = rememberAsyncImagePainter(publicUrl),
-                                                contentDescription = fileName,
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier.fillMaxSize()
-                                            )
+                    // Suchleiste oben
+                    androidx.compose.material3.OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        label = { Text("Suche") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        singleLine = true
+                    )
 
-                                            Column(
-                                                modifier = Modifier
-                                                    .align(Alignment.BottomCenter)
-                                                    .fillMaxWidth()
-                                                    .background(Color.Black.copy(alpha = 0.7f))
-                                                    .padding(4.dp)
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.End
-                                                ) {
-                                                    val localImageFile = fileExistsInDCIM(file)
-                                                    val imageAlreadyDownloaded =
-                                                        localImageFile != null
-                                                    Text(
-                                                        text = "$fileName\n📅 $fileDate",
-                                                        style = MaterialTheme.typography.bodySmall.copy(
-                                                            fontSize = 9.sp
-                                                        ),
-                                                        color = Color.White,
-                                                        maxLines = 2
-                                                    )
-
-                                                    if (!imageAlreadyDownloaded) {
-                                                        IconButton(
-                                                            onClick = {
-                                                                // Bild herunterladen
-                                                                isDownloading = file
-                                                                scope.launch {
-                                                                    try {
-                                                                        val data =
-                                                                            withContext(Dispatchers.IO) {
-                                                                                storage.from(
-                                                                                    SupabaseConfig.SUPABASE_BUCKET
-                                                                                )
-                                                                                    .downloadAuthenticated(
-                                                                                        file
-                                                                                    )
-                                                                            }
-                                                                        val targetDir =
-                                                                            Environment.getExternalStoragePublicDirectory(
-                                                                                Environment.DIRECTORY_DCIM
-                                                                            )
-                                                                        val outputFile =
-                                                                            File(targetDir, file)
-                                                                        withContext(Dispatchers.IO) {
-                                                                            FileOutputStream(
-                                                                                outputFile
-                                                                            ).use { fos ->
-                                                                                fos.write(data)
-                                                                            }
-                                                                        }
-                                                                        val mediaScanIntent =
-                                                                            Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE)
-                                                                        mediaScanIntent.data =
-                                                                            Uri.fromFile(outputFile)
-                                                                        context.sendBroadcast(
-                                                                            mediaScanIntent
-                                                                        )
-                                                                        Toast.makeText(
-                                                                            context,
-                                                                            "Bild gespeichert ✅",
-                                                                            Toast.LENGTH_SHORT
-                                                                        ).show()
-                                                                    } catch (e: Exception) {
-                                                                        Toast.makeText(
-                                                                            context,
-                                                                            "Fehler: ${e.message}",
-                                                                            Toast.LENGTH_LONG
-                                                                        ).show()
-                                                                    } finally {
-                                                                        isDownloading = null
-                                                                    }
-                                                                }
-                                                            },
-                                                            enabled = isDownloading != file,
-                                                            modifier = Modifier.size(32.dp)
-                                                        ) {
-                                                            if (isDownloading == file) {
-                                                                CircularProgressIndicator(
-                                                                    modifier = Modifier.size(16.dp),
-                                                                    color = Color.White
-                                                                )
-                                                            } else {
-                                                                Icon(
-                                                                    imageVector = Icons.Filled.ArrowDropDown,
-                                                                    contentDescription = "Download",
-                                                                    tint = Color.White
-                                                                )
-                                                            }
-                                                        }
-                                                    }
-
-                                                    IconButton(
-                                                        onClick = { scope.launch { deleteFile(file) } },
-                                                        modifier = Modifier.size(32.dp)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.Delete,
-                                                            contentDescription = "Löschen",
-                                                            tint = Color.Red
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
+                    // Filter-Chips direkt unter der Suchleiste
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        listOf("Alle", "Dateien", "Bilder").forEach { filter ->
+                            FilterChip(
+                                selected = selectedFilter == filter,
+                                onClick = { selectedFilter = filter },
+                                label = {
+                                    Text(
+                                        filter,
+                                        color = if (selectedFilter == filter) Color.Black else Color.White
+                                    )
                                 }
-                                if (rowFiles.size == 1) {
-                                    Spacer(modifier = Modifier.weight(1f))
+                            )
+                        }
+                    }
+
+                    // Filtered & searched list
+                    val filteredFileList =
+                        remember(fileList, selectedFilter, searchQuery, refreshTrigger) {
+                            fileList.filter { file ->
+                                val fileName = file.substringBefore("|")
+                                val matchesFilter = when (selectedFilter) {
+                                    "Bilder" -> isImageFile(fileName)
+                                    "Dateien" -> !isImageFile(fileName)
+                                    else -> true
                                 }
+                                val matchesSearch =
+                                    fileName.contains(searchQuery, ignoreCase = true)
+                                matchesFilter && matchesSearch
                             }
                         }
-                    } else {
-                        items(filteredFileList) { file ->
-                            val localFile = fileExistsInDownloads(file)
-                            val showOpenButton = localFile != null
-                            val parts = file.split("|")
-                            val fileName = parts.getOrNull(0) ?: "Unbekannt"
-                            val fileDate =
-                                parts.getOrNull(1)?.replace("T", " ")?.substringBefore(".")
-                                    ?: "Unbekannt"
 
-                            Card(modifier = Modifier.fillMaxWidth()) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(Color.DarkGray)
-                                        .padding(12.dp)
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (selectedFilter == "Bilder") {
+                            items(filteredFileList.chunked(2)) { rowFiles ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Column {
-                                        Text(
-                                            text = fileName,
-                                            style = MaterialTheme.typography.bodyMedium.copy(
-                                                fontSize = 20.sp
-                                            ),
-                                            color = Color.White
-                                        )
-
-                                        Text(
-                                            text = "Hochgeladen: $fileDate",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = Color.LightGray,
-                                            fontSize = 12.sp
-                                        )
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.align(Alignment.CenterEnd),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        if (showOpenButton && !isImageFile(file)) {
-                                            IconButton(onClick = {
-                                                val fileUri = FileProvider.getUriForFile(
-                                                    context,
-                                                    "${context.packageName}.fileprovider",
-                                                    localFile
-                                                )
-                                                val mimeType =
-                                                    context.contentResolver.getType(fileUri)
-                                                        ?: getMimeType(file)
-                                                val intent = Intent(Intent.ACTION_VIEW).apply {
-                                                    setDataAndType(fileUri, mimeType)
-                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    rowFiles.forEach { file ->
+                                        val parts = file.split("|")
+                                        val fileName = parts.getOrNull(0) ?: "Unbekannt"
+                                        val fileDate =
+                                            parts.getOrNull(1)?.replace("T", " ")
+                                                ?.substringBefore(".")
+                                                ?: "Unbekannt"
+                                        val filesize =
+                                            parts.getOrNull(2)?.replace("T", " ")
+                                                ?.substringBefore(".")
+                                                ?: "Unbekannt"
+                                        Card(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .aspectRatio(1f),
+                                            onClick = {
+                                                val localImageFile = fileExistsInDCIM(fileName)
+                                                if (localImageFile != null) {
+                                                    // Bild öffnen
+                                                    val fileUri = FileProvider.getUriForFile(
+                                                        context,
+                                                        "${context.packageName}.fileprovider",
+                                                        localImageFile
+                                                    )
+                                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                        setDataAndType(fileUri, "image/*")
+                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    }
+                                                    context.startActivity(intent)
                                                 }
-                                                context.startActivity(intent)
-                                            }) {
-                                                Icon(
-                                                    Icons.Filled.ArrowDropDown,
-                                                    contentDescription = "Öffnen",
-                                                    tint = Color.White
-                                                )
                                             }
-                                        } else if (isImageFile(file) && fileExistsInDCIM(file) != null) {
-                                            IconButton(onClick = {
-                                                val imageFile = fileExistsInDCIM(file)!!
-                                                val fileUri = FileProvider.getUriForFile(
-                                                    context,
-                                                    "${context.packageName}.fileprovider",
-                                                    imageFile
-                                                )
-                                                val intent = Intent(Intent.ACTION_VIEW).apply {
-                                                    setDataAndType(fileUri, "image/*")
-                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                }
-                                                context.startActivity(intent)
-                                            }) {
-                                                Icon(
-                                                    Icons.Filled.ArrowDropDown,
-                                                    contentDescription = "Öffnen",
-                                                    tint = Color.White
-                                                )
-                                            }
-                                        } else {
-                                            IconButton(onClick = {
-                                                isDownloading = file
-                                                scope.launch {
-                                                    try {
-                                                        val data = withContext(Dispatchers.IO) {
-                                                            storage.from(SupabaseConfig.SUPABASE_BUCKET)
-                                                                .downloadAuthenticated(file)
-                                                        }
-                                                        val isImage = isImageFile(file)
-                                                        val targetDir = if (isImage) {
-                                                            Environment.getExternalStoragePublicDirectory(
-                                                                Environment.DIRECTORY_DCIM
+                                        ) {
+                                            Box(modifier = Modifier.fillMaxSize()) {
+                                                val publicUrl = remember(fileName) {
+                                                    runBlocking {
+                                                        storage.from(SupabaseConfig.SUPABASE_BUCKET)
+                                                            .createSignedUrl(
+                                                                fileName,
+                                                                (60 * 10).seconds
                                                             )
-                                                        } else {
-                                                            Environment.getExternalStoragePublicDirectory(
-                                                                Environment.DIRECTORY_DOWNLOADS
+                                                    }
+                                                }
+                                                Image(
+                                                    painter = rememberAsyncImagePainter(publicUrl),
+                                                    contentDescription = fileName,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
+
+                                                Column(
+                                                    modifier = Modifier
+                                                        .align(Alignment.BottomCenter)
+                                                        .fillMaxWidth()
+                                                        .background(Color.Black.copy(alpha = 0.7f))
+                                                        .padding(4.dp)
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween
+                                                    ) {
+                                                        val localImageFile =
+                                                            fileExistsInDCIM(fileName)
+                                                        val imageAlreadyDownloaded =
+                                                            localImageFile != null
+
+
+                                                        val sizeBytes =
+                                                            filesize.toLongOrNull() ?: 0L
+                                                        val sizeText = when {
+                                                            sizeBytes >= 1_000_000_000 -> "Dateigröße: %.2f GB".format(
+                                                                sizeBytes / 1_000_000_000.0
+                                                            )
+
+                                                            sizeBytes >= 1_000_000 -> "Dateigröße: %.2f MB".format(
+                                                                sizeBytes / 1_000_000.0
+                                                            )
+
+                                                            else -> "Dateigröße: %.1f KB".format(
+                                                                sizeBytes / 1_000.0
                                                             )
                                                         }
-                                                        val outputFile = File(targetDir, file)
-                                                        withContext(Dispatchers.IO) {
-                                                            FileOutputStream(outputFile).use { fos ->
-                                                                fos.write(data)
+                                                        Text(
+                                                            text = "$fileName\n $fileDate\n $sizeText",
+                                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                                fontSize = 9.sp
+                                                            ),
+                                                            color = Color.White,
+                                                            maxLines = 3
+                                                        )
+                                                        if (!imageAlreadyDownloaded) {
+                                                            IconButton(
+                                                                onClick = {
+                                                                    // Bild herunterladen
+                                                                    isDownloading = file
+                                                                    scope.launch {
+                                                                        try {
+                                                                            val data =
+                                                                                withContext(
+                                                                                    Dispatchers.IO
+                                                                                ) {
+                                                                                    storage.from(
+                                                                                        SupabaseConfig.SUPABASE_BUCKET
+                                                                                    )
+                                                                                        .downloadAuthenticated(
+                                                                                            fileName
+                                                                                        )
+                                                                                }
+                                                                            val dcimDir =
+                                                                                Environment.getExternalStoragePublicDirectory(
+                                                                                    Environment.DIRECTORY_DCIM
+                                                                                )
+                                                                            val appFolder =
+                                                                                File(
+                                                                                    dcimDir,
+                                                                                    "Cloud"
+                                                                                )
+                                                                            if (!appFolder.exists()) {
+                                                                                appFolder.mkdirs() // Ordner erstellen falls nicht vorhanden
+                                                                            }
+                                                                            val outputFile = File(
+                                                                                appFolder,
+                                                                                fileName
+                                                                            )
+
+                                                                            withContext(Dispatchers.IO) {
+                                                                                FileOutputStream(
+                                                                                    outputFile
+                                                                                ).use { fos ->
+                                                                                    fos.write(data)
+                                                                                }
+                                                                            }
+                                                                            val mediaScanIntent =
+                                                                                Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE)
+                                                                            mediaScanIntent.data =
+                                                                                Uri.fromFile(
+                                                                                    outputFile
+                                                                                )
+                                                                            context.sendBroadcast(
+                                                                                mediaScanIntent
+                                                                            )
+                                                                            Toast.makeText(
+                                                                                context,
+                                                                                "Bild gespeichert ✅",
+                                                                                Toast.LENGTH_SHORT
+                                                                            ).show()
+                                                                        } catch (e: Exception) {
+                                                                            val clipboard =
+                                                                                context.getSystemService(
+                                                                                    Context.CLIPBOARD_SERVICE
+                                                                                ) as ClipboardManager
+                                                                            val clip =
+                                                                                ClipData.newPlainText(
+                                                                                    "code",
+                                                                                    e.message
+                                                                                )
+                                                                            Toast.makeText(
+                                                                                context,
+                                                                                "Fehler: ${e.message}",
+                                                                                Toast.LENGTH_LONG
+                                                                            ).show()
+                                                                            clipboard.setPrimaryClip(
+                                                                                clip
+                                                                            )
+                                                                        } finally {
+                                                                            isDownloading = null
+                                                                        }
+                                                                    }
+                                                                },
+                                                                enabled = isDownloading != file,
+                                                                modifier = Modifier.size(32.dp)
+                                                            ) {
+                                                                if (isDownloading == file) {
+                                                                    CircularProgressIndicator(
+                                                                        modifier = Modifier.size(16.dp),
+                                                                        color = Color.White
+                                                                    )
+                                                                } else {
+                                                                    Icon(
+                                                                        imageVector = Icons.Filled.ArrowDropDown,
+                                                                        contentDescription = "Download",
+                                                                        tint = Color.White
+                                                                    )
+                                                                }
                                                             }
                                                         }
-                                                        if (isImage) {
-                                                            val mediaScanIntent =
-                                                                Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE)
-                                                            mediaScanIntent.data =
-                                                                Uri.fromFile(outputFile)
-                                                            context.sendBroadcast(mediaScanIntent)
-                                                        }
-                                                        Toast.makeText(
-                                                            context,
-                                                            "Datei gespeichert in ${if (isImage) "DCIM (Galerie)" else "Downloads"} ✅",
-                                                            Toast.LENGTH_SHORT
-                                                        ).show()
 
-                                                        if (file.endsWith(".apk")) {
-                                                            val apkUri = FileProvider.getUriForFile(
-                                                                context,
-                                                                "${context.packageName}.fileprovider",
-                                                                outputFile
+                                                        IconButton(
+                                                            onClick = {
+                                                                scope.launch {
+                                                                    deleteFile(
+                                                                        file
+                                                                    )
+                                                                }
+                                                            },
+                                                            modifier = Modifier.size(32.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Delete,
+                                                                contentDescription = "Löschen",
+                                                                tint = Color.Red
                                                             )
-                                                            val installIntent =
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (rowFiles.size == 1) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        } else {
+                            items(filteredFileList) { file ->
+                                val parts = file.split("|")
+                                val fileName = parts.getOrNull(0) ?: "Unbekannt"
+                                val localFile = fileExistsInDownloads(fileName)
+                                val showOpenButton = localFile != null
+                                val fileDate =
+                                    parts.getOrNull(1)?.replace("T", " ")?.substringBefore(".")
+                                        ?: "Unbekannt"
+                                val filesize =
+                                    parts.getOrNull(2)?.replace("T", " ")?.substringBefore(".")
+                                        ?: "Unbekannt"
+
+                                Card(modifier = Modifier.fillMaxWidth()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(Color.DarkGray)
+                                            .padding(12.dp)
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = fileName,
+                                                style = MaterialTheme.typography.bodyMedium.copy(
+                                                    fontSize = 20.sp
+                                                ),
+                                                color = Color.White
+                                            )
+
+                                            Text(
+                                                text = "Hochgeladen: $fileDate",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = Color.LightGray,
+                                                fontSize = 12.sp
+                                            )
+
+                                            val sizeBytes = filesize.toLongOrNull() ?: 0L
+                                            val sizeText = when {
+                                                sizeBytes >= 1_000_000_000 -> "Dateigröße: %.2f GB".format(
+                                                    sizeBytes / 1_000_000_000.0
+                                                )
+
+                                                sizeBytes >= 1_000_000 -> "Dateigröße: %.2f MB".format(
+                                                    sizeBytes / 1_000_000.0
+                                                )
+
+                                                else -> "Dateigröße: %.1f KB".format(sizeBytes / 1_000.0)
+                                            }
+
+                                            Text(
+                                                text = sizeText,
+                                                fontSize = 14.sp,
+                                                color = Color.Gray
+                                            )
+                                        }
+
+                                        Row(
+                                            modifier = Modifier.align(Alignment.CenterEnd),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            if (showOpenButton && !isImageFile(file)) {
+                                                IconButton(onClick = {
+                                                    val fileUri = FileProvider.getUriForFile(
+                                                        context,
+                                                        "${context.packageName}.fileprovider",
+                                                        localFile
+                                                    )
+                                                    val mimeType =
+                                                        context.contentResolver.getType(fileUri)
+                                                            ?: getMimeType(file)
+                                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                        setDataAndType(fileUri, mimeType)
+                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    }
+                                                    context.startActivity(intent)
+                                                }) {
+                                                    Icon(
+                                                        Icons.Filled.ArrowDropDown,
+                                                        contentDescription = "Öffnen",
+                                                        tint = Color.White
+                                                    )
+                                                }
+                                            } else if (isImageFile(file) && fileExistsInDCIM(file) != null) {
+                                                IconButton(onClick = {
+                                                    val imageFile = fileExistsInDCIM(file)!!
+                                                    val fileUri = FileProvider.getUriForFile(
+                                                        context,
+                                                        "${context.packageName}.fileprovider",
+                                                        imageFile
+                                                    )
+                                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                        setDataAndType(fileUri, "image/*")
+                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    }
+                                                    context.startActivity(intent)
+                                                }) {
+                                                    Icon(
+                                                        Icons.Filled.ArrowDropDown,
+                                                        contentDescription = "Öffnen",
+                                                        tint = Color.White
+                                                    )
+                                                }
+                                            } else {
+                                                IconButton(onClick = {
+                                                    isDownloading = file
+                                                    scope.launch {
+                                                        try {
+                                                            val data = withContext(Dispatchers.IO) {
+                                                                storage.from(SupabaseConfig.SUPABASE_BUCKET)
+                                                                    .downloadAuthenticated(
+                                                                        file.substringBefore(
+                                                                            "|"
+                                                                        )
+                                                                    )
+                                                            }
+                                                            val isImage = isImageFile(file)
+
+                                                            val targetDir = if (isImage) {
+                                                                val dcimDir =
+                                                                    Environment.getExternalStoragePublicDirectory(
+                                                                        Environment.DIRECTORY_DCIM
+                                                                    )
+                                                                val appFolder =
+                                                                    File(dcimDir, "Cloud")
+                                                                if (!appFolder.exists()) {
+                                                                    appFolder.mkdirs()
+                                                                }
+                                                                appFolder
+                                                            } else {
+                                                                Environment.getExternalStoragePublicDirectory(
+                                                                    Environment.DIRECTORY_DOWNLOADS
+                                                                )
+                                                            }
+
+                                                            val outputFile =
+                                                                File(targetDir, fileName)
+                                                            withContext(Dispatchers.IO) {
+                                                                FileOutputStream(outputFile).use { fos ->
+                                                                    fos.write(data)
+                                                                }
+                                                            }
+                                                            if (isImage) {
+                                                                val mediaScanIntent =
+                                                                    Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE)
+                                                                mediaScanIntent.data =
+                                                                    Uri.fromFile(outputFile)
+                                                                context.sendBroadcast(
+                                                                    mediaScanIntent
+                                                                )
+                                                            }
+                                                            Toast.makeText(
+                                                                context,
+                                                                "Datei gespeichert in ${if (isImage) "DCIM (Galerie)" else "Downloads"} ✅",
+                                                                Toast.LENGTH_SHORT
+                                                            ).show()
+
+                                                            if (file.endsWith(".apk")) {
+                                                                val apkUri =
+                                                                    FileProvider.getUriForFile(
+                                                                        context,
+                                                                        "${context.packageName}.fileprovider",
+                                                                        outputFile
+                                                                    )
+                                                                val installIntent =
+                                                                    Intent(Intent.ACTION_VIEW).apply {
+                                                                        setDataAndType(
+                                                                            apkUri,
+                                                                            "application/vnd.android.package-archive"
+                                                                        )
+                                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                                    }
+                                                                context.startActivity(installIntent)
+                                                                return@launch
+                                                            }
+
+                                                            val fileUri =
+                                                                FileProvider.getUriForFile(
+                                                                    context,
+                                                                    "${context.packageName}.fileprovider",
+                                                                    outputFile
+                                                                )
+                                                            val mimeType =
+                                                                context.contentResolver.getType(
+                                                                    fileUri
+                                                                )
+                                                                    ?: getMimeType(file)
+                                                            val openIntent =
                                                                 Intent(Intent.ACTION_VIEW).apply {
                                                                     setDataAndType(
-                                                                        apkUri,
-                                                                        "application/vnd.android.package-archive"
+                                                                        fileUri,
+                                                                        mimeType
                                                                     )
                                                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                                                 }
-                                                            context.startActivity(installIntent)
-                                                            return@launch
+                                                            context.startActivity(openIntent)
+                                                        } catch (e: Exception) {
+                                                            val clipboard =
+                                                                context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                            val clip =
+                                                                ClipData.newPlainText(
+                                                                    "code",
+                                                                    e.message
+                                                                )
+                                                            Toast.makeText(
+                                                                context,
+                                                                "Fehler: ${e.message}",
+                                                                Toast.LENGTH_LONG
+                                                            ).show()
+                                                            clipboard.setPrimaryClip(clip)
+                                                        } finally {
+                                                            isDownloading = null
                                                         }
-
-                                                        val fileUri = FileProvider.getUriForFile(
-                                                            context,
-                                                            "${context.packageName}.fileprovider",
-                                                            outputFile
+                                                    }
+                                                }) {
+                                                    if (isDownloading == file) {
+                                                        CircularProgressIndicator(
+                                                            modifier = Modifier.size(
+                                                                20.dp
+                                                            )
                                                         )
-                                                        val mimeType =
-                                                            context.contentResolver.getType(fileUri)
-                                                                ?: getMimeType(file)
-                                                        val openIntent =
-                                                            Intent(Intent.ACTION_VIEW).apply {
-                                                                setDataAndType(fileUri, mimeType)
-                                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                            }
-                                                        context.startActivity(openIntent)
-                                                    } catch (e: Exception) {
-                                                        Toast.makeText(
-                                                            context,
-                                                            "Fehler beim Download: ${e.message}",
-                                                            Toast.LENGTH_LONG
-                                                        ).show()
-                                                    } finally {
-                                                        isDownloading = null
+                                                    } else {
+                                                        Icon(
+                                                            Icons.Filled.ArrowDropDown,
+                                                            contentDescription = "Download"
+                                                        )
                                                     }
                                                 }
-                                            }) {
-                                                if (isDownloading == file) {
-                                                    CircularProgressIndicator(
-                                                        modifier = Modifier.size(
-                                                            20.dp
-                                                        )
-                                                    )
-                                                } else {
-                                                    Icon(
-                                                        Icons.Filled.ArrowDropDown,
-                                                        contentDescription = "Download"
-                                                    )
-                                                }
                                             }
-                                        }
 
-                                        IconButton(onClick = {
-                                            scope.launch { deleteFile(file) }
-                                        }) {
-                                            Icon(
-                                                Icons.Default.Delete,
-                                                contentDescription = "Löschen",
-                                                tint = MaterialTheme.colorScheme.error
-                                            )
+                                            IconButton(onClick = {
+                                                scope.launch { deleteFile(file) }
+                                            }) {
+                                                Icon(
+                                                    Icons.Default.Delete,
+                                                    contentDescription = "Löschen",
+                                                    tint = MaterialTheme.colorScheme.error
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -647,6 +828,7 @@ class MainActivity : ComponentActivity() {
                     Button(onClick = {
                         scope.launch {
                             loadFiles()
+                            refreshTrigger++ // NEU! Erzwingt Recomposition
                             Toast.makeText(context, "Liste aktualisiert ✅", Toast.LENGTH_SHORT)
                                 .show()
                         }
@@ -670,7 +852,10 @@ class MainActivity : ComponentActivity() {
                                 val downloadsUri =
                                     "content://com.android.externalstorage.documents/document/primary:Download".toUri()
                                 val intent = Intent(Intent.ACTION_VIEW).apply {
-                                    setDataAndType(downloadsUri, "vnd.android.document/directory")
+                                    setDataAndType(
+                                        downloadsUri,
+                                        "vnd.android.document/directory"
+                                    )
                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 }
                                 context.startActivity(intent)
@@ -692,59 +877,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        selectedImageForPreview?.let { (imageUrl, fileName) ->
-            ImagePreviewDialog(
-                imageUrl = imageUrl,
-                fileName = fileName,
-                onDismiss = { selectedImageForPreview = null },
-                onOpenInGallery = {
-                    val localImageFile = fileExistsInDCIM(fileName)
-                    if (localImageFile != null) {
-                        val fileUri = FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.fileprovider",
-                            localImageFile
-                        )
-                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                            setDataAndType(fileUri, "image/*")
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(intent)
-                        selectedImageForPreview = null
-                    } else {
-                        Toast.makeText(
-                            context,
-                            "Bitte zuerst herunterladen",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                },
-                onShare = {
-                    val localImageFile = fileExistsInDCIM(fileName)
-                    if (localImageFile != null) {
-                        val fileUri = FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.fileprovider",
-                            localImageFile
-                        )
-                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "image/*"
-                            putExtra(Intent.EXTRA_STREAM, fileUri)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        context.startActivity(Intent.createChooser(shareIntent, "Bild teilen"))
-                        selectedImageForPreview = null
-                    } else {
-                        Toast.makeText(
-                            context,
-                            "Bitte zuerst herunterladen",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                }
-            )
-        }
     }
 }
 
@@ -764,4 +896,3 @@ private fun getMimeType(fileName: String): String {
         else -> "*/*"
     }
 }
-
