@@ -107,6 +107,11 @@ class MainActivity : ComponentActivity() {
         var isDownloading by remember { mutableStateOf<String?>(null) }
         var selectedFilter by remember { mutableStateOf("Alle") }
         var refreshTrigger by remember { mutableStateOf(0) } // NEU!
+        var sortOption by remember { mutableStateOf("A-Z") }
+        var uploadProgress by remember { mutableStateOf(0f) }
+        var downloadProgress by remember { mutableStateOf(0f) }
+        var showUploadProgress by remember { mutableStateOf(false) }
+        var showDownloadProgress by remember { mutableStateOf(false) }
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
 
@@ -201,6 +206,42 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        suspend fun uploadFileWithProgress(uri: Uri, fileName: String) {
+            showUploadProgress = true
+            uploadProgress = 0f
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val bytes = inputStream?.readBytes()
+                inputStream?.close()
+
+                if (bytes != null) {
+                    // Simuliere Upload-Progress in Chunks
+                    val chunkSize = bytes.size / 10
+                    for (i in 0..10) {
+                        uploadProgress = i / 10f
+                        kotlinx.coroutines.delay(100) // Simulation
+                    }
+
+                    withContext(Dispatchers.IO) {
+                        storage.from(SupabaseConfig.SUPABASE_BUCKET).upload(fileName, bytes)
+                    }
+                    uploadProgress = 1f
+
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "✅ Upload abgeschlossen!", Toast.LENGTH_SHORT).show()
+                    }
+                    loadFiles()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                kotlinx.coroutines.delay(500)
+                showUploadProgress = false
+            }
+        }
+
         val filteredFileList =
             remember(fileList, selectedFilter, refreshTrigger) { // refreshTrigger hinzufügen
                 when (selectedFilter) {
@@ -265,6 +306,27 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    listOf("A-Z", "Größte Datei", "Zuletzt hochgeladen").forEach { sort ->
+                        FilterChip(
+                            selected = sortOption == sort,
+                            onClick = { sortOption = sort },
+                            label = {
+                                Text(
+                                    sort,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                                    color = if (sortOption == sort) Color.Black else Color.White
+                                )
+                            }
+                        )
+                    }
+                }
+
                 if (filteredFileList.isEmpty()) {
                     Text(
                         "Keine ${if (selectedFilter == "Alle") "Dateien" else selectedFilter} vorhanden",
@@ -285,49 +347,45 @@ class MainActivity : ComponentActivity() {
                     androidx.compose.material3.OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        label = { Text("Suche") },
+                        label = { Text("Suche", color = Color.White) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp),
                         singleLine = true
                     )
 
-                    // Filter-Chips direkt unter der Suchleiste
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly
+                    // Filtered & searched list
+                    val filteredFileList = remember(
+                        fileList,
+                        selectedFilter,
+                        searchQuery,
+                        sortOption,
+                        refreshTrigger
                     ) {
-                        listOf("Alle", "Dateien", "Bilder").forEach { filter ->
-                            FilterChip(
-                                selected = selectedFilter == filter,
-                                onClick = { selectedFilter = filter },
-                                label = {
-                                    Text(
-                                        filter,
-                                        color = if (selectedFilter == filter) Color.Black else Color.White
-                                    )
-                                }
-                            )
+                        val filtered = fileList.filter { file ->
+                            val fileName = file.substringBefore("|")
+                            val matchesFilter = when (selectedFilter) {
+                                "Bilder" -> isImageFile(fileName)
+                                "Dateien" -> !isImageFile(fileName)
+                                else -> true
+                            }
+                            val matchesSearch = fileName.contains(searchQuery, ignoreCase = true)
+                            matchesFilter && matchesSearch
+                        }
+
+                        when (sortOption) {
+                            "A-Z" -> filtered.sortedBy { it.substringBefore("|").lowercase() }
+                            "Größte Datei" -> filtered.sortedByDescending {
+                                it.split("|").getOrNull(2)?.toLongOrNull() ?: 0L
+                            }
+
+                            "Zuletzt hochgeladen" -> filtered.sortedByDescending {
+                                it.split("|").getOrNull(1) ?: ""
+                            }
+
+                            else -> filtered
                         }
                     }
-
-                    // Filtered & searched list
-                    val filteredFileList =
-                        remember(fileList, selectedFilter, searchQuery, refreshTrigger) {
-                            fileList.filter { file ->
-                                val fileName = file.substringBefore("|")
-                                val matchesFilter = when (selectedFilter) {
-                                    "Bilder" -> isImageFile(fileName)
-                                    "Dateien" -> !isImageFile(fileName)
-                                    else -> true
-                                }
-                                val matchesSearch =
-                                    fileName.contains(searchQuery, ignoreCase = true)
-                                matchesFilter && matchesSearch
-                            }
-                        }
 
                     LazyColumn(
                         modifier = Modifier
@@ -437,18 +495,19 @@ class MainActivity : ComponentActivity() {
                                                                     // Bild herunterladen
                                                                     isDownloading = file
                                                                     scope.launch {
+                                                                        showDownloadProgress = true
+                                                                        downloadProgress = 0f
                                                                         try {
-                                                                            val data =
-                                                                                withContext(
-                                                                                    Dispatchers.IO
-                                                                                ) {
-                                                                                    storage.from(
-                                                                                        SupabaseConfig.SUPABASE_BUCKET
-                                                                                    )
-                                                                                        .downloadAuthenticated(
-                                                                                            fileName
-                                                                                        )
-                                                                                }
+                                                                            // Simuliere Progress
+                                                                            for (i in 0..10) {
+                                                                                downloadProgress = i / 10f
+                                                                                kotlinx.coroutines.delay(100)
+                                                                            }
+
+                                                                            val data = withContext(Dispatchers.IO) {
+                                                                                storage.from(SupabaseConfig.SUPABASE_BUCKET)
+                                                                                    .downloadAuthenticated(fileName)
+                                                                            }
                                                                             val dcimDir =
                                                                                 Environment.getExternalStoragePublicDirectory(
                                                                                     Environment.DIRECTORY_DCIM
@@ -487,6 +546,7 @@ class MainActivity : ComponentActivity() {
                                                                                 "Bild gespeichert ✅",
                                                                                 Toast.LENGTH_SHORT
                                                                             ).show()
+                                                                            downloadProgress = 1f
                                                                         } catch (e: Exception) {
                                                                             val clipboard =
                                                                                 context.getSystemService(
@@ -507,6 +567,8 @@ class MainActivity : ComponentActivity() {
                                                                             )
                                                                         } finally {
                                                                             isDownloading = null
+                                                                            kotlinx.coroutines.delay(500)
+                                                                            showDownloadProgress = false
                                                                         }
                                                                     }
                                                                 },
@@ -662,7 +724,14 @@ class MainActivity : ComponentActivity() {
                                                 IconButton(onClick = {
                                                     isDownloading = file
                                                     scope.launch {
+                                                        showDownloadProgress = true
+                                                        downloadProgress = 0f
                                                         try {
+                                                            // Simuliere Progress
+                                                            for (i in 0..10) {
+                                                                downloadProgress = i / 10f
+                                                                kotlinx.coroutines.delay(100)
+                                                            }
                                                             val data = withContext(Dispatchers.IO) {
                                                                 storage.from(SupabaseConfig.SUPABASE_BUCKET)
                                                                     .downloadAuthenticated(
@@ -671,6 +740,7 @@ class MainActivity : ComponentActivity() {
                                                                         )
                                                                     )
                                                             }
+
                                                             val isImage = isImageFile(file)
 
                                                             val targetDir = if (isImage) {
@@ -711,6 +781,8 @@ class MainActivity : ComponentActivity() {
                                                                 "Datei gespeichert in ${if (isImage) "DCIM (Galerie)" else "Downloads"} ✅",
                                                                 Toast.LENGTH_SHORT
                                                             ).show()
+
+                                                            downloadProgress = 1f
 
                                                             if (file.endsWith(".apk")) {
                                                                 val apkUri =
@@ -769,6 +841,8 @@ class MainActivity : ComponentActivity() {
                                                             clipboard.setPrimaryClip(clip)
                                                         } finally {
                                                             isDownloading = null
+                                                            kotlinx.coroutines.delay(500)
+                                                            showDownloadProgress = false
                                                         }
                                                     }
                                                 }) {
@@ -872,6 +946,84 @@ class MainActivity : ComponentActivity() {
                             imageVector = Icons.Filled.Settings,
                             contentDescription = "Settings",
                             tint = Color.White
+                        )
+                    }
+                }
+            }
+        }
+        // Upload Progress Overlay
+        if (showUploadProgress) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.7f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth(0.8f)
+                        .padding(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "Wird hochgeladen...",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        androidx.compose.material3.LinearProgressIndicator(
+                            progress = uploadProgress,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "${(uploadProgress * 100).toInt()}%",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+        }
+
+        if (showDownloadProgress) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.7f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth(0.8f)
+                        .padding(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "Wird heruntergeladen...",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        androidx.compose.material3.LinearProgressIndicator(
+                            progress = downloadProgress,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "${(downloadProgress * 100).toInt()}%",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.White
                         )
                     }
                 }
