@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<paths>
-    <external-path name="downloads" path="Download/" />
-    <external-path name="dcim" path="DCIM/" />
-    <external-path name="external_files" path="." />
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- App-interne Dateien (wichtig für getExternalFilesDir) -->
+    <external-files-path
+        name="external_files"
+        path="." />
+
+    <!-- Öffentlicher DCIM-Ordner (z. B. Bilder) -->
+    <external-path
+        name="dcim"
+        path="DCIM/" />
+
+    <!-- Öffentlicher Download-Ordner -->
+    <external-path
+        name="downloads"
+        path="Download/" />
 </paths>
