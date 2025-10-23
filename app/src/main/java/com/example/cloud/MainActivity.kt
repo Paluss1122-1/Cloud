@@ -636,42 +636,58 @@ class MainActivity : ComponentActivity() {
                                             .background(Color.DarkGray)
                                             .padding(12.dp)
                                     ) {
-                                        Column {
-                                            Text(
-                                                text = fileName,
-                                                style = MaterialTheme.typography.bodyMedium.copy(
-                                                    fontSize = 20.sp
-                                                ),
-                                                color = Color.White
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            // NEU: Icon/Vorschau hinzufügen
+                                            FileIcon(
+                                                fileName = fileName,
+                                                storage = storage,
+                                                modifier = Modifier
+                                                    .size(56.dp)
+                                                    .padding(end = 12.dp)
                                             )
 
-                                            Text(
-                                                text = "Hochgeladen: $fileDate",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = Color.LightGray,
-                                                fontSize = 12.sp
-                                            )
-
-                                            val sizeBytes = filesize.toLongOrNull() ?: 0L
-                                            val sizeText = when {
-                                                sizeBytes >= 1_000_000_000 -> "Dateigröße: %.2f GB".format(
-                                                    sizeBytes / 1_000_000_000.0
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = fileName,
+                                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                                        fontSize = 16.sp // Von 20sp auf 16sp reduziert
+                                                    ),
+                                                    color = Color.White,
+                                                    maxLines = 1
                                                 )
 
-                                                sizeBytes >= 1_000_000 -> "Dateigröße: %.2f MB".format(
-                                                    sizeBytes / 1_000_000.0
+                                                Text(
+                                                    text = "Hochgeladen: $fileDate",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = Color.LightGray,
+                                                    fontSize = 10.sp // Von 12sp auf 10sp reduziert
                                                 )
 
-                                                else -> "Dateigröße: %.1f KB".format(sizeBytes / 1_000.0)
+                                                val sizeBytes = filesize.toLongOrNull() ?: 0L
+                                                val sizeText = when {
+                                                    sizeBytes >= 1_000_000_000 -> "%.2f GB".format(
+                                                        sizeBytes / 1_000_000_000.0
+                                                    )
+
+                                                    sizeBytes >= 1_000_000 -> "%.2f MB".format(
+                                                        sizeBytes / 1_000_000.0
+                                                    )
+
+                                                    else -> "%.1f KB".format(sizeBytes / 1_000.0)
+                                                }
+
+                                                Text(
+                                                    text = sizeText,
+                                                    fontSize = 10.sp, // Von 14sp auf 10sp reduziert
+                                                    color = Color.Gray
+                                                )
                                             }
 
-                                            Text(
-                                                text = sizeText,
-                                                fontSize = 14.sp,
-                                                color = Color.Gray
-                                            )
-                                            val isFavorite = favoriteFiles.contains(fileName)
                                             // Favoriten-Button
+                                            val isFavorite = favoriteFiles.contains(fileName)
                                             IconButton(
                                                 onClick = {
                                                     favoriteFiles = if (isFavorite) {
@@ -688,12 +704,8 @@ class MainActivity : ComponentActivity() {
                                                     tint = if (isFavorite) Color.Yellow else Color.White
                                                 )
                                             }
-                                        }
 
-                                        Row(
-                                            modifier = Modifier.align(Alignment.CenterEnd),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
+                                            // Download/Öffnen Button
                                             if (showOpenButton && !isImageFile(file)) {
                                                 IconButton(onClick = {
                                                     val fileUri = FileProvider.getUriForFile(
@@ -745,7 +757,6 @@ class MainActivity : ComponentActivity() {
                                                         showDownloadProgress = true
                                                         downloadProgress = 0f
                                                         try {
-                                                            // Simuliere Progress
                                                             for (i in 0..10) {
                                                                 downloadProgress = i / 10f
                                                                 kotlinx.coroutines.delay(100)
@@ -753,9 +764,7 @@ class MainActivity : ComponentActivity() {
                                                             val data = withContext(Dispatchers.IO) {
                                                                 storage.from(SupabaseConfig.SUPABASE_BUCKET)
                                                                     .downloadAuthenticated(
-                                                                        file.substringBefore(
-                                                                            "|"
-                                                                        )
+                                                                        file.substringBefore("|")
                                                                     )
                                                             }
 
@@ -845,12 +854,13 @@ class MainActivity : ComponentActivity() {
                                                             context.startActivity(openIntent)
                                                         } catch (e: Exception) {
                                                             val clipboard =
-                                                                context.getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-                                                            val clip =
-                                                                ClipData.newPlainText(
-                                                                    "code",
-                                                                    e.message
-                                                                )
+                                                                context.getSystemService(
+                                                                    CLIPBOARD_SERVICE
+                                                                ) as ClipboardManager
+                                                            val clip = ClipData.newPlainText(
+                                                                "code",
+                                                                e.message
+                                                            )
                                                             Toast.makeText(
                                                                 context,
                                                                 "Fehler: ${e.message}",
@@ -879,6 +889,7 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             }
 
+                                            // Delete Button
                                             IconButton(onClick = {
                                                 scope.launch { deleteFile(file) }
                                             }) {
@@ -894,175 +905,238 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-                }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Button(
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-                                type = "*/*"
-                                addCategory(Intent.CATEGORY_OPENABLE)
-                                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                            }
-                            filePicker.launch(intent)
-                        },
-                        enabled = !isUploading
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Datei auswählen & hochladen", fontSize = 12.sp)
-                    }
-
-                    Button(onClick = {
-                        scope.launch {
-                            loadFiles()
-                            refreshTrigger++ // NEU! Erzwingt Recomposition
-                            Toast.makeText(context, "Liste aktualisiert ✅", Toast.LENGTH_SHORT)
-                                .show()
+                        Button(
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                                    type = "*/*"
+                                    addCategory(Intent.CATEGORY_OPENABLE)
+                                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                                }
+                                filePicker.launch(intent)
+                            },
+                            enabled = !isUploading
+                        ) {
+                            Text("Datei auswählen & hochladen", fontSize = 12.sp)
                         }
-                    }) {
-                        Text("🔄 Aktualisieren", fontSize = 12.sp)
-                    }
 
-                    IconButton(onClick = {
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW).apply {
-                                setDataAndType(
-                                    "content://downloads/my_downloads".toUri(),
-                                    "vnd.android.document/directory"
+                        Button(onClick = {
+                            scope.launch {
+                                loadFiles()
+                                refreshTrigger++ // NEU! Erzwingt Recomposition
+                                Toast.makeText(
+                                    context,
+                                    "Liste aktualisiert ✅",
+                                    Toast.LENGTH_SHORT
                                 )
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    .show()
                             }
-                            context.startActivity(intent)
-                        } catch (_: Exception) {
-                            // Fallback: Öffne Downloads-Ordner über Files-App
+                        }) {
+                            Text("🔄 Aktualisieren", fontSize = 12.sp)
+                        }
+
+                        IconButton(onClick = {
                             try {
-                                val downloadsUri =
-                                    "content://com.android.externalstorage.documents/document/primary:Download".toUri()
                                 val intent = Intent(Intent.ACTION_VIEW).apply {
                                     setDataAndType(
-                                        downloadsUri,
+                                        "content://downloads/my_downloads".toUri(),
                                         "vnd.android.document/directory"
                                     )
                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 }
                                 context.startActivity(intent)
                             } catch (_: Exception) {
-                                Toast.makeText(
-                                    context,
-                                    "Downloads-Ordner konnte nicht geöffnet werden",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                // Fallback: Öffne Downloads-Ordner über Files-App
+                                try {
+                                    val downloadsUri =
+                                        "content://com.android.externalstorage.documents/document/primary:Download".toUri()
+                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                        setDataAndType(
+                                            downloadsUri,
+                                            "vnd.android.document/directory"
+                                        )
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {
+                                    Toast.makeText(
+                                        context,
+                                        "Downloads-Ordner konnte nicht geöffnet werden",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
                             }
+                        }) {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = "Settings",
+                                tint = Color.White
+                            )
                         }
-                    }) {
-                        Icon(
-                            imageVector = Icons.Filled.Settings,
-                            contentDescription = "Settings",
-                            tint = Color.White
-                        )
                     }
                 }
             }
-        }
-        // Upload Progress Overlay
-        if (showUploadProgress) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.7f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
+            // Upload Progress Overlay
+            if (showUploadProgress) {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth(0.8f)
-                        .padding(16.dp)
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.7f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth(0.8f)
+                            .padding(16.dp)
                     ) {
-                        Text(
-                            "Wird hochgeladen...",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.White
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        androidx.compose.material3.LinearProgressIndicator(
-                            progress = uploadProgress,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "${(uploadProgress * 100).toInt()}%",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Color.White
-                        )
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                "Wird hochgeladen...",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = uploadProgress,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "${(uploadProgress * 100).toInt()}%",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Color.White
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        if (showDownloadProgress) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.7f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
+            if (showDownloadProgress) {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth(0.8f)
-                        .padding(16.dp)
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.7f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth(0.8f)
+                            .padding(16.dp)
                     ) {
-                        Text(
-                            "Wird heruntergeladen...",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.White
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        androidx.compose.material3.LinearProgressIndicator(
-                            progress = downloadProgress,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "${(downloadProgress * 100).toInt()}%",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Color.White
-                        )
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                "Wird heruntergeladen...",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = downloadProgress,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "${(downloadProgress * 100).toInt()}%",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Color.White
+                            )
+                        }
                     }
                 }
             }
         }
     }
-}
 
-private fun getMimeType(fileName: String): String {
-    return when (fileName.substringAfterLast('.', "").lowercase()) {
-        "pdf" -> "application/pdf"
-        "jpg", "jpeg" -> "image/jpeg"
-        "png" -> "image/png"
-        "gif" -> "image/gif"
-        "webp" -> "image/webp"
-        "mp4" -> "video/mp4"
-        "mp3" -> "audio/mpeg"
-        "txt" -> "text/plain"
-        "doc", "docx" -> "application/msword"
-        "xls", "xlsx" -> "application/vnd.ms-excel"
-        "zip" -> "application/zip"
-        else -> "*/*"
+    private fun getMimeType(fileName: String): String {
+        return when (fileName.substringAfterLast('.', "").lowercase()) {
+            "pdf" -> "application/pdf"
+            "jpg", "jpeg" -> "image/jpeg"
+            "png" -> "image/png"
+            "gif" -> "image/gif"
+            "webp" -> "image/webp"
+            "mp4" -> "video/mp4"
+            "mp3" -> "audio/mpeg"
+            "txt" -> "text/plain"
+            "doc", "docx" -> "application/msword"
+            "xls", "xlsx" -> "application/vnd.ms-excel"
+            "zip" -> "application/zip"
+            else -> "*/*"
+        }
+    }
+
+    @Composable
+    private fun FileIcon(fileName: String, storage: Storage, modifier: Modifier = Modifier) {
+        val isImage = fileName.lowercase().let {
+            it.endsWith(".jpg") || it.endsWith(".jpeg") ||
+                    it.endsWith(".png") || it.endsWith(".gif") ||
+                    it.endsWith(".webp")
+        }
+
+        if (isImage) {
+            // Bild-Vorschau
+            val publicUrl = remember(fileName) {
+                runBlocking {
+                    try {
+                        storage.from(SupabaseConfig.SUPABASE_BUCKET)
+                            .createSignedUrl(fileName, (60 * 10).seconds)
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+            }
+
+            if (publicUrl != null) {
+                Image(
+                    painter = rememberAsyncImagePainter(publicUrl),
+                    contentDescription = fileName,
+                    contentScale = ContentScale.Crop,
+                    modifier = modifier
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Settings, // Fallback
+                    contentDescription = "Bild",
+                    tint = Color.White,
+                    modifier = modifier
+                )
+            }
+        } else {
+            // Icon basierend auf Dateiendung
+            val (icon, tint) = when (fileName.substringAfterLast('.', "").lowercase()) {
+                "apk" -> Icons.Default.Settings to Color(0xFF3DDC84) // Android Grün
+                "pdf" -> Icons.Default.Settings to Color(0xFFFF0000) // Rot
+                "mp4", "avi", "mkv" -> Icons.Default.Settings to Color(0xFFFF6B6B) // Video
+                "mp3", "wav", "flac" -> Icons.Default.Settings to Color(0xFF9B59B6) // Audio
+                "zip", "rar", "7z" -> Icons.Default.Settings to Color(0xFFFFD700) // Archive
+                "txt" -> Icons.Default.Settings to Color.White
+                "doc", "docx" -> Icons.Default.Settings to Color(0xFF2B579A) // Word Blau
+                "xls", "xlsx" -> Icons.Default.Settings to Color(0xFF217346) // Excel Grün
+                else -> Icons.Default.Settings to Color.Gray
+            }
+
+            Icon(
+                imageVector = icon,
+                contentDescription = fileName,
+                tint = tint,
+                modifier = modifier
+            )
+        }
     }
 }
