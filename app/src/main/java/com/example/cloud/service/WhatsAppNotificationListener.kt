@@ -11,6 +11,7 @@ import android.util.Log
 import android.widget.Toast
 import com.example.cloud.database.WhatsAppMessage
 import com.example.cloud.database.WhatsAppMessageRepository
+import com.example.cloud.objects.NotificationRepository
 import kotlinx.coroutines.*
 
 class WhatsAppNotificationListener : NotificationListenerService() {
@@ -39,7 +40,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 if (replyData == null) {
                     Log.w("WhatsAppListener", "No reply action found for $sender")
                     Handler(Looper.getMainLooper()).post {
-                        Toast.makeText(context, "Antwort nicht mehr verfügbar", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "Antwort nicht mehr verfügbar", Toast.LENGTH_LONG)
+                            .show()
                     }
                     return false
                 }
@@ -68,39 +70,46 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        if (sbn.packageName != "com.whatsapp") return
 
         val notification = sbn.notification
         val extras = notification.extras
         val sender = extras.getString(android.app.Notification.EXTRA_TITLE) ?: return
-        val messageText = extras.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString() ?: return
+        val messageText =
+            extras.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString() ?: return
 
-        notification.actions?.forEach { action ->
-            action.remoteInputs?.firstOrNull()?.let { remoteInput ->
-                replyActions[sender] = ReplyData(
-                    pendingIntent = action.actionIntent,
-                    remoteInput = remoteInput,
-                    timestamp = System.currentTimeMillis()
-                )
+        super.onNotificationPosted(sbn)
 
-                CoroutineScope(Dispatchers.IO).launch {
-                    val exists = repository.getAll().any {
-                        it.sender == sender && it.text == messageText
-                    }
-                    if (!exists) {
-                        repository.insert(
-                            WhatsAppMessage(
-                                sender = sender,
-                                text = messageText,
-                                timestamp = System.currentTimeMillis()
-                            )
-                        )
+        // 🔹 1. Speichere ALLE Benachrichtigungen für den Verlauf
+        NotificationRepository.addNotification(sbn)
 
-                        // Broadcast senden für UI-Update
-                        val broadcastIntent = Intent("WHATSAPP_MESSAGE_RECEIVED").apply {
-                            setPackage(applicationContext.packageName)
+        if (sbn.packageName == "com.whatsapp" || sbn.packageName == "com.whatsapp.w4b") {
+            notification.actions?.forEach { action ->
+                action.remoteInputs?.firstOrNull()?.let { remoteInput ->
+                    replyActions[sender] = ReplyData(
+                        pendingIntent = action.actionIntent,
+                        remoteInput = remoteInput,
+                        timestamp = System.currentTimeMillis()
+                    )
+
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val exists = repository.getAll().any {
+                            it.sender == sender && it.text == messageText
                         }
-                        sendBroadcast(broadcastIntent)
+                        if (!exists) {
+                            repository.insert(
+                                WhatsAppMessage(
+                                    sender = sender,
+                                    text = messageText,
+                                    timestamp = System.currentTimeMillis()
+                                )
+                            )
+
+                            // Broadcast senden für UI-Update
+                            val broadcastIntent = Intent("WHATSAPP_MESSAGE_RECEIVED").apply {
+                                setPackage(applicationContext.packageName)
+                            }
+                            sendBroadcast(broadcastIntent)
+                        }
                     }
                 }
             }
@@ -112,5 +121,12 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             val sender = sbn.notification.extras.getString(android.app.Notification.EXTRA_TITLE)
             sender?.let { replyActions.remove(it) }
         }
+        super.onNotificationRemoved(sbn)
+        NotificationRepository.removeNotification(sbn)
+    }
+
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        NotificationRepository.clear()
     }
 }

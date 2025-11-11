@@ -3,6 +3,7 @@
 package com.example.cloud.functions
 
 import android.Manifest
+import android.R
 import android.annotation.SuppressLint
 import android.app.Activity.RESULT_OK
 import android.app.ActivityManager
@@ -123,34 +124,46 @@ import android.app.NotificationChannel
 import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorManager
+import android.hardware.camera2.CameraManager
 import android.hardware.display.DisplayManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.StatFs
+import android.provider.AlarmClock
+import android.provider.MediaStore
 import android.telephony.TelephonyManager
 import android.util.DisplayMetrics
 import android.view.Display
+import android.view.Surface
+import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
+import com.example.cloud.objects.NotificationRepository
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.NetworkInterface
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.Executors
 import kotlin.math.pow
+import kotlin.math.sqrt
 
 // Enum für Menü-Einträge (einfach erweiterbar)
 enum class MenuItem(val title: String, val icon: String) {
@@ -158,7 +171,8 @@ enum class MenuItem(val title: String, val icon: String) {
     OTHER_BUCKET("Other Bucket", "📂"),
     WHATSAPP("WhatsApp", "💬"),
     BROWSER("Browser", "🌐"),
-    QUICK("Schnellzugriff", "⚡")
+    QUICK("Schnellzugriff", "⚡"),
+    NOTIFICATIONS("Benachrichtigungsverlauf", "⌚")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -180,14 +194,14 @@ fun PrivateCloudApp(storage: Storage) {
     )
     val scope = rememberCoroutineScope()
     var webViewUrl by remember { mutableStateOf("https://www.google.com") }
-    var webViewState by remember { mutableStateOf<android.webkit.WebView?>(null) }
+    var webViewState by remember { mutableStateOf<WebView?>(null) }
 
     if (isFullScreen) {
         // Nur den Inhalt anzeigen, OHNE Drawer
         Box(modifier = Modifier.fillMaxSize()) {
             var messages by remember { mutableStateOf<List<WhatsAppMessage>>(emptyList()) }
             var webViewUrl by remember { mutableStateOf("https://www.google.com") }
-            var webViewState by remember { mutableStateOf<android.webkit.WebView?>(null) }
+            var webViewState by remember { mutableStateOf<WebView?>(null) }
             scope.launch {
                 messages = WhatsAppNotificationListener.getMessages()
             }
@@ -210,6 +224,7 @@ fun PrivateCloudApp(storage: Storage) {
 
                 MenuItem.WHATSAPP -> WhatsAppTabContent(messages)
                 MenuItem.QUICK -> QuickSettingsTabContent()
+                MenuItem.NOTIFICATIONS -> Notifications()
             }
         }
     } else {
@@ -299,7 +314,7 @@ fun PrivateCloudApp(storage: Storage) {
                 Box(modifier = Modifier.padding(paddingValues)) {
                     var messages by remember { mutableStateOf<List<WhatsAppMessage>>(emptyList()) }
                     var webViewUrl by remember { mutableStateOf("https://www.google.com") }
-                    var webViewState by remember { mutableStateOf<android.webkit.WebView?>(null) }
+                    var webViewState by remember { mutableStateOf<WebView?>(null) }
                     scope.launch {
                         messages = WhatsAppNotificationListener.getMessages()
                     }
@@ -321,6 +336,7 @@ fun PrivateCloudApp(storage: Storage) {
                                 saveLastMenuItem(context, MenuItem.PRIVATE_CLOUD)
                             }
                         )
+                        MenuItem.NOTIFICATIONS -> Notifications()
                     }
 
                 }
@@ -1439,7 +1455,7 @@ fun LockscreenFrameScreen(
 
     var isFullScreen by remember { mutableStateOf(false) }
     var webViewUrl by remember { mutableStateOf("https://www.google.com") }
-    var webViewState by remember { mutableStateOf<android.webkit.WebView?>(null) }
+    var webViewState by remember { mutableStateOf<WebView?>(null) }
 
     // Broadcast Receiver für neue Nachrichten
     DisposableEffect(Unit) {
@@ -1508,7 +1524,7 @@ fun LockscreenFrameScreen(
 
                 Button(
                     onClick = { selectedTab = 1 },
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    colors = ButtonDefaults.buttonColors(
                         containerColor = if (selectedTab == 1) Color(0xFF4CAF50) else Color(
                             0xFF666666
                         )
@@ -1523,7 +1539,7 @@ fun LockscreenFrameScreen(
                 Button(
                     onClick = { selectedTab = 2 },
 
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    colors = ButtonDefaults.buttonColors(
                         containerColor = if (selectedTab == 2) Color(0xFF4CAF50) else Color(
                             0xFF666666
                         )
@@ -1541,7 +1557,7 @@ fun LockscreenFrameScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                colors = androidx.compose.material3.CardDefaults.cardColors(
+                colors = CardDefaults.cardColors(
                     containerColor = Color(0xFF2A2A2A)
                 )
             ) {
@@ -1618,7 +1634,7 @@ fun WhatsAppTabContent(messages: List<WhatsAppMessage>) {
                 text = "💡 Tipp: Erlaube Benachrichtigungen und\nschreib dir selbst eine Testnachricht!",
                 fontSize = 12.sp,
                 color = Color.LightGray,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                textAlign = TextAlign.Center
             )
         }
     } else {
@@ -1665,7 +1681,7 @@ fun MessageCard(message: WhatsAppMessage, context: Context, scope: CoroutineScop
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = androidx.compose.material3.CardDefaults.cardColors(
+        colors = CardDefaults.cardColors(
             containerColor = Color(0xFF1E1E1E)
         )
     ) {
@@ -1737,11 +1753,11 @@ fun MessageCard(message: WhatsAppMessage, context: Context, scope: CoroutineScop
                         val allMessages =
                             WhatsAppNotificationListener.getMessagesBySender(message.sender)
                         allMessagesText = allMessages.joinToString("\n\n") {
-                            val time = java.text.SimpleDateFormat(
+                            val time = SimpleDateFormat(
                                 "dd.MM. HH:mm",
-                                java.util.Locale.getDefault()
+                                Locale.getDefault()
                             )
-                                .format(java.util.Date(it.timestamp))
+                                .format(Date(it.timestamp))
                             "[$time] ${it.sender}: ${it.text}"
                         }
                         showAllMessagesDialog = true
@@ -1760,7 +1776,7 @@ fun BrowserTabContent(
     url: String,
     onUrlChange: (String) -> Unit,
     onEnterFullScreen: () -> Unit,
-    webViewState: android.webkit.WebView?,
+    webViewState: WebView?,
     modifier: Modifier = Modifier
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -1826,6 +1842,92 @@ fun BrowserTabContent(
                 .height(56.dp)
         ) {
             Text("Öffnen", fontSize = 20.sp)
+        }
+    }
+}
+
+
+
+@Composable
+fun Notifications() {
+    val context = LocalContext.current
+    val notifications = NotificationRepository.notifications
+
+    // Prüfen, ob der Listener aktiviert ist
+    val isListenerEnabled = remember {
+        Settings.Secure.getString(
+            context.contentResolver,
+            "enabled_notification_listeners"
+        )?.contains(context.packageName) == true
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF2A2A2A))
+            .padding(12.dp)
+    ) {
+        if (!isListenerEnabled) {
+            Text(
+                text = "⚠️ Benachrichtigungszugriff nicht aktiviert",
+                color = Color.Red,
+                modifier = Modifier.padding(16.dp)
+            )
+            Button(
+                onClick = {
+                    context.startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
+                }
+            ) {
+                Text("Einstellungen öffnen")
+            }
+            return
+        }
+
+        if (notifications.isEmpty()) {
+            Text(
+                text = "Keine Benachrichtigungen vorhanden",
+                color = Color.Gray,
+                modifier = Modifier.fillMaxSize(),
+                textAlign = TextAlign.Center
+            )
+            return
+        }
+
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(notifications.reversed()) { sbn ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF333333))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        // Paketname (App)
+                        Text(
+                            text = sbn.packageName,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            fontSize = 13.sp
+                        )
+
+                        // Titel und Text (wenn vorhanden)
+                        val extras = sbn.notification.extras
+                        extras.getString("android.title")?.let { title ->
+                            Text(text = title, color = Color.LightGray, fontSize = 13.sp)
+                        }
+                        extras.getString("android.text")?.let { text ->
+                            Text(text = text, color = Color.White, fontSize = 12.sp)
+                        }
+
+                        // Zeitstempel
+                        Text(
+                            text = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                                .format(java.util.Date(sbn.postTime)),
+                            color = Color.Gray,
+                            fontSize = 11.sp,
+                            modifier = Modifier.align(Alignment.End)
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -1901,14 +2003,14 @@ fun QuickSettingRow(buttons: List<Pair<String, () -> Unit>>) {
                 modifier = Modifier
                     .weight(1f)
                     .height(80.dp),
-                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF444444)
                 )
             ) {
                 Text(
                     text = label,
                     fontSize = 12.sp,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    textAlign = TextAlign.Center
                 )
             }
         }
@@ -2004,7 +2106,7 @@ private fun showSensorNotification(context: Context, content: String, notificati
     }
 
     val builder = NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(android.R.drawable.ic_menu_camera)
+        .setSmallIcon(R.drawable.ic_menu_camera)
         .setContentTitle("📡 Sensoren-Info")
         .setContentText("Anzahl und Details aller Sensoren")
         .setStyle(NotificationCompat.BigTextStyle().bigText(content))
@@ -2028,7 +2130,7 @@ private fun showSensorNotification(context: Context, content: String, notificati
 @SuppressLint("NewApi")
 fun showDisplayInfo(context: Context) {
     val windowManager =
-        context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+        context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     val display: Display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         context.display ?: windowManager.defaultDisplay
     } else {
@@ -2072,7 +2174,7 @@ fun showDisplayInfo(context: Context) {
         val widthInches = realWidth / metrics.xdpi.toDouble()
         val heightInches = realHeight / metrics.ydpi.toDouble()
         val diagonalInches =
-            kotlin.math.sqrt(widthInches * widthInches + heightInches * heightInches)
+            sqrt(widthInches * widthInches + heightInches * heightInches)
         info.append("📐 Bildschirmgröße: ${String.format("%.1f", diagonalInches)} Zoll\n")
     } catch (e: Exception) {
         info.append("📐 Bildschirmgröße: N/A\n")
@@ -2101,11 +2203,11 @@ fun showDisplayInfo(context: Context) {
 
     // === 7. Ausrichtung ===
     val rotation = display.rotation
-    val orientationStr = when (rotation ?: android.view.Surface.ROTATION_0) {
-        android.view.Surface.ROTATION_0 -> "Hochformat (0°)"
-        android.view.Surface.ROTATION_90 -> "Querformat (90°)"
-        android.view.Surface.ROTATION_180 -> "Hochformat (180°, umgekehrt)"
-        android.view.Surface.ROTATION_270 -> "Querformat (270°, umgekehrt)"
+    val orientationStr = when (rotation ?: Surface.ROTATION_0) {
+        Surface.ROTATION_0 -> "Hochformat (0°)"
+        Surface.ROTATION_90 -> "Querformat (90°)"
+        Surface.ROTATION_180 -> "Hochformat (180°, umgekehrt)"
+        Surface.ROTATION_270 -> "Querformat (270°, umgekehrt)"
         else -> "Unbekannt"
     }
     info.append("🧭 Ausrichtung: $orientationStr\n")
@@ -2125,7 +2227,7 @@ fun showDisplayInfo(context: Context) {
     }
 
     val builder = NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(android.R.drawable.ic_menu_gallery)
+        .setSmallIcon(R.drawable.ic_menu_gallery)
         .setContentTitle("🖥️ Display-Info")
         .setContentText("Auflösung, Dichte, Größe, Refresh Rate")
         .setStyle(NotificationCompat.BigTextStyle().bigText(info.toString()))
@@ -2145,7 +2247,7 @@ fun showDisplayInfo(context: Context) {
                 "Größe: ${
                     String.format(
                         "%.1f",
-                        kotlin.math.sqrt(
+                        sqrt(
                             (realWidth / metrics.xdpi).pow(2) + (realHeight / metrics.ydpi).pow(2)
                         )
                     )
@@ -2312,7 +2414,7 @@ private fun showNetworkNotificationNow(context: Context, content: String, final:
     }
 
     val builder = NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(android.R.drawable.ic_menu_compass)
+        .setSmallIcon(R.drawable.ic_menu_compass)
         .setContentTitle("📡 Netzwerk-Info")
         .setContentText(content.lines().firstOrNull() ?: "Netzwerkinfo")
         .setStyle(NotificationCompat.BigTextStyle().bigText(content))
@@ -2422,7 +2524,7 @@ private fun showStorageNotification(
     }
 
     val builder = NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(android.R.drawable.ic_menu_info_details)
+        .setSmallIcon(R.drawable.ic_menu_info_details)
         .setContentTitle(title)
         .setContentText(content.lines().firstOrNull() ?: content)
         .setStyle(NotificationCompat.BigTextStyle().bigText(content))
@@ -2513,7 +2615,7 @@ fun showBatteryInfo(context: Context) {
         // Notification Channel erstellen (für Android 8.0+)
         val channelId = "battery_info_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = android.app.NotificationChannel(
+            val channel = NotificationChannel(
                 channelId,
                 "Batterie-Informationen",
                 NotificationManager.IMPORTANCE_DEFAULT
@@ -2521,17 +2623,17 @@ fun showBatteryInfo(context: Context) {
                 description = "Zeigt detaillierte Batterie-Informationen an"
             }
             val notificationManager =
-                context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
         }
 
         // Notification erstellen
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_dialog_info)
             .setContentTitle("🔋 Batterie-Info")
             .setContentText("Ladezustand: $percentage%")
             .setStyle(
-                androidx.core.app.NotificationCompat.BigTextStyle()
+                NotificationCompat.BigTextStyle()
                     .bigText(
                         """
                     Ladezustand: $percentage%
@@ -2543,15 +2645,15 @@ fun showBatteryInfo(context: Context) {
                 """.trimIndent()
                     )
             )
-            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
 
         // Notification anzeigen
-        val notificationManager = androidx.core.app.NotificationManagerCompat.from(context)
-        if (androidx.core.app.ActivityCompat.checkSelfPermission(
+        val notificationManager = NotificationManagerCompat.from(context)
+        if (ActivityCompat.checkSelfPermission(
                 context,
-                android.Manifest.permission.POST_NOTIFICATIONS
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
         ) {
             notificationManager.notify(1001, builder.build())
         } else {
@@ -2602,7 +2704,7 @@ fun showDeviceInfo(context: Context) {
         Sicherheitspatch: ${Build.VERSION.SECURITY_PATCH}
         Build: ${Build.DISPLAY}
         Build-Typ: ${Build.TYPE}
-        Build-Zeit: ${java.util.Date(Build.TIME)}
+        Build-Zeit: ${Date(Build.TIME)}
     """.trimIndent()
 
     val hardwareInfo = """
@@ -2618,8 +2720,8 @@ fun showDeviceInfo(context: Context) {
     val appInfo = """
         ▶ App:
         App-Version: ${packageInfo.versionName} (${packageInfo.longVersionCode})
-        Installiert am: ${java.util.Date(packageInfo.firstInstallTime)}
-        Zuletzt aktualisiert: ${java.util.Date(packageInfo.lastUpdateTime)}
+        Installiert am: ${Date(packageInfo.firstInstallTime)}
+        Zuletzt aktualisiert: ${Date(packageInfo.lastUpdateTime)}
     """.trimIndent()
 
     val networkInfo = """
@@ -2656,7 +2758,7 @@ fun showDeviceInfo(context: Context) {
         val notification = NotificationCompat.Builder(context, channelId)
             .setContentTitle(title)
             .setContentText(content)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_dialog_info)
             .setStyle(NotificationCompat.BigTextStyle().bigText(content))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setAutoCancel(true)
@@ -2752,7 +2854,7 @@ fun toggleFlashlight(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
         try {
             val cameraManager =
-                context.getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
+                context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
             val cameraId = cameraManager.cameraIdList[0]
 
             // Hinweis: Toggle-Funktion erfordert mehr State-Management
@@ -2810,7 +2912,7 @@ fun openMobileDataSettings(context: Context) {
 
 fun openCamera(context: Context) {
     try {
-        context.startActivity(Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).apply {
+        context.startActivity(Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         })
     } catch (_: Exception) {
@@ -2856,7 +2958,7 @@ fun openCalculator(context: Context) {
 
 fun openAlarm(context: Context) {
     try {
-        context.startActivity(Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS).apply {
+        context.startActivity(Intent(AlarmClock.ACTION_SHOW_ALARMS).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         })
     } catch (_: Exception) {
