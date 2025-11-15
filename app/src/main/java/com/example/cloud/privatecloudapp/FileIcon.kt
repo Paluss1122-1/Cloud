@@ -1,4 +1,4 @@
-package com.example.cloud.functions
+package com.example.cloud.privatecloudapp
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -11,11 +11,11 @@ import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.TextSnippet
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,10 +27,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.example.cloud.SupabaseConfig
-import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.annotations.SupabaseExperimental
 import io.github.jan.supabase.storage.Storage
-import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.seconds
@@ -50,7 +48,7 @@ fun FileIcon(
         var publicUrl by remember(fileName) { mutableStateOf<String?>(null) }
         var isLoading by remember { mutableStateOf(true) }
 
-        androidx.compose.runtime.LaunchedEffect(fileName) {
+        LaunchedEffect(fileName) {
             isLoading = true
             try {
                 val signedUrl = withContext(Dispatchers.IO) {
@@ -79,7 +77,7 @@ fun FileIcon(
                 modifier = modifier.background(Color.Gray),
                 contentAlignment = Alignment.Center
             ) {
-                androidx.compose.material3.CircularProgressIndicator(
+                CircularProgressIndicator(
                     modifier = Modifier.size(16.dp),
                     color = Color.White,
                     strokeWidth = 2.dp

@@ -1,4 +1,4 @@
-package com.example.cloud.functions
+package com.example.cloud.privatecloudapp
 
 fun getMimeType(fileName: String): String {
     return when (fileName.substringAfterLast('.', "").lowercase()) {

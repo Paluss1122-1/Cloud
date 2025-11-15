@@ -1,15 +1,18 @@
 @file:Suppress("DEPRECATION")
 
-package com.example.cloud.functions
+package com.example.cloud.privatecloudapp
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Environment
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,9 +28,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,6 +53,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -57,11 +61,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import coil.compose.rememberAsyncImagePainter
-import com.example.cloud.SupabaseConfig
 import com.example.cloud.ui.theme.gruen
 import com.example.cloud.ui.theme.hellgruen
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -69,6 +73,11 @@ import java.io.File
 import java.io.FileOutputStream
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.runtime.DisposableEffect
 
 @OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -82,21 +91,33 @@ fun OtherBucketViewer(
     var uploadProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) } // current, total
     var showDownloadProgress by remember { mutableStateOf(false) }
     var showFullscreenImage by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var showVideoPlayer by remember { mutableStateOf<Pair<String, String>?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
 
     suspend fun loadFiles() {
         try {
+            val videofiles = withContext(Dispatchers.IO) {
+                storage.from("videos").list()
+            }
+
+            videofiles.forEach { Log.d("FILES", "→ ${it.name}") }
+
             val bucketName = "Other"
 
             val files = withContext(Dispatchers.IO) {
                 storage.from(bucketName).list()
             }
 
-            fileList = files
+            val toastlist = files.filter { isVideoFile(it.name) }
+
+            toastlist.forEach { _ ->
+                Toast.makeText(context, "FOUND!!", Toast.LENGTH_SHORT).show()
+            }
+
+            fileList = (videofiles + files)
                 .filter { it.name != ".emptyFolderPlaceholder" }
-                .filter { isImageFile(it.name) }
                 .map { "${it.name}|${it.updatedAt}|${it.metadata?.get("size") ?: 0}" }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -236,7 +257,11 @@ fun OtherBucketViewer(
                                         .aspectRatio(1f),
                                     onClick = {
                                         if (!isUploading && isDownloading == null) {
-                                            showFullscreenImage = Pair(fileName, file)
+                                            if (isVideoFile(fileName)) {
+                                                showVideoPlayer = Pair(fileName, file)
+                                            } else {
+                                                showFullscreenImage = Pair(fileName, file)
+                                            }
                                         }
                                     }
                                 ) {
@@ -256,14 +281,50 @@ fun OtherBucketViewer(
                                             }
                                         }
 
-                                        Image(
-                                            painter = rememberAsyncImagePainter(publicUrl),
-                                            contentDescription = fileName,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .background(Color.Transparent)
-                                        )
+                                        if (isVideoFile(fileName)) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(Color.Black),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.PlayArrow,
+                                                    contentDescription = "Video",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(48.dp)
+                                                )
+
+                                                // Optional: Video-Thumbnail laden
+                                                var publicUrl by remember(fileName) { mutableStateOf<String?>(null) }
+                                                LaunchedEffect(fileName) {
+                                                    try {
+                                                        publicUrl = storage.from("videos").createSignedUrl(fileName, 600.seconds)
+                                                    } catch (e: Exception) {
+                                                        e.printStackTrace()
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            var publicUrl by remember(fileName) { mutableStateOf<String?>(null) }
+
+                                            LaunchedEffect(fileName) {
+                                                try {
+                                                    publicUrl = storage.from("Other").createSignedUrl(fileName, 600.seconds)
+                                                } catch (e: Exception) {
+                                                    e.printStackTrace()
+                                                }
+                                            }
+
+                                            Image(
+                                                painter = rememberAsyncImagePainter(publicUrl),
+                                                contentDescription = fileName,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(Color.Transparent)
+                                            )
+                                        }
 
                                         Column(
                                             modifier = Modifier
@@ -452,13 +513,44 @@ fun OtherBucketViewer(
             }
         }
 
+        var lastTapTime by remember { mutableStateOf(0L) }
+        var singleTapJob by remember { mutableStateOf<Job?>(null) }
+        val doubleTapTimeout = 300L // ms
+        val scope = rememberCoroutineScope()
+
         FloatingActionButton(
             onClick = {
-                imagePickerLauncher.launch("image/*")
+                val currentTime = System.currentTimeMillis()
+                if (currentTime - lastTapTime <= doubleTapTimeout) {
+                    singleTapJob?.cancel()
+                    singleTapJob = null
+                    Toast.makeText(context, "Double", Toast.LENGTH_SHORT).show()
+                    imagePickerLauncher.launch("video/*")
+                    lastTapTime = 0L // Reset to prevent triple tap issues
+                } else {
+                    // Single Tap nach kurzer Verzögerung ausführen
+                    lastTapTime = currentTime
+                    singleTapJob?.cancel() // Cancel any existing job
+                    singleTapJob = scope.launch {
+                        delay(doubleTapTimeout)
+                        Toast.makeText(context, "Single", Toast.LENGTH_SHORT).show()
+                        imagePickerLauncher.launch("image/*")
+                    }
+                }
             },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(16.dp),
+                .padding(16.dp)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onLongPress = {
+                            singleTapJob?.cancel() // Cancel single tap if long press detected
+                            singleTapJob = null
+                            Toast.makeText(context, "Long", Toast.LENGTH_SHORT).show()
+                            imagePickerLauncher.launch("video/*")
+                        }
+                    )
+                },
             containerColor = gruen
         ) {
             if (isUploading) {
@@ -631,17 +723,116 @@ fun OtherBucketViewer(
             }
         )
     }
+    showVideoPlayer?.let { (displayFileName, fileWithMetadata) ->
+        val parts = fileWithMetadata.split("|")
+        val actualFileName = parts.getOrNull(0) ?: displayFileName
+
+        var videoUrl by remember(actualFileName) { mutableStateOf<String?>(null) }
+
+        LaunchedEffect(actualFileName) {
+            try {
+                videoUrl = storage.from("videos").createSignedUrl(actualFileName, 600.seconds)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        VideoPlayerDialog(
+            storage = storage,
+            fileName = actualFileName,
+            onDismiss = { showVideoPlayer = null }
+        )
+    }
 }
 
-suspend fun uploadImage(context: android.content.Context, storage: Storage, uri: Uri) {
+suspend fun uploadImage(context: Context, storage: Storage, uri: Uri) {
     withContext(Dispatchers.IO) {
         val inputStream = context.contentResolver.openInputStream(uri)
         val bytes = inputStream?.readBytes()
         inputStream?.close()
 
         if (bytes != null) {
-            val fileName = "IMG_${System.currentTimeMillis()}.jpg"
+            val mimeType = context.contentResolver.getType(uri)
+            val extension = when {
+                mimeType?.startsWith("video/") == true -> {
+                    when {
+                        mimeType.contains("mp4") -> ".mp4"
+                        mimeType.contains("quicktime") -> ".mov"
+                        mimeType.contains("avi") -> ".avi"
+                        mimeType.contains("mkv") -> ".mkv"
+                        mimeType.contains("3gpp") -> ".3gp"
+                        else -> ".mp4"
+                    }
+                }
+                else -> ".jpg"
+            }
+
+            val prefix = if (mimeType?.startsWith("video/") == true) "VID" else "IMG"
+            val fileName = "${prefix}_${System.currentTimeMillis()}${extension}"
             storage.from("Other").upload(fileName, bytes)
+        }
+    }
+}
+
+@Composable
+fun VideoPlayerDialog(
+    storage: Storage,
+    fileName: String,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var videoUrl by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(fileName) {
+        try {
+            // Signed URL gültig für 600 Sekunden
+            videoUrl = withContext(Dispatchers.IO) {
+                storage.from("videos").createSignedUrl(fileName, 600.seconds)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    videoUrl?.let { url ->
+        val exoPlayer = remember {
+            ExoPlayer.Builder(context).build().apply {
+                setMediaItem(MediaItem.fromUri(url))
+                prepare()
+                playWhenReady = true
+            }
+        }
+
+        androidx.compose.ui.window.Dialog(onDismissRequest = {
+            exoPlayer.release()
+            onDismiss()
+        }) {
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        player = exoPlayer
+                        useController = true
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+            )
+        }
+
+        DisposableEffect(Unit) {
+            onDispose { exoPlayer.release() }
+        }
+    } ?: run {
+        // Ladeanzeige, falls URL noch null
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = Color.White)
         }
     }
 }

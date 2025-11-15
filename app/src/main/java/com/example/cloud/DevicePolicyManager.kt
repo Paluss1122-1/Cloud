@@ -4,8 +4,6 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.widget.Toast
-import androidx.activity.result.ActivityResultLauncher
 
 class PolicyManager(private val activity: MainActivity) {
 

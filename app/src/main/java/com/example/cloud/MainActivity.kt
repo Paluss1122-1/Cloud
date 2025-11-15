@@ -1,6 +1,7 @@
 package com.example.cloud
 
 import android.os.Bundle
+import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -10,11 +11,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
-import com.example.cloud.functions.PrivateCloudApp
+import androidx.lifecycle.lifecycleScope
+import com.example.cloud.privatecloudapp.PrivateCloudApp
+import com.example.cloud.quicksettingsfunctions.BatteryDataRepository
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.storage.storage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     private lateinit var policyManager: PolicyManager
@@ -35,8 +41,19 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         policyManager = PolicyManager(this)
 
+        // ✅ Systemleisten transparent machen
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+
+        // ✅ Für Android 10+ (Q): Gesten-Kontrast deaktivieren
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
+
         // Admin-Rechte prüfen und ggf. anfordern
         policyManager.checkAndRequestAdminRights()
+        BatteryDataRepository.init(this)
         setContent {
             MaterialTheme {
                 Surface(

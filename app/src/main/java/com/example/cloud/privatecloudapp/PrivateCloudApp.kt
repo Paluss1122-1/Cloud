@@ -1,6 +1,13 @@
 @file:Suppress("DEPRECATION", "NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
 
-package com.example.cloud.functions
+package com.example.cloud.privatecloudapp
+
+import com.example.cloud.quicksettingsfunctions.BatteryDataRepository
+import com.example.cloud.quicksettingsfunctions.showNetworkInfo
+import com.example.cloud.quicksettingsfunctions.showSensorsInfo
+import com.example.cloud.quicksettingsfunctions.BatteryChartScreen
+import com.example.cloud.whatsapptab.WhatsAppTabScreen
+import com.example.cloud.browsertab.BrowserTabContent
 
 import android.Manifest
 import android.R
@@ -8,7 +15,6 @@ import android.annotation.SuppressLint
 import android.app.Activity.RESULT_OK
 import android.app.ActivityManager
 import android.app.NotificationManager
-import android.content.BroadcastReceiver
 import androidx.activity.compose.BackHandler
 import android.content.Context
 import android.content.Intent
@@ -45,13 +51,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material.icons.filled.ArrowBack
-import android.webkit.WebViewClient
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -73,15 +75,10 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -105,12 +102,9 @@ import coil.compose.rememberAsyncImagePainter
 import com.example.cloud.AesEncryption
 import com.example.cloud.objects.FavoriteManager
 import com.example.cloud.SupabaseConfig
-import com.example.cloud.database.WhatsAppMessage
-import com.example.cloud.service.WhatsAppNotificationListener
 import com.example.cloud.ui.theme.gruen
 import com.example.cloud.ui.theme.hellgruen
 import io.github.jan.supabase.storage.Storage
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -122,48 +116,30 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import android.app.NotificationChannel
 import android.content.pm.PackageManager
-import android.hardware.Sensor
-import android.hardware.SensorManager
-import android.hardware.camera2.CameraManager
 import android.hardware.display.DisplayManager
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.os.StatFs
-import android.provider.AlarmClock
-import android.provider.MediaStore
-import android.telephony.TelephonyManager
 import android.util.DisplayMetrics
 import android.view.Display
 import android.view.Surface
-import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.cloud.objects.NotificationRepository
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.net.HttpURLConnection
-import java.net.NetworkInterface
-import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.Executors
 import kotlin.math.pow
 import kotlin.math.sqrt
+import androidx.core.content.edit
 
 // Enum für Menü-Einträge (einfach erweiterbar)
 enum class MenuItem(val title: String, val icon: String) {
@@ -181,6 +157,14 @@ fun PrivateCloudApp(storage: Storage) {
     var isFullScreen by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var selectedMenuItem by remember { mutableStateOf(loadLastMenuItem(context)) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        BatteryDataRepository.init(context)
+    }
+    var webViewUrl by remember { mutableStateOf("https://www.google.com") }
+    var webViewState by remember { mutableStateOf<WebView?>(null) }
+
     val drawerState = rememberDrawerState(
         initialValue = DrawerValue.Closed,
         confirmStateChange = { futureValue ->
@@ -192,19 +176,10 @@ fun PrivateCloudApp(storage: Storage) {
             }
         }
     )
-    val scope = rememberCoroutineScope()
-    var webViewUrl by remember { mutableStateOf("https://www.google.com") }
-    var webViewState by remember { mutableStateOf<WebView?>(null) }
 
     if (isFullScreen) {
-        // Nur den Inhalt anzeigen, OHNE Drawer
         Box(modifier = Modifier.fillMaxSize()) {
-            var messages by remember { mutableStateOf<List<WhatsAppMessage>>(emptyList()) }
-            var webViewUrl by remember { mutableStateOf("https://www.google.com") }
-            var webViewState by remember { mutableStateOf<WebView?>(null) }
-            scope.launch {
-                messages = WhatsAppNotificationListener.getMessages()
-            }
+            // ✅ Keine erneute Deklaration nötig!
             when (selectedMenuItem) {
                 MenuItem.PRIVATE_CLOUD -> MainCloudScreen(storage = storage)
                 MenuItem.BROWSER -> BrowserTabContent(
@@ -222,9 +197,20 @@ fun PrivateCloudApp(storage: Storage) {
                     }
                 )
 
-                MenuItem.WHATSAPP -> WhatsAppTabContent(messages)
+                MenuItem.WHATSAPP -> WhatsAppTabScreen()
                 MenuItem.QUICK -> QuickSettingsTabContent()
                 MenuItem.NOTIFICATIONS -> Notifications()
+            }
+
+            // ✅ Back-Handler für Browser-Vollbild
+            if (selectedMenuItem == MenuItem.BROWSER) {
+                BackHandler(enabled = true) {
+                    if (webViewState?.canGoBack() == true) {
+                        webViewState?.goBack()
+                    } else {
+                        isFullScreen = false
+                    }
+                }
             }
         }
     } else {
@@ -312,15 +298,10 @@ fun PrivateCloudApp(storage: Storage) {
                 }
             ) { paddingValues ->
                 Box(modifier = Modifier.padding(paddingValues)) {
-                    var messages by remember { mutableStateOf<List<WhatsAppMessage>>(emptyList()) }
-                    var webViewUrl by remember { mutableStateOf("https://www.google.com") }
-                    var webViewState by remember { mutableStateOf<WebView?>(null) }
-                    scope.launch {
-                        messages = WhatsAppNotificationListener.getMessages()
-                    }
+                    // ✅ Keine erneute Deklaration nötig!
                     when (selectedMenuItem) {
                         MenuItem.PRIVATE_CLOUD -> MainCloudScreen(storage)
-                        MenuItem.WHATSAPP -> WhatsAppTabContent(messages)
+                        MenuItem.WHATSAPP -> WhatsAppTabScreen()
                         MenuItem.BROWSER -> BrowserTabContent(
                             url = webViewUrl,
                             onUrlChange = { webViewUrl = it },
@@ -336,9 +317,9 @@ fun PrivateCloudApp(storage: Storage) {
                                 saveLastMenuItem(context, MenuItem.PRIVATE_CLOUD)
                             }
                         )
+
                         MenuItem.NOTIFICATIONS -> Notifications()
                     }
-
                 }
             }
         }
@@ -347,31 +328,18 @@ fun PrivateCloudApp(storage: Storage) {
 
     if (isFullScreen) {
         Box(modifier = Modifier.fillMaxSize()) {
-
-            var canGoBack by remember { mutableStateOf(false) }
             var webViewState by remember { mutableStateOf<WebView?>(null) }
-
-            // WebViewClient, der canGoBack aktualisiert
-            val webViewClient = remember {
-                object : WebViewClient() {
-                    override fun onPageFinished(view: WebView?, url: String?) {
-                        canGoBack = view?.canGoBack() == true
-                    }
-                }
-            }
 
             // WebView
             AndroidView(
                 factory = { ctx ->
                     val webView = WebView(ctx).apply {
                         webChromeClient = WebChromeClient()
-                        this.webViewClient = webViewClient
                         settings.apply {
                             databaseEnabled = true
                             allowFileAccess = true
                             allowContentAccess = true
                             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                            javaScriptEnabled = true
                             domStorageEnabled = true
                             loadWithOverviewMode = true
                             useWideViewPort = true
@@ -379,15 +347,13 @@ fun PrivateCloudApp(storage: Storage) {
                             displayZoomControls = false
                             cacheMode = WebSettings.LOAD_DEFAULT
                         }
-                        loadUrl("https://example.com")
+                        loadUrl(webViewUrl)
                     }
 
                     // CookieManager konfigurieren
                     CookieManager.getInstance().apply {
                         setAcceptCookie(true)
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                            setAcceptThirdPartyCookies(webView, true)
-                        }
+                        setAcceptThirdPartyCookies(webView, true)
                     }
 
                     webView
@@ -397,29 +363,6 @@ fun PrivateCloudApp(storage: Storage) {
                 },
                 modifier = Modifier.fillMaxSize()
             )
-
-            // Zurück-Button (klein, oben links)
-            IconButton(
-                onClick = {
-                    webViewState?.goBack()
-                },
-                modifier = Modifier
-                    .padding(8.dp)
-                    .size(64.dp)
-                    .align(Alignment.TopStart),
-                enabled = canGoBack,
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = Color.Black.copy(alpha = 0.6f),
-                    contentColor = Color.Blue
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.ArrowBack,
-                    contentDescription = "Zurück",
-                    modifier = Modifier.size(16.dp),
-                    tint = Color.Blue
-                )
-            }
 
             // Hardware-Back-Handler
             BackHandler(enabled = true) {
@@ -1244,7 +1187,7 @@ fun MainCloudScreen(storage: Storage) {
                     Button(
                         onClick = {
                             val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-                                type = "*/*"
+                                type = "*/*"  // ✅ CORRECT
                                 addCategory(Intent.CATEGORY_OPENABLE)
                                 putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
                             }
@@ -1443,410 +1386,6 @@ fun MainCloudScreen(storage: Storage) {
     }
 }
 
-// ========== LOCKSCREEN FRAME SCREEN (ohne Lockscreen-Funktionalität) ==========
-@Composable
-fun LockscreenFrameScreen(
-    onIsFullScreenChange: (Boolean) -> Unit = {}
-) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var messages by remember { mutableStateOf<List<WhatsAppMessage>>(emptyList()) }
-
-    var isFullScreen by remember { mutableStateOf(false) }
-    var webViewUrl by remember { mutableStateOf("https://www.google.com") }
-    var webViewState by remember { mutableStateOf<WebView?>(null) }
-
-    // Broadcast Receiver für neue Nachrichten
-    DisposableEffect(Unit) {
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
-                scope.launch {
-                    messages = WhatsAppNotificationListener.getMessages()
-                }
-            }
-        }
-
-        val filter = IntentFilter("WHATSAPP_MESSAGE_RECEIVED")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        }
-
-        // Initial laden
-        scope.launch {
-            messages = WhatsAppNotificationListener.getMessages()
-
-        }
-
-        onDispose {
-            context.unregisterReceiver(receiver)
-        }
-    }
-
-    val gradient = Brush.linearGradient(
-        colors = listOf(Color(0xFF1A1A1A), Color(0xFF2A2A2A)),
-        start = Offset.Zero,
-        end = Offset.Infinite
-    )
-
-    LaunchedEffect(isFullScreen) {
-        onIsFullScreenChange(isFullScreen)
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(gradient)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(20.dp)
-        ) {
-            // Tab-Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                Button(
-                    onClick = { selectedTab = 0 },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (selectedTab == 0) Color(0xFF4CAF50) else Color(
-                            0xFF666666
-                        )
-                    ),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("💬 WhatsApp")
-                }
-
-                Spacer(Modifier.width(8.dp))
-
-                Button(
-                    onClick = { selectedTab = 1 },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (selectedTab == 1) Color(0xFF4CAF50) else Color(
-                            0xFF666666
-                        )
-                    ),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("🌐 Browser")
-                }
-
-                Spacer(Modifier.width(8.dp))
-
-                Button(
-                    onClick = { selectedTab = 2 },
-
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (selectedTab == 2) Color(0xFF4CAF50) else Color(
-                            0xFF666666
-                        )
-                    ),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("⚡ Quick")
-                }
-            }
-
-            Spacer(Modifier.height(20.dp))
-
-            // Content
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFF2A2A2A)
-                )
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(20.dp)
-                ) {
-                    when (selectedTab) {
-                        0 -> WhatsAppTabContent(messages = messages)
-                        1 -> BrowserTabContent(
-                            url = webViewUrl,
-                            onUrlChange = { webViewUrl = it },
-                            onEnterFullScreen = { isFullScreen = true },
-                            webViewState = webViewState
-                        )
-
-                        2 -> QuickSettingsTabContent()
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            fun isNotificationListenerEnabled(context: Context): Boolean {
-                val enabledListeners = Settings.Secure.getString(
-                    context.contentResolver,
-                    "enabled_notification_listeners"
-                )
-                val packageName = context.packageName
-                return enabledListeners?.contains(packageName) == true
-            }
-
-            var hasPermission by remember { mutableStateOf(isNotificationListenerEnabled(context)) }
-
-            if (!hasPermission) {
-                Button(
-                    onClick = {
-                        context.startActivity(
-                            Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("📱 Benachrichtigungs-Berechtigung erteilen")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun WhatsAppTabContent(messages: List<WhatsAppMessage>) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    if (messages.isEmpty()) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-                .background(Color(0xFF2A2A2A)),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(text = "📱", fontSize = 60.sp)
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = "Keine WhatsApp-Nachrichten",
-                fontSize = 20.sp,
-                color = Color.White,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "💡 Tipp: Erlaube Benachrichtigungen und\nschreib dir selbst eine Testnachricht!",
-                fontSize = 12.sp,
-                color = Color.LightGray,
-                textAlign = TextAlign.Center
-            )
-        }
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(messages.size) { index ->
-                val message = messages[index]
-                MessageCard(message = message, context = context, scope = scope)
-            }
-        }
-    }
-}
-
-@Composable
-fun MessageCard(message: WhatsAppMessage, context: Context, scope: CoroutineScope) {
-    var replyText by remember { mutableStateOf("") }
-    var showAllMessagesDialog by remember { mutableStateOf(false) }
-    var allMessagesText by remember { mutableStateOf("") }
-
-    // AlertDialog für alle Nachrichten
-    if (showAllMessagesDialog) {
-        AlertDialog(
-            onDismissRequest = { showAllMessagesDialog = false },
-            title = { Text("Alle Nachrichten von ${message.sender}") },
-            text = {
-                LazyColumn {
-                    item {
-                        Text(allMessagesText, color = Color.White)
-                    }
-                }
-            },
-            confirmButton = {
-                Button(onClick = { showAllMessagesDialog = false }) {
-                    Text("OK")
-                }
-            },
-            containerColor = Color(0xFF2A2A2A),
-            titleContentColor = Color.White,
-            textContentColor = Color.White
-        )
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF1E1E1E)
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            // Sender
-            Text(
-                text = message.sender,
-                fontSize = 18.sp,
-                color = Color(0xFF4CAF50),
-                fontWeight = FontWeight.Bold
-            )
-
-            // Message
-            Text(
-                text = message.text,
-                fontSize = 16.sp,
-                color = Color.White,
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
-
-            // Reply Section
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = replyText,
-                    onValueChange = { replyText = it },
-                    placeholder = { Text("Antworten...", color = Color.Gray) },
-                    modifier = Modifier.weight(1f),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedContainerColor = Color(0xFF333333),
-                        unfocusedContainerColor = Color(0xFF333333)
-                    ),
-                    singleLine = true
-                )
-
-                Spacer(Modifier.width(8.dp))
-
-                Button(
-                    onClick = {
-                        if (replyText.isNotBlank()) {
-                            scope.launch {
-                                val success = WhatsAppNotificationListener.sendReply(
-                                    message.sender,
-                                    replyText,
-                                    context
-                                )
-                                if (success) {
-                                    replyText = ""
-                                }
-                            }
-                        }
-                    },
-                    enabled = replyText.isNotBlank()
-                ) {
-                    Text("📤")
-                }
-            }
-
-            // Button für alle Nachrichten
-            TextButton(
-                onClick = {
-                    scope.launch {
-                        val allMessages =
-                            WhatsAppNotificationListener.getMessagesBySender(message.sender)
-                        allMessagesText = allMessages.joinToString("\n\n") {
-                            val time = SimpleDateFormat(
-                                "dd.MM. HH:mm",
-                                Locale.getDefault()
-                            )
-                                .format(Date(it.timestamp))
-                            "[$time] ${it.sender}: ${it.text}"
-                        }
-                        showAllMessagesDialog = true
-                    }
-                }
-            ) {
-                Text("Alle Nachrichten anzeigen", color = Color.LightGray, fontSize = 12.sp)
-            }
-        }
-    }
-}
-
-
-@Composable
-fun BrowserTabContent(
-    url: String,
-    onUrlChange: (String) -> Unit,
-    onEnterFullScreen: () -> Unit,
-    webViewState: WebView?,
-    modifier: Modifier = Modifier
-) {
-    val keyboardController = LocalSoftwareKeyboardController.current
-
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color(0xFF2A2A2A))
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, // zentriert alle Kinder horizontal
-        verticalArrangement = Arrangement.Center // optional: zentriert auch vertikal im gesamten Column
-    ) {
-        TextField(
-            value = url,
-            onValueChange = onUrlChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp), // optional: feste Höhe für konsistentes Aussehen
-            singleLine = true,
-            placeholder = { Text("URL hier eingeben", color = Color.Gray) },
-            colors = TextFieldDefaults.colors(
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
-                cursorColor = Color.White,
-                focusedContainerColor = Color(0xFF333333),
-                unfocusedContainerColor = Color(0xFF333333),
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent
-            ),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-            keyboardActions = KeyboardActions(
-                onGo = {
-                    val newUrl = if (url.startsWith("http://") || url.startsWith("https://")) {
-                        url
-                    } else {
-                        "https://$url"
-                    }
-                    webViewState?.loadUrl(newUrl)
-                    keyboardController?.hide()
-                }
-            )
-        )
-
-        Spacer(modifier = Modifier.height(16.dp)) // Abstand zwischen Input und Button
-
-        Button(
-            onClick = {
-                val newUrl = if (url.startsWith("http://") || url.startsWith("https://")) {
-                    url
-                } else {
-                    "https://$url"
-                }
-                webViewState?.loadUrl(newUrl)
-                keyboardController?.hide()
-                onEnterFullScreen()
-            },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF4CAF50),
-                contentColor = Color.White
-            ),
-            modifier = Modifier
-                .fillMaxWidth() // oder .defaultMinSize(minWidth = ...) je nach Wunsch
-                .height(56.dp)
-        ) {
-            Text("Öffnen", fontSize = 20.sp)
-        }
-    }
-}
-
-
 
 @Composable
 fun Notifications() {
@@ -1919,8 +1458,8 @@ fun Notifications() {
 
                         // Zeitstempel
                         Text(
-                            text = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
-                                .format(java.util.Date(sbn.postTime)),
+                            text = SimpleDateFormat("HH:mm", Locale.getDefault())
+                                .format(Date(sbn.postTime)),
                             color = Color.Gray,
                             fontSize = 11.sp,
                             modifier = Modifier.align(Alignment.End)
@@ -1936,9 +1475,11 @@ fun Notifications() {
 @Composable
 fun QuickSettingsTabContent() {
     val context = LocalContext.current
+    var showBatteryChart by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier
+            .fillMaxSize()
             .background(Color(0xFF2A2A2A))
     ) {
         LazyColumn(
@@ -1982,12 +1523,18 @@ fun QuickSettingsTabContent() {
             item {
                 QuickSettingRow(
                     listOf(
+                        "Batterie\nDiagramm" to { showBatteryChart = true },
                         "📱\nGeräte\nInfo" to { showDeviceInfo(context) },
                         "🔨\nEntwickler" to { openDeveloperOptions(context) }
                     )
                 )
             }
         }
+    }
+    if (showBatteryChart) {
+        BatteryChartScreen(
+            onDismiss = { showBatteryChart = false }
+        )
     }
 }
 
@@ -2003,139 +1550,16 @@ fun QuickSettingRow(buttons: List<Pair<String, () -> Unit>>) {
                 modifier = Modifier
                     .weight(1f)
                     .height(80.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF444444)
-                )
-            ) {
-                Text(
-                    text = label,
-                    fontSize = 12.sp,
-                    textAlign = TextAlign.Center
-                )
-            }
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF444444))
+            ) { Text(text = label, fontSize = 12.sp, textAlign = TextAlign.Center) }
         }
-    }
-}
-
-fun showSensorsInfo(context: Context) {
-    val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-    val sensorList = sensorManager.getSensorList(Sensor.TYPE_ALL)
-
-    if (sensorList.isEmpty()) {
-        showSensorNotification(context, "Keine Sensoren gefunden", 1040)
-        return
-    }
-
-    val info = StringBuilder()
-    info.append("📱 **Gefundene Sensoren**: ${sensorList.size}\n\n")
-
-    // Gruppiert nach Typ für bessere Lesbarkeit
-    sensorList.forEachIndexed { index, sensor ->
-        val typeStr = getSensorTypeString(sensor.type)
-        val vendor = sensor.vendor.ifEmpty { "N/A" }
-        val version = sensor.version
-        val resolution = sensor.resolution
-        val maxRange = sensor.maximumRange
-        val power = sensor.power // mA
-        val minDelay =
-            if (sensor.minDelay > 0) "${sensor.minDelay / 1000} ms" else "kein Livestream"
-
-        info.append("[$index] **${sensor.name}**\n")
-        info.append("   Typ: $typeStr\n")
-        info.append("   Hersteller: $vendor\n")
-        info.append("   Version: $version\n")
-        info.append("   Reichweite: ±$maxRange\n")
-        info.append("   Auflösung: $resolution\n")
-        info.append("   Min. Verzögerung: $minDelay\n")
-        info.append("   Stromverbrauch: ${String.format("%.2f", power)} mA\n\n")
-    }
-
-    info.append("ℹ️ Hinweis: Werte sind statisch. Keine Live-Daten.")
-
-    showSensorNotification(context, info.toString(), 1040)
-}
-
-// Hilfsfunktion: Typ in lesbaren String umwandeln
-private fun getSensorTypeString(type: Int): String {
-    return when (type) {
-        Sensor.TYPE_ACCELEROMETER -> "Beschleunigungssensor"
-        Sensor.TYPE_GYROSCOPE -> "Gyroskop"
-        Sensor.TYPE_MAGNETIC_FIELD -> "Magnetfeld (Kompass)"
-        Sensor.TYPE_LIGHT -> "Umgebungslicht"
-        Sensor.TYPE_PROXIMITY -> "Näherungssensor"
-        Sensor.TYPE_PRESSURE -> "Luftdruck (Barometer)"
-        Sensor.TYPE_ROTATION_VECTOR -> "Rotationsvektor"
-        Sensor.TYPE_GRAVITY -> "Schwerkraft"
-        Sensor.TYPE_LINEAR_ACCELERATION -> "Lineare Beschleunigung"
-        Sensor.TYPE_ORIENTATION -> "Orientierung (veraltet)"
-        Sensor.TYPE_AMBIENT_TEMPERATURE -> "Umgebungstemperatur"
-        Sensor.TYPE_RELATIVE_HUMIDITY -> "Luftfeuchtigkeit"
-        Sensor.TYPE_HEART_RATE -> "Herzfrequenz"
-        Sensor.TYPE_STEP_DETECTOR -> "Schritterkennung"
-        Sensor.TYPE_STEP_COUNTER -> "Schrittzähler"
-        Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR -> "Geomagnetischer Rotationsvektor"
-        Sensor.TYPE_GAME_ROTATION_VECTOR -> "Spiel-Rotationsvektor"
-        Sensor.TYPE_SIGNIFICANT_MOTION -> "Bedeutende Bewegung"
-        Sensor.TYPE_HINGE_ANGLE -> "Klappwinkel (Foldables)"
-        Sensor.TYPE_POSE_6DOF -> "6DOF Pose"
-        Sensor.TYPE_MOTION_DETECT -> "Bewegungserkennung"
-        Sensor.TYPE_MAGNETIC_FIELD_UNCALIBRATED -> "Unkalibriertes Magnetfeld"
-        Sensor.TYPE_ACCELEROMETER_UNCALIBRATED -> "Unkalibrierte Beschleunigung"
-        Sensor.TYPE_GYROSCOPE_UNCALIBRATED -> "Unkalibriertes Gyroskop"
-        Sensor.TYPE_HEART_BEAT -> "Herzschlag (Rhythmus)"
-        Sensor.TYPE_LOW_LATENCY_OFFBODY_DETECT -> "KörpereRKennung (Low Latency)"
-        Sensor.TYPE_ACCELEROMETER_LIMITED_AXES -> "Beschleunigung (limitierte Achsen)"
-        Sensor.TYPE_GYROSCOPE_LIMITED_AXES -> "Gyroskop (limitierte Achsen)"
-        else -> "Unbekannt ($type)"
-    }
-}
-
-// Einheitliche Benachrichtigung
-private fun showSensorNotification(context: Context, content: String, notificationId: Int) {
-    val channelId = "sensors_info_channel"
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val channel = NotificationChannel(
-            channelId,
-            "Sensor-Informationen",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Listet alle verfügbaren Sensoren auf"
-        }
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.createNotificationChannel(channel)
-    }
-
-    val builder = NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(R.drawable.ic_menu_camera)
-        .setContentTitle("📡 Sensoren-Info")
-        .setContentText("Anzahl und Details aller Sensoren")
-        .setStyle(NotificationCompat.BigTextStyle().bigText(content))
-        .setPriority(NotificationCompat.PRIORITY_LOW)
-        .setAutoCancel(true)
-
-    if (ActivityCompat.checkSelfPermission(
-            context,
-            Manifest.permission.POST_NOTIFICATIONS
-        ) == PackageManager.PERMISSION_GRANTED
-    ) {
-        NotificationManagerCompat.from(context).notify(notificationId, builder.build())
-    } else {
-        // Fallback: Anzahl + erstes Beispiel
-        val lines = content.lines()
-        val preview = lines.take(4).joinToString("\n")
-        Toast.makeText(context, "Sensoren:\n$preview", Toast.LENGTH_LONG).show()
     }
 }
 
 @SuppressLint("NewApi")
 fun showDisplayInfo(context: Context) {
-    val windowManager =
-        context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-    val display: Display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        context.display ?: windowManager.defaultDisplay
-    } else {
-        windowManager.defaultDisplay
-    }
+    val display: Display = context.display
+
 
     val metrics = DisplayMetrics()
     display.getRealMetrics(metrics) // inkl. Systemleisten
@@ -2148,13 +1572,13 @@ fun showDisplayInfo(context: Context) {
     // === 1. Physikalische Auflösung (echte Pixel) ===
     val realWidth = metrics.widthPixels
     val realHeight = metrics.heightPixels
-    info.append("📏 Phys. Auflösung: ${realWidth} × ${realHeight} px\n")
+    info.append("📏 Phys. Auflösung: $realWidth × $realHeight px\n")
 
     // === 2. Nutzbare Auflösung (ohne Systemleisten) ===
     val usableWidth = usableMetrics.widthPixels
     val usableHeight = usableMetrics.heightPixels
     if (usableWidth != realWidth || usableHeight != realHeight) {
-        info.append("📦 Nutzbare Fläche: ${usableWidth} × ${usableHeight} px\n")
+        info.append("📦 Nutzbare Fläche: $usableWidth × $usableHeight px\n")
     }
 
     // === 3. Dichte (dpi) ===
@@ -2165,7 +1589,7 @@ fun showDisplayInfo(context: Context) {
         densityDpi <= 240 -> "hdpi (240 dpi)"
         densityDpi <= 320 -> "xhdpi (320 dpi)"
         densityDpi <= 480 -> "xxhdpi (480 dpi)"
-        else -> "xxxhdpi (≥ ${densityDpi} dpi)"
+        else -> "xxxhdpi (≥ $densityDpi dpi)"
     }
     info.append("🔍 Dichte: $densityDpi dpi ($densityStr)\n")
 
@@ -2176,34 +1600,27 @@ fun showDisplayInfo(context: Context) {
         val diagonalInches =
             sqrt(widthInches * widthInches + heightInches * heightInches)
         info.append("📐 Bildschirmgröße: ${String.format("%.1f", diagonalInches)} Zoll\n")
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         info.append("📐 Bildschirmgröße: N/A\n")
     }
 
     // === 5. Bildwiederholfrequenz (Refresh Rate) – ab Android 11 ===
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        try {
-            val refreshRate = display.refreshRate
-            info.append("🔄 Refresh Rate: ${String.format("%.1f", refreshRate)} Hz\n")
-        } catch (e: Exception) {
-            info.append("🔄 Refresh Rate: N/A\n")
-        }
-    } else {
-        // Alternative für ältere Versionen (ungenau, aber möglich)
-        info.append("🔄 Refresh Rate: ≤ 60 Hz (Android < 11)\n")
+    try {
+        val refreshRate = display.refreshRate
+        info.append("🔄 Refresh Rate: ${String.format("%.1f", refreshRate)} Hz\n")
+    } catch (_: Exception) {
+        info.append("🔄 Refresh Rate: N/A\n")
     }
 
     // === 6. HDR-Unterstützung (optional) ===
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-        val supportsHdr =
-            displayManager.getDisplay(display.displayId)?.hdrCapabilities?.supportedHdrTypes?.isNotEmpty() == true
-        info.append("🖼️ HDR: ${if (supportsHdr) "Ja" else "Nein"}\n")
-    }
+    val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+    val supportsHdr =
+        displayManager.getDisplay(display.displayId)?.hdrCapabilities?.supportedHdrTypes?.isNotEmpty() == true
+    info.append("🖼️ HDR: ${if (supportsHdr) "Ja" else "Nein"}\n")
 
     // === 7. Ausrichtung ===
     val rotation = display.rotation
-    val orientationStr = when (rotation ?: Surface.ROTATION_0) {
+    val orientationStr = when (rotation) {
         Surface.ROTATION_0 -> "Hochformat (0°)"
         Surface.ROTATION_90 -> "Querformat (90°)"
         Surface.ROTATION_180 -> "Hochformat (180°, umgekehrt)"
@@ -2214,17 +1631,15 @@ fun showDisplayInfo(context: Context) {
 
     // === Notification ===
     val channelId = "display_info_channel"
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val channel = NotificationChannel(
-            channelId,
-            "Display-Informationen",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Zeigt technische Display-Daten an"
-        }
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.createNotificationChannel(channel)
+    val channel = NotificationChannel(
+        channelId,
+        "Display-Informationen",
+        NotificationManager.IMPORTANCE_LOW
+    ).apply {
+        description = "Zeigt technische Display-Daten an"
     }
+    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    nm.createNotificationChannel(channel)
 
     val builder = NotificationCompat.Builder(context, channelId)
         .setSmallIcon(R.drawable.ic_menu_gallery)
@@ -2243,7 +1658,7 @@ fun showDisplayInfo(context: Context) {
     } else {
         // Fallback: Zeige wichtige Werte als Toast
         val fallback = "Auflösung: ${realWidth}×${realHeight}\n" +
-                "Dichte: ${densityDpi} dpi\n" +
+                "Dichte: $densityDpi dpi\n" +
                 "Größe: ${
                     String.format(
                         "%.1f",
@@ -2256,162 +1671,18 @@ fun showDisplayInfo(context: Context) {
     }
 }
 
-@SuppressLint("MissingPermission") // Berechtigungen werden zur Laufzeit geprüft
-fun showNetworkInfo(context: Context) {
-    val connectivityManager =
-        context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-    val wifiManager =
-        context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-
-    val info = StringBuilder()
-
-    // === 1. Aktives Netzwerk ===
-    val activeNetwork = connectivityManager.activeNetwork
-    val networkCapabilities = if (activeNetwork != null) {
-        connectivityManager.getNetworkCapabilities(activeNetwork)
-    } else null
-
-    if (networkCapabilities == null) {
-        info.append("🌐 Keine aktive Netzwerkverbindung\n\n")
-    } else {
-        val transport = when {
-            networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "WLAN"
-            networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "Mobilfunk"
-            networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"
-            networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH) -> "Bluetooth"
-            else -> "Unbekannt"
-        }
-
-        val isInternet =
-            networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-        val isValidated =
-            networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-
-        info.append("📡 Aktive Verbindung: $transport\n")
-        info.append("✅ Internet verfügbar: ${if (isInternet && isValidated) "Ja" else "Nein (kein Zugriff)"}\n\n")
-
-        // === 2. WLAN-Details (wenn WLAN) ===
-        if (transport == "WLAN") {
-            var ssid = "<unbekannt>"
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                // Ab Android 11: Zugriff auf SSID nur mit Location-Berechtigung
-                if (ActivityCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.ACCESS_FINE_LOCATION
-                    ) == PackageManager.PERMISSION_GRANTED ||
-                    ActivityCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.ACCESS_COARSE_LOCATION
-                    ) == PackageManager.PERMISSION_GRANTED
-                ) {
-                    val wifiInfo = wifiManager.connectionInfo
-                    ssid = wifiInfo.ssid.trim().removeSurrounding("\"")
-                } else {
-                    ssid = "<Standortberechtigung fehlt>"
-                }
-            } else {
-                // Unter Android 11: SSID oft lesbar ohne Location (je nach Hersteller)
-                try {
-                    val wifiInfo = wifiManager.connectionInfo
-                    ssid = wifiInfo.ssid.trim().removeSurrounding("\"")
-                } catch (e: Exception) {
-                    ssid = "<nicht lesbar>"
-                }
-            }
-            info.append("📶 WLAN-Name (SSID): $ssid\n")
-
-            // Signalstärke (RSSI → dBm)
-            val rssi = wifiManager.connectionInfo.rssi
-            val level = WifiManager.calculateSignalLevel(rssi, 5) // 0–4
-            val bars = "▂▄▆█".substring(0, level.coerceIn(0, 4))
-            info.append("📡 Signalstärke: $rssi dBm ($bars)\n\n")
-        }
-
-        // === 3. Mobilfunk-Details (wenn Mobil) ===
-        if (transport == "Mobilfunk") {
-            try {
-                val telephonyManager =
-                    context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
-                val networkType = when (telephonyManager.dataNetworkType) {
-                    TelephonyManager.NETWORK_TYPE_LTE -> "LTE"
-                    TelephonyManager.NETWORK_TYPE_NR -> "5G"
-                    TelephonyManager.NETWORK_TYPE_UMTS -> "3G"
-                    TelephonyManager.NETWORK_TYPE_GSM -> "2G"
-                    else -> "Mobil (${telephonyManager.dataNetworkType})"
-                }
-                info.append("📶 Mobilfunktyp: $networkType\n")
-                // Signalstärke bei Mobil ist komplex → optional, hier weggelassen für Stabilität
-            } catch (e: Exception) {
-                info.append("📶 Mobilfunktyp: N/A\n")
-            }
-            info.append("\n")
-        }
-    }
-
-    // === 4. Lokale IP-Adresse ===
-    try {
-        var localIp = "N/A"
-        val en = NetworkInterface.getNetworkInterfaces()
-        while (en.hasMoreElements()) {
-            val intf = en.nextElement()
-            val enumIpAddr = intf.inetAddresses
-            while (enumIpAddr.hasMoreElements()) {
-                val inetAddress = enumIpAddr.nextElement()
-                if (!inetAddress.isLoopbackAddress && inetAddress.hostAddress?.contains(":") == false) {
-                    localIp = inetAddress.hostAddress
-                    break
-                }
-            }
-            if (localIp != "N/A") break
-        }
-        info.append("🏠 Lokale IP: $localIp\n")
-    } catch (e: Exception) {
-        info.append("🏠 Lokale IP: N/A\n")
-    }
-
-    // === 5. Öffentliche IP (asynchron, da Netzwerkaufruf) ===
-    info.append("🌍 Öffentliche IP: Wird abgerufen…\n")
-
-    // Benachrichtigung VOR async-IP-Abruf anzeigen
-    showNetworkNotificationNow(context, info.toString())
-
-    // Öffentliche IP im Hintergrund laden
-    Executors.newSingleThreadExecutor().execute {
-        var publicIp = "N/A"
-        try {
-            val url = URL("https://api.ipify.org")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.connectTimeout = 3000
-            conn.readTimeout = 3000
-            val reader = BufferedReader(InputStreamReader(conn.inputStream))
-            publicIp = reader.readLine() ?: "Fehler"
-            reader.close()
-            conn.disconnect()
-        } catch (e: Exception) {
-            publicIp = "Offline / Timeout"
-        }
-
-        // Benachrichtigung mit aktualisierter öffentlicher IP
-        val updatedInfo = info.toString()
-            .replace("🌍 Öffentliche IP: Wird abgerufen…", "🌍 Öffentliche IP: $publicIp")
-        showNetworkNotificationNow(context, updatedInfo, final = true)
-    }
-}
-
 // Hilfsfunktion: Sofortige Benachrichtigung (wird 1–2× aufgerufen)
-private fun showNetworkNotificationNow(context: Context, content: String, final: Boolean = false) {
+fun showNetworkNotificationNow(context: Context, content: String, final: Boolean = false) {
     val channelId = "network_info_channel"
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val channel = NotificationChannel(
-            channelId,
-            "Netzwerk-Informationen",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Zeigt aktuelle Netzwerkdetails an"
-        }
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.createNotificationChannel(channel)
+    val channel = NotificationChannel(
+        channelId,
+        "Netzwerk-Informationen",
+        NotificationManager.IMPORTANCE_LOW
+    ).apply {
+        description = "Zeigt aktuelle Netzwerkdetails an"
     }
+    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    nm.createNotificationChannel(channel)
 
     val builder = NotificationCompat.Builder(context, channelId)
         .setSmallIcon(R.drawable.ic_menu_compass)
@@ -2459,7 +1730,7 @@ fun showDetailedStorageInfo(context: Context) {
             "📁 Interner Speicher (Gerät)",
             content
         )
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         showStorageNotification(
             context,
             "storage_internal",
@@ -2494,7 +1765,7 @@ fun showDetailedStorageInfo(context: Context) {
             "📱 Externer Speicher (geteilt)",
             content
         )
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         showStorageNotification(
             context,
             "storage_external",
@@ -2515,13 +1786,11 @@ private fun showStorageNotification(
     title: String,
     content: String
 ) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val channel =
-            NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_LOW)
-        channel.description = "Speicherinformation"
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.createNotificationChannel(channel)
-    }
+    val channel =
+        NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_LOW)
+    channel.description = "Speicherinformation"
+    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    nm.createNotificationChannel(channel)
 
     val builder = NotificationCompat.Builder(context, channelId)
         .setSmallIcon(R.drawable.ic_menu_info_details)
@@ -2555,15 +1824,6 @@ private fun formatBytes(bytes: Long): String {
         bytes >= 1_000_000L -> "${String.format("%.2f", bytes / 1_000_000.0)} MB"
         bytes >= 1_000L -> "${String.format("%.2f", bytes / 1_000.0)} KB"
         else -> "$bytes B"
-    }
-}
-
-private fun formatDirSize(dir: File?): String {
-    if (dir == null || !dir.exists()) return "0 B"
-    return try {
-        formatBytes(getDirSize(dir))
-    } catch (e: Exception) {
-        "N/A"
     }
 }
 
@@ -2614,18 +1874,16 @@ fun showBatteryInfo(context: Context) {
 
         // Notification Channel erstellen (für Android 8.0+)
         val channelId = "battery_info_channel"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "Batterie-Informationen",
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = "Zeigt detaillierte Batterie-Informationen an"
-            }
-            val notificationManager =
-                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            channelId,
+            "Batterie-Informationen",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "Zeigt detaillierte Batterie-Informationen an"
         }
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.createNotificationChannel(channel)
 
         // Notification erstellen
         val builder = NotificationCompat.Builder(context, channelId)
@@ -2647,9 +1905,6 @@ fun showBatteryInfo(context: Context) {
             )
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
-
-        // Notification anzeigen
-        val notificationManager = NotificationManagerCompat.from(context)
         if (ActivityCompat.checkSelfPermission(
                 context,
                 Manifest.permission.POST_NOTIFICATIONS
@@ -2674,13 +1929,14 @@ fun showBatteryInfo(context: Context) {
  */
 fun openBatterySettings(context: Context) {
     context.startActivity(Intent("android.intent.action.POWER_USAGE_SUMMARY").apply {
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK  // ✅ CORRECT
     })
 }
 
 /*
  * Zeigt Geräte-Info an
  */
+@SuppressLint("HardwareIds")
 fun showDeviceInfo(context: Context) {
     val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
     val wifiManager =
@@ -2735,16 +1991,14 @@ fun showDeviceInfo(context: Context) {
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     val channelId = "device_info_channel"
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val channel = NotificationChannel(
-            channelId,
-            "Geräte-Infos",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Zeigt System-, Hardware-, App- und Netzwerk-Infos an"
-        }
-        notificationManager.createNotificationChannel(channel)
+    val channel = NotificationChannel(
+        channelId,
+        "Geräte-Infos",
+        NotificationManager.IMPORTANCE_LOW
+    ).apply {
+        description = "Zeigt System-, Hardware-, App- und Netzwerk-Infos an"
     }
+    notificationManager.createNotificationChannel(channel)
 
     val categories = listOf(
         "📱 System" to systemInfo,
@@ -2780,20 +2034,6 @@ fun openDeveloperOptions(context: Context) {
 }
 
 /**
- * Schaltet Bildschirm-Helligkeit (öffnet Einstellungen)
- */
-fun adjustBrightness(context: Context) {
-    try {
-        context.startActivity(Intent(Settings.ACTION_DISPLAY_SETTINGS).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        })
-    } catch (_: Exception) {
-        Toast.makeText(context, "Helligkeits-Einstellungen nicht verfügbar", Toast.LENGTH_SHORT)
-            .show()
-    }
-}
-
-/**
  * Öffnet Datennutzung
  */
 fun openDataUsage(context: Context) {
@@ -2807,34 +2047,6 @@ fun openDataUsage(context: Context) {
 }
 
 /**
- * Öffnet App-Info der eigenen App
- */
-fun openAppInfo(context: Context) {
-    try {
-        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = Uri.fromParts("package", context.packageName, null)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        Toast.makeText(context, "App-Info nicht verfügbar", Toast.LENGTH_SHORT).show()
-    }
-}
-
-/**
- * Öffnet Standort-Einstellungen
- */
-fun openLocationSettings(context: Context) {
-    try {
-        context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        })
-    } catch (e: Exception) {
-        Toast.makeText(context, "Standort-Einstellungen nicht verfügbar", Toast.LENGTH_SHORT).show()
-    }
-}
-
-/**
  * Öffnet Speicher-Einstellungen
  */
 fun openStorageSettings(context: Context) {
@@ -2842,127 +2054,8 @@ fun openStorageSettings(context: Context) {
         context.startActivity(Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         })
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         Toast.makeText(context, "Speicher-Einstellungen nicht verfügbar", Toast.LENGTH_SHORT).show()
-    }
-}
-
-/**
- * Startet Taschenlampe-Toggle (falls verfügbar)
- */
-fun toggleFlashlight(context: Context) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        try {
-            val cameraManager =
-                context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-            val cameraId = cameraManager.cameraIdList[0]
-
-            // Hinweis: Toggle-Funktion erfordert mehr State-Management
-            Toast.makeText(context, "💡 Taschenlampe über Quick Settings nutzen", Toast.LENGTH_SHORT)
-                .show()
-
-            // Alternative: Öffne Quick Settings
-            try {
-                context.sendBroadcast(Intent("android.intent.action.CLOSE_SYSTEM_DIALOGS"))
-            } catch (e: Exception) {
-                // Ignorieren
-            }
-        } catch (e: Exception) {
-            Toast.makeText(context, "Taschenlampe nicht verfügbar", Toast.LENGTH_SHORT).show()
-        }
-    } else {
-        Toast.makeText(
-            context,
-            "Funktion nicht verfügbar (Android 6.0+ benötigt)",
-            Toast.LENGTH_SHORT
-        ).show()
-    }
-}
-
-// Quick Settings Funktionen
-fun openWiFiSettings(context: Context) {
-    try {
-        context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        })
-    } catch (e: Exception) {
-        Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
-    }
-}
-
-fun openBluetoothSettings(context: Context) {
-    try {
-        context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        })
-    } catch (e: Exception) {
-        Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
-    }
-}
-
-fun openMobileDataSettings(context: Context) {
-    try {
-        context.startActivity(Intent(Settings.ACTION_DATA_ROAMING_SETTINGS).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        })
-    } catch (e: Exception) {
-        Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
-    }
-}
-
-fun openCamera(context: Context) {
-    try {
-        context.startActivity(Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        })
-    } catch (_: Exception) {
-        Toast.makeText(context, "Kamera nicht verfügbar", Toast.LENGTH_SHORT).show()
-    }
-}
-
-fun openDisplaySettings(context: Context) {
-    try {
-        context.startActivity(Intent(Settings.ACTION_DISPLAY_SETTINGS).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        })
-    } catch (e: Exception) {
-        Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
-    }
-}
-
-fun openSoundSettings(context: Context) {
-    try {
-        context.startActivity(Intent(Settings.ACTION_SOUND_SETTINGS).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        })
-    } catch (e: Exception) {
-        Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
-    }
-}
-
-fun openCalculator(context: Context) {
-    try {
-        val intent =
-            context.packageManager.getLaunchIntentForPackage("com.google.android.calculator")
-                ?: context.packageManager.getLaunchIntentForPackage("com.android.calculator2")
-        if (intent != null) {
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            context.startActivity(intent)
-        } else {
-            Toast.makeText(context, "Taschenrechner nicht gefunden", Toast.LENGTH_SHORT).show()
-        }
-    } catch (e: Exception) {
-        Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
-    }
-}
-
-fun openAlarm(context: Context) {
-    try {
-        context.startActivity(Intent(AlarmClock.ACTION_SHOW_ALARMS).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        })
-    } catch (_: Exception) {
-        Toast.makeText(context, "Wecker nicht verfügbar", Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -2982,9 +2075,9 @@ private const val KEY_LAST_MENU_ITEM = "last_menu_item"
 
 fun saveLastMenuItem(context: Context, menuItem: MenuItem) {
     context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        .edit()
-        .putString(KEY_LAST_MENU_ITEM, menuItem.name)
-        .apply()
+        .edit {
+            putString(KEY_LAST_MENU_ITEM, menuItem.name)
+        }
 }
 
 fun loadLastMenuItem(context: Context): MenuItem {
@@ -2992,7 +2085,7 @@ fun loadLastMenuItem(context: Context): MenuItem {
     val savedName = prefs.getString(KEY_LAST_MENU_ITEM, MenuItem.PRIVATE_CLOUD.name)
     return try {
         MenuItem.valueOf(savedName ?: MenuItem.PRIVATE_CLOUD.name)
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         MenuItem.PRIVATE_CLOUD
     }
 }
