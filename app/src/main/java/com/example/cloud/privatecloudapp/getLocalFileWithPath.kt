@@ -1,4 +1,4 @@
-package com.example.cloud.functions
+package com.example.cloud.privatecloudapp
 
 import android.os.Environment
 import java.io.File
