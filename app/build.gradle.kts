@@ -1,14 +1,27 @@
+import com.android.build.api.dsl.Packaging
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    kotlin("kapt")
     kotlin("plugin.serialization") version "1.9.20"
 }
 
 android {
     namespace = "com.example.cloud"
-    compileSdk {
-        version = release(36)
+    compileSdk = 36
+
+    fun Packaging.() {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/DEPENDENCIES"
+        }
     }
 
     defaultConfig {
@@ -19,14 +32,43 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField(
+            "String",
+            "SUPABASE_ANON_KEY",
+            "\"${project.properties["SUPABASE_ANON_KEY"]}\""
+        )
+
+        buildConfigField(
+            "String",
+            "WEATHERAPI_API_KEY",
+            "\"${project.properties["WEATHERAPI_api_key"]}\""
+        )
+    }
+
+    buildFeatures {
+        buildConfig = true
+        compose = true
     }
 
     buildTypes {
+        debug {
+            buildConfigField(
+                "String",
+                "SUPABASE_ANON_KEY",
+                "\"${project.properties["SUPABASE_ANON_KEY"]}\""
+            )
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
+            )
+            buildConfigField(
+                "String",
+                "SUPABASE_ANON_KEY",
+                "\"${project.properties["SUPABASE_ANON_KEY"]}\""
             )
         }
     }
@@ -48,7 +90,6 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.ui)
@@ -58,6 +99,11 @@ dependencies {
     implementation(libs.androidx.compose.ui.text)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.ui.graphics)
+    implementation(libs.androidx.compose.runtime)
+    implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.compose.runtime.saved.instance.state)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.play.services.location)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -65,20 +111,23 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-    implementation("io.github.jan-tennert.supabase:storage-kt:3.2.5")
-    implementation("io.github.jan-tennert.supabase:gotrue-kt:2.6.1")
-    implementation("io.github.jan-tennert.supabase:postgrest-kt:3.2.5")
-    implementation("androidx.activity:activity-compose:1.11.0")
-    implementation("io.github.jan-tennert.supabase:supabase-kt:3.2.5")
-    implementation("io.ktor:ktor-client-android:3.3.1")
-    implementation("io.coil-kt:coil-compose:2.7.0")
-    implementation("androidx.compose.material:material-icons-extended:1.7.8")
-    implementation("androidx.compose.material3:material3:1.4.0")
-    val roomVersion = "2.6.1"
-    implementation("androidx.room:room-runtime:$roomVersion")
-    implementation("androidx.room:room-ktx:$roomVersion")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.1")
-    implementation("androidx.media3:media3-exoplayer:1.2.0")
-    implementation("androidx.media3:media3-ui:1.2.0")
-    implementation("androidx.media3:media3-common:1.2.0")
+    implementation(libs.storage.kt)
+    implementation(libs.postgrest.kt)
+    implementation(libs.supabase.kt)
+    implementation(libs.coil.compose)
+    implementation(libs.androidx.material.icons.extended)
+    implementation(libs.androidx.material3)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui)
+    implementation(libs.androidx.media3.common)
+    implementation(libs.androidx.biometric)
+    implementation(libs.core)
+    implementation(libs.zxing.android.embedded)
+    kapt(libs.androidx.room.compiler)
+    implementation(libs.ktor.ktor.client.android)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.utils)
+    implementation(libs.accompanist.swiperefresh)
 }

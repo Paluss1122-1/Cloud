@@ -10,8 +10,9 @@ import com.example.cloud.whatsapptab.WhatsAppTabScreen
 import com.example.cloud.browsertab.BrowserTabContent
 
 import android.Manifest
-import android.R
+import androidx.activity.compose.LocalActivity
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.Activity.RESULT_OK
 import android.app.ActivityManager
 import android.app.NotificationManager
@@ -115,20 +116,41 @@ import kotlin.collections.chunked
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import android.app.NotificationChannel
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.hardware.display.DisplayManager
 import android.os.StatFs
 import android.util.DisplayMetrics
+import android.util.Log
 import android.view.Display
 import android.view.Surface
+import android.view.View
+import android.view.ViewGroup
+import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
+import android.webkit.WebView.setWebContentsDebuggingEnabled
+import android.webkit.WebViewClient
+import android.widget.FrameLayout
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.Laptop
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
@@ -140,17 +162,38 @@ import java.util.Locale
 import kotlin.math.pow
 import kotlin.math.sqrt
 import androidx.core.content.edit
+import com.example.cloud.Authenticator.AuthenticatorTab
+import com.example.cloud.aitab.AITabContent
+import com.example.cloud.audiorecorder.AudioRecorderContent
+import com.example.cloud.contactstab.ContactsRepository
+import com.example.cloud.contactstab.ContactsTabContent
+import com.example.cloud.contactstab.ContactsViewModel
+import com.example.cloud.datecalculator.DateCalculatorContent
+import com.example.cloud.gallery.GalleryTab
+import com.example.cloud.movietab.MovieDiscoveryTabContent
+import com.example.cloud.service.QuietHoursNotificationService
+import com.example.cloud.weathertab.WeatherTabContent
+import java.time.Instant
+import java.time.ZoneId
 
 // Enum für Menü-Einträge (einfach erweiterbar)
 enum class MenuItem(val title: String, val icon: String) {
     PRIVATE_CLOUD("Private Cloud", "☁️"),
-    OTHER_BUCKET("Other Bucket", "📂"),
     WHATSAPP("WhatsApp", "💬"),
     BROWSER("Browser", "🌐"),
     QUICK("Schnellzugriff", "⚡"),
-    NOTIFICATIONS("Benachrichtigungsverlauf", "⌚")
+    NOTIFICATIONS("Benachrichtigungsverlauf", "⌚"),
+    GALLERY("Gallerie", "🖼️"),
+    AUTHENTICATOR("Authenticator", "🔒"),
+    WEATHER("Wetter", "🌡️"),
+    AI("Chatgpt", "🤖"),
+    CONTACTS("Kontakte", "🧍"),
+    RECORDER("Recorder", "🎙️"),
+    DATECALCULATOR("Date Calculator", "📅"),
+    MOVIEDISCOVER("Filme Discovery", "📺")
 }
 
+@SuppressLint("ContextCastToActivity")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrivateCloudApp(storage: Storage) {
@@ -158,11 +201,21 @@ fun PrivateCloudApp(storage: Storage) {
     val context = LocalContext.current
     var selectedMenuItem by remember { mutableStateOf(loadLastMenuItem(context)) }
     val scope = rememberCoroutineScope()
+    var currentUrl by rememberSaveable { mutableStateOf<String?>(null) }
+
+    QuietHoursNotificationService.startService(context)
 
     LaunchedEffect(Unit) {
         BatteryDataRepository.init(context)
     }
-    var webViewUrl by remember { mutableStateOf("https://www.google.com") }
+
+    LaunchedEffect(currentUrl) {
+        currentUrl?.let { url ->
+            saveLastUrl(context, url)  // Speichert URL automatisch
+        }
+    }
+
+    var webViewUrl by remember { mutableStateOf(loadLastUrl(context)) }  // Lädt letzte URL
     var webViewState by remember { mutableStateOf<WebView?>(null) }
 
     val drawerState = rememberDrawerState(
@@ -189,27 +242,56 @@ fun PrivateCloudApp(storage: Storage) {
                     webViewState = webViewState
                 )
 
-                MenuItem.OTHER_BUCKET -> OtherBucketViewer(
-                    storage = storage,
-                    onBackPressed = {
-                        selectedMenuItem = MenuItem.PRIVATE_CLOUD
-                        saveLastMenuItem(context, MenuItem.PRIVATE_CLOUD)
-                    }
-                )
-
                 MenuItem.WHATSAPP -> WhatsAppTabScreen()
                 MenuItem.QUICK -> QuickSettingsTabContent()
                 MenuItem.NOTIFICATIONS -> Notifications()
-            }
+                MenuItem.GALLERY -> GalleryTab()
+                MenuItem.AUTHENTICATOR -> AuthenticatorTab()
+                MenuItem.WEATHER -> WeatherTabContent()
 
-            // ✅ Back-Handler für Browser-Vollbild
-            if (selectedMenuItem == MenuItem.BROWSER) {
-                BackHandler(enabled = true) {
-                    if (webViewState?.canGoBack() == true) {
-                        webViewState?.goBack()
-                    } else {
-                        isFullScreen = false
+                MenuItem.AI -> AITabContent()
+
+                MenuItem.CONTACTS -> {
+                    val repository = remember { ContactsRepository(context) }
+                    val viewModel = remember { ContactsViewModel(repository) }
+                    // Berechtigungen prüfen
+                    val permissionLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.RequestMultiplePermissions()
+                    ) { permissions ->
+                        if (permissions.all { it.value }) {
+                            viewModel.loadContacts()
+                        }
                     }
+
+                    LaunchedEffect(Unit) {
+                        permissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.READ_CONTACTS,
+                                Manifest.permission.WRITE_CONTACTS
+                            )
+                        )
+                    }
+
+                    ContactsTabContent(
+                        state = viewModel.state,
+                        onLoadContacts = { viewModel.loadContacts() },
+                        onSaveContact = { contact -> viewModel.saveContact(contact) },
+                        onDeleteContact = { id -> viewModel.deleteContact(id) }
+                    )
+                }
+                MenuItem.RECORDER -> AudioRecorderContent()
+                MenuItem.DATECALCULATOR -> DateCalculatorContent()
+                MenuItem.MOVIEDISCOVER -> MovieDiscoveryTabContent()
+            }
+        }
+
+        // ✅ Back-Handler für Browser-Vollbild
+        if (selectedMenuItem == MenuItem.BROWSER) {
+            BackHandler(enabled = true) {
+                if (webViewState?.canGoBack() == true) {
+                    webViewState?.goBack()
+                } else {
+                    isFullScreen = false
                 }
             }
         }
@@ -293,9 +375,11 @@ fun PrivateCloudApp(storage: Storage) {
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = Color(0xFF2A2A2A)
-                        )
+                        ),
+                        windowInsets = WindowInsets(0, 40, 0, 0) // Entfernt die Insets
                     )
-                }
+                },
+                contentWindowInsets = WindowInsets(0, 0, 0, 0) // Optional: für den Content-Bereich
             ) { paddingValues ->
                 Box(modifier = Modifier.padding(paddingValues)) {
                     // ✅ Keine erneute Deklaration nötig!
@@ -310,15 +394,45 @@ fun PrivateCloudApp(storage: Storage) {
                         )
 
                         MenuItem.QUICK -> QuickSettingsTabContent()
-                        MenuItem.OTHER_BUCKET -> OtherBucketViewer(
-                            storage = storage,
-                            onBackPressed = {
-                                selectedMenuItem = MenuItem.PRIVATE_CLOUD
-                                saveLastMenuItem(context, MenuItem.PRIVATE_CLOUD)
-                            }
-                        )
-
                         MenuItem.NOTIFICATIONS -> Notifications()
+                        MenuItem.GALLERY -> GalleryTab()
+                        MenuItem.AUTHENTICATOR -> AuthenticatorTab()
+                        MenuItem.WEATHER -> WeatherTabContent()
+
+                        MenuItem.AI -> AITabContent()
+
+                        MenuItem.CONTACTS -> {
+
+                            val repository = remember { ContactsRepository(context) }
+                            val viewModel = remember { ContactsViewModel(repository) }
+                            // Berechtigungen prüfen
+                            val permissionLauncher = rememberLauncherForActivityResult(
+                                ActivityResultContracts.RequestMultiplePermissions()
+                            ) { permissions ->
+                                if (permissions.all { it.value }) {
+                                    viewModel.loadContacts()
+                                }
+                            }
+
+                            LaunchedEffect(Unit) {
+                                permissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.READ_CONTACTS,
+                                        Manifest.permission.WRITE_CONTACTS
+                                    )
+                                )
+                            }
+
+                            ContactsTabContent(
+                                state = viewModel.state,
+                                onLoadContacts = { viewModel.loadContacts() },
+                                onSaveContact = { contact -> viewModel.saveContact(contact) },
+                                onDeleteContact = { id -> viewModel.deleteContact(id) }
+                            )
+                        }
+                        MenuItem.RECORDER -> AudioRecorderContent()
+                        MenuItem.DATECALCULATOR -> DateCalculatorContent()
+                        MenuItem.MOVIEDISCOVER -> MovieDiscoveryTabContent()
                     }
                 }
             }
@@ -327,44 +441,179 @@ fun PrivateCloudApp(storage: Storage) {
 
 
     if (isFullScreen) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+        ) {
             var webViewState by remember { mutableStateOf<WebView?>(null) }
 
-            // WebView
-            AndroidView(
-                factory = { ctx ->
-                    val webView = WebView(ctx).apply {
-                        webChromeClient = WebChromeClient()
-                        settings.apply {
-                            databaseEnabled = true
-                            allowFileAccess = true
-                            allowContentAccess = true
-                            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                            domStorageEnabled = true
-                            loadWithOverviewMode = true
-                            useWideViewPort = true
-                            builtInZoomControls = true
-                            displayZoomControls = false
-                            cacheMode = WebSettings.LOAD_DEFAULT
+            val webView = remember {
+                WebView(context).apply {
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                            Log.d("WebViewConsole", "${consoleMessage.message()} -- ${consoleMessage.sourceId()}:${consoleMessage.lineNumber()}")
+                            return true
                         }
-                        loadUrl(webViewUrl)
+                        private var customView: View? = null
+                        private var customViewCallback: CustomViewCallback? = null
+
+                        override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                            (context as? Activity)?.let { activity ->
+                                val decor = activity.window.decorView as FrameLayout
+                                decor.addView(
+                                    view, FrameLayout.LayoutParams(
+                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ViewGroup.LayoutParams.MATCH_PARENT
+                                    )
+                                )
+                                customView = view
+                                customViewCallback = callback
+                                activity.window.decorView.systemUiVisibility = (
+                                        View.SYSTEM_UI_FLAG_FULLSCREEN or
+                                                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                                                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                                        )
+                            }
+                        }
+
+                        override fun onHideCustomView() {
+                            (context as? Activity)?.let { activity ->
+                                val decor = activity.window.decorView as FrameLayout
+                                customView?.let { decor.removeView(it) }
+                                customView = null
+                                customViewCallback?.onCustomViewHidden()
+                                activity.window.decorView.systemUiVisibility =
+                                    View.SYSTEM_UI_FLAG_VISIBLE
+                            }
+                        }
                     }
 
-                    // CookieManager konfigurieren
+                    // Neuer WebViewClient mit URL-Überwachung
+                    webViewClient = object : WebViewClient() {
+                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                            // Lass den WebView selbst laden
+                            return false
+                        }
+
+                        override fun onReceivedError(
+                            view: WebView?,
+                            request: WebResourceRequest?,
+                            error: WebResourceError?
+                        ) {
+                            Log.e("WebView", "Error loading: ${error?.errorCode} ${error?.description}")
+                            super.onReceivedError(view, request, error)
+                        }
+
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            super.onPageFinished(view, url)
+                            if (url != null) currentUrl = url
+                            Log.d("WebView", "Finished loading: $url")
+                        }
+                    }
+
+                    settings.apply {
+                        javaScriptEnabled = true
+                        domStorageEnabled = true
+                        databaseEnabled = true
+
+                        setWebContentsDebuggingEnabled(true)
+                        setLayerType(View.LAYER_TYPE_HARDWARE, null)
+
+                        // Wichtig für moderne Websites:
+                        allowFileAccess = true
+                        allowContentAccess = true
+
+                        safeBrowsingEnabled = false
+
+                        loadsImagesAutomatically = true
+                        blockNetworkLoads = false
+
+                        // Besser: NUR wenn nötig mixed content erlauben
+                        mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+
+                        // Desktop-Ansicht aktivieren:
+                        useWideViewPort = true  // ← Hier war das Problem!
+                        loadWithOverviewMode = true
+
+                        // Zoom-Einstellungen
+                        builtInZoomControls = true
+                        displayZoomControls = false
+                        setSupportZoom(true)
+
+                        // Multi-Window Support
+                        javaScriptCanOpenWindowsAutomatically = true
+                        setSupportMultipleWindows(true)
+
+                        // Caching für bessere Performance
+                        cacheMode = WebSettings.LOAD_DEFAULT
+
+                        // Media-Unterstützung
+                        mediaPlaybackRequiresUserGesture = false
+
+                        userAgentString =
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.200 Safari/537.36"
+                    }
+                    loadUrl(webViewUrl)
+                }.also { wv ->
                     CookieManager.getInstance().apply {
                         setAcceptCookie(true)
-                        setAcceptThirdPartyCookies(webView, true)
+                        setAcceptThirdPartyCookies(wv, true)
                     }
+                    CookieManager.getInstance().flush()
+                }
+            }
 
-                    webView
-                },
-                update = { webView ->
-                    webViewState = webView
-                },
-                modifier = Modifier.fillMaxSize()
-            )
+            var isDesktopMode by remember { mutableStateOf(false) }
 
-            // Hardware-Back-Handler
+            Box(modifier = Modifier.fillMaxSize()) {
+                // WebView bleibt im Hintergrund, nimmt den kompletten Platz ein
+                AndroidView(
+                    factory = { webView },
+                    update = { webViewState = it },
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                Button(
+                    onClick = {
+                        isDesktopMode = !isDesktopMode
+                        webView.settings.apply {
+                            if (isDesktopMode) {
+                                // Desktop-Modus
+                                userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+                                        "AppleWebKit/537.36 (KHTML, like Gecko) " +
+                                        "Chrome/120.0.0.0 Safari/537.36"
+                                useWideViewPort = true
+                                loadWithOverviewMode = true
+                            } else {
+                                // Mobile-Modus
+                                userAgentString = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
+                                        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                                useWideViewPort = false
+                                loadWithOverviewMode = false
+                            }
+                        }
+                        webView.reload()
+                    },
+                    modifier = Modifier
+                        .align(Alignment.CenterStart) // mittig links
+                        .padding(start = 16.dp)
+                ) {
+                    if (isDesktopMode) {
+                        Icon(
+                            imageVector = Icons.Filled.Laptop,
+                            contentDescription = "Wechsel zu PC Ansicht",
+                            tint = Color.White
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Filled.Phone,
+                            contentDescription = "Wechsel zu Handyansicht",
+                            tint = Color.White
+                        )
+                    }
+                }
+            }
+
             BackHandler(enabled = true) {
                 if (webViewState?.canGoBack() == true) {
                     webViewState?.goBack()
@@ -373,6 +622,19 @@ fun PrivateCloudApp(storage: Storage) {
                 }
             }
         }
+
+        // Orientation erlauben (Activity)
+        val activity = LocalActivity.current
+        DisposableEffect(Unit) {
+            val originalOrientation = activity?.requestedOrientation
+            activity?.requestedOrientation =
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR // erlaubt Hoch- & Querformat
+            onDispose {
+                activity?.requestedOrientation =
+                    originalOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
+        }
+
         return
     }
 }
@@ -388,6 +650,8 @@ fun MainCloudScreen(storage: Storage) {
     var sortOption by remember { mutableStateOf("A-Z") }
     var showUploadProgress by remember { mutableStateOf(false) }
     var showDownloadProgress by remember { mutableStateOf(false) }
+    var favoritesClickCount by remember { mutableStateOf(0) }
+    var showOtherBucket by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var favoriteFiles by remember {
         mutableStateOf(FavoriteManager.loadFavorites(context))
@@ -403,9 +667,40 @@ fun MainCloudScreen(storage: Storage) {
                 storage.from(SupabaseConfig.SUPABASE_BUCKET).list()
             }
 
-            fileList = files
+            // Gruppiere Chunks und normale Dateien
+            val groupedFiles = files
                 .filter { it.name != ".emptyFolderPlaceholder" }
-                .map { "${it.name}|${it.updatedAt}|${it.metadata?.get("size") ?: 0}" }
+                .groupBy { file ->
+                    if (file.name.contains(".part")) {
+                        file.name.substringBefore(".part")
+                    } else {
+                        file.name
+                    }
+                }
+                .map { (baseName, chunks) ->
+                    if (chunks.size > 1 || chunks.first().name.contains(".part")) {
+                        val totalSize = chunks.sumOf { chunk ->
+                            when (chunk.metadata?.get("size")) {
+                                else -> 0L
+                            }
+                        }
+                        val latestDate = chunks.mapNotNull { it.updatedAt }.maxOrNull() ?: ""
+                        // Rückgabe als String
+                        "$baseName|$latestDate|$totalSize"
+                    } else {
+                        val file = chunks.first()
+                        val localDate = file.updatedAt
+                            ?.let {
+                                Instant.ofEpochMilli(it.toEpochMilliseconds())
+                                    .atZone(ZoneId.systemDefault())
+                            }
+                            ?.toString() ?: ""
+
+                        "${file.name}|$localDate|${0}"
+                    }
+                }
+
+            fileList = groupedFiles
         } catch (e: Exception) {
             e.printStackTrace()
             withContext(Dispatchers.Main) {
@@ -455,39 +750,67 @@ fun MainCloudScreen(storage: Storage) {
                 try {
                     for (uri in uris) {
                         val fileName = getFileNameFromUri(uri, context) ?: "unnamed_file"
-                        val inputStream = context.contentResolver.openInputStream(uri)!!
-                        val rawData = inputStream.readBytes()
-                        inputStream.close()
+                        val file = File(context.cacheDir, fileName)
 
-                        val dataToUpload = if (isImageFile(fileName)) {
-                            rawData
-                        } else {
-                            AesEncryption.encrypt(rawData)
+                        // Kopiere Datei lokal (falls nötig)
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            file.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
                         }
 
-                        withContext(Dispatchers.IO) {
+                        val fileSize = file.length()
+                        val maxChunkSize = 20 * 1024 * 1024L // 20 MB
+                        val shouldEncrypt =
+                            !isImageFile(fileName) && !fileName.endsWith(".apk", true)
+
+                        if (fileSize <= maxChunkSize) {
+                            // Kleine Datei
+                            val bytes = file.readBytes()
+                            val dataToUpload =
+                                if (shouldEncrypt) AesEncryption.encrypt(bytes) else bytes
                             storage.from(SupabaseConfig.SUPABASE_BUCKET)
                                 .upload(fileName, dataToUpload)
+                        } else {
+                            // Große Datei: split in 20MB-Teile
+                            val inputStream = file.inputStream()
+                            var chunkIndex = 0
+                            val buffer = ByteArray(maxChunkSize.toInt())
+                            var bytesRead: Int
+
+                            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                                val chunkData = buffer.copyOf(bytesRead)
+                                val dataToUpload =
+                                    if (shouldEncrypt) AesEncryption.encrypt(chunkData) else chunkData
+                                val chunkFileName = "${fileName}.part${chunkIndex + 1}"
+                                storage.from(SupabaseConfig.SUPABASE_BUCKET)
+                                    .upload(chunkFileName, dataToUpload)
+                                chunkIndex++
+                            }
+                            inputStream.close()
                         }
+
+                        // Optional: temporäre lokale Datei löschen
+                        file.delete()
                     }
-                    Toast.makeText(
-                        context,
-                        "✅ Hochgeladen!",
-                        Toast.LENGTH_SHORT
-                    ).show()
+
+                    Toast.makeText(context, "✅ Hochgeladen!", Toast.LENGTH_SHORT).show()
                     loadFiles()
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    Toast.makeText(
-                        context,
-                        "Fehler beim Upload: ${e.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "Fehler beim Upload: ${e.message}",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
                 } finally {
                     isUploading = false
                     showUploadProgress = false
                 }
             }
+
         }
     }
 
@@ -516,8 +839,6 @@ fun MainCloudScreen(storage: Storage) {
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(20.dp))
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -528,6 +849,15 @@ fun MainCloudScreen(storage: Storage) {
                     FilterChip(
                         selected = selectedFilter == filter,
                         onClick = {
+                            if (filter == "Favoriten") {
+                                favoritesClickCount++
+                                if (favoritesClickCount >= 5) {
+                                    showOtherBucket = true
+                                    favoritesClickCount = 0
+                                }
+                            } else {
+                                favoritesClickCount = 0
+                            }
                             selectedFilter = filter
                         },
                         label = {
@@ -544,14 +874,6 @@ fun MainCloudScreen(storage: Storage) {
                     "Dateien" -> fileList.filter { !isImageFile(it.substringBefore("|")) }
                     else -> fileList
                 }
-            }
-
-            if (preFilteredFileList.isEmpty()) {
-                Text(
-                    "Keine ${if (selectedFilter == "Alle") "Dateien" else selectedFilter} vorhanden",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White
-                )
             }
 
             var searchQuery by remember { mutableStateOf("") }
@@ -663,6 +985,14 @@ fun MainCloudScreen(storage: Storage) {
 
                         else -> filtered
                     }
+                }
+
+                if (preFilteredFileList.isEmpty()) {
+                    Text(
+                        "Keine ${if (selectedFilter == "Alle") "Dateien" else selectedFilter} vorhanden",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White
+                    )
                 }
 
                 LazyColumn(
@@ -1107,40 +1437,144 @@ fun MainCloudScreen(storage: Storage) {
                                                     scope.launch {
                                                         showDownloadProgress = true
                                                         try {
-                                                            val data = withContext(Dispatchers.IO) {
-                                                                storage.from(SupabaseConfig.SUPABASE_BUCKET)
-                                                                    .downloadAuthenticated(fileName)
-                                                            }
-                                                            val dcimDir =
-                                                                Environment.getExternalStoragePublicDirectory(
-                                                                    Environment.DIRECTORY_DCIM
+                                                            // Prüfen ob es Chunks gibt
+                                                            val allFiles =
+                                                                withContext(Dispatchers.IO) {
+                                                                    storage.from(SupabaseConfig.SUPABASE_BUCKET)
+                                                                        .list()
+                                                                }
+
+                                                            val chunks = allFiles.filter {
+                                                                it.name.startsWith(fileName) && it.name.contains(
+                                                                    ".part"
                                                                 )
-                                                            val appFolder = File(dcimDir, "Cloud")
+                                                            }.sortedBy {
+                                                                // Sortierung nach part1, part2, etc.
+                                                                val partMatch =
+                                                                    Regex("part(\\d+)of").find(it.name)
+                                                                partMatch?.groupValues?.get(1)
+                                                                    ?.toIntOrNull() ?: 0
+                                                            }// Dynamischen Zielordner wählen
+                                                            val targetBaseFolder =
+                                                                if (isImageFile(fileName) || fileName.endsWith(
+                                                                        ".mp4",
+                                                                        ignoreCase = true
+                                                                    )
+                                                                ) {
+                                                                    Environment.getExternalStoragePublicDirectory(
+                                                                        Environment.DIRECTORY_DCIM
+                                                                    )
+                                                                } else {
+                                                                    Environment.getExternalStoragePublicDirectory(
+                                                                        Environment.DIRECTORY_DOWNLOADS
+                                                                    )
+                                                                }
+
+                                                            val appFolder =
+                                                                File(targetBaseFolder, "Cloud")
                                                             if (!appFolder.exists()) {
                                                                 appFolder.mkdirs()
                                                             }
+
+                                                            // Original-Dateinamen ohne .partXofY verwenden
+                                                            val cleanFileName =
+                                                                fileName.substringBefore(".part")
                                                             val outputFile =
-                                                                File(appFolder, fileName)
+                                                                File(appFolder, cleanFileName)
 
                                                             withContext(Dispatchers.IO) {
                                                                 FileOutputStream(outputFile).use { fos ->
-                                                                    fos.write(data)
+                                                                    if (chunks.isNotEmpty()) {
+                                                                        // Chunks direkt in Datei schreiben (spart Speicher!)
+                                                                        for (chunk in chunks) {
+                                                                            val chunkData =
+                                                                                storage.from(
+                                                                                    SupabaseConfig.SUPABASE_BUCKET
+                                                                                )
+                                                                                    .downloadAuthenticated(
+                                                                                        chunk.name
+                                                                                    )
+
+                                                                            // Entschlüsseln falls nötig
+                                                                            val decryptedChunk =
+                                                                                if (isImageFile(
+                                                                                        fileName
+                                                                                    ) || fileName.endsWith(
+                                                                                        ".apk",
+                                                                                        ignoreCase = true
+                                                                                    )
+                                                                                ) {
+                                                                                    chunkData
+                                                                                } else {
+                                                                                    try {
+                                                                                        AesEncryption.decrypt(
+                                                                                            chunkData
+                                                                                        )
+                                                                                    } catch (_: Exception) {
+                                                                                        chunkData
+                                                                                    }
+                                                                                }
+
+                                                                            // Direkt in Datei schreiben
+                                                                            fos.write(decryptedChunk)
+                                                                        }
+                                                                    } else {
+                                                                        // Normale Datei downloaden
+                                                                        val downloadedData =
+                                                                            storage.from(
+                                                                                SupabaseConfig.SUPABASE_BUCKET
+                                                                            )
+                                                                                .downloadAuthenticated(
+                                                                                    fileName
+                                                                                )
+
+                                                                        // Entschlüsseln falls nötig
+                                                                        val finalData =
+                                                                            if (isImageFile(fileName) || fileName.endsWith(
+                                                                                    ".apk",
+                                                                                    ignoreCase = true
+                                                                                )
+                                                                            ) {
+                                                                                downloadedData
+                                                                            } else {
+                                                                                try {
+                                                                                    AesEncryption.decrypt(
+                                                                                        downloadedData
+                                                                                    )
+                                                                                } catch (_: Exception) {
+                                                                                    downloadedData
+                                                                                }
+                                                                            }
+
+                                                                        fos.write(finalData)
+                                                                    }
                                                                 }
                                                             }
-                                                            val mediaScanIntent =
-                                                                Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE)
-                                                            mediaScanIntent.data =
-                                                                Uri.fromFile(outputFile)
-                                                            context.sendBroadcast(mediaScanIntent)
+
+                                                            if (isImageFile(fileName) || fileName.endsWith(
+                                                                    ".mp4",
+                                                                    ignoreCase = true
+                                                                )
+                                                            ) {
+                                                                context.sendBroadcast(
+                                                                    Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE).apply {
+                                                                        data =
+                                                                            Uri.fromFile(outputFile)
+                                                                    }
+                                                                )
+                                                            }
+
                                                             Toast.makeText(
                                                                 context,
-                                                                "Bild gespeichert ✅",
+                                                                "Datei gespeichert ✅",
                                                                 Toast.LENGTH_SHORT
                                                             ).show()
+
                                                             haptic.performHapticFeedback(
                                                                 HapticFeedbackType.LongPress
                                                             )
                                                         } catch (e: Exception) {
+                                                            e.printStackTrace()
                                                             Toast.makeText(
                                                                 context,
                                                                 "Fehler: ${e.message}",
@@ -1384,6 +1818,14 @@ fun MainCloudScreen(storage: Storage) {
             }
         )
     }
+    if (showOtherBucket) {
+        OtherBucketViewer(
+            storage = storage,
+            onBackPressed = {
+                showOtherBucket = false
+            }
+        )
+    }
 }
 
 
@@ -1477,6 +1919,43 @@ fun QuickSettingsTabContent() {
     val context = LocalContext.current
     var showBatteryChart by remember { mutableStateOf(false) }
 
+    val sharedPrefs = context.getSharedPreferences("quick_settings_prefs", Context.MODE_PRIVATE)
+    var savedNumber by remember {
+        mutableStateOf(
+            sharedPrefs.getString("saved_number", "21") ?: "21"
+        )
+    }
+    var savedNumber1 by remember {
+        mutableStateOf(
+            sharedPrefs.getString("saved_number_start", "7") ?: "7"
+        )
+    }
+    var showNumberDialog by remember { mutableStateOf(false) }
+    var showNumberDialogSave by remember { mutableStateOf(false) }
+
+    // In deiner Activity mit File Picker
+    val pickMusicLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    it,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+
+                context.getSharedPreferences("quiet_hours_prefs", Context.MODE_PRIVATE)
+                    .edit {
+                        putString("music_file_path", it.toString())
+                    }
+
+                Toast.makeText(context, "Musik gespeichert", Toast.LENGTH_SHORT).show()
+            } catch (_: Exception) {
+                Toast.makeText(context, "Fehler beim Speichern", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1514,7 +1993,7 @@ fun QuickSettingsTabContent() {
                     listOf(
                         "🔋\nBatterie\nInfo" to { showBatteryInfo(context) },
                         "💾\nSpeicher" to { openStorageSettings(context) },
-                        "⚡\nBatterie\nEinstellungen" to { openBatterySettings(context) }
+                        "bg Notification" to { QuietHoursNotificationService.startService(context) }
                     )
                 )
             }
@@ -1529,6 +2008,17 @@ fun QuickSettingsTabContent() {
                     )
                 )
             }
+
+            // Zeile 6: Erweitert
+            item {
+                QuickSettingRow(
+                    listOf(
+                        "Downtime" to { showNumberDialog = true },
+                        "Uptime" to { showNumberDialogSave = true },
+                        "Musik Titel" to { pickMusicLauncher.launch(arrayOf("audio/*")) }
+                    )
+                )
+            }
         }
     }
     if (showBatteryChart) {
@@ -1536,6 +2026,40 @@ fun QuickSettingsTabContent() {
             onDismiss = { showBatteryChart = false }
         )
     }
+    if (showNumberDialog) {
+        NumberInputDialog(
+            currentNumber = savedNumber,
+            onDismiss = { showNumberDialog = false },
+            onSave = { number ->
+                savedNumber = number
+                saveNumber(context, number)
+                showNumberDialog = false
+            }
+        )
+    }
+    if (showNumberDialogSave) {
+        NumberInputDialog(
+            currentNumber = savedNumber1,
+            onDismiss = { showNumberDialogSave = false },
+            onSave = { number ->
+                savedNumber1 = number
+                saveNumber1(context, number)
+                showNumberDialogSave = false
+            }
+        )
+    }
+}
+
+private fun saveNumber(context: Context, number: String) {
+    val sharedPrefs = context.getSharedPreferences("quick_settings_prefs", Context.MODE_PRIVATE)
+    sharedPrefs.edit(commit = true) { putString("saved_number", number) }
+    Log.d("QuickSettings", "Number saved: $number")
+}
+
+private fun saveNumber1(context: Context, number: String) {
+    val sharedPrefs = context.getSharedPreferences("quick_settings_prefs", Context.MODE_PRIVATE)
+    sharedPrefs.edit(commit = true) { putString("saved_number_start", number) }
+    Log.d("QuickSettings", "Number saved: $number")
 }
 
 @Composable
@@ -1599,7 +2123,7 @@ fun showDisplayInfo(context: Context) {
         val heightInches = realHeight / metrics.ydpi.toDouble()
         val diagonalInches =
             sqrt(widthInches * widthInches + heightInches * heightInches)
-        info.append("📐 Bildschirmgröße: ${String.format("%.1f", diagonalInches)} Zoll\n")
+        info.append("📐 Bildschirmgröße: ${String.format(Locale.US, "%.1f", diagonalInches)} Zoll\n")
     } catch (_: Exception) {
         info.append("📐 Bildschirmgröße: N/A\n")
     }
@@ -1607,7 +2131,7 @@ fun showDisplayInfo(context: Context) {
     // === 5. Bildwiederholfrequenz (Refresh Rate) – ab Android 11 ===
     try {
         val refreshRate = display.refreshRate
-        info.append("🔄 Refresh Rate: ${String.format("%.1f", refreshRate)} Hz\n")
+        info.append("🔄 Refresh Rate: ${String.format(Locale.US,"%.1f", refreshRate)} Hz\n")
     } catch (_: Exception) {
         info.append("🔄 Refresh Rate: N/A\n")
     }
@@ -1642,7 +2166,7 @@ fun showDisplayInfo(context: Context) {
     nm.createNotificationChannel(channel)
 
     val builder = NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(R.drawable.ic_menu_gallery)
+        .setSmallIcon(android.R.drawable.ic_menu_gallery)
         .setContentTitle("🖥️ Display-Info")
         .setContentText("Auflösung, Dichte, Größe, Refresh Rate")
         .setStyle(NotificationCompat.BigTextStyle().bigText(info.toString()))
@@ -1660,7 +2184,7 @@ fun showDisplayInfo(context: Context) {
         val fallback = "Auflösung: ${realWidth}×${realHeight}\n" +
                 "Dichte: $densityDpi dpi\n" +
                 "Größe: ${
-                    String.format(
+                    String.format(Locale.US,
                         "%.1f",
                         sqrt(
                             (realWidth / metrics.xdpi).pow(2) + (realHeight / metrics.ydpi).pow(2)
@@ -1685,7 +2209,7 @@ fun showNetworkNotificationNow(context: Context, content: String, final: Boolean
     nm.createNotificationChannel(channel)
 
     val builder = NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(R.drawable.ic_menu_compass)
+        .setSmallIcon(android.R.drawable.ic_menu_compass)
         .setContentTitle("📡 Netzwerk-Info")
         .setContentText(content.lines().firstOrNull() ?: "Netzwerkinfo")
         .setStyle(NotificationCompat.BigTextStyle().bigText(content))
@@ -1793,7 +2317,7 @@ private fun showStorageNotification(
     nm.createNotificationChannel(channel)
 
     val builder = NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(R.drawable.ic_menu_info_details)
+        .setSmallIcon(android.R.drawable.ic_menu_info_details)
         .setContentTitle(title)
         .setContentText(content.lines().firstOrNull() ?: content)
         .setStyle(NotificationCompat.BigTextStyle().bigText(content))
@@ -1819,10 +2343,10 @@ private fun showStorageNotification(
 // === Hilfsfunktionen (wie in deinem Original) ===
 private fun formatBytes(bytes: Long): String {
     return when {
-        bytes >= 1_000_000_000_000L -> "${String.format("%.2f", bytes / 1_000_000_000_000.0)} TB"
-        bytes >= 1_000_000_000L -> "${String.format("%.2f", bytes / 1_000_000_000.0)} GB"
-        bytes >= 1_000_000L -> "${String.format("%.2f", bytes / 1_000_000.0)} MB"
-        bytes >= 1_000L -> "${String.format("%.2f", bytes / 1_000.0)} KB"
+        bytes >= 1_000_000_000_000L -> "${String.format(Locale.US,"%.2f", bytes / 1_000_000_000_000.0)} TB"
+        bytes >= 1_000_000_000L -> "${String.format(Locale.US,"%.2f", bytes / 1_000_000_000.0)} GB"
+        bytes >= 1_000_000L -> "${String.format(Locale.US,"%.2f", bytes / 1_000_000.0)} MB"
+        bytes >= 1_000L -> "${String.format(Locale.US,"%.2f", bytes / 1_000.0)} KB"
         else -> "$bytes B"
     }
 }
@@ -1887,7 +2411,7 @@ fun showBatteryInfo(context: Context) {
 
         // Notification erstellen
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_dialog_info)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("🔋 Batterie-Info")
             .setContentText("Ladezustand: $percentage%")
             .setStyle(
@@ -1922,15 +2446,6 @@ fun showBatteryInfo(context: Context) {
     } else {
         Toast.makeText(context, "Batterie-Info nicht verfügbar", Toast.LENGTH_SHORT).show()
     }
-}
-
-/**
- * Aktiviert/Deaktiviert Energiesparmodus (benötigt Android 5.1+)
- */
-fun openBatterySettings(context: Context) {
-    context.startActivity(Intent("android.intent.action.POWER_USAGE_SUMMARY").apply {
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK  // ✅ CORRECT
-    })
 }
 
 /*
@@ -2012,7 +2527,7 @@ fun showDeviceInfo(context: Context) {
         val notification = NotificationCompat.Builder(context, channelId)
             .setContentTitle(title)
             .setContentText(content)
-            .setSmallIcon(R.drawable.ic_dialog_info)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setStyle(NotificationCompat.BigTextStyle().bigText(content))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setAutoCancel(true)
@@ -2088,4 +2603,85 @@ fun loadLastMenuItem(context: Context): MenuItem {
     } catch (_: Exception) {
         MenuItem.PRIVATE_CLOUD
     }
+}
+
+private const val KEY_LAST_URL = "last_browser_url"
+
+fun saveLastUrl(context: Context, url: String) {
+    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .edit {
+            putString(KEY_LAST_URL, url)
+        }
+}
+
+fun loadLastUrl(context: Context): String {
+    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    return prefs.getString(KEY_LAST_URL, "https://www.google.com") ?: "https://www.google.com"
+}
+
+@Composable
+fun NumberInputDialog(
+    currentNumber: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var numberText by remember { mutableStateOf(currentNumber) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF2A2A2A),
+        title = {
+            Text(
+                text = "Nummer eingeben",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column {
+                if (currentNumber.isNotEmpty()) {
+                    Text(
+                        text = "Gespeicherte Nummer: $currentNumber",
+                        color = Color(0xFF4CAF50),
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+
+                OutlinedTextField(
+                    value = numberText,
+                    onValueChange = { numberText = it },
+                    label = { Text("Nummer", color = Color.Gray) },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = { onSave(numberText) }
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFF4CAF50),
+                        unfocusedBorderColor = Color.Gray,
+                        cursorColor = Color(0xFF4CAF50)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(numberText) }
+            ) {
+                Text("Speichern", color = Color(0xFF4CAF50))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Abbrechen", color = Color.Gray)
+            }
+        }
+    )
 }

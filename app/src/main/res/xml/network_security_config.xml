@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">pornhub.com</domain>
+        <domain includeSubdomains="true">phncdn.com</domain>
+        <domain includeSubdomains="true">phncdn2.com</domain>
+        <domain includeSubdomains="true">phncdn3.com</domain>
+        <domain includeSubdomains="true">phncdn4.com</domain>
+    </domain-config>
+</network-security-config>
