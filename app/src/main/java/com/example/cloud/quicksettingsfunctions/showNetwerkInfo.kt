@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.telephony.TelephonyManager
 import androidx.core.app.ActivityCompat
@@ -64,8 +65,8 @@ fun showNetworkInfo(context: Context) {
                     Manifest.permission.ACCESS_COARSE_LOCATION
                 ) == PackageManager.PERMISSION_GRANTED
             ) {
-                val wifiInfo = wifiManager.connectionInfo
-                ssid = wifiInfo.ssid.trim().removeSurrounding("\"")
+                val wifiInfo = networkCapabilities.transportInfo as? WifiInfo
+                ssid = wifiInfo?.ssid?.trim()?.removeSurrounding("\"") ?: ""
             } else {
                 ssid = "<Standortberechtigung fehlt>"
             }
@@ -73,7 +74,7 @@ fun showNetworkInfo(context: Context) {
 
             // Signalstärke (RSSI → dBm)
             val rssi = wifiManager.connectionInfo.rssi
-            val level = WifiManager.calculateSignalLevel(rssi, 5) // 0–4
+            val level = wifiManager.calculateSignalLevel(rssi)
             val bars = "▂▄▆█".substring(0, level.coerceIn(0, 4))
             info.append("📡 Signalstärke: $rssi dBm ($bars)\n\n")
         }
@@ -108,7 +109,7 @@ fun showNetworkInfo(context: Context) {
             val enumIpAddr = intf.inetAddresses
             while (enumIpAddr.hasMoreElements()) {
                 val inetAddress = enumIpAddr.nextElement()
-                if (!inetAddress.isLoopbackAddress && inetAddress.hostAddress?.contains(":") == false) {
+                if (!inetAddress.isLoopbackAddress  && inetAddress.hostAddress?.contains(":") == false) {
                     localIp = inetAddress.hostAddress
                     break
                 }
