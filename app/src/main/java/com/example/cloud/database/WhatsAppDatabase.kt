@@ -1,8 +1,6 @@
 package com.example.cloud.database
 
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
 data class WhatsAppMessage(
     val id: Int = 0,
@@ -13,7 +11,6 @@ data class WhatsAppMessage(
 
 class WhatsAppMessageRepository {
     private val _messages = MutableStateFlow<List<WhatsAppMessage>>(emptyList())
-    val messages: StateFlow<List<WhatsAppMessage>> = _messages.asStateFlow()
 
     fun insert(message: WhatsAppMessage) {
         val newMessages = _messages.value.toMutableList().apply {
@@ -41,9 +38,5 @@ class WhatsAppMessageRepository {
         return _messages.value
             .filter { it.sender == sender }
             .sortedBy { it.timestamp }
-    }
-
-    fun deleteAll() {
-        _messages.value = emptyList()
     }
 }
