@@ -9,12 +9,9 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.media.MediaPlayer
 import android.net.Uri
-import android.os.Build
 import android.os.IBinder
 import android.provider.MediaStore
 import android.util.Log
-import android.widget.Toast
-import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import java.util.concurrent.TimeUnit
@@ -43,11 +40,6 @@ class PodcastPlayerService : Service() {
             context.startForegroundService(intent)
         }
 
-        fun stopService(context: Context) {
-            val intent = Intent(context, PodcastPlayerService::class.java)
-            context.stopService(intent)
-        }
-
         fun sendPlayAction(context: Context) {
             val intent = Intent(context, PodcastPlayerService::class.java).apply {
                 action = ACTION_PLAY
@@ -71,19 +63,16 @@ class PodcastPlayerService : Service() {
     private var positionSaveRunnable: Runnable? = null
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
 
-    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     override fun onCreate() {
         super.onCreate()
-        sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
 
         createNotificationChannel()
         loadPodcasts()
 
-        // Letzten Podcast laden
         val lastPodcastPath = sharedPreferences.getString(KEY_CURRENT_PODCAST, null)
         if (lastPodcastPath != null) {
             currentPodcast = podcasts.find { it.path == lastPodcastPath }
-            Toast.makeText(this, "lastPodcastPath != null", Toast.LENGTH_SHORT).show()
         }
 
         startForeground(NOTIFICATION_ID, createNotification(), getServiceForegroundType())
@@ -103,6 +92,18 @@ class PodcastPlayerService : Service() {
                 pausePodcast()
                 val position = mediaPlayer?.currentPosition?.toLong() ?: 0
                 savePosition(currentPodcast!!.path, position)
+            }
+            action == "ACTION_NOTIFICATION_DELETED" -> {
+                if (currentPodcast != null && mediaPlayer != null) {
+                    try {
+                        val position = mediaPlayer?.currentPosition?.toLong() ?: 0
+                        savePosition(currentPodcast!!.path, position)
+                        Log.d("PodcastPlayerService", "Position saved on delete: ${formatTime(position)}")
+                    } catch (e: Exception) {
+                        Log.e("PodcastPlayerService", "Error saving position on delete", e)
+                    }
+                }
+                stopSelf() // Service beenden
             }
             action == ACTION_REWIND -> {
                 rewind()
@@ -158,7 +159,6 @@ class PodcastPlayerService : Service() {
         notificationManager.createNotificationChannel(channel)
     }
 
-    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun getServiceForegroundType(): Int {
         return try {
             if (checkSelfPermission(android.Manifest.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK)
@@ -168,7 +168,7 @@ class PodcastPlayerService : Service() {
             } else {
                 android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         }
     }
@@ -232,7 +232,7 @@ class PodcastPlayerService : Service() {
                         java.net.URLDecoder.decode(data, "UTF-8")
                             .replace("\\", "/")
                             .lowercase()
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         data.replace("\\", "/").lowercase()
                     }
 
@@ -240,7 +240,12 @@ class PodcastPlayerService : Service() {
                             normalizedPath.contains("/downloads/cloud/podcasts/") ||
                             data.contains("/Cloud/Podcasts/", ignoreCase = true)
 
-                    if (isInPodcasts && name.endsWith(".mp3", ignoreCase = true)) {
+                    val mimeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
+                    val mime = cursor.getString(mimeColumn)
+                    val supported = mime == "audio/mpeg" || mime == "audio/mp4"
+
+
+                    if (isInPodcasts && supported) {
                         val contentUri = Uri.withAppendedPath(
                             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                             id.toString()
@@ -275,14 +280,14 @@ class PodcastPlayerService : Service() {
 
     private fun savePosition(podcastPath: String, position: Long) {
         val key = KEY_PREFIX_POSITION + podcastPath.hashCode()
-        sharedPreferences.edit {
+        sharedPreferences.edit(commit = true) {
             putLong(key, position)
         }
         Log.d("PodcastPlayerService", "Position saved: ${formatTime(position)} for $podcastPath")
     }
 
     private fun saveCurrentPodcast(podcastPath: String) {
-        sharedPreferences.edit {
+        sharedPreferences.edit(commit = true) {
             putString(KEY_CURRENT_PODCAST, podcastPath)
         }
     }
@@ -451,17 +456,19 @@ class PodcastPlayerService : Service() {
     private fun showPodcastSelection() {
         try {
             if (podcasts.isEmpty()) {
-                showSimpleNotification(
-                    "Keine Podcasts",
-                    "Keine MP3-Dateien in Downloads/Cloud/Podcasts gefunden"
-                )
                 return
+            }
+
+            // ✅ WICHTIG: Aktualisiere alle savedPositions VOR der Anzeige
+            val updatedPodcasts = podcasts.map { podcast ->
+                val currentSavedPos = getSavedPosition(podcast.path)
+                podcast.copy(savedPosition = currentSavedPos)
             }
 
             val notificationManager = getSystemService(NotificationManager::class.java)
 
             // Erstelle für jeden Podcast eine Notification
-            podcasts.forEachIndexed { index, podcast ->
+            updatedPodcasts.forEachIndexed { index, podcast ->
                 val selectIntent = Intent(this, PodcastPlayerService::class.java).apply {
                     action = "SELECT_${podcast.path.hashCode()}"
                 }
@@ -598,6 +605,16 @@ class PodcastPlayerService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val deleteIntent = Intent(this, PodcastPlayerService::class.java).apply {
+            action = "ACTION_NOTIFICATION_DELETED"
+        }
+        val deletePendingIntent = PendingIntent.getService(
+            this,
+            4,
+            deleteIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle("🎙️ $title")
@@ -606,6 +623,7 @@ class PodcastPlayerService : Service() {
             .setOngoing(true)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(selectPendingIntent)
+            .setDeleteIntent(deletePendingIntent)
             .addAction(
                 android.R.drawable.ic_media_rew,
                 "-15s",
@@ -625,39 +643,39 @@ class PodcastPlayerService : Service() {
         return builder.build()
     }
 
-    private fun showSimpleNotification(title: String, text: String) {
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .build()
-
-        val notificationManager = getSystemService(NotificationManager::class.java)
-        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
-            == android.content.pm.PackageManager.PERMISSION_GRANTED
-        ) {
-            notificationManager.notify(70000, notification)
-        }
-    }
-
     override fun onDestroy() {
         super.onDestroy()
 
-        // Speichere finale Position vor dem Beenden
-        if (currentPodcast != null && mediaPlayer != null) {
-            try {
+        try {
+            if (currentPodcast != null && mediaPlayer != null) {
                 val position = mediaPlayer?.currentPosition?.toLong() ?: 0
                 savePosition(currentPodcast!!.path, position)
-            } catch (e: Exception) {
-                Log.e("PodcastPlayerService", "Error saving final position", e)
+                Log.d("PodcastPlayerService", "Final position saved: ${formatTime(position)}")
             }
+        } catch (e: Exception) {
+            Log.e("PodcastPlayerService", "Error saving final position", e)
         }
 
-        handler.removeCallbacks(positionSaveRunnable!!)
-        mediaPlayer?.release()
-        mediaPlayer = null
-        Log.d("PodcastPlayerService", "Service destroyed")
+        try {
+            positionSaveRunnable?.let {
+                handler.removeCallbacks(it)
+                Log.d("PodcastPlayerService", "Position save runnable removed")
+            }
+        } catch (e: Exception) {
+            Log.e("PodcastPlayerService", "Error removing callbacks", e)
+        }
+
+        // Release MediaPlayer SICHER
+        try {
+            mediaPlayer?.stop()
+            mediaPlayer?.release()
+            mediaPlayer = null
+            Log.d("PodcastPlayerService", "MediaPlayer released")
+        } catch (e: Exception) {
+            Log.e("PodcastPlayerService", "Error releasing MediaPlayer", e)
+        }
+
+        isPlaying = false
+        Log.d("PodcastPlayerService", "PodcastPlayerService destroyed")
     }
 }

@@ -9,6 +9,15 @@ plugins {
 }
 
 android {
+    signingConfigs {
+        create("release") {
+            storeFile =
+                file("C:\\Users\\pauls\\AndroidStudioProjects\\Cloud\\keystore\\my-release-key.jks")
+            storePassword = "CdRYqvzH75jcOnvIMx75Ewl5sOrzHtCe"
+            keyAlias = "my-key-alias"
+            keyPassword = "CdRYqvzH75jcOnvIMx75Ewl5sOrzHtCe"
+        }
+    }
     namespace = "com.example.cloud"
     compileSdk = 36
 
@@ -26,7 +35,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.cloud"
-        minSdk = 30
+        minSdk = 35
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -104,6 +113,8 @@ dependencies {
     implementation(libs.androidx.compose.runtime.saved.instance.state)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.play.services.location)
+    implementation(libs.androidx.tools.core)
+    implementation(libs.androidx.media3.session)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -114,6 +125,7 @@ dependencies {
     implementation(libs.storage.kt)
     implementation(libs.postgrest.kt)
     implementation(libs.supabase.kt)
+    implementation(libs.realtime.kt)
     implementation(libs.coil.compose)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.material3)
@@ -128,6 +140,8 @@ dependencies {
     kapt(libs.androidx.room.compiler)
     implementation(libs.ktor.ktor.client.android)
     implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.websockets)
+    implementation(libs.ktor.client.cio)
     implementation(libs.ktor.utils)
     implementation(libs.accompanist.swiperefresh)
 }
