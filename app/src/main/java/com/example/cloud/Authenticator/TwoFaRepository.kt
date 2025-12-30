@@ -12,6 +12,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.cloud.SupabaseConfig
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -54,7 +55,7 @@ fun TwoFAEntry.toSupabase(): TwoFaEntrySupabase {
 suspend fun loadTwoFaEntriesFromSupabase(): List<TwoFAEntry> {
     return withContext(Dispatchers.IO) {
         try {
-            val supabaseEntries = supabase.postgrest
+            val supabaseEntries = SupabaseConfig.client.postgrest
                 .from("two_fa_entries")
                 .select()
                 .decodeList<TwoFaEntrySupabase>()
@@ -77,7 +78,7 @@ suspend fun saveTwoFaEntryToSupabase(entry: TwoFAEntry, db: TwoFADatabase? = nul
             println("🔍 Supabase Entry: account_name=${supabaseEntry.account_name}, issuer=${supabaseEntry.issuer}")
 
             // Insert mit select() um die generierte ID zu bekommen
-            val response = supabase.postgrest
+            val response = SupabaseConfig.client.postgrest
                 .from("two_fa_entries")
                 .insert(supabaseEntry) {
                     select()
@@ -118,8 +119,7 @@ suspend fun updateTwoFaEntryInSupabase(entry: TwoFAEntry): Boolean {
 
             val supabaseEntry = entry.toSupabase()
 
-            // Update basierend auf der ID
-            supabase.postgrest
+            SupabaseConfig.client.postgrest
                 .from("two_fa_entries")
                 .update({
                     set("account_name", supabaseEntry.account_name)

@@ -882,8 +882,6 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                             onClick = {
                                 if (name.isNotBlank() && secret.isNotBlank()) {
                                     scope.launch {
-                                        Toast.makeText(context, "Starting!", Toast.LENGTH_SHORT)
-                                            .show()
                                         val existingEntries = db.twoFADao().getAll()
                                         val secretExists =
                                             existingEntries.any { it.secret == secret }
@@ -934,9 +932,6 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                                     ).show()
                                                 }
                                             }
-
-                                            Toast.makeText(context, "Server!", Toast.LENGTH_SHORT)
-                                                .show()
 
                                             // UI aktualisieren
                                             entries = db.twoFADao().getAll()

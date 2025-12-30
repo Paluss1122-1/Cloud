@@ -72,8 +72,8 @@ fun showNetworkInfo(context: Context) {
             }
             info.append("📶 WLAN-Name (SSID): $ssid\n")
 
-            // Signalstärke (RSSI → dBm)
-            val rssi = wifiManager.connectionInfo.rssi
+            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val rssi = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)?.signalStrength ?: 0
             val level = wifiManager.calculateSignalLevel(rssi)
             val bars = "▂▄▆█".substring(0, level.coerceIn(0, 4))
             info.append("📡 Signalstärke: $rssi dBm ($bars)\n\n")
@@ -110,7 +110,7 @@ fun showNetworkInfo(context: Context) {
             while (enumIpAddr.hasMoreElements()) {
                 val inetAddress = enumIpAddr.nextElement()
                 if (!inetAddress.isLoopbackAddress  && inetAddress.hostAddress?.contains(":") == false) {
-                    localIp = inetAddress.hostAddress
+                    localIp = inetAddress.hostAddress ?: "N/A"
                     break
                 }
             }
