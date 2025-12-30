@@ -15,7 +15,6 @@ class WhatsAppMessageRepository {
     fun insert(message: WhatsAppMessage) {
         val newMessages = _messages.value.toMutableList().apply {
             add(message)
-            // Optional: auf 100 begrenzen (wie bei Room)
             while (size > 100) removeAt(0)
         }
         _messages.value = newMessages

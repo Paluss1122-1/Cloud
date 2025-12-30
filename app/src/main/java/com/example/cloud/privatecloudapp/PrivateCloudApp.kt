@@ -1,5 +1,3 @@
-@file:Suppress("DEPRECATION", "NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
-
 package com.example.cloud.privatecloudapp
 
 import com.example.cloud.quicksettingsfunctions.BatteryDataRepository
@@ -8,6 +6,7 @@ import com.example.cloud.quicksettingsfunctions.showSensorsInfo
 import com.example.cloud.quicksettingsfunctions.BatteryChartScreen
 import com.example.cloud.whatsapptab.WhatsAppTabScreen
 import com.example.cloud.browsertab.BrowserTabContent
+import com.example.cloud.notes.NotizenApp
 
 import android.Manifest
 import androidx.activity.compose.LocalActivity
@@ -27,7 +26,6 @@ import android.webkit.WebView
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
-import android.text.format.Formatter
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -58,7 +56,6 @@ import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -118,14 +115,18 @@ import kotlin.time.ExperimentalTime
 import android.app.NotificationChannel
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
-import android.hardware.display.DisplayManager
+import android.media.MediaScannerConnection
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.net.wifi.WifiInfo
 import android.os.StatFs
-import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Display
 import android.view.Surface
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsetsController
+import android.view.WindowManager
 import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
@@ -144,10 +145,13 @@ import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -159,7 +163,6 @@ import com.example.cloud.objects.NotificationRepository
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.pow
 import kotlin.math.sqrt
 import androidx.core.content.edit
 import com.example.cloud.Authenticator.AuthenticatorTab
@@ -172,38 +175,140 @@ import com.example.cloud.datecalculator.DateCalculatorContent
 import com.example.cloud.gallery.GalleryTab
 import com.example.cloud.movietab.MovieDiscoveryTabContent
 import com.example.cloud.service.QuietHoursNotificationService
+import com.example.cloud.service.ChatService
 import com.example.cloud.weathertab.WeatherTabContent
+import java.net.Inet4Address
 import java.time.Instant
 import java.time.ZoneId
 
-// Enum für Menü-Einträge (einfach erweiterbar)
-enum class MenuItem(val title: String, val icon: String) {
-    PRIVATE_CLOUD("Private Cloud", "☁️"),
-    WHATSAPP("WhatsApp", "💬"),
-    BROWSER("Browser", "🌐"),
-    QUICK("Schnellzugriff", "⚡"),
-    NOTIFICATIONS("Benachrichtigungsverlauf", "⌚"),
-    GALLERY("Gallerie", "🖼️"),
-    AUTHENTICATOR("Authenticator", "🔒"),
-    WEATHER("Wetter", "🌡️"),
-    AI("Chatgpt", "🤖"),
-    CONTACTS("Kontakte", "🧍"),
-    RECORDER("Recorder", "🎙️"),
-    DATECALCULATOR("Date Calculator", "📅"),
-    MOVIEDISCOVER("Filme Discovery", "📺")
+var isFullScreen = false
+
+enum class MenuItem(
+    val title: String,
+    val icon: String,
+    val content: @Composable () -> Unit
+) {
+    PRIVATE_CLOUD(
+        "Private Cloud",
+        "☁️",
+        {}
+    ),
+    WHATSAPP(
+        "WhatsApp",
+        "💬",
+        { WhatsAppTabScreen() }
+    ),
+    BROWSER(
+        "Browser",
+        "🌐",
+        {
+            val context = LocalContext.current
+            var webViewUrl by remember { mutableStateOf(loadLastUrl(context)) }
+            var webViewState by remember { mutableStateOf<WebView?>(null) }
+
+            BrowserTabContent(
+                url = webViewUrl,
+                onUrlChange = { webViewUrl = it },
+                onEnterFullScreen = { isFullScreen = true },
+                webViewState = webViewState
+            )
+        }
+    ),
+    QUICK(
+        "Schnellzugriff",
+        "⚡",
+        { QuickSettingsTabContent() }
+    ),
+    NOTIFICATIONS(
+        "Benachrichtigungsverlauf",
+        "⌚",
+        { Notifications() }
+    ),
+    GALLERY(
+        "Gallerie",
+        "🖼️",
+        { GalleryTab() }
+    ),
+    AUTHENTICATOR(
+        "Authenticator",
+        "🔒",
+        { AuthenticatorTab() }
+    ),
+    WEATHER(
+        "Wetter",
+        "🌡️",
+        { WeatherTabContent() }
+    ),
+    AI(
+        "Chatgpt",
+        "🤖",
+        { AITabContent() }
+    ),
+    CONTACTS(
+        "Kontakte",
+        "🧍",
+        {
+            val context = LocalContext.current
+            val repository = remember { ContactsRepository(context) }
+            val viewModel = remember { ContactsViewModel(repository) }
+            val permissionLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestMultiplePermissions()
+            ) { permissions ->
+                if (permissions.all { it.value }) {
+                    viewModel.loadContacts()
+                }
+            }
+
+            LaunchedEffect(Unit) {
+                permissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.READ_CONTACTS,
+                        Manifest.permission.WRITE_CONTACTS
+                    )
+                )
+            }
+
+            ContactsTabContent(
+                state = viewModel.state,
+                onLoadContacts = { viewModel.loadContacts() },
+                onSaveContact = { contact -> viewModel.saveContact(contact) },
+                onDeleteContact = { id -> viewModel.deleteContact(id) }
+            )
+        }
+    ),
+    RECORDER(
+        "Recorder",
+        "🎙️",
+        { AudioRecorderContent() }
+    ),
+    DATECALCULATOR(
+        "Date Calculator",
+        "📅",
+        { DateCalculatorContent() }
+    ),
+    MOVIEDISCOVER(
+        "Filme Discovery",
+        "📺",
+        { MovieDiscoveryTabContent() }
+    ),
+    NOTES(
+        "Notizen",
+        "📖",
+        { NotizenApp() }
+    );
 }
 
-@SuppressLint("ContextCastToActivity")
+@SuppressLint("ContextCastToActivity", "SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrivateCloudApp(storage: Storage) {
-    var isFullScreen by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var selectedMenuItem by remember { mutableStateOf(loadLastMenuItem(context)) }
     val scope = rememberCoroutineScope()
     var currentUrl by rememberSaveable { mutableStateOf<String?>(null) }
 
     QuietHoursNotificationService.startService(context)
+    ChatService.startService(context)
 
     LaunchedEffect(Unit) {
         BatteryDataRepository.init(context)
@@ -211,17 +316,16 @@ fun PrivateCloudApp(storage: Storage) {
 
     LaunchedEffect(currentUrl) {
         currentUrl?.let { url ->
-            saveLastUrl(context, url)  // Speichert URL automatisch
+            saveLastUrl(context, url)
         }
     }
 
-    var webViewUrl by remember { mutableStateOf(loadLastUrl(context)) }  // Lädt letzte URL
+    var webViewUrl by remember { mutableStateOf(loadLastUrl(context)) }
     var webViewState by remember { mutableStateOf<WebView?>(null) }
 
     val drawerState = rememberDrawerState(
         initialValue = DrawerValue.Closed,
         confirmStateChange = { futureValue ->
-            // Wenn Vollbild im Lockscreen: Drawer NICHT öffnen
             if (isFullScreen && selectedMenuItem == MenuItem.BROWSER) {
                 futureValue == DrawerValue.Closed
             } else {
@@ -232,60 +336,13 @@ fun PrivateCloudApp(storage: Storage) {
 
     if (isFullScreen) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // ✅ Keine erneute Deklaration nötig!
-            when (selectedMenuItem) {
-                MenuItem.PRIVATE_CLOUD -> MainCloudScreen(storage = storage)
-                MenuItem.BROWSER -> BrowserTabContent(
-                    url = webViewUrl,
-                    onUrlChange = { webViewUrl = it },
-                    onEnterFullScreen = { isFullScreen = true },
-                    webViewState = webViewState
-                )
-
-                MenuItem.WHATSAPP -> WhatsAppTabScreen()
-                MenuItem.QUICK -> QuickSettingsTabContent()
-                MenuItem.NOTIFICATIONS -> Notifications()
-                MenuItem.GALLERY -> GalleryTab()
-                MenuItem.AUTHENTICATOR -> AuthenticatorTab()
-                MenuItem.WEATHER -> WeatherTabContent()
-
-                MenuItem.AI -> AITabContent()
-
-                MenuItem.CONTACTS -> {
-                    val repository = remember { ContactsRepository(context) }
-                    val viewModel = remember { ContactsViewModel(repository) }
-                    // Berechtigungen prüfen
-                    val permissionLauncher = rememberLauncherForActivityResult(
-                        ActivityResultContracts.RequestMultiplePermissions()
-                    ) { permissions ->
-                        if (permissions.all { it.value }) {
-                            viewModel.loadContacts()
-                        }
-                    }
-
-                    LaunchedEffect(Unit) {
-                        permissionLauncher.launch(
-                            arrayOf(
-                                Manifest.permission.READ_CONTACTS,
-                                Manifest.permission.WRITE_CONTACTS
-                            )
-                        )
-                    }
-
-                    ContactsTabContent(
-                        state = viewModel.state,
-                        onLoadContacts = { viewModel.loadContacts() },
-                        onSaveContact = { contact -> viewModel.saveContact(contact) },
-                        onDeleteContact = { id -> viewModel.deleteContact(id) }
-                    )
-                }
-                MenuItem.RECORDER -> AudioRecorderContent()
-                MenuItem.DATECALCULATOR -> DateCalculatorContent()
-                MenuItem.MOVIEDISCOVER -> MovieDiscoveryTabContent()
+            if (selectedMenuItem == MenuItem.PRIVATE_CLOUD) {
+                MainCloudScreen(storage = storage)
+            } else {
+                selectedMenuItem.content()
             }
         }
 
-        // ✅ Back-Handler für Browser-Vollbild
         if (selectedMenuItem == MenuItem.BROWSER) {
             BackHandler(enabled = true) {
                 if (webViewState?.canGoBack() == true) {
@@ -303,7 +360,6 @@ fun PrivateCloudApp(storage: Storage) {
                 ModalDrawerSheet(
                     drawerContainerColor = Color.DarkGray
                 ) {
-                    // App-Titel
                     Text(
                         text = "Cloud App",
                         modifier = Modifier.padding(16.dp),
@@ -312,41 +368,44 @@ fun PrivateCloudApp(storage: Storage) {
                         fontWeight = FontWeight.Bold
                     )
 
-                    Divider(color = Color.Gray, thickness = 1.dp)
+                    HorizontalDivider(thickness = 1.dp, color = Color.Gray)
 
                     Spacer(Modifier.height(8.dp))
 
-                    // Menü-Einträge (automatisch aus Enum generiert)
-                    MenuItem.entries.forEach { item ->
-                        NavigationDrawerItem(
-                            icon = {
-                                Text(
-                                    text = item.icon,
-                                    fontSize = 24.sp
-                                )
-                            },
-                            label = {
-                                Text(
-                                    text = item.title,
-                                    color = Color.White
-                                )
-                            },
-                            selected = selectedMenuItem == item,
-                            onClick = {
-                                selectedMenuItem = item
-                                saveLastMenuItem(context, item)
-                                scope.launch {
-                                    drawerState.close()
-                                }
-                            },
-                            colors = NavigationDrawerItemDefaults.colors(
-                                selectedContainerColor = Color(0xFF4CAF50),
-                                unselectedContainerColor = Color.Transparent,
-                                selectedTextColor = Color.White,
-                                unselectedTextColor = Color.White
-                            ),
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                        )
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(MenuItem.entries) { item ->
+                            NavigationDrawerItem(
+                                icon = {
+                                    Text(
+                                        text = item.icon,
+                                        fontSize = 24.sp
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        text = item.title,
+                                        color = Color.White
+                                    )
+                                },
+                                selected = selectedMenuItem == item,
+                                onClick = {
+                                    selectedMenuItem = item
+                                    saveLastMenuItem(context, item)
+                                    scope.launch {
+                                        drawerState.close()
+                                    }
+                                },
+                                colors = NavigationDrawerItemDefaults.colors(
+                                    selectedContainerColor = Color(0xFF4CAF50),
+                                    unselectedContainerColor = Color.Transparent,
+                                    selectedTextColor = Color.White,
+                                    unselectedTextColor = Color.White
+                                ),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -376,63 +435,16 @@ fun PrivateCloudApp(storage: Storage) {
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = Color(0xFF2A2A2A)
                         ),
-                        windowInsets = WindowInsets(0, 40, 0, 0) // Entfernt die Insets
+                        windowInsets = WindowInsets(0, 40, 0, 0)
                     )
                 },
-                contentWindowInsets = WindowInsets(0, 0, 0, 0) // Optional: für den Content-Bereich
+                contentWindowInsets = WindowInsets(0, 0, 0, 0)
             ) { paddingValues ->
                 Box(modifier = Modifier.padding(paddingValues)) {
-                    // ✅ Keine erneute Deklaration nötig!
-                    when (selectedMenuItem) {
-                        MenuItem.PRIVATE_CLOUD -> MainCloudScreen(storage)
-                        MenuItem.WHATSAPP -> WhatsAppTabScreen()
-                        MenuItem.BROWSER -> BrowserTabContent(
-                            url = webViewUrl,
-                            onUrlChange = { webViewUrl = it },
-                            onEnterFullScreen = { isFullScreen = true },
-                            webViewState = webViewState
-                        )
-
-                        MenuItem.QUICK -> QuickSettingsTabContent()
-                        MenuItem.NOTIFICATIONS -> Notifications()
-                        MenuItem.GALLERY -> GalleryTab()
-                        MenuItem.AUTHENTICATOR -> AuthenticatorTab()
-                        MenuItem.WEATHER -> WeatherTabContent()
-
-                        MenuItem.AI -> AITabContent()
-
-                        MenuItem.CONTACTS -> {
-
-                            val repository = remember { ContactsRepository(context) }
-                            val viewModel = remember { ContactsViewModel(repository) }
-                            // Berechtigungen prüfen
-                            val permissionLauncher = rememberLauncherForActivityResult(
-                                ActivityResultContracts.RequestMultiplePermissions()
-                            ) { permissions ->
-                                if (permissions.all { it.value }) {
-                                    viewModel.loadContacts()
-                                }
-                            }
-
-                            LaunchedEffect(Unit) {
-                                permissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.READ_CONTACTS,
-                                        Manifest.permission.WRITE_CONTACTS
-                                    )
-                                )
-                            }
-
-                            ContactsTabContent(
-                                state = viewModel.state,
-                                onLoadContacts = { viewModel.loadContacts() },
-                                onSaveContact = { contact -> viewModel.saveContact(contact) },
-                                onDeleteContact = { id -> viewModel.deleteContact(id) }
-                            )
-                        }
-                        MenuItem.RECORDER -> AudioRecorderContent()
-                        MenuItem.DATECALCULATOR -> DateCalculatorContent()
-                        MenuItem.MOVIEDISCOVER -> MovieDiscoveryTabContent()
+                    if (selectedMenuItem == MenuItem.PRIVATE_CLOUD) {
+                        MainCloudScreen(storage = storage)
+                    } else {
+                        selectedMenuItem.content()
                     }
                 }
             }
@@ -451,9 +463,13 @@ fun PrivateCloudApp(storage: Storage) {
                 WebView(context).apply {
                     webChromeClient = object : WebChromeClient() {
                         override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-                            Log.d("WebViewConsole", "${consoleMessage.message()} -- ${consoleMessage.sourceId()}:${consoleMessage.lineNumber()}")
+                            Log.d(
+                                "WebViewConsole",
+                                "${consoleMessage.message()} -- ${consoleMessage.sourceId()}:${consoleMessage.lineNumber()}"
+                            )
                             return true
                         }
+
                         private var customView: View? = null
                         private var customViewCallback: CustomViewCallback? = null
 
@@ -468,29 +484,34 @@ fun PrivateCloudApp(storage: Storage) {
                                 )
                                 customView = view
                                 customViewCallback = callback
-                                activity.window.decorView.systemUiVisibility = (
-                                        View.SYSTEM_UI_FLAG_FULLSCREEN or
-                                                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                                                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                                        )
+
+                                val controller = activity.window.insetsController
+                                controller?.hide(android.view.WindowInsets.Type.systemBars())
+                                controller?.systemBarsBehavior =
+                                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                             }
                         }
 
                         override fun onHideCustomView() {
                             (context as? Activity)?.let { activity ->
                                 val decor = activity.window.decorView as FrameLayout
-                                customView?.let { decor.removeView(it) }
+                                decor.removeView(customView)
                                 customView = null
                                 customViewCallback?.onCustomViewHidden()
-                                activity.window.decorView.systemUiVisibility =
-                                    View.SYSTEM_UI_FLAG_VISIBLE
+                                customViewCallback = null
+
+                                val controller = activity.window.insetsController
+                                controller?.show(android.view.WindowInsets.Type.systemBars())
                             }
                         }
                     }
 
                     // Neuer WebViewClient mit URL-Überwachung
                     webViewClient = object : WebViewClient() {
-                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                        override fun shouldOverrideUrlLoading(
+                            view: WebView?,
+                            request: WebResourceRequest?
+                        ): Boolean {
                             // Lass den WebView selbst laden
                             return false
                         }
@@ -500,7 +521,10 @@ fun PrivateCloudApp(storage: Storage) {
                             request: WebResourceRequest?,
                             error: WebResourceError?
                         ) {
-                            Log.e("WebView", "Error loading: ${error?.errorCode} ${error?.description}")
+                            Log.e(
+                                "WebView",
+                                "Error loading: ${error?.errorCode} ${error?.description}"
+                            )
                             super.onReceivedError(view, request, error)
                         }
 
@@ -514,12 +538,10 @@ fun PrivateCloudApp(storage: Storage) {
                     settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true
-                        databaseEnabled = true
 
                         setWebContentsDebuggingEnabled(true)
                         setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
-                        // Wichtig für moderne Websites:
                         allowFileAccess = true
                         allowContentAccess = true
 
@@ -586,8 +608,9 @@ fun PrivateCloudApp(storage: Storage) {
                                 loadWithOverviewMode = true
                             } else {
                                 // Mobile-Modus
-                                userAgentString = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
-                                        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                                userAgentString =
+                                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
+                                            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                                 useWideViewPort = false
                                 loadWithOverviewMode = false
                             }
@@ -650,7 +673,7 @@ fun MainCloudScreen(storage: Storage) {
     var sortOption by remember { mutableStateOf("A-Z") }
     var showUploadProgress by remember { mutableStateOf(false) }
     var showDownloadProgress by remember { mutableStateOf(false) }
-    var favoritesClickCount by remember { mutableStateOf(0) }
+    var favoritesClickCount by remember { mutableIntStateOf(0) }
     var showOtherBucket by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var favoriteFiles by remember {
@@ -928,7 +951,7 @@ fun MainCloudScreen(storage: Storage) {
                                 unfocusedTextColor = Color.White
                             ),
                             modifier = Modifier
-                                .menuAnchor()
+                                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, true)
                                 .fillMaxWidth()
                         )
 
@@ -1151,6 +1174,7 @@ fun MainCloudScreen(storage: Storage) {
                                                                                         fileName
                                                                                     )
                                                                             }
+
                                                                         val dcimDir =
                                                                             Environment.getExternalStoragePublicDirectory(
                                                                                 Environment.DIRECTORY_DCIM
@@ -1160,6 +1184,7 @@ fun MainCloudScreen(storage: Storage) {
                                                                         if (!appFolder.exists()) {
                                                                             appFolder.mkdirs()
                                                                         }
+
                                                                         val outputFile = File(
                                                                             appFolder,
                                                                             fileName
@@ -1172,18 +1197,20 @@ fun MainCloudScreen(storage: Storage) {
                                                                                 fos.write(data)
                                                                             }
                                                                         }
-                                                                        val mediaScanIntent =
-                                                                            Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE)
-                                                                        mediaScanIntent.data =
-                                                                            Uri.fromFile(outputFile)
-                                                                        context.sendBroadcast(
-                                                                            mediaScanIntent
+
+                                                                        MediaScannerConnection.scanFile(
+                                                                            context,
+                                                                            arrayOf(outputFile.absolutePath),
+                                                                            null,
+                                                                            null
                                                                         )
+
                                                                         Toast.makeText(
                                                                             context,
                                                                             "Bild gespeichert ✅",
                                                                             Toast.LENGTH_SHORT
                                                                         ).show()
+
                                                                         haptic.performHapticFeedback(
                                                                             HapticFeedbackType.LongPress
                                                                         )
@@ -1556,11 +1583,11 @@ fun MainCloudScreen(storage: Storage) {
                                                                     ignoreCase = true
                                                                 )
                                                             ) {
-                                                                context.sendBroadcast(
-                                                                    Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE).apply {
-                                                                        data =
-                                                                            Uri.fromFile(outputFile)
-                                                                    }
+                                                                MediaScannerConnection.scanFile(
+                                                                    context,
+                                                                    arrayOf(outputFile.absolutePath),
+                                                                    null,
+                                                                    null
                                                                 )
                                                             }
 
@@ -1782,11 +1809,11 @@ fun MainCloudScreen(storage: Storage) {
                         withContext(Dispatchers.IO) {
                             FileOutputStream(outputFile).use { fos -> fos.write(data) }
                         }
-                        context.sendBroadcast(
-                            Intent(
-                                Intent.ACTION_MEDIA_SCANNER_SCAN_FILE,
-                                Uri.fromFile(outputFile)
-                            )
+                        MediaScannerConnection.scanFile(
+                            context,
+                            arrayOf(outputFile.absolutePath),
+                            null,
+                            null
                         )
                         Toast.makeText(context, "Bild gespeichert ✅", Toast.LENGTH_SHORT).show()
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -2084,29 +2111,35 @@ fun QuickSettingRow(buttons: List<Pair<String, () -> Unit>>) {
 fun showDisplayInfo(context: Context) {
     val display: Display = context.display
 
+    val realWidth: Int
+    val realHeight: Int
+    val xdpi: Float
+    val ydpi: Float
+    val densityDpi: Int
 
-    val metrics = DisplayMetrics()
-    display.getRealMetrics(metrics) // inkl. Systemleisten
+    val usableWidth: Int
+    val usableHeight: Int
 
-    val usableMetrics = DisplayMetrics()
-    display.getMetrics(usableMetrics) // nutzbarer Bereich
+    val displayMetrics = context.resources.displayMetrics
+    realWidth = displayMetrics.widthPixels
+    realHeight = displayMetrics.heightPixels
+    xdpi = displayMetrics.xdpi
+    ydpi = displayMetrics.ydpi
+    densityDpi = displayMetrics.densityDpi
+
+    val windowMetrics = context.getSystemService(WindowManager::class.java).currentWindowMetrics
+    val bounds = windowMetrics.bounds
+    usableWidth = bounds.width()
+    usableHeight = bounds.height()
 
     val info = StringBuilder()
 
-    // === 1. Physikalische Auflösung (echte Pixel) ===
-    val realWidth = metrics.widthPixels
-    val realHeight = metrics.heightPixels
     info.append("📏 Phys. Auflösung: $realWidth × $realHeight px\n")
 
-    // === 2. Nutzbare Auflösung (ohne Systemleisten) ===
-    val usableWidth = usableMetrics.widthPixels
-    val usableHeight = usableMetrics.heightPixels
     if (usableWidth != realWidth || usableHeight != realHeight) {
         info.append("📦 Nutzbare Fläche: $usableWidth × $usableHeight px\n")
     }
 
-    // === 3. Dichte (dpi) ===
-    val densityDpi = metrics.densityDpi
     val densityStr = when {
         densityDpi <= 120 -> "ldpi (120 dpi)"
         densityDpi <= 160 -> "mdpi (160 dpi)"
@@ -2117,10 +2150,9 @@ fun showDisplayInfo(context: Context) {
     }
     info.append("🔍 Dichte: $densityDpi dpi ($densityStr)\n")
 
-    // === 4. Bildschirmgröße (Zoll, berechnet) ===
     try {
-        val widthInches = realWidth / metrics.xdpi.toDouble()
-        val heightInches = realHeight / metrics.ydpi.toDouble()
+        val widthInches = realWidth / xdpi.toDouble()
+        val heightInches = realHeight / ydpi.toDouble()
         val diagonalInches =
             sqrt(widthInches * widthInches + heightInches * heightInches)
         info.append("📐 Bildschirmgröße: ${String.format(Locale.US, "%.1f", diagonalInches)} Zoll\n")
@@ -2128,21 +2160,13 @@ fun showDisplayInfo(context: Context) {
         info.append("📐 Bildschirmgröße: N/A\n")
     }
 
-    // === 5. Bildwiederholfrequenz (Refresh Rate) – ab Android 11 ===
     try {
         val refreshRate = display.refreshRate
-        info.append("🔄 Refresh Rate: ${String.format(Locale.US,"%.1f", refreshRate)} Hz\n")
+        info.append("🔄 Refresh Rate: ${String.format(Locale.US, "%.1f", refreshRate)} Hz\n")
     } catch (_: Exception) {
         info.append("🔄 Refresh Rate: N/A\n")
     }
 
-    // === 6. HDR-Unterstützung (optional) ===
-    val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-    val supportsHdr =
-        displayManager.getDisplay(display.displayId)?.hdrCapabilities?.supportedHdrTypes?.isNotEmpty() == true
-    info.append("🖼️ HDR: ${if (supportsHdr) "Ja" else "Nein"}\n")
-
-    // === 7. Ausrichtung ===
     val rotation = display.rotation
     val orientationStr = when (rotation) {
         Surface.ROTATION_0 -> "Hochformat (0°)"
@@ -2153,7 +2177,6 @@ fun showDisplayInfo(context: Context) {
     }
     info.append("🧭 Ausrichtung: $orientationStr\n")
 
-    // === Notification ===
     val channelId = "display_info_channel"
     val channel = NotificationChannel(
         channelId,
@@ -2179,23 +2202,9 @@ fun showDisplayInfo(context: Context) {
         ) == PackageManager.PERMISSION_GRANTED
     ) {
         NotificationManagerCompat.from(context).notify(1030, builder.build())
-    } else {
-        // Fallback: Zeige wichtige Werte als Toast
-        val fallback = "Auflösung: ${realWidth}×${realHeight}\n" +
-                "Dichte: $densityDpi dpi\n" +
-                "Größe: ${
-                    String.format(Locale.US,
-                        "%.1f",
-                        sqrt(
-                            (realWidth / metrics.xdpi).pow(2) + (realHeight / metrics.ydpi).pow(2)
-                        )
-                    )
-                }\""
-        Toast.makeText(context, fallback, Toast.LENGTH_LONG).show()
     }
 }
 
-// Hilfsfunktion: Sofortige Benachrichtigung (wird 1–2× aufgerufen)
 fun showNetworkNotificationNow(context: Context, content: String, final: Boolean = false) {
     val channelId = "network_info_channel"
     val channel = NotificationChannel(
@@ -2343,10 +2352,17 @@ private fun showStorageNotification(
 // === Hilfsfunktionen (wie in deinem Original) ===
 private fun formatBytes(bytes: Long): String {
     return when {
-        bytes >= 1_000_000_000_000L -> "${String.format(Locale.US,"%.2f", bytes / 1_000_000_000_000.0)} TB"
-        bytes >= 1_000_000_000L -> "${String.format(Locale.US,"%.2f", bytes / 1_000_000_000.0)} GB"
-        bytes >= 1_000_000L -> "${String.format(Locale.US,"%.2f", bytes / 1_000_000.0)} MB"
-        bytes >= 1_000L -> "${String.format(Locale.US,"%.2f", bytes / 1_000.0)} KB"
+        bytes >= 1_000_000_000_000L -> "${
+            String.format(
+                Locale.US,
+                "%.2f",
+                bytes / 1_000_000_000_000.0
+            )
+        } TB"
+
+        bytes >= 1_000_000_000L -> "${String.format(Locale.US, "%.2f", bytes / 1_000_000_000.0)} GB"
+        bytes >= 1_000_000L -> "${String.format(Locale.US, "%.2f", bytes / 1_000_000.0)} MB"
+        bytes >= 1_000L -> "${String.format(Locale.US, "%.2f", bytes / 1_000.0)} KB"
         else -> "$bytes B"
     }
 }
@@ -2454,8 +2470,7 @@ fun showBatteryInfo(context: Context) {
 @SuppressLint("HardwareIds")
 fun showDeviceInfo(context: Context) {
     val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-    val wifiManager =
-        context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
     val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
     val memInfo = ActivityManager.MemoryInfo()
     activityManager.getMemoryInfo(memInfo)
@@ -2495,11 +2510,35 @@ fun showDeviceInfo(context: Context) {
         Zuletzt aktualisiert: ${Date(packageInfo.lastUpdateTime)}
     """.trimIndent()
 
+    val connectivityManager =
+        context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+    val network = connectivityManager.activeNetwork
+    val linkProperties = connectivityManager.getLinkProperties(network)
+
+    val ipAddress = linkProperties?.linkAddresses
+        ?.firstOrNull { it.address is Inet4Address }
+        ?.address
+        ?.hostAddress
+
+    val caps = connectivityManager.getNetworkCapabilities(network)
+
+    val ssid = if (
+        caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+    ) {
+        val wifiInfo = caps.transportInfo as? WifiInfo
+        wifiInfo?.ssid?.removePrefix("\"")?.removeSuffix("\"")
+    } else {
+        null
+    }
+
+    val macAddress = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+
     val networkInfo = """
         ▶ Netzwerk:
-        WLAN SSID: ${wifiManager.connectionInfo.ssid}
-        IP-Adresse: ${Formatter.formatIpAddress(wifiManager.connectionInfo.ipAddress)}
-        MAC-Adresse: ${wifiManager.connectionInfo.macAddress}
+        WLAN SSID: $ssid
+        IP-Adresse: $ipAddress
+        MAC-Adresse: $macAddress
     """.trimIndent()
 
     val notificationManager =

@@ -160,9 +160,11 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             }
         }
 
-        // Nur WhatsApp Benachrichtigungen behandeln
         if (sbn.packageName == "com.whatsapp" || sbn.packageName == "com.whatsapp.w4b") {
-
+            if (title.contains("Backup", ignoreCase = true) || title.contains("Du", ignoreCase = true)|| title.contains("WhatsApp", ignoreCase = true)) {
+                return
+            }
+            Toast.makeText(this, title,Toast.LENGTH_SHORT).show()
             notification.actions?.forEach { action ->
                 action.remoteInputs?.firstOrNull()?.let { systemRemoteInput ->
                     val remoteInput = RemoteInput.Builder(systemRemoteInput.resultKey)
@@ -171,11 +173,10 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                         .setAllowFreeFormInput(systemRemoteInput.allowFreeFormInput)
                         .build()
 
-                    // Speichere Original-PendingIntent, angepasstes RemoteInput, und WICHTIG: den originalen resultKey
-                    replyActions[title] = ReplyData( // Stelle sicher, dass deine geänderte ReplyData-Klasse hier verwendet wird
+                    replyActions[title] = ReplyData(
                         pendingIntent = action.actionIntent,
                         remoteInput = remoteInput,
-                        originalResultKey = systemRemoteInput.resultKey, // <-- Hinzugefügt
+                        originalResultKey = systemRemoteInput.resultKey,
                                 timestamp = System.currentTimeMillis()
                     )
                     Log.d("WhatsAppListener", "Saved reply action for $title with originalResultKey: ${systemRemoteInput.resultKey}")
@@ -191,7 +192,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 val exists = repository.getAll().any {
                     it.sender == title && it.text == text
                 }
-                if (!exists) {
+                if (!exists && !title.contains("Du")) {
                     repository.insert(
                         WhatsAppMessage(
                             sender = title,

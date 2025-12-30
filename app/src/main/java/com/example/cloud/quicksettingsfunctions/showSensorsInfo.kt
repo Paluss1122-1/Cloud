@@ -11,6 +11,7 @@ import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import java.util.Locale
 import kotlin.text.ifEmpty
 
 
@@ -44,7 +45,7 @@ fun showSensorsInfo(context: Context) {
         info.append("   Reichweite: ±$maxRange\n")
         info.append("   Auflösung: $resolution\n")
         info.append("   Min. Verzögerung: $minDelay\n")
-        info.append("   Stromverbrauch: ${String.format("%.2f", power)} mA\n\n")
+        info.append("   Stromverbrauch: ${String.format(Locale.US, "%.2f", power)} mA\n\n")
     }
 
     info.append("ℹ️ Hinweis: Werte sind statisch. Keine Live-Daten.")
@@ -64,7 +65,6 @@ private fun getSensorTypeString(type: Int): String {
         Sensor.TYPE_ROTATION_VECTOR -> "Rotationsvektor"
         Sensor.TYPE_GRAVITY -> "Schwerkraft"
         Sensor.TYPE_LINEAR_ACCELERATION -> "Lineare Beschleunigung"
-        Sensor.TYPE_ORIENTATION -> "Orientierung (veraltet)"
         Sensor.TYPE_AMBIENT_TEMPERATURE -> "Umgebungstemperatur"
         Sensor.TYPE_RELATIVE_HUMIDITY -> "Luftfeuchtigkeit"
         Sensor.TYPE_HEART_RATE -> "Herzfrequenz"

@@ -1,24 +1,49 @@
 package com.example.cloud.service
 
+import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.media.MediaPlayer
 import android.net.Uri
-import android.os.Build
-import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
-import androidx.annotation.RequiresApi
+import android.view.Surface
+import android.view.SurfaceHolder
+import android.view.SurfaceView
+import android.view.TextureView
+import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.DeviceInfo
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.Player
+import androidx.media3.common.Timeline
+import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.Tracks
+import androidx.media3.common.VideoSize
+import androidx.media3.common.text.CueGroup
+import androidx.media3.common.util.Size
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaSessionService
+import com.example.cloud.MainActivity
 import java.io.File
+import java.net.URLDecoder
 
-class MusicPlayerService : Service() {
+class MusicPlayerService : MediaSessionService() {
 
     companion object {
         private const val CHANNEL_ID = "music_player_channel"
@@ -50,6 +75,13 @@ class MusicPlayerService : Service() {
             }
             context.startService(intent)
         }
+
+        fun startAndPlay(context: Context) {
+            val intent = Intent(context, MusicPlayerService::class.java).apply {
+                action = ACTION_PLAY
+            }
+            context.startForegroundService(intent)
+        }
     }
 
     data class Song(
@@ -59,23 +91,36 @@ class MusicPlayerService : Service() {
     )
 
     private var mediaPlayer: MediaPlayer? = null
+    private var mediaSession: MediaSession? = null
     private var isPlaying = false
     private var playlist: List<Song> = emptyList()
     private var currentSongIndex = 0
     private var isRepeatEnabled = false
     private lateinit var sharedPreferences: SharedPreferences
+    private val handler = Handler(Looper.getMainLooper())
 
-    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
-        sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
 
-        // Gespeicherte Werte laden
         currentSongIndex = sharedPreferences.getInt(KEY_CURRENT_SONG_INDEX, 0)
         isRepeatEnabled = sharedPreferences.getBoolean(KEY_REPEAT_MODE, false)
 
         createNotificationChannel()
         loadPlaylist()
+
+        // MediaSession ohne Player erstellen (nur für Notification/Lock Screen Control)
+        mediaSession = MediaSession.Builder(this, DummyPlayer())
+            .setSessionActivity(
+                PendingIntent.getActivity(
+                    this,
+                    0,
+                    Intent(this, MainActivity::class.java),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            )
+            .build()
 
         startForeground(NOTIFICATION_ID, createNotification(), getServiceForegroundType())
 
@@ -83,6 +128,7 @@ class MusicPlayerService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
             ACTION_PLAY -> playMusic()
             ACTION_PAUSE -> pauseMusic()
@@ -93,44 +139,43 @@ class MusicPlayerService : Service() {
         return START_STICKY
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
+        return mediaSession
+    }
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
             "Musik Player",
-            NotificationManager.IMPORTANCE_DEFAULT // Erhöht von LOW auf DEFAULT
+            NotificationManager.IMPORTANCE_LOW
         ).apply {
             description = "Steuerung für Musik-Wiedergabe"
             setShowBadge(false)
-            lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
-            setSound(null, null) // Kein Sound für Notification-Updates
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            setSound(null, null)
         }
         val notificationManager = getSystemService(NotificationManager::class.java)
         notificationManager.createNotificationChannel(channel)
     }
 
-    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun getServiceForegroundType(): Int {
         return try {
-            if (checkSelfPermission(android.Manifest.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK)
-                == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (checkSelfPermission(Manifest.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK)
+                == PackageManager.PERMISSION_GRANTED
             ) {
-                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
             } else {
-                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
             }
-        } catch (e: Exception) {
-            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        } catch (_: Exception) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         }
     }
 
     private fun loadPlaylist() {
         try {
             val songs = mutableListOf<Song>()
-
             loadFromMediaStore(songs)
-
             playlist = songs.sortedBy { it.name }
 
             Log.d("MusicPlayerService", "Loaded ${playlist.size} songs")
@@ -138,7 +183,6 @@ class MusicPlayerService : Service() {
                 Log.d("MusicPlayerService", "[$index] ${song.name}")
             }
 
-            // Index validieren
             if (currentSongIndex >= playlist.size) {
                 currentSongIndex = 0
                 saveCurrentIndex()
@@ -183,18 +227,16 @@ class MusicPlayerService : Service() {
                     val data = cursor.getString(dataColumn) ?: continue
                     val title = cursor.getString(titleColumn)
 
-                    // Normalisiere den Pfad und dekodiere URL-Encoding
                     val normalizedPath = try {
-                        java.net.URLDecoder.decode(data, "UTF-8")
+                        URLDecoder.decode(data, "UTF-8")
                             .replace("\\", "/")
                             .lowercase()
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         data.replace("\\", "/").lowercase()
                     }
 
                     Log.d("MusicPlayerService", "Checking: '$name' -> '$normalizedPath'")
 
-                    // Prüfe verschiedene mögliche Pfad-Varianten
                     val isInCloud = normalizedPath.contains("/download/cloud/") ||
                             normalizedPath.contains("/downloads/cloud/") ||
                             data.contains("/Cloud/", ignoreCase = true)
@@ -206,38 +248,31 @@ class MusicPlayerService : Service() {
                         )
 
                         val isAccessible = try {
-                            contentResolver.openFileDescriptor(contentUri, "r")?.use { true } ?: false
+                            contentResolver.openFileDescriptor(contentUri, "r")?.use { true }
+                                ?: false
                         } catch (e: Exception) {
                             Log.w("MusicPlayerService", "Cannot access URI for $name: ${e.message}")
                             false
-                        }
-
-                        if (!isAccessible) {
-                            Log.w("MusicPlayerService", "⚠ Skipping inaccessible file: $name")
-                            // Versuche direkte File-URI als Fallback
-                            val fileUri = Uri.fromFile(File(data))
-                            val displayName = if (!title.isNullOrBlank() && title != "<unknown>") {
-                                title
-                            } else {
-                                name.substringBeforeLast('.')
-                            }
-
-                            songs.add(
-                                Song(
-                                    uri = fileUri, // File-URI statt Content-URI
-                                    name = displayName,
-                                    path = data
-                                )
-                            )
-                            cloudCount++
-                            Log.d("MusicPlayerService", "✓ Added via file URI: '$displayName'")
-                            return@use // Zum nächsten File
                         }
 
                         val displayName = if (!title.isNullOrBlank() && title != "<unknown>") {
                             title
                         } else {
                             name.substringBeforeLast('.')
+                        }
+
+                        if (!isAccessible) {
+                            Log.w("MusicPlayerService", "⚠ Using file URI for inaccessible: $name")
+                            val fileUri = Uri.fromFile(File(data))
+                            songs.add(
+                                Song(
+                                    uri = fileUri,
+                                    name = displayName,
+                                    path = data
+                                )
+                            )
+                            Log.d("MusicPlayerService", "✓ Added via file URI: '$displayName'")
+                            continue // FIXED: continue statt return@use
                         }
 
                         songs.add(
@@ -248,7 +283,10 @@ class MusicPlayerService : Service() {
                             )
                         )
                         cloudCount++
-                        Log.d("MusicPlayerService", "✓ Added from Cloud: '$displayName' (file: '$name')")
+                        Log.d(
+                            "MusicPlayerService",
+                            "✓ Added from Cloud: '$displayName' (file: '$name')"
+                        )
                     }
                 }
 
@@ -268,7 +306,6 @@ class MusicPlayerService : Service() {
                 return
             }
 
-            // Wenn bereits ein Song läuft, fortsetzen
             if (mediaPlayer != null && !isPlaying) {
                 mediaPlayer?.start()
                 isPlaying = true
@@ -277,7 +314,6 @@ class MusicPlayerService : Service() {
                 return
             }
 
-            // Neuen Song laden
             if (mediaPlayer == null) {
                 loadSong(currentSongIndex)
             }
@@ -294,25 +330,20 @@ class MusicPlayerService : Service() {
                 return
             }
 
-            // Alten MediaPlayer aufräumen
             mediaPlayer?.release()
             mediaPlayer = null
 
             val song = playlist[index]
             Log.d("MusicPlayerService", "Loading song [$index]: ${song.name}")
-            Log.d("MusicPlayerService", "URI: ${song.uri}")
-            Log.d("MusicPlayerService", "Path: ${song.path}")
 
             mediaPlayer = MediaPlayer().apply {
                 try {
-                    // Versuch 1: Content URI verwenden
                     setDataSource(applicationContext, song.uri)
                     prepare()
                     Log.d("MusicPlayerService", "✓ Loaded via Content URI")
                 } catch (e: Exception) {
                     Log.w("MusicPlayerService", "Failed with Content URI, trying file path", e)
 
-                    // Versuch 2: Direkter Dateipfad
                     try {
                         reset()
                         setDataSource(song.path)
@@ -338,21 +369,18 @@ class MusicPlayerService : Service() {
             Log.d("MusicPlayerService", "▶ Now playing: ${song.name}")
 
         } catch (e: Exception) {
-            Log.e("MusicPlayerService", "Error loading song at index $index: ${playlist[index].name}", e)
+            Log.e("MusicPlayerService", "Error loading song at index $index", e)
 
-            // Markiere fehlerhafte Songs
             if (index < playlist.size) {
                 Log.e("MusicPlayerService", "Skipping broken file: ${playlist[index].path}")
             }
 
-            // Versuche nächsten Song (aber nicht endlos)
             val nextIndex = (index + 1) % playlist.size
             if (nextIndex != index && nextIndex < playlist.size) {
-                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                handler.postDelayed({
                     loadSong(nextIndex)
-                }, 500) // Kurze Verzögerung vor nächstem Versuch
+                }, 500)
             } else {
-                // Keine weiteren Songs verfügbar
                 isPlaying = false
                 updateNotification()
             }
@@ -422,7 +450,6 @@ class MusicPlayerService : Service() {
         Log.d("MusicPlayerService", "Song completed at index $currentSongIndex")
 
         if (isRepeatEnabled) {
-            // Wiederhole aktuellen Song
             try {
                 mediaPlayer?.seekTo(0)
                 mediaPlayer?.start()
@@ -432,9 +459,7 @@ class MusicPlayerService : Service() {
                 nextSong()
             }
         } else {
-            // Nächster Song oder zurück zu Song 1
             if (currentSongIndex + 1 >= playlist.size) {
-                // Am Ende der Playlist, zurück zu Song 1
                 currentSongIndex = 0
                 Log.d("MusicPlayerService", "End of playlist, restarting from beginning")
             } else {
@@ -453,7 +478,7 @@ class MusicPlayerService : Service() {
         }
     }
 
-    private fun createNotification(): android.app.Notification {
+    private fun createNotification(): Notification {
         return buildNotification()
     }
 
@@ -463,14 +488,12 @@ class MusicPlayerService : Service() {
         notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
-    private fun buildNotification(): android.app.Notification {
+    private fun buildNotification(): Notification {
         val currentSong = if (playlist.isNotEmpty() && currentSongIndex < playlist.size) {
             playlist[currentSongIndex].name
         } else {
             "Keine Playlist"
         }
-
-        val repeatStatus = if (isRepeatEnabled) "🔁" else ""
 
         val playPauseIntent = Intent(this, MusicPlayerService::class.java).apply {
             action = if (isPlaying) ACTION_PAUSE else ACTION_PLAY
@@ -496,11 +519,11 @@ class MusicPlayerService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val repeatIntent = Intent(this, MusicPlayerService::class.java).apply {
+        val toggleRepeatIntent = Intent(this, MusicPlayerService::class.java).apply {
             action = ACTION_TOGGLE_REPEAT
         }
-        val repeatPendingIntent = PendingIntent.getService(
-            this, 3, repeatIntent,
+        val toggleRepeatPendingIntent = PendingIntent.getService(
+            this, 3, toggleRepeatIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -508,12 +531,11 @@ class MusicPlayerService : Service() {
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle("🎵 Musik Player")
             .setContentText("$currentSong (${currentSongIndex + 1}/${playlist.size}) ${if (isRepeatEnabled) "🔁" else ""}")
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT) // Erhöht von LOW auf DEFAULT
-            .setOngoing(true) // Macht die Notification nicht wegwischbar
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setOngoing(true)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setContentIntent(repeatPendingIntent)
+            .setContentIntent(toggleRepeatPendingIntent)
 
-        // Nur 3 Hauptbuttons (Android Limit für kompakte Ansicht)
         if (playlist.isNotEmpty()) {
             builder
                 .addAction(
@@ -540,6 +562,146 @@ class MusicPlayerService : Service() {
         super.onDestroy()
         mediaPlayer?.release()
         mediaPlayer = null
+        mediaSession?.release()
+        mediaSession = null
         Log.d("MusicPlayerService", "Service destroyed")
+    }
+
+    @UnstableApi
+    private inner class DummyPlayer : Player {
+        override fun getApplicationLooper(): Looper = Looper.getMainLooper()
+        override fun addListener(listener: Player.Listener) {}
+        override fun removeListener(listener: Player.Listener) {}
+        override fun setMediaItems(mediaItems: MutableList<MediaItem>) {}
+        override fun setMediaItems(mediaItems: MutableList<MediaItem>, resetPosition: Boolean) {}
+        override fun setMediaItems(mediaItems: MutableList<MediaItem>, startIndex: Int, startPositionMs: Long) {}
+        override fun setMediaItem(mediaItem: MediaItem) {}
+        override fun setMediaItem(mediaItem: MediaItem, startPositionMs: Long) {}
+        override fun setMediaItem(mediaItem: MediaItem, resetPosition: Boolean) {}
+        override fun addMediaItem(mediaItem: MediaItem) {}
+        override fun addMediaItem(index: Int, mediaItem: MediaItem) {}
+        override fun addMediaItems(mediaItems: MutableList<MediaItem>) {}
+        override fun addMediaItems(index: Int, mediaItems: MutableList<MediaItem>) {}
+        override fun moveMediaItem(currentIndex: Int, newIndex: Int) {}
+        override fun moveMediaItems(fromIndex: Int, toIndex: Int, newIndex: Int) {}
+        override fun replaceMediaItem(index: Int, mediaItem: MediaItem) {}
+        override fun replaceMediaItems(fromIndex: Int, toIndex: Int, mediaItems: MutableList<MediaItem>) {}
+        override fun removeMediaItem(index: Int) {}
+        override fun removeMediaItems(fromIndex: Int, toIndex: Int) {}
+        override fun clearMediaItems() {}
+        override fun isCommandAvailable(command: Int) = false
+        override fun canAdvertiseSession() = true
+        override fun getAvailableCommands() = Player.Commands.EMPTY
+        override fun prepare() {}
+        override fun getPlaybackState() = Player.STATE_IDLE
+        override fun getPlaybackSuppressionReason() = Player.PLAYBACK_SUPPRESSION_REASON_NONE
+        override fun isPlaying() = false
+        override fun getPlayerError(): PlaybackException? = null
+        override fun play() {}
+        override fun pause() {}
+        override fun setPlayWhenReady(playWhenReady: Boolean) {}
+        override fun getPlayWhenReady() = false
+        override fun setRepeatMode(repeatMode: Int) {}
+        override fun getRepeatMode() = Player.REPEAT_MODE_OFF
+        override fun setShuffleModeEnabled(shuffleModeEnabled: Boolean) {}
+        override fun getShuffleModeEnabled() = false
+        override fun isLoading() = false
+        override fun seekToDefaultPosition() {}
+        override fun seekToDefaultPosition(mediaItemIndex: Int) {}
+        override fun seekTo(positionMs: Long) {}
+        override fun seekTo(mediaItemIndex: Int, positionMs: Long) {}
+        override fun getSeekBackIncrement() = 0L
+        override fun seekBack() {}
+        override fun getSeekForwardIncrement() = 0L
+        override fun seekForward() {}
+        override fun hasPreviousMediaItem() = false
+        override fun seekToPreviousMediaItem() {}
+        override fun getMaxSeekToPreviousPosition() = 0L
+        override fun seekToPrevious() {}
+        override fun hasNextMediaItem() = false
+        override fun seekToNextMediaItem() {}
+        override fun seekToNext() {}
+        override fun setPlaybackParameters(playbackParameters: PlaybackParameters) {}
+        override fun setPlaybackSpeed(speed: Float) {}
+        override fun getPlaybackParameters() = PlaybackParameters.DEFAULT
+        override fun stop() {}
+        override fun release() {}
+        override fun getCurrentTracks() = Tracks.EMPTY
+
+        @OptIn(UnstableApi::class)
+        override fun getTrackSelectionParameters() = TrackSelectionParameters.DEFAULT_WITHOUT_CONTEXT
+        override fun setTrackSelectionParameters(parameters: TrackSelectionParameters) {}
+        override fun getMediaMetadata() = MediaMetadata.EMPTY
+        override fun getPlaylistMetadata() = MediaMetadata.EMPTY
+        override fun setPlaylistMetadata(mediaMetadata: MediaMetadata) {}
+        override fun getCurrentManifest(): Any? = null
+        override fun getCurrentTimeline() = Timeline.EMPTY
+        override fun getCurrentPeriodIndex() = 0
+        @Deprecated("Deprecated in Java")
+        override fun getCurrentWindowIndex() = 0
+        override fun getCurrentMediaItemIndex() = 0
+        @Deprecated("Deprecated in Java")
+        override fun getNextWindowIndex() = 0
+        override fun getNextMediaItemIndex() = 0
+        @Deprecated("Deprecated in Java")
+        override fun getPreviousWindowIndex() = 0
+        override fun getPreviousMediaItemIndex() = 0
+        override fun getCurrentMediaItem(): MediaItem? = null
+        override fun getMediaItemCount() = 0
+        override fun getMediaItemAt(index: Int): MediaItem = throw IndexOutOfBoundsException()
+        override fun getDuration() = 0L
+        override fun getCurrentPosition() = 0L
+        override fun getBufferedPosition() = 0L
+        override fun getBufferedPercentage() = 0
+        override fun getTotalBufferedDuration() = 0L
+        @Deprecated("Deprecated in Java")
+        override fun isCurrentWindowDynamic() = false
+        override fun isCurrentMediaItemDynamic() = false
+        @Deprecated("Deprecated in Java")
+        override fun isCurrentWindowLive() = false
+        override fun isCurrentMediaItemLive() = false
+        override fun getCurrentLiveOffset() = 0L
+        @Deprecated("Deprecated in Java")
+        override fun isCurrentWindowSeekable() = false
+        override fun isCurrentMediaItemSeekable() = false
+        override fun isPlayingAd() = false
+        override fun getCurrentAdGroupIndex() = 0
+        override fun getCurrentAdIndexInAdGroup() = 0
+        override fun getContentDuration() = 0L
+        override fun getContentPosition() = 0L
+        override fun getContentBufferedPosition() = 0L
+        override fun getAudioAttributes() = AudioAttributes.DEFAULT
+        override fun setVolume(volume: Float) {}
+        override fun getVolume() = 1f
+        override fun mute() {}
+        override fun unmute() {}
+        override fun clearVideoSurface() {}
+        override fun clearVideoSurface(surface: Surface?) {}
+        override fun setVideoSurface(surface: Surface?) {}
+        override fun setVideoSurfaceHolder(surfaceHolder: SurfaceHolder?) {}
+        override fun clearVideoSurfaceHolder(surfaceHolder: SurfaceHolder?) {}
+        override fun setVideoSurfaceView(surfaceView: SurfaceView?) {}
+        override fun clearVideoSurfaceView(surfaceView: SurfaceView?) {}
+        override fun setVideoTextureView(textureView: TextureView?) {}
+        override fun clearVideoTextureView(textureView: TextureView?) {}
+        override fun getVideoSize() = VideoSize.UNKNOWN
+        override fun getSurfaceSize() = Size.UNKNOWN
+        override fun getCurrentCues() = CueGroup.EMPTY_TIME_ZERO
+        override fun getDeviceInfo() = DeviceInfo.UNKNOWN
+        override fun getDeviceVolume() = 0
+        override fun isDeviceMuted() = false
+        @Deprecated("Deprecated in Java")
+        override fun setDeviceVolume(volume: Int) {}
+        override fun setDeviceVolume(volume: Int, flags: Int) {}
+        @Deprecated("Deprecated in Java")
+        override fun increaseDeviceVolume() {}
+        override fun increaseDeviceVolume(flags: Int) {}
+        @Deprecated("Deprecated in Java")
+        override fun decreaseDeviceVolume() {}
+        override fun decreaseDeviceVolume(flags: Int) {}
+        @Deprecated("Deprecated in Java")
+        override fun setDeviceMuted(muted: Boolean) {}
+        override fun setDeviceMuted(muted: Boolean, flags: Int) {}
+        override fun setAudioAttributes(audioAttributes: AudioAttributes, handleAudioFocus: Boolean) {}
     }
 }

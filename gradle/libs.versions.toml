@@ -11,15 +11,18 @@ junitVersion = "1.3.0"
 espressoCore = "3.7.0"
 kotlinxSerializationJson = "1.9.0"
 ktorClientAndroidVersion = "3.3.3"
+ktorClientCio = "3.3.3"
 ktorClientCore = "3.3.3"
+ktorClientWebsockets = "3.3.3"
 ktorUtils = "3.3.3"
 lifecycleRuntimeKtx = "2.9.4"
-activityCompose = "1.11.0"
+activityCompose = "1.12.2"
 composeBom = "2025.11.00"
 material3 = "1.4.0"
 materialIconsExtendedVersion = "1.7.8"
 media3Exoplayer = "1.8.0"
 postgrestKt = "3.2.6"
+realtimeKt = "3.2.6"
 roomRuntime = "2.8.4"
 storageKt = "3.2.6"
 supabaseKt = "3.2.6"
@@ -28,14 +31,16 @@ appcompat = "1.7.1"
 protoliteWellKnownTypes = "18.0.1"
 uiText = "1.9.4"
 workRuntimeKtx = "2.11.0"
-uiGraphics = "1.9.4"
-runtime = "1.9.4"
+uiGraphics = "1.10.0"
+runtime = "1.10.0"
 foundationVersion = "1.9.5"
 roomKtx = "2.8.4"
 runtimeSavedInstanceState = "1.0.0-alpha11"
 navigationCompose = "2.9.6"
 playServicesLocation = "21.3.0"
 zxingAndroidEmbedded = "4.3.0"
+toolsCore = "1.0.0-alpha14"
+media3Session = "1.9.0"
 
 [libraries]
 accompanist-swiperefresh = { module = "com.google.accompanist:accompanist-swiperefresh", version.ref = "accompanistSwiperefresh" }
@@ -65,7 +70,9 @@ androidx-compose-material3 = { group = "androidx.compose.material3", name = "mat
 androidx-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "ui" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktorClientCio" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktorClientCore" }
+ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktorClientWebsockets" }
 ktor-ktor-client-android = { module = "io.ktor:ktor-client-android", version.ref = "ktorClientAndroidVersion" }
 ktor-utils = { module = "io.ktor:ktor-utils", version.ref = "ktorUtils" }
 postgrest-kt = { module = "io.github.jan-tennert.supabase:postgrest-kt", version.ref = "postgrestKt" }
@@ -74,14 +81,17 @@ androidx-compose-ui-text = { group = "androidx.compose.ui", name = "ui-text", ve
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workRuntimeKtx" }
 androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics", version.ref = "uiGraphics" }
 androidx-compose-runtime = { group = "androidx.compose.runtime", name = "runtime", version.ref = "runtime" }
-androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundationVersion" }
+androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version = "1.10.0" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "roomKtx" }
 androidx-compose-runtime-saved-instance-state = { group = "androidx.compose.runtime", name = "runtime-saved-instance-state", version.ref = "runtimeSavedInstanceState" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+realtime-kt = { module = "io.github.jan-tennert.supabase:realtime-kt", version.ref = "realtimeKt" }
 storage-kt = { module = "io.github.jan-tennert.supabase:storage-kt", version.ref = "storageKt" }
 supabase-kt = { module = "io.github.jan-tennert.supabase:supabase-kt", version.ref = "supabaseKt" }
 zxing-android-embedded = { module = "com.journeyapps:zxing-android-embedded", version.ref = "zxingAndroidEmbedded" }
+androidx-tools-core = { group = "androidx.privacysandbox.tools", name = "tools-core", version.ref = "toolsCore" }
+androidx-media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3Session" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

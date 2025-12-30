@@ -2,12 +2,10 @@ package com.example.cloud.privatecloudapp
 
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,16 +31,8 @@ import kotlinx.coroutines.withContext
 
 class ShareActivity : ComponentActivity() {
     lateinit var storage : Storage
-    private val supabase: SupabaseClient by lazy {
-        createSupabaseClient(
-            supabaseUrl = SupabaseConfig.SUPABASE_URL,
-            supabaseKey = SupabaseConfig.SUPABASE_ANON_KEY
-        ) {
-            install(Storage)
-        }
-    }
+    private val supabase: SupabaseClient = SupabaseConfig.client
 
-    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -62,7 +52,6 @@ class ShareActivity : ComponentActivity() {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun handleSingleShare(intent: Intent) {
         val uri = intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
         if (uri != null) {
@@ -73,7 +62,6 @@ class ShareActivity : ComponentActivity() {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun handleMultipleShare(intent: Intent) {
         val uris =intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
         if (uris != null && uris.isNotEmpty()) {

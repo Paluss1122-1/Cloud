@@ -55,11 +55,9 @@ fun SilentCaptureScreen() {
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
-        // Kameraansicht (Barcode Scanner)
         AndroidView(
             factory = { ctx ->
                 DecoratedBarcodeView(ctx).apply {
-                    // Laser + Rahmen unsichtbar machen
                     viewFinder.visibility = View.GONE
                     setStatusText("")
 
@@ -83,7 +81,6 @@ fun SilentCaptureScreen() {
             modifier = Modifier.fillMaxSize()
         )
 
-        // Eigenes Overlay-Design (Rahmen + Text)
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -131,13 +128,7 @@ suspend fun handleQrCode(qrText: String, context: Context) {
             return
         }
 
-        val db = Room.databaseBuilder(
-            context,
-            TwoFADatabase::class.java,
-            "twofa_database"
-        )
-            .fallbackToDestructiveMigration(dropAllTables = true)
-            .build()
+        val db = TwoFADatabase.getDatabase(context)
 
         // Prüfen ob bereits vorhanden
         val existingEntries = db.twoFADao().getAll()
