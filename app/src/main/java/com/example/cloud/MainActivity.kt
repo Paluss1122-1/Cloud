@@ -2,10 +2,8 @@ package com.example.cloud
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,8 +12,6 @@ import androidx.core.view.WindowCompat
 import com.example.cloud.privatecloudapp.PrivateCloudApp
 import com.example.cloud.quicksettingsfunctions.BatteryDataRepository
 import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.createSupabaseClient
-import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.storage.storage
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -25,7 +21,7 @@ import androidx.fragment.app.FragmentActivity
 
 class MainActivity : FragmentActivity() {
     private lateinit var policyManager: PolicyManager
-    public val supabase: SupabaseClient = SupabaseConfig.client
+    val supabase: SupabaseClient = SupabaseConfig.client
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -34,7 +30,6 @@ class MainActivity : FragmentActivity() {
             WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         super.onCreate(savedInstanceState)
 
-        window.setDecorFitsSystemWindows(false)
         window.insetsController?.let { controller ->
             controller.hide(android.view.WindowInsets.Type.systemBars())
             controller.systemBarsBehavior =
