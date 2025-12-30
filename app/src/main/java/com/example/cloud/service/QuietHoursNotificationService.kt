@@ -600,6 +600,13 @@ class QuietHoursNotificationService : Service() {
                     showSimpleNotification("❌ Fehler", "Konnte Notification nicht anzeigen")
                 }
             },
+            Command(
+                name = "bluetooth",
+                aliases = listOf("bt", "connect", "headphones", "kopfhörer"),
+                description = "Verbindet mit gespeicherten Bluetooth-Kopfhörern"
+            ) {
+                connectToBluetoothHeadphones()
+            }
         )
     }
 
@@ -953,6 +960,38 @@ class QuietHoursNotificationService : Service() {
                         "setdowntime [Uhrzeit]"
                     )
                 }
+            }
+
+            "bluetooth", "bt", "connect", "headphones", "kopfhörer" -> {
+                when {
+                    argument == null -> {
+                        connectToBluetoothHeadphones()
+                    }
+                    argument.equals("save", ignoreCase = true) -> {
+                        saveBluetoothHeadphones()
+                    }
+                    argument.equals("info", ignoreCase = true) -> {
+                        showBluetoothInfo()
+                    }
+                    argument.startsWith("save ", ignoreCase = true) -> {
+                        val macAddress = argument.substring(5).trim()
+                        val prefs = getSharedPreferences("bluetooth_prefs", MODE_PRIVATE)
+                        prefs.edit {
+                            putString("headphone_mac", macAddress)
+                        }
+                        showSimpleNotification(
+                            "✅ MAC gespeichert",
+                            "Kopfhörer-Adresse: $macAddress"
+                        )
+                    }
+                    else -> {
+                        showSimpleNotification(
+                            "ℹ️ Bluetooth Befehle",
+                            "bluetooth - Verbinden\nbluetooth save - Gerät speichern\nbluetooth info - Info anzeigen"
+                        )
+                    }
+                }
+                return
             }
         }
 
@@ -3675,6 +3714,235 @@ class QuietHoursNotificationService : Service() {
             )
         }
     }
+
+    private fun connectToBluetoothHeadphones() {
+        try {
+            // Prefs für gespeicherte Bluetooth-Adresse
+            val prefs = getSharedPreferences("bluetooth_prefs", MODE_PRIVATE)
+            val savedAddress = prefs.getString("headphone_mac", null)
+
+            if (savedAddress == null) {
+                showSimpleNotification(
+                    "ℹ️ Keine Kopfhörer gespeichert",
+                    "Verwende 'bluetooth save' um deine Kopfhörer zu speichern"
+                )
+                return
+            }
+
+            val bluetoothAdapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter()
+
+            if (bluetoothAdapter == null) {
+                showSimpleNotification(
+                    "❌ Bluetooth nicht verfügbar",
+                    "Dieses Gerät unterstützt kein Bluetooth"
+                )
+                return
+            }
+
+            if (!bluetoothAdapter.isEnabled) {
+                showSimpleNotification(
+                    "⚠️ Bluetooth ausgeschaltet",
+                    "Schalte Bluetooth zuerst ein"
+                )
+                return
+            }
+
+            // Verbindung herstellen
+            if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
+                == PackageManager.PERMISSION_GRANTED) {
+
+                val device = bluetoothAdapter.getRemoteDevice(savedAddress)
+
+                // Trigger connection via system
+                val intent = Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+
+                // Alternative: Direkte Verbindung (benötigt mehr Permissions)
+                try {
+                    val method = device.javaClass.getMethod("createBond")
+                    method.invoke(device)
+
+                    showSimpleNotification(
+                        "🔵 Verbinde...",
+                        "Verbindung zu Kopfhörern wird hergestellt"
+                    )
+
+                    // Status nach 2 Sekunden prüfen
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        checkBluetoothConnectionStatus(device)
+                    }, 2000)
+
+                } catch (e: Exception) {
+                    Log.e("QuietHoursService", "Direct connection failed, opening settings", e)
+                    startActivity(intent)
+                    showSimpleNotification(
+                        "ℹ️ Bluetooth Einstellungen",
+                        "Verbinde manuell mit deinen Kopfhörern"
+                    )
+                }
+
+            } else {
+                showSimpleNotification(
+                    "❌ Keine Berechtigung",
+                    "BLUETOOTH_CONNECT Berechtigung fehlt"
+                )
+            }
+
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "Error connecting bluetooth", e)
+            showSimpleNotification(
+                "❌ Verbindungsfehler",
+                "Bluetooth konnte nicht verbunden werden: ${e.message}"
+            )
+        }
+    }
+
+    private fun checkBluetoothConnectionStatus(device: android.bluetooth.BluetoothDevice) {
+        try {
+            if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
+                == PackageManager.PERMISSION_GRANTED) {
+
+                val isConnected = device.bondState == android.bluetooth.BluetoothDevice.BOND_BONDED
+
+                if (isConnected) {
+                    showSimpleNotification(
+                        "✅ Verbunden",
+                        "Kopfhörer erfolgreich verbunden"
+                    )
+                } else {
+                    showSimpleNotification(
+                        "⏳ Wird verbunden...",
+                        "Verbindung läuft noch"
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "Error checking connection status", e)
+        }
+    }
+
+    private fun saveBluetoothHeadphones() {
+        try {
+            val bluetoothAdapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter()
+
+            if (bluetoothAdapter == null) {
+                showSimpleNotification(
+                    "❌ Bluetooth nicht verfügbar",
+                    "Dieses Gerät unterstützt kein Bluetooth"
+                )
+                return
+            }
+
+            if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
+                == PackageManager.PERMISSION_GRANTED) {
+
+                val pairedDevices = bluetoothAdapter.bondedDevices
+
+                if (pairedDevices.isEmpty()) {
+                    showSimpleNotification(
+                        "ℹ️ Keine Geräte gekoppelt",
+                        "Koppele zuerst deine Kopfhörer"
+                    )
+                    return
+                }
+
+                // Zeige gekoppelte Geräte
+                val deviceList = pairedDevices.joinToString("\n") { device ->
+                    "• ${device.name} (${device.address})"
+                }
+
+                // Wenn nur ein Gerät: Automatisch speichern
+                if (pairedDevices.size == 1) {
+                    val device = pairedDevices.first()
+                    val prefs = getSharedPreferences("bluetooth_prefs", MODE_PRIVATE)
+                    prefs.edit {
+                        putString("headphone_mac", device.address)
+                        putString("headphone_name", device.name)
+                    }
+
+                    showSimpleNotification(
+                        "✅ Kopfhörer gespeichert",
+                        "${device.name} wurde als Standard-Kopfhörer gespeichert"
+                    )
+                } else {
+                    // Mehrere Geräte: Liste anzeigen
+                    val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+                        .setSmallIcon(R.drawable.ic_dialog_info)
+                        .setContentTitle("🔵 Gekoppelte Bluetooth-Geräte")
+                        .setContentText("${pairedDevices.size} Geräte gefunden")
+                        .setStyle(
+                            NotificationCompat.BigTextStyle()
+                                .bigText("$deviceList\n\nVerwende 'bluetooth save [MAC]' um ein Gerät zu speichern")
+                        )
+                        .setPriority(NotificationCompat.PRIORITY_HIGH)
+                        .setAutoCancel(true)
+                        .build()
+
+                    val notificationManager = getSystemService(NotificationManager::class.java)
+                    if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                        == PackageManager.PERMISSION_GRANTED) {
+                        notificationManager.notify(50100, notification)
+                    }
+                }
+
+            } else {
+                showSimpleNotification(
+                    "❌ Keine Berechtigung",
+                    "BLUETOOTH_CONNECT Berechtigung fehlt"
+                )
+            }
+
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "Error saving bluetooth headphones", e)
+            showSimpleNotification(
+                "❌ Fehler",
+                "Kopfhörer konnten nicht gespeichert werden: ${e.message}"
+            )
+        }
+    }
+
+    private fun showBluetoothInfo() {
+        try {
+            val prefs = getSharedPreferences("bluetooth_prefs", MODE_PRIVATE)
+            val savedAddress = prefs.getString("headphone_mac", null)
+            val savedName = prefs.getString("headphone_name", null)
+
+            if (savedAddress == null) {
+                showSimpleNotification(
+                    "ℹ️ Keine Kopfhörer gespeichert",
+                    "Verwende 'bluetooth save' um deine Kopfhörer zu speichern"
+                )
+                return
+            }
+
+            val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_dialog_info)
+                .setContentTitle("🔵 Gespeicherte Kopfhörer")
+                .setContentText(savedName ?: "Unbekannt")
+                .setStyle(
+                    NotificationCompat.BigTextStyle()
+                        .bigText("""
+                        Name: ${savedName ?: "Unbekannt"}
+                        MAC: $savedAddress
+                        
+                        Verwende 'bluetooth' zum Verbinden
+                    """.trimIndent())
+                )
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .build()
+
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                == PackageManager.PERMISSION_GRANTED) {
+                notificationManager.notify(50101, notification)
+            }
+
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "Error showing bluetooth info", e)
+        }
+    }
+
 }
 
 class QuietActionReceiver : BroadcastReceiver() {
