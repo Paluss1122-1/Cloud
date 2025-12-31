@@ -464,22 +464,15 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?) {
 
     if (isFullScreen) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
+            modifier = Modifier.fillMaxSize()
         ) {
             var webViewState by remember { mutableStateOf<WebView?>(null) }
+            var currentUrl by remember { mutableStateOf(webViewUrl) }
+            var isDesktopMode by remember { mutableStateOf(false) }
 
             val webView = remember {
                 WebView(context).apply {
                     webChromeClient = object : WebChromeClient() {
-                        override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-                            Log.d(
-                                "WebViewConsole",
-                                "${consoleMessage.message()} -- ${consoleMessage.sourceId()}:${consoleMessage.lineNumber()}"
-                            )
-                            return true
-                        }
-
                         private var customView: View? = null
                         private var customViewCallback: CustomViewCallback? = null
 
@@ -487,7 +480,8 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?) {
                             (context as? Activity)?.let { activity ->
                                 val decor = activity.window.decorView as FrameLayout
                                 decor.addView(
-                                    view, FrameLayout.LayoutParams(
+                                    view,
+                                    FrameLayout.LayoutParams(
                                         ViewGroup.LayoutParams.MATCH_PARENT,
                                         ViewGroup.LayoutParams.MATCH_PARENT
                                     )
@@ -495,10 +489,11 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?) {
                                 customView = view
                                 customViewCallback = callback
 
-                                val controller = activity.window.insetsController
-                                controller?.hide(android.view.WindowInsets.Type.systemBars())
-                                controller?.systemBarsBehavior =
-                                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                                activity.window.insetsController?.apply {
+                                    hide(android.view.WindowInsets.Type.systemBars())
+                                    systemBarsBehavior =
+                                        WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                                }
                             }
                         }
 
@@ -510,38 +505,21 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?) {
                                 customViewCallback?.onCustomViewHidden()
                                 customViewCallback = null
 
-                                val controller = activity.window.insetsController
-                                controller?.show(android.view.WindowInsets.Type.systemBars())
+                                activity.window.insetsController?.show(
+                                    android.view.WindowInsets.Type.systemBars()
+                                )
                             }
                         }
                     }
 
-                    // Neuer WebViewClient mit URL-Überwachung
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(
                             view: WebView?,
                             request: WebResourceRequest?
-                        ): Boolean {
-                            // Lass den WebView selbst laden
-                            return false
-                        }
-
-                        override fun onReceivedError(
-                            view: WebView?,
-                            request: WebResourceRequest?,
-                            error: WebResourceError?
-                        ) {
-                            Log.e(
-                                "WebView",
-                                "Error loading: ${error?.errorCode} ${error?.description}"
-                            )
-                            super.onReceivedError(view, request, error)
-                        }
+                        ): Boolean = false
 
                         override fun onPageFinished(view: WebView?, url: String?) {
-                            super.onPageFinished(view, url)
                             if (url != null) currentUrl = url
-                            Log.d("WebView", "Finished loading: $url")
                         }
                     }
 
@@ -549,56 +527,41 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?) {
                         javaScriptEnabled = true
                         domStorageEnabled = true
 
-                        setWebContentsDebuggingEnabled(true)
-                        setLayerType(View.LAYER_TYPE_HARDWARE, null)
-
                         allowFileAccess = true
                         allowContentAccess = true
-
-                        safeBrowsingEnabled = false
 
                         loadsImagesAutomatically = true
                         blockNetworkLoads = false
 
-                        // Besser: NUR wenn nötig mixed content erlauben
-                        mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                        mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
 
-                        // Desktop-Ansicht aktivieren:
-                        useWideViewPort = true  // ← Hier war das Problem!
+                        useWideViewPort = true
                         loadWithOverviewMode = true
 
-                        // Zoom-Einstellungen
                         builtInZoomControls = true
                         displayZoomControls = false
                         setSupportZoom(true)
 
-                        // Multi-Window Support
                         javaScriptCanOpenWindowsAutomatically = true
                         setSupportMultipleWindows(true)
 
-                        // Caching für bessere Performance
                         cacheMode = WebSettings.LOAD_DEFAULT
-
-                        // Media-Unterstützung
                         mediaPlaybackRequiresUserGesture = false
 
                         userAgentString =
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.200 Safari/537.36"
+                            "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
                     }
+
+                    val cookieManager = CookieManager.getInstance()
+                    cookieManager.setAcceptCookie(true)
+                    cookieManager.setAcceptThirdPartyCookies(this, true)
+                    cookieManager.flush()
+
                     loadUrl(webViewUrl)
-                }.also { wv ->
-                    CookieManager.getInstance().apply {
-                        setAcceptCookie(true)
-                        setAcceptThirdPartyCookies(wv, true)
-                    }
-                    CookieManager.getInstance().flush()
                 }
             }
 
-            var isDesktopMode by remember { mutableStateOf(false) }
-
             Box(modifier = Modifier.fillMaxSize()) {
-                // WebView bleibt im Hintergrund, nimmt den kompletten Platz ein
                 AndroidView(
                     factory = { webView },
                     update = { webViewState = it },
@@ -608,42 +571,32 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?) {
                 Button(
                     onClick = {
                         isDesktopMode = !isDesktopMode
+
                         webView.settings.apply {
                             if (isDesktopMode) {
-                                // Desktop-Modus
-                                userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-                                        "AppleWebKit/537.36 (KHTML, like Gecko) " +
-                                        "Chrome/120.0.0.0 Safari/537.36"
+                                userAgentString =
+                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                                 useWideViewPort = true
                                 loadWithOverviewMode = true
                             } else {
-                                // Mobile-Modus
                                 userAgentString =
-                                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
-                                            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                                useWideViewPort = false
-                                loadWithOverviewMode = false
+                                    "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                                useWideViewPort = true
+                                loadWithOverviewMode = true
                             }
                         }
-                        webView.reload()
+
+                        webView.loadUrl(currentUrl)
                     },
                     modifier = Modifier
-                        .align(Alignment.CenterStart) // mittig links
+                        .align(Alignment.CenterStart)
                         .padding(start = 16.dp)
                 ) {
-                    if (isDesktopMode) {
-                        Icon(
-                            imageVector = Icons.Filled.Laptop,
-                            contentDescription = "Wechsel zu PC Ansicht",
-                            tint = Color.White
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Filled.Phone,
-                            contentDescription = "Wechsel zu Handyansicht",
-                            tint = Color.White
-                        )
-                    }
+                    Icon(
+                        imageVector = if (isDesktopMode) Icons.Filled.Laptop else Icons.Filled.Phone,
+                        contentDescription = null,
+                        tint = Color.White
+                    )
                 }
             }
 
@@ -656,12 +609,10 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?) {
             }
         }
 
-        // Orientation erlauben (Activity)
         val activity = LocalActivity.current
         DisposableEffect(Unit) {
             val originalOrientation = activity?.requestedOrientation
-            activity?.requestedOrientation =
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR // erlaubt Hoch- & Querformat
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
             onDispose {
                 activity?.requestedOrientation =
                     originalOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
