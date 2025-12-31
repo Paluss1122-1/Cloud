@@ -28,6 +28,7 @@ import androidx.compose.ui.window.Dialog
 import java.text.SimpleDateFormat
 import java.util.*
 import com.example.cloud.ui.theme.Gray
+import androidx.core.content.edit
 
 sealed class NoteType {
     data class Text(val content: String) : NoteType()
@@ -632,7 +633,7 @@ fun saveNotes(context: Context, notes: List<Note>) {
         ).joinToString("##")
     }
 
-    prefs.edit().putString("notes", serialized).apply()
+    prefs.edit(commit = true) { putString("notes", serialized) }
 }
 
 fun loadNotes(context: Context): List<Note> {

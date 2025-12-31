@@ -1,62 +1,59 @@
 package com.example.cloud.browsertab
 
 import android.content.Context
-import android.webkit.WebView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.cloud.privatecloudapp.loadLastUrl
-
 
 @Composable
 fun BrowserTabContent(
     url: String,
     onUrlChange: (String) -> Unit,
     onEnterFullScreen: () -> Unit,
-    webViewState: WebView?,
     modifier: Modifier = Modifier
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
+    val context = LocalContext.current
+
+    fun loadAndOpenUrl(targetUrl: String) {
+        val finalUrl = if (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")) {
+            targetUrl
+        } else {
+            "https://$targetUrl"
+        }
+        
+        onUrlChange(finalUrl)
+        keyboardController?.hide()
+        onEnterFullScreen()
+    }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF2A2A2A))
             .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, // zentriert alle Kinder horizontal
-        verticalArrangement = Arrangement.Center // optional: zentriert auch vertikal im gesamten Column
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
         TextField(
             value = url,
             onValueChange = onUrlChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp), // optional: feste Höhe für konsistentes Aussehen
+            modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            placeholder = { Text("URL hier eingeben", color = Color.Gray) },
+            placeholder = { Text("URL eingeben...", color = Color.Gray) },
             colors = TextFieldDefaults.colors(
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White,
@@ -68,73 +65,67 @@ fun BrowserTabContent(
             ),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
             keyboardActions = KeyboardActions(
-                onGo = {
-                    val newUrl = if (url.startsWith("http://") || url.startsWith("https://")) {
-                        url
-                    } else {
-                        "https://$url"
-                    }
-                    webViewState?.loadUrl(newUrl)
-                    keyboardController?.hide()
-                }
+                onGo = { loadAndOpenUrl(url) }
             )
         )
 
-        Spacer(modifier = Modifier.height(16.dp)) // Abstand zwischen Input und Button
+        Spacer(modifier = Modifier.height(16.dp))
 
+        // Öffnen Button
         Button(
-            onClick = {
-                val newUrl = if (url.startsWith("http://") || url.startsWith("https://")) {
-                    url
-                } else {
-                    "https://$url"
-                }
-                webViewState?.loadUrl(newUrl)
-                keyboardController?.hide()
-                onEnterFullScreen()
-            },
+            onClick = { loadAndOpenUrl(url) },
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFF4CAF50),
                 contentColor = Color.White
             ),
             modifier = Modifier
-                .fillMaxWidth() // oder .defaultMinSize(minWidth = ...) je nach Wunsch
+                .fillMaxWidth()
                 .height(56.dp)
         ) {
             Text("Öffnen", fontSize = 20.sp)
         }
 
-        val context = LocalContext.current
+        Spacer(modifier = Modifier.height(32.dp))
 
-        LastUrlButton(context, onUrlLoad = {
-            val url = context.getSharedPreferences("cloud_app_prefs", Context.MODE_PRIVATE).getString("last_browser_url", "https://www.google.com")
-            if (url != null) {
-                onUrlChange(url)
+        // Quick Links
+        Text("Schnellzugriff:", color = Color.Gray, fontSize = 14.sp)
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            QuickLinkButton("YouTube", Color.Red) { 
+                loadAndOpenUrl("https://www.youtube.com") 
             }
-        })
-        Row {
-            Button(
-                onClick = { onUrlChange("https://www.youtube.com") },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-            ) {
-                Text("YouTube", fontSize = 12.sp)
+            QuickLinkButton("Gmail", Color(0xFFFFA500)) { 
+                loadAndOpenUrl("https://www.gmail.com") 
             }
-
-            Button(
-                onClick = { onUrlChange("https://www.gmail.com") },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFA500))
-            ) {
-                Text("Gmail", fontSize = 12.sp)
-            }
-
-            Button(
-                onClick = { onUrlChange("http://www.pornhub.com") },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Black, contentColor = Color(0xFFFFA500))
-            ) {
-                Text("PH", fontSize = 12.sp)
+            QuickLinkButton("PH", Color.Black, textColor = Color(0xFFFFA500)) { 
+                loadAndOpenUrl("http://www.pornhub.com") 
             }
         }
 
+        Spacer(modifier = Modifier.height(24.dp))
+
+        LastUrlButton(context) { lastUrl ->
+            loadAndOpenUrl(lastUrl)
+        }
+    }
+}
+
+@Composable
+fun QuickLinkButton(
+    text: String, 
+    bgColor: Color, 
+    textColor: Color = Color.White, 
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(containerColor = bgColor)
+    ) {
+        Text(text, fontSize = 12.sp, color = textColor)
     }
 }
 
@@ -146,6 +137,6 @@ fun LastUrlButton(context: Context, onUrlLoad: (String) -> Unit) {
         onClick = { onUrlLoad(lastUrl) },
         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF444444))
     ) {
-        Text("🔙 Letzte URL", fontSize = 12.sp)
+        Text("🔙 Letzte URL laden", fontSize = 14.sp)
     }
 }

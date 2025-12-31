@@ -337,7 +337,7 @@ fun loadSavedMovies(context: Context): Set<Int> {
 
 fun saveMoviesToPrefs(context: Context, movieIds: Set<Int>) {
     val prefs = context.getSharedPreferences("cloud_app_prefs", Context.MODE_PRIVATE)
-    prefs.edit { putStringSet("saved_movies", movieIds.map { it.toString() }.toSet()) }
+    prefs.edit(commit = true) { putStringSet("saved_movies", movieIds.map { it.toString() }.toSet()) }
 }
 
 @SuppressLint("DefaultLocale")

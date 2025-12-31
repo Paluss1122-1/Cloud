@@ -124,6 +124,8 @@ class MainActivity : FragmentActivity() {
             }
         }*/
 
+        val startTarget = intent.getStringExtra("target")
+
         // Content setzen
         setContent {
             MaterialTheme {
@@ -131,7 +133,7 @@ class MainActivity : FragmentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    PrivateCloudApp(supabase.storage)
+                    PrivateCloudApp(supabase.storage, startTarget)
                 }
             }
         }

@@ -10,6 +10,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.IBinder
@@ -20,19 +21,24 @@ import com.example.cloud.SupabaseConfig
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
-import java.time.Clock
 import java.util.*
+import androidx.core.content.edit
 
 class ChatService : Service() {
 
     companion object {
         private const val CHANNEL_ID = "chat_service_channel"
-        private const val NOTIFICATION_ID = 666666
         private const val ACTION_REPLY = "com.example.cloud.ACTION_CHAT_REPLY"
+        private const val ACTION_SHOW_HISTORY = "com.example.cloud.ACTION_SHOW_HISTORY"
         private const val KEY_REPLY_TEXT = "key_reply_text"
         private const val KEY_NOTIFICATION_ID = "key_notification_id"
-        private const val POLL_INTERVAL_MS = 3000L // Poll alle 3 Sekunden
+        private const val POLL_INTERVAL_MS = 3000L
+        private const val SERVICE_NOTIFICATION_ID = 1
+
+        private const val PREFS_NAME = "ChatServicePrefs"
+        private const val KEY_SEEN_MESSAGES = "seen_message_ids"
 
         fun startService(context: Context) {
             val intent = Intent(context, ChatService::class.java)
@@ -54,23 +60,31 @@ class ChatService : Service() {
     private val myUserId = "you"
     private val friendUserId = "friend"
 
-    // Set um bereits gesehene Nachrichten zu tracken
+    private lateinit var sharedPreferences: SharedPreferences
     private val seenMessageIds = mutableSetOf<String>()
+    private val messageHistory = mutableListOf<Message>() // Letzte 5 Nachrichten
 
     private val replyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == ACTION_REPLY) {
-                val replyText = RemoteInput.getResultsFromIntent(intent)
-                    ?.getCharSequence(KEY_REPLY_TEXT)?.toString()
+            when (intent?.action) {
+                ACTION_REPLY -> {
+                    val replyText = RemoteInput.getResultsFromIntent(intent)
+                        ?.getCharSequence(KEY_REPLY_TEXT)?.toString()
 
-                val notificationId = intent.getIntExtra(KEY_NOTIFICATION_ID, -1)
-
-                if (replyText != null && context != null) {
+                    if (replyText != null && context != null) {
+                        serviceScope.launch {
+                            sendMessage(replyText)
+                            withContext(Dispatchers.Main) {
+                                updateServiceNotification()
+                            }
+                        }
+                    }
+                }
+                ACTION_SHOW_HISTORY -> {
+                    Log.d("ChatService", "History angefordert: ${messageHistory.size} Nachrichten")
                     serviceScope.launch {
-                        sendMessage(replyText) // Sendet als INSERT -> Realtime Event auf Website!
-
                         withContext(Dispatchers.Main) {
-                            updateNotificationAfterReply(notificationId, replyText)
+                            showHistoryNotification()
                         }
                     }
                 }
@@ -80,18 +94,27 @@ class ChatService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // SharedPreferences initialisieren
+        sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+
+        // Gesehene Nachrichten aus Prefs laden
+        loadSeenMessageIds()
+
         createNotificationChannel()
 
-        val filter = IntentFilter(ACTION_REPLY)
+        val filter = IntentFilter().apply {
+            addAction(ACTION_REPLY)
+            addAction(ACTION_SHOW_HISTORY)
+        }
         registerReceiver(replyReceiver, filter, RECEIVER_NOT_EXPORTED)
 
         startForeground(
-            NOTIFICATION_ID,
+            SERVICE_NOTIFICATION_ID,
             createServiceNotification(),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
         )
 
-        // Starte Polling
         serviceScope.launch {
             pollForNewMessages()
         }
@@ -106,7 +129,7 @@ class ChatService : Service() {
                     try {
                         val notification = createServiceNotification()
                         val notificationManager = getSystemService(NotificationManager::class.java)
-                        notificationManager.notify(NOTIFICATION_ID, notification)
+                        notificationManager.notify(SERVICE_NOTIFICATION_ID, notification)
                     } catch (_: Exception) {
                     }
                 }, 100)
@@ -116,6 +139,30 @@ class ChatService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    // ============ SharedPreferences Funktionen ============
+
+    private fun loadSeenMessageIds() {
+        val json = sharedPreferences.getString(KEY_SEEN_MESSAGES, "[]")
+        try {
+            val ids = Json.decodeFromString<List<String>>(json ?: "[]")
+            seenMessageIds.addAll(ids)
+            Log.d("ChatService", "✅ Loaded ${seenMessageIds.size} seen messages from prefs")
+        } catch (e: Exception) {
+            Log.e("ChatService", "Error loading seen messages", e)
+        }
+    }
+
+    private fun saveSeenMessageIds() {
+        try {
+            val json = Json.encodeToString(seenMessageIds.toList())
+            sharedPreferences.edit { putString(KEY_SEEN_MESSAGES, json) }
+        } catch (e: Exception) {
+            Log.e("ChatService", "Error saving seen messages", e)
+        }
+    }
+
+    // ============ Notification Channel ============
 
     private fun createNotificationChannel() {
         val serviceChannel = NotificationChannel(
@@ -146,21 +193,21 @@ class ChatService : Service() {
         notificationManager.createNotificationChannel(messageChannel)
     }
 
-     fun createServiceNotification(): Notification {
-        val permanentNotificationId = NOTIFICATION_ID
+    // ============ Service Notification ============
 
+    fun createServiceNotification(): Notification {
         val replyRemoteInput = RemoteInput.Builder(KEY_REPLY_TEXT)
             .setLabel("Nachricht schreiben...")
             .build()
 
         val replyIntent = Intent(ACTION_REPLY).apply {
-            putExtra(KEY_NOTIFICATION_ID, permanentNotificationId)
+            putExtra(KEY_NOTIFICATION_ID, SERVICE_NOTIFICATION_ID)
             `package` = packageName
         }
 
         val replyPendingIntent = PendingIntent.getBroadcast(
             this,
-            permanentNotificationId,
+            SERVICE_NOTIFICATION_ID,
             replyIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
@@ -174,16 +221,35 @@ class ChatService : Service() {
             .setShowsUserInterface(false)
             .build()
 
-         val deleteIntent = Intent(this, ChatService::class.java).apply {
-             action = "ACTION_NOTIFICATION_DELETED"
-         }
+        // ========== HISTORY ACTION ==========
+        val historyIntent = Intent(ACTION_SHOW_HISTORY).apply {
+            `package` = packageName
+        }
 
-         val deletePendingIntent = PendingIntent.getService(
-             this,
-             999,
-             deleteIntent,
-             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-         )
+        val historyPendingIntent = PendingIntent.getBroadcast(
+            this,
+            9999,
+            historyIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        )
+
+        val historyAction = NotificationCompat.Action.Builder(
+            android.R.drawable.ic_menu_view,
+            "Letzte 5",
+            historyPendingIntent
+        ).build()
+
+        // ========== DELETE INTENT ==========
+        val deleteIntent = Intent(this, ChatService::class.java).apply {
+            action = "ACTION_NOTIFICATION_DELETED"
+        }
+
+        val deletePendingIntent = PendingIntent.getService(
+            this,
+            999,
+            deleteIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_email)
@@ -192,15 +258,84 @@ class ChatService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .addAction(replyAction)
+            .addAction(historyAction)
             .setDeleteIntent(deletePendingIntent)
             .build()
     }
+
+    private fun updateServiceNotification() {
+        try {
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            val notification = createServiceNotification()
+            notificationManager.notify(SERVICE_NOTIFICATION_ID, notification)
+            Log.d("ChatService", "Service notification updated")
+        } catch (e: Exception) {
+            Log.e("ChatService", "Error updating service notification", e)
+        }
+    }
+
+    // ============ Message History Notification ============
+
+    private fun showHistoryNotification() {
+        try {
+            val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+
+            val sortedHistory = messageHistory
+                .filter { it.sender_id == friendUserId }
+                .sortedBy { msg ->
+                    try {
+                        isoFormat.parse(msg.created_at?.substring(0, 19) ?: "")?.time ?: 0L
+                    } catch (_: Exception) {
+                        0L
+                    }
+                }
+                .takeLast(5)
+
+            val historyText = sortedHistory.joinToString("\n\n") { msg ->
+                val dateTime = try {
+                    val date = isoFormat.parse(msg.created_at?.substring(0, 19) ?: "")
+                    val dateFormatter = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+                    if (date != null) {
+                        dateFormatter.format(date)
+                    } else {
+                        "??:??"
+                    }
+                } catch (_: Exception) {
+                    "??:??"
+                }
+                "[$dateTime] ${msg.sender_id}:\n${msg.content}"
+            }
+
+            val notification = NotificationCompat.Builder(this, "chat_messages")
+                .setSmallIcon(android.R.drawable.ic_dialog_email)
+                .setContentTitle("📜 Letzte Nachrichten")
+                .setContentText("${messageHistory.size} Nachrichten")
+                .setStyle(
+                    NotificationCompat.BigTextStyle()
+                        .bigText(historyText.ifEmpty { "Keine Nachrichten" })
+                )
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setAutoCancel(true)
+                .build()
+
+            val notificationManager = getSystemService(NotificationManager::class.java)
+
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                notificationManager.notify(2000, notification)
+                Log.d("ChatService", "✅ History notification shown")
+            }
+
+        } catch (e: Exception) {
+            Log.e("ChatService", "Error showing history notification", e)
+        }
+    }
+
+    // ============ Message Polling ============
 
     private suspend fun pollForNewMessages() {
         Log.d("ChatService", "Starting message polling...")
 
         try {
-            // Initial: Lade die letzten 10 Nachrichten und markiere sie als "gesehen"
             val initialMessages = supabase.from("messages")
                 .select()
                 .decodeList<Message>()
@@ -209,29 +344,27 @@ class ChatService : Service() {
             initialMessages.forEach { msg ->
                 msg.id?.let { seenMessageIds.add(it) }
             }
+            messageHistory.addAll(initialMessages.takeLast(5))
 
+            saveSeenMessageIds()
             Log.d("ChatService", "Initial ${seenMessageIds.size} messages marked as seen")
 
         } catch (e: Exception) {
             Log.e("ChatService", "Error loading initial messages", e)
         }
 
-        // Polling-Loop
         while (true) {
             try {
-                // Hole alle Nachrichten
                 val messages = supabase.from("messages")
                     .select()
                     .decodeList<Message>()
 
-                // Finde neue Nachrichten (die wir noch nicht gesehen haben)
                 val newMessages = messages.filter { msg ->
                     msg.id != null &&
                             !seenMessageIds.contains(msg.id) &&
-                            msg.sender_id == friendUserId // Nur vom Freund
+                            msg.sender_id == friendUserId
                 }
 
-                // Zeige Benachrichtigungen für neue Nachrichten
                 newMessages.forEach { message ->
                     Log.d("ChatService", "📩 New message: ${message.content}")
 
@@ -239,18 +372,28 @@ class ChatService : Service() {
                         showMessageNotification(message)
                     }
 
-                    // Markiere als gesehen
                     message.id?.let { seenMessageIds.add(it) }
+
+                    // Aktualisiere History (max. 5)
+                    messageHistory.add(message)
+                    if (messageHistory.size > 5) {
+                        messageHistory.removeAt(0)
+                    }
+                }
+
+                if (newMessages.isNotEmpty()) {
+                    saveSeenMessageIds()
                 }
 
             } catch (e: Exception) {
                 Log.e("ChatService", "Error polling messages", e)
             }
 
-            // Warte bis zum nächsten Poll
             delay(POLL_INTERVAL_MS)
         }
     }
+
+    // ============ New Message Notification ============
 
     private fun showMessageNotification(message: Message) {
         try {
@@ -315,27 +458,7 @@ class ChatService : Service() {
         }
     }
 
-    private fun updateNotificationAfterReply(notificationId: Int, replyText: String) {
-        try {
-            val notification = NotificationCompat.Builder(this, "chat_messages")
-                .setSmallIcon(android.R.drawable.ic_menu_send)
-                .setContentTitle("✅ Gesendet")
-                .setContentText(replyText)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setAutoCancel(true)
-                .setTimeoutAfter(3000)
-                .build()
-
-            val notificationManager = getSystemService(NotificationManager::class.java)
-
-            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                notificationManager.notify(notificationId, notification)
-            }
-
-        } catch (e: Exception) {
-            Log.e("ChatService", "Error updating notification", e)
-        }
-    }
+    // ============ Send Message ============
 
     private suspend fun sendMessage(content: String) {
         try {
@@ -345,15 +468,16 @@ class ChatService : Service() {
                 content = content
             )
 
-            // INSERT -> Wird als Realtime Event auf der Website ankommen!
             supabase.from("messages").insert(message)
 
-            Log.d("ChatService", "✅ Message sent (will trigger realtime on website): $content")
+            Log.d("ChatService", "✅ Message sent: $content")
 
         } catch (e: Exception) {
             Log.e("ChatService", "Error sending message", e)
         }
     }
+
+    // ============ Lifecycle ============
 
     override fun onDestroy() {
         super.onDestroy()
@@ -365,7 +489,6 @@ class ChatService : Service() {
         }
 
         serviceScope.cancel()
-
         Log.d("ChatService", "Service destroyed")
     }
 }

@@ -79,6 +79,7 @@ android {
                 "SUPABASE_ANON_KEY",
                 "\"${project.properties["SUPABASE_ANON_KEY"]}\""
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
@@ -90,6 +91,15 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    packaging {
+        resources {
+            excludes += "dump_syms/**"
+            excludes += "lib/**/dump_syms.bin"
+        }
+        jniLibs {
+            useLegacyPackaging = false
+        }
     }
 }
 
@@ -115,6 +125,7 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.androidx.tools.core)
     implementation(libs.androidx.media3.session)
+    implementation(libs.firebase.crashlytics.buildtools)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -144,4 +155,5 @@ dependencies {
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.utils)
     implementation(libs.accompanist.swiperefresh)
+    implementation(libs.gson)
 }

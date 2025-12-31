@@ -166,14 +166,15 @@ import java.util.Locale
 import kotlin.math.sqrt
 import androidx.core.content.edit
 import com.example.cloud.Authenticator.AuthenticatorTab
-import com.example.cloud.aitab.AITabContent
 import com.example.cloud.audiorecorder.AudioRecorderContent
 import com.example.cloud.contactstab.ContactsRepository
 import com.example.cloud.contactstab.ContactsTabContent
 import com.example.cloud.contactstab.ContactsViewModel
 import com.example.cloud.datecalculator.DateCalculatorContent
 import com.example.cloud.gallery.GalleryTab
+import com.example.cloud.mediarecorder.MediaRecorderContent
 import com.example.cloud.movietab.MovieDiscoveryTabContent
+import com.example.cloud.musicstatstab.MusicStatsTabContent
 import com.example.cloud.service.QuietHoursNotificationService
 import com.example.cloud.service.ChatService
 import com.example.cloud.weathertab.WeatherTabContent
@@ -181,7 +182,7 @@ import java.net.Inet4Address
 import java.time.Instant
 import java.time.ZoneId
 
-var isFullScreen = false
+var isFullScreen by mutableStateOf(false)
 
 enum class MenuItem(
     val title: String,
@@ -204,13 +205,11 @@ enum class MenuItem(
         {
             val context = LocalContext.current
             var webViewUrl by remember { mutableStateOf(loadLastUrl(context)) }
-            var webViewState by remember { mutableStateOf<WebView?>(null) }
 
             BrowserTabContent(
                 url = webViewUrl,
                 onUrlChange = { webViewUrl = it },
-                onEnterFullScreen = { isFullScreen = true },
-                webViewState = webViewState
+                onEnterFullScreen = { isFullScreen = true }
             )
         }
     ),
@@ -238,11 +237,6 @@ enum class MenuItem(
         "Wetter",
         "🌡️",
         { WeatherTabContent() }
-    ),
-    AI(
-        "Chatgpt",
-        "🤖",
-        { AITabContent() }
     ),
     CONTACTS(
         "Kontakte",
@@ -295,13 +289,23 @@ enum class MenuItem(
         "Notizen",
         "📖",
         { NotizenApp() }
-    );
+    ),
+    MUSICSTATS(
+        "Musik Statistiken",
+        "🎵 ",
+        { MusicStatsTabContent() }
+    ),
+    MEDIARECORDER(
+        "Media Recorder",
+        "🎵 ",
+        { MediaRecorderContent() }
+    )
 }
 
 @SuppressLint("ContextCastToActivity", "SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrivateCloudApp(storage: Storage) {
+fun PrivateCloudApp(storage: Storage, startTarget: String?) {
     val context = LocalContext.current
     var selectedMenuItem by remember { mutableStateOf(loadLastMenuItem(context)) }
     val scope = rememberCoroutineScope()
@@ -309,6 +313,12 @@ fun PrivateCloudApp(storage: Storage) {
 
     QuietHoursNotificationService.startService(context)
     ChatService.startService(context)
+
+    LaunchedEffect(startTarget) {
+        if (startTarget == "weather") {
+            selectedMenuItem = MenuItem.WEATHER
+        }
+    }
 
     LaunchedEffect(Unit) {
         BatteryDataRepository.init(context)
@@ -415,7 +425,7 @@ fun PrivateCloudApp(storage: Storage) {
                     TopAppBar(
                         title = {
                             Text(
-                                text = selectedMenuItem.title,
+                                text = "${selectedMenuItem.icon} ${selectedMenuItem.title}",
                                 color = Color.White
                             )
                         },

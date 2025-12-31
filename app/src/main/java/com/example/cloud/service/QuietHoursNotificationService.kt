@@ -12,6 +12,7 @@ import android.app.PendingIntent
 import androidx.core.app.RemoteInput
 import android.app.Service
 import android.app.admin.DevicePolicyManager
+import android.bluetooth.BluetoothAdapter
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -30,6 +31,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
@@ -45,9 +47,13 @@ import java.util.Date
 import java.util.Locale
 import androidx.core.net.toUri
 import com.example.cloud.SupabaseConfig
+import com.example.cloud.weathertab.fetchWeatherForecast
+import com.example.cloud.weathertab.getLastKnownLocation
+import com.example.cloud.weathertab.weathernot
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -161,7 +167,7 @@ class QuietHoursNotificationService : Service() {
             val resultKey = replyData.originalResultKey
 
             val prefs = getSharedPreferences(PREFS_REPLY_DATA, MODE_PRIVATE)
-            prefs.edit {
+            prefs.edit(commit = true) {
                 putString(KEY_SAVED_SENDER, sender)
                 putString(KEY_SAVED_PACKAGE, packageName)
                 putString(KEY_SAVED_RESULT_KEY, resultKey)
@@ -580,33 +586,20 @@ class QuietHoursNotificationService : Service() {
             Command(
                 name = "friendmessages",
                 aliases = listOf("fm", "friendmsgs", "lastmsgs", "friend"),
-                description = "Zeigt letzte 10 Nachrichten von friend"
+                description = "Zeigt letzte 3 Nachrichten von friend"
             ) {
                 showLastFriendMessages()
             },
             Command(
-                name = "friendmessages",
-                aliases = listOf("fm", "friendmsgs", "lastmsgs", "friend"),
-                description = "Zeigt letzte 10 Nachrichten von friend"
+                name = "sound",
+                aliases = listOf("vibrate", "vib", "ton", "sound", "silent", "s"),
+                description = "Stellt Vibration/Ton ein (Syntax: sound [vibrate|silent|normal])"
             ) {
-                try {
-                    val chatService = ChatService()
-                    val notification = chatService.createServiceNotification()
-
-                    val notificationManager = getSystemService(NotificationManager::class.java)
-                    notificationManager.notify(66666, notification)
-                } catch (e: Exception) {
-                    Log.e("QuietHoursService", "Error showing chat notification", e)
-                    showSimpleNotification("❌ Fehler", "Konnte Notification nicht anzeigen")
-                }
+                showSimpleNotification(
+                    "ℹ️ Sound Befehle",
+                    "sound vibrate - Nur Vibration\nsound silent - Stumm\nsound normal - Normal mit Ton"
+                )
             },
-            Command(
-                name = "bluetooth",
-                aliases = listOf("bt", "connect", "headphones", "kopfhörer"),
-                description = "Verbindet mit gespeicherten Bluetooth-Kopfhörern"
-            ) {
-                connectToBluetoothHeadphones()
-            }
         )
     }
 
@@ -740,7 +733,9 @@ class QuietHoursNotificationService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
 
                 if (commandText != null && context != null) {
-                    Handler(Looper.getMainLooper()).post {
+                    Handler(Looper.getMainLooper()).post @RequiresPermission(
+                        Manifest.permission.BLUETOOTH_CONNECT
+                    ) {
                         executeCommand(commandText.trim())
                     }
                 }
@@ -748,6 +743,7 @@ class QuietHoursNotificationService : Service() {
         }
     }
 
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     @OptIn(DelicateCoroutinesApi::class)
     private fun executeCommand(commandText: String) {
         val actualCommand = when (commandText) {
@@ -785,7 +781,7 @@ class QuietHoursNotificationService : Service() {
             }
         }
 
-        val parts = actualCommand.split(" ", limit = 2)
+        val parts = actualCommand.split(" ", limit = 3)
         val commandInput = parts[0].lowercase()
         val argument = if (parts.size > 1) parts[1] else null
 
@@ -845,10 +841,10 @@ class QuietHoursNotificationService : Service() {
 
                         if (day != null && dayNum in 0..2) {
                             Handler(Looper.getMainLooper()).post {
-                                kotlinx.coroutines.GlobalScope.launch {
+                                GlobalScope.launch {
                                     try {
                                         val loc =
-                                            com.example.cloud.weathertab.getLastKnownLocation(this@QuietHoursNotificationService)
+                                            getLastKnownLocation(this@QuietHoursNotificationService)
                                         if (loc == null) {
                                             showSimpleNotification(
                                                 "❌ Standort-Fehler",
@@ -859,13 +855,13 @@ class QuietHoursNotificationService : Service() {
                                         }
 
                                         val weatherData =
-                                            com.example.cloud.weathertab.fetchWeatherForecast(
+                                            fetchWeatherForecast(
                                                 loc.latitude,
                                                 loc.longitude,
                                                 days = 14
                                             )
 
-                                        com.example.cloud.weathertab.weathernot(
+                                        weathernot(
                                             this@QuietHoursNotificationService,
                                             day,
                                             hour,
@@ -962,34 +958,11 @@ class QuietHoursNotificationService : Service() {
                 }
             }
 
-            "bluetooth", "bt", "connect", "headphones", "kopfhörer" -> {
-                when {
-                    argument == null -> {
-                        connectToBluetoothHeadphones()
-                    }
-                    argument.equals("save", ignoreCase = true) -> {
-                        saveBluetoothHeadphones()
-                    }
-                    argument.equals("info", ignoreCase = true) -> {
-                        showBluetoothInfo()
-                    }
-                    argument.startsWith("save ", ignoreCase = true) -> {
-                        val macAddress = argument.substring(5).trim()
-                        val prefs = getSharedPreferences("bluetooth_prefs", MODE_PRIVATE)
-                        prefs.edit {
-                            putString("headphone_mac", macAddress)
-                        }
-                        showSimpleNotification(
-                            "✅ MAC gespeichert",
-                            "Kopfhörer-Adresse: $macAddress"
-                        )
-                    }
-                    else -> {
-                        showSimpleNotification(
-                            "ℹ️ Bluetooth Befehle",
-                            "bluetooth - Verbinden\nbluetooth save - Gerät speichern\nbluetooth info - Info anzeigen"
-                        )
-                    }
+            "sound", "vibrate", "vib", "ton", "silent" -> {
+                if (argument != null) {
+                    setSoundMode(argument)
+                } else {
+                    setSoundMode("help")
                 }
                 return
             }
@@ -1108,11 +1081,11 @@ class QuietHoursNotificationService : Service() {
 
                     when (intent.action) {
                         ACTION_CHANGE_START -> {
-                            prefs.edit {
+                            prefs.edit(commit = true) {
                                 putString(
                                     "saved_number_start",
                                     timeValue.toString()
-                                ).commit()
+                                )
                             }
                             showSimpleNotification(
                                 "✓ Startzeit geändert",
@@ -1121,7 +1094,7 @@ class QuietHoursNotificationService : Service() {
                         }
 
                         ACTION_CHANGE_END -> {
-                            prefs.edit { putString("saved_number", timeValue.toString()).commit() }
+                            prefs.edit(commit = true) { putString("saved_number", timeValue.toString()) }
                             showSimpleNotification(
                                 "✓ Endzeit geändert",
                                 "Neue Endzeit: $timeValue:00 Uhr"
@@ -3715,234 +3688,123 @@ class QuietHoursNotificationService : Service() {
         }
     }
 
-    private fun connectToBluetoothHeadphones() {
+    private fun setSoundMode(mode: String) {
         try {
-            // Prefs für gespeicherte Bluetooth-Adresse
-            val prefs = getSharedPreferences("bluetooth_prefs", MODE_PRIVATE)
-            val savedAddress = prefs.getString("headphone_mac", null)
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
 
-            if (savedAddress == null) {
-                showSimpleNotification(
-                    "ℹ️ Keine Kopfhörer gespeichert",
-                    "Verwende 'bluetooth save' um deine Kopfhörer zu speichern"
-                )
-                return
-            }
-
-            val bluetoothAdapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter()
-
-            if (bluetoothAdapter == null) {
-                showSimpleNotification(
-                    "❌ Bluetooth nicht verfügbar",
-                    "Dieses Gerät unterstützt kein Bluetooth"
-                )
-                return
-            }
-
-            if (!bluetoothAdapter.isEnabled) {
-                showSimpleNotification(
-                    "⚠️ Bluetooth ausgeschaltet",
-                    "Schalte Bluetooth zuerst ein"
-                )
-                return
-            }
-
-            // Verbindung herstellen
-            if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
-                == PackageManager.PERMISSION_GRANTED) {
-
-                val device = bluetoothAdapter.getRemoteDevice(savedAddress)
-
-                // Trigger connection via system
-                val intent = Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-
-                // Alternative: Direkte Verbindung (benötigt mehr Permissions)
-                try {
-                    val method = device.javaClass.getMethod("createBond")
-                    method.invoke(device)
-
-                    showSimpleNotification(
-                        "🔵 Verbinde...",
-                        "Verbindung zu Kopfhörern wird hergestellt"
-                    )
-
-                    // Status nach 2 Sekunden prüfen
-                    Handler(Looper.getMainLooper()).postDelayed({
-                        checkBluetoothConnectionStatus(device)
-                    }, 2000)
-
-                } catch (e: Exception) {
-                    Log.e("QuietHoursService", "Direct connection failed, opening settings", e)
-                    startActivity(intent)
-                    showSimpleNotification(
-                        "ℹ️ Bluetooth Einstellungen",
-                        "Verbinde manuell mit deinen Kopfhörern"
-                    )
-                }
-
-            } else {
+            // Prüfe WRITE_SETTINGS Permission
+            if (!canWriteSettings()) {
                 showSimpleNotification(
                     "❌ Keine Berechtigung",
-                    "BLUETOOTH_CONNECT Berechtigung fehlt"
-                )
-            }
-
-        } catch (e: Exception) {
-            Log.e("QuietHoursService", "Error connecting bluetooth", e)
-            showSimpleNotification(
-                "❌ Verbindungsfehler",
-                "Bluetooth konnte nicht verbunden werden: ${e.message}"
-            )
-        }
-    }
-
-    private fun checkBluetoothConnectionStatus(device: android.bluetooth.BluetoothDevice) {
-        try {
-            if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
-                == PackageManager.PERMISSION_GRANTED) {
-
-                val isConnected = device.bondState == android.bluetooth.BluetoothDevice.BOND_BONDED
-
-                if (isConnected) {
-                    showSimpleNotification(
-                        "✅ Verbunden",
-                        "Kopfhörer erfolgreich verbunden"
-                    )
-                } else {
-                    showSimpleNotification(
-                        "⏳ Wird verbunden...",
-                        "Verbindung läuft noch"
-                    )
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("QuietHoursService", "Error checking connection status", e)
-        }
-    }
-
-    private fun saveBluetoothHeadphones() {
-        try {
-            val bluetoothAdapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter()
-
-            if (bluetoothAdapter == null) {
-                showSimpleNotification(
-                    "❌ Bluetooth nicht verfügbar",
-                    "Dieses Gerät unterstützt kein Bluetooth"
+                    "WRITE_SETTINGS Berechtigung fehlt. Aktiviere sie manuell.",
+                    20.seconds
                 )
                 return
             }
 
-            if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
-                == PackageManager.PERMISSION_GRANTED) {
+            when (mode.lowercase()) {
+                "vibrate", "vib", "v" -> {
+                    // Stumm mit Vibration
+                    audioManager.ringerMode = android.media.AudioManager.RINGER_MODE_VIBRATE
 
-                val pairedDevices = bluetoothAdapter.bondedDevices
-
-                if (pairedDevices.isEmpty()) {
-                    showSimpleNotification(
-                        "ℹ️ Keine Geräte gekoppelt",
-                        "Koppele zuerst deine Kopfhörer"
-                    )
-                    return
-                }
-
-                // Zeige gekoppelte Geräte
-                val deviceList = pairedDevices.joinToString("\n") { device ->
-                    "• ${device.name} (${device.address})"
-                }
-
-                // Wenn nur ein Gerät: Automatisch speichern
-                if (pairedDevices.size == 1) {
-                    val device = pairedDevices.first()
-                    val prefs = getSharedPreferences("bluetooth_prefs", MODE_PRIVATE)
-                    prefs.edit {
-                        putString("headphone_mac", device.address)
-                        putString("headphone_name", device.name)
-                    }
-
-                    showSimpleNotification(
-                        "✅ Kopfhörer gespeichert",
-                        "${device.name} wurde als Standard-Kopfhörer gespeichert"
-                    )
-                } else {
-                    // Mehrere Geräte: Liste anzeigen
-                    val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-                        .setSmallIcon(R.drawable.ic_dialog_info)
-                        .setContentTitle("🔵 Gekoppelte Bluetooth-Geräte")
-                        .setContentText("${pairedDevices.size} Geräte gefunden")
-                        .setStyle(
-                            NotificationCompat.BigTextStyle()
-                                .bigText("$deviceList\n\nVerwende 'bluetooth save [MAC]' um ein Gerät zu speichern")
+                    // Zusätzlich: Stille System-Sounds
+                    try {
+                        Settings.System.putInt(
+                            contentResolver,
+                            Settings.System.VIBRATE_ON,
+                            1
                         )
-                        .setPriority(NotificationCompat.PRIORITY_HIGH)
-                        .setAutoCancel(true)
-                        .build()
-
-                    val notificationManager = getSystemService(NotificationManager::class.java)
-                    if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                        == PackageManager.PERMISSION_GRANTED) {
-                        notificationManager.notify(50100, notification)
+                        Settings.System.putInt(
+                            contentResolver,
+                            Settings.System.SOUND_EFFECTS_ENABLED,
+                            0
+                        )
+                    } catch (e: Exception) {
+                        Log.w("QuietHoursService", "Could not set vibration settings", e)
                     }
+
+                    showSimpleNotification(
+                        "📳 Vibration aktiviert",
+                        "Nur Vibrationen, keine Töne"
+                    )
                 }
 
-            } else {
-                showSimpleNotification(
-                    "❌ Keine Berechtigung",
-                    "BLUETOOTH_CONNECT Berechtigung fehlt"
-                )
+                "silent", "mute", "m" -> {
+                    // Komplett stumm
+                    audioManager.ringerMode = android.media.AudioManager.RINGER_MODE_SILENT
+
+                    try {
+                        Settings.System.putInt(
+                            contentResolver,
+                            Settings.System.VIBRATE_ON,
+                            0
+                        )
+                        Settings.System.putInt(
+                            contentResolver,
+                            Settings.System.SOUND_EFFECTS_ENABLED,
+                            0
+                        )
+                    } catch (e: Exception) {
+                        Log.w("QuietHoursService", "Could not set silent settings", e)
+                    }
+
+                    showSimpleNotification(
+                        "🔇 Stumm",
+                        "Keine Töne, keine Vibrationen"
+                    )
+                }
+
+                "normal", "loud", "l", "on" -> {
+                    // Normal mit Ton
+                    audioManager.ringerMode = android.media.AudioManager.RINGER_MODE_NORMAL
+
+                    try {
+                        Settings.System.putInt(
+                            contentResolver,
+                            Settings.System.VIBRATE_ON,
+                            1
+                        )
+                        Settings.System.putInt(
+                            contentResolver,
+                            Settings.System.SOUND_EFFECTS_ENABLED,
+                            1
+                        )
+                    } catch (e: Exception) {
+                        Log.w("QuietHoursService", "Could not set normal settings", e)
+                    }
+
+                    showSimpleNotification(
+                        "🔊 Normal",
+                        "Töne und Vibrationen aktiviert"
+                    )
+                }
+
+                else -> {
+                    showSimpleNotification(
+                        "❌ Ungültig",
+                        "Nutze: sound [vibrate|silent|normal]",
+                        20.seconds
+                    )
+                }
             }
 
         } catch (e: Exception) {
-            Log.e("QuietHoursService", "Error saving bluetooth headphones", e)
+            Log.e("QuietHoursService", "Error setting sound mode", e)
             showSimpleNotification(
                 "❌ Fehler",
-                "Kopfhörer konnten nicht gespeichert werden: ${e.message}"
+                "Sound-Modus konnte nicht geändert werden: ${e.message}",
+                20.seconds
             )
         }
     }
 
-    private fun showBluetoothInfo() {
-        try {
-            val prefs = getSharedPreferences("bluetooth_prefs", MODE_PRIVATE)
-            val savedAddress = prefs.getString("headphone_mac", null)
-            val savedName = prefs.getString("headphone_name", null)
-
-            if (savedAddress == null) {
-                showSimpleNotification(
-                    "ℹ️ Keine Kopfhörer gespeichert",
-                    "Verwende 'bluetooth save' um deine Kopfhörer zu speichern"
-                )
-                return
-            }
-
-            val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_dialog_info)
-                .setContentTitle("🔵 Gespeicherte Kopfhörer")
-                .setContentText(savedName ?: "Unbekannt")
-                .setStyle(
-                    NotificationCompat.BigTextStyle()
-                        .bigText("""
-                        Name: ${savedName ?: "Unbekannt"}
-                        MAC: $savedAddress
-                        
-                        Verwende 'bluetooth' zum Verbinden
-                    """.trimIndent())
-                )
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                .setAutoCancel(true)
-                .build()
-
-            val notificationManager = getSystemService(NotificationManager::class.java)
-            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                == PackageManager.PERMISSION_GRANTED) {
-                notificationManager.notify(50101, notification)
-            }
-
-        } catch (e: Exception) {
-            Log.e("QuietHoursService", "Error showing bluetooth info", e)
+    private fun canWriteSettings(): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            Settings.canDrawOverlays(this)
+        } else {
+            checkSelfPermission(Manifest.permission.WRITE_SETTINGS) == PackageManager.PERMISSION_GRANTED
         }
     }
-
 }
 
 class QuietActionReceiver : BroadcastReceiver() {
@@ -3951,11 +3813,11 @@ class QuietActionReceiver : BroadcastReceiver() {
 
         when (intent.action) {
             "SET_START" -> {
-                prefs.edit { putString("saved_number_start", "21") }
+                prefs.edit(commit = true) { putString("saved_number_start", "21") }
             }
 
             "SET_END" -> {
-                prefs.edit { putString("saved_number", "7") }
+                    prefs.edit(commit = true) { putString("saved_number", "7") }
             }
         }
     }

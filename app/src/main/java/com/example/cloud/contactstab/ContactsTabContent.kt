@@ -21,7 +21,7 @@ class ContactsRepository(private val context: Context) {
         val cursor = context.contentResolver.query(
             ContactsContract.Contacts.CONTENT_URI,
             null,
-            null,
+            "${ContactsContract.Contacts.DISPLAY_NAME} IS NOT NULL AND ${ContactsContract.Contacts.DISPLAY_NAME} != ''",
             null,
             ContactsContract.Contacts.DISPLAY_NAME + " ASC"
         )
