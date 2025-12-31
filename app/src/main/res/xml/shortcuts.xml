@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="weather"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/shortcut_weather_short"
+        android:shortcutLongLabel="@string/shortcut_weather_long"
+        android:icon="@drawable/ic_launcher_foreground">
+
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.example.cloud"
+            android:targetClass="com.example.cloud.MainActivity">
+
+            <extra
+                android:name="target"
+                android:value="weather" />
+        </intent>
+
+    </shortcut>
+
+</shortcuts>

@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Cloud</string>
+    <string name="shortcut_weather_short">Wetter</string>
+    <string name="shortcut_weather_long">Wetter öffnen</string>
 </resources>
