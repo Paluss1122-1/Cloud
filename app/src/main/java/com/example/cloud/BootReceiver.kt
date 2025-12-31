@@ -12,10 +12,7 @@ class BootReceiver : BroadcastReceiver() {
         val serviceIntent = Intent(context, QuietHoursNotificationService::class.java)
         context.startForegroundService(serviceIntent)
 
-        val serviceIntent1 = Intent(context, WhatsAppNotificationListener::class.java)
+        val serviceIntent1 = Intent(context, ChatService::class.java)
         context.startForegroundService(serviceIntent1)
-
-        val serviceIntent2 = Intent(context, ChatService::class.java)
-        context.startForegroundService(serviceIntent2)
     }
 }

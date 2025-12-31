@@ -12,37 +12,15 @@ import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.media.MediaPlayer
 import android.media.MediaRecorder
-import android.net.Uri
 import android.os.Build
-import android.os.IBinder
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.RangeSlider
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -54,20 +32,19 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.content.PermissionChecker
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.io.File
 import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.util.*
 
 @Composable
 fun AudioRecorderContent(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var isRecording by remember { mutableStateOf(false) }
-    var mediaRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
-    var currentFilePath by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
     var hasPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -77,28 +54,42 @@ fun AudioRecorderContent(
         )
     }
 
-    // Player States
+    if (!hasPermission) {
+        Toast.makeText(context, "Keine Mikrofon Berechtigung", Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    var isRecording by remember { mutableStateOf(false) }
+    var audioFiles by remember { mutableStateOf<List<File>>(emptyList()) }
+    
+    // Player State
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var selectedFile by remember { mutableStateOf<File?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
     var currentPosition by remember { mutableFloatStateOf(0f) }
     var duration by remember { mutableFloatStateOf(0f) }
-    var selectedFile by remember { mutableStateOf<File?>(null) }
-    var audioFiles by remember { mutableStateOf<List<File>>(emptyList()) }
 
-    // Teilen Dialog States
+    // Sharing State
     var showShareDialog by remember { mutableStateOf(false) }
     var shareFile by remember { mutableStateOf<File?>(null) }
     var shareRange by remember { mutableStateOf(0f..0f) }
-    var shareDuration by remember { mutableFloatStateOf(0f) }
     var isProcessing by remember { mutableStateOf(false) }
 
-    // Lade alle Audiodateien
-    LaunchedEffect(Unit) {
+    // Hilfsfunktion zum Aktualisieren der Liste
+    fun refreshFiles() {
         val dir = context.getExternalFilesDir(null)
-        audioFiles = dir?.listFiles()?.filter { it.extension == "m4a" }?.sortedByDescending { it.lastModified() } ?: emptyList()
+        audioFiles = dir?.listFiles()
+            ?.filter { it.extension == "m4a" }
+            ?.sortedByDescending { it.lastModified() } 
+            ?: emptyList()
     }
 
-    // Update Position während Wiedergabe
+    // Initiale Liste laden
+    LaunchedEffect(Unit) {
+        refreshFiles()
+    }
+
+    // Player Update Loop
     LaunchedEffect(isPlaying) {
         while (isPlaying) {
             mediaPlayer?.let {
@@ -110,199 +101,51 @@ fun AudioRecorderContent(
         }
     }
 
+    // Cleanup beim Verlassen
     DisposableEffect(Unit) {
         onDispose {
-            mediaRecorder?.apply {
-                try {
-                    stop()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-                release()
-            }
             mediaPlayer?.release()
         }
     }
 
-    // Share Dialog
-    if (showShareDialog && shareFile != null) {
-        AlertDialog(
-            onDismissRequest = {
-                if (!isProcessing) {
-                    showShareDialog = false
-                }
-            },
-            title = { Text("Audio-Ausschnitt wählen") },
-            text = {
-                Column {
-                    Text(
-                        text = "Wähle den Bereich, den du teilen möchtest:",
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-
-                    RangeSlider(
-                        value = shareRange,
-                        onValueChange = { newRange ->
-                            shareRange = newRange
-                        },
-                        valueRange = 0f..shareDuration,
-                        enabled = !isProcessing,
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color(0xFF4CAF50),
-                            activeTrackColor = Color(0xFF4CAF50),
-                            inactiveTrackColor = Color.Gray
-                        )
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Start: ${formatTime(shareRange.start.toInt())}",
-                            fontSize = 12.sp,
-                            color = Color.Gray
-                        )
-                        Text(
-                            text = "Ende: ${formatTime(shareRange.endInclusive.toInt())}",
-                            fontSize = 12.sp,
-                            color = Color.Gray
-                        )
-                    }
-
-                    Text(
-                        text = "Dauer: ${formatTime((shareRange.endInclusive - shareRange.start).toInt())}",
-                        fontSize = 12.sp,
-                        color = Color(0xFF4CAF50),
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-
-                    if (isProcessing) {
-                        Text(
-                            text = "⏳ Verarbeite Audio...",
-                            fontSize = 14.sp,
-                            color = Color(0xFFFFA500),
-                            modifier = Modifier.padding(top = 16.dp)
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        isProcessing = true
-                        shareAudioToWhatsApp(
-                            context = context,
-                            sourceFile = shareFile!!,
-                            startMs = shareRange.start.toLong(),
-                            endMs = shareRange.endInclusive.toLong(),
-                            onComplete = {
-                                isProcessing = false
-                                showShareDialog = false
-                            },
-                            onError = { error ->
-                                isProcessing = false
-                                println("Fehler beim Teilen: $error")
-                            }
-                        )
-                    },
-                    enabled = !isProcessing,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF25D366)
-                    )
-                ) {
-                    Text("📤 Auf WhatsApp teilen")
-                }
-            },
-            dismissButton = {
-                Button(
-                    onClick = { showShareDialog = false },
-                    enabled = !isProcessing,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Gray
-                    )
-                ) {
-                    Text("Abbrechen")
-                }
-            }
-        )
-    }
-
+    // UI
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF2A2A2A))
             .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Top
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Titel
         Text(
             text = if (isRecording) "🎙️ Aufnahme läuft..." else "🎤 Audio Recorder",
             fontSize = 24.sp,
             color = if (isRecording) Color.Red else Color.White
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        if (!hasPermission) {
-            Text(
-                text = "⚠️ Mikrofon-Berechtigung erforderlich",
-                fontSize = 16.sp,
-                color = Color.Yellow,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-        }
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Aufnahme Button
         Button(
             onClick = {
                 if (isRecording) {
-                    // Aufnahme beenden
-                    mediaRecorder?.apply {
-                        try {
-                            stop()
-                            release()
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                    mediaRecorder = null
+                    // STOP
+                    stopAudioService(context)
                     isRecording = false
-
-                    // Liste aktualisieren
-                    val dir = context.getExternalFilesDir(null)
-                    audioFiles = dir?.listFiles()?.filter { it.extension == "m4a" }?.sortedByDescending { it.lastModified() } ?: emptyList()
-                } else {
-                    // Aufnahme starten
-                    try {
-                        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-                        val audioFile = File(context.getExternalFilesDir(null), "audio_$timestamp.m4a")
-                        currentFilePath = audioFile.absolutePath
-                        startForegroundAudioService(context, currentFilePath!!)
-                        isRecording = true
-
-                        mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            MediaRecorder(context)
-                        } else {
-                            @Suppress("DEPRECATION")
-                            MediaRecorder()
-                        }.apply {
-                            setAudioSource(MediaRecorder.AudioSource.MIC)
-                            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                            setOutputFile(audioFile.absolutePath)
-                            prepare()
-                            start()
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                    // Kurz warten bis Datei geschrieben ist
+                    scope.launch {
+                        delay(500)
+                        refreshFiles()
                     }
+                } else {
+                    // START
+                    val file = createAudioFile(context)
+                    startAudioService(context, file.absolutePath)
+                    isRecording = true
                 }
             },
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (isRecording) Color.Red else Color(0xFF4CAF50),
-                contentColor = Color.White
+                containerColor = if (isRecording) Color.Red else Color(0xFF4CAF50)
             ),
             modifier = Modifier
                 .fillMaxWidth()
@@ -316,231 +159,295 @@ fun AudioRecorderContent(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Player Sektion
-        if (selectedFile != null) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF333333))
-                    .padding(16.dp)
-            ) {
-                Text(
-                    text = "▶️ Player: ${selectedFile?.name}",
-                    fontSize = 14.sp,
-                    color = Color.White
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Timeline Slider
-                Slider(
-                    value = currentPosition,
-                    onValueChange = { newPosition ->
-                        currentPosition = newPosition
-                        mediaPlayer?.seekTo(newPosition.toInt())
-                    },
-                    valueRange = 0f..duration,
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color(0xFF4CAF50),
-                        activeTrackColor = Color(0xFF4CAF50),
-                        inactiveTrackColor = Color.Gray
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = formatTime(currentPosition.toInt()),
-                        fontSize = 12.sp,
-                        color = Color.Gray
-                    )
-                    Text(
-                        text = formatTime(duration.toInt()),
-                        fontSize = 12.sp,
-                        color = Color.Gray
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Button(
-                        onClick = {
-                            if (isPlaying) {
-                                mediaPlayer?.pause()
-                                isPlaying = false
-                            } else {
-                                if (mediaPlayer == null) {
-                                    mediaPlayer = MediaPlayer().apply {
-                                        setDataSource(selectedFile?.absolutePath)
-                                        prepare()
-                                        duration = this.duration.toFloat()
-                                        setOnCompletionListener {
-                                            isPlaying = false
-                                            currentPosition = 0f
-                                        }
-                                    }
+        // Player Bereich
+        selectedFile?.let { file ->
+            PlayerSection(
+                file = file,
+                isPlaying = isPlaying,
+                currentPosition = currentPosition,
+                duration = duration,
+                onPlayPause = {
+                    if (isPlaying) {
+                        mediaPlayer?.pause()
+                        isPlaying = false
+                    } else {
+                        if (mediaPlayer == null) {
+                            mediaPlayer = MediaPlayer().apply {
+                                setDataSource(file.absolutePath)
+                                prepare()
+                                setOnCompletionListener { 
+                                    isPlaying = false
+                                    currentPosition = 0f
                                 }
-                                mediaPlayer?.start()
-                                isPlaying = true
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF4CAF50)
-                        )
-                    ) {
-                        Text(if (isPlaying) "⏸️ Pause" else "▶️ Play", fontSize = 16.sp)
+                            duration = mediaPlayer?.duration?.toFloat() ?: 0f
+                        }
+                        mediaPlayer?.start()
+                        isPlaying = true
                     }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Button(
-                        onClick = {
-                            mediaPlayer?.stop()
-                            mediaPlayer?.release()
-                            mediaPlayer = null
-                            isPlaying = false
-                            currentPosition = 0f
-                            duration = 0f
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.Red
-                        )
-                    ) {
-                        Text("⏹️ Stop", fontSize = 16.sp)
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Button(
-                        onClick = {
-                            // Teilen-Dialog öffnen
-                            shareFile = selectedFile
-                            shareDuration = duration
-                            shareRange = 0f..duration
-                            showShareDialog = true
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF25D366)
-                        )
-                    ) {
-                        Text("📤 Teilen", fontSize = 16.sp)
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Button(
-                        onClick = {
-                            selectedFile = null
-                            mediaPlayer?.release()
-                            mediaPlayer = null
-                            isPlaying = false
-                            currentPosition = 0f
-                            duration = 0f
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.Gray
-                        )
-                    ) {
-                        Text("✖️", fontSize = 16.sp)
-                    }
+                },
+                onStop = {
+                    mediaPlayer?.stop()
+                    mediaPlayer?.release()
+                    mediaPlayer = null
+                    isPlaying = false
+                    currentPosition = 0f
+                },
+                onSeek = { pos ->
+                    mediaPlayer?.seekTo(pos.toInt())
+                    currentPosition = pos
+                },
+                onClose = {
+                    mediaPlayer?.release()
+                    mediaPlayer = null
+                    isPlaying = false
+                    selectedFile = null
+                },
+                onShare = {
+                    shareFile = file
+                    shareRange = 0f..duration
+                    showShareDialog = true
                 }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
+            )
         }
 
-        // Liste der Aufnahmen
+        // Dateiliste
+        Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = "📁 Aufnahmen (${audioFiles.size})",
             fontSize = 18.sp,
             color = Color.White,
-            modifier = Modifier.padding(vertical = 8.dp)
+            modifier = Modifier
+                .padding(vertical = 8.dp)
+                .align(Alignment.Start)
         )
 
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        LazyColumn(modifier = Modifier.fillMaxWidth()) {
             items(audioFiles) { file ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(if (selectedFile == file) Color(0xFF444444) else Color(0xFF333333))
-                        .clickable {
-                            // Player zurücksetzen und neue Datei laden
-                            mediaPlayer?.release()
-                            mediaPlayer = null
-                            isPlaying = false
-                            currentPosition = 0f
-                            duration = 0f
-                            selectedFile = file
-                        }
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = file.name,
-                            fontSize = 14.sp,
-                            color = Color.White
-                        )
-                        Text(
-                            text = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
-                                .format(Date(file.lastModified())),
-                            fontSize = 11.sp,
-                            color = Color.Gray
-                        )
+                FileItem(
+                    file = file,
+                    isSelected = selectedFile == file,
+                    onClick = {
+                        // Reset Player
+                        mediaPlayer?.release()
+                        mediaPlayer = null
+                        isPlaying = false
+                        currentPosition = 0f
+                        selectedFile = file
+                    },
+                    onShareDirect = {
+                        // Quick Share Setup
+                        val mp = MediaPlayer()
+                        mp.setDataSource(file.absolutePath)
+                        mp.prepare()
+                        val dur = mp.duration.toFloat()
+                        mp.release()
+                        
+                        shareFile = file
+                        shareRange = 0f..dur
+                        showShareDialog = true
                     }
-                    Row {
-                        Text(
-                            text = "📤",
-                            fontSize = 20.sp,
-                            color = Color(0xFF25D366),
-                            modifier = Modifier
-                                .padding(end = 12.dp)
-                                .clickable {
-                                    // Direkt teilen ohne Auswahl
-                                    val mp = MediaPlayer()
-                                    mp.setDataSource(file.absolutePath)
-                                    mp.prepare()
-                                    val fileDuration = mp.duration.toFloat()
-                                    mp.release()
-
-                                    shareFile = file
-                                    shareDuration = fileDuration
-                                    shareRange = 0f..fileDuration
-                                    showShareDialog = true
-                                }
-                        )
-                        Text(
-                            text = "▶️",
-                            fontSize = 20.sp,
-                            color = if (selectedFile == file) Color(0xFF4CAF50) else Color.White
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(4.dp))
+                )
             }
         }
     }
+
+    // Share Dialog
+    if (showShareDialog && shareFile != null) {
+        ShareDialog(
+            initialRange = shareRange,
+            maxDuration = if (shareRange.endInclusive > 0) shareRange.endInclusive else 1f,
+            isProcessing = isProcessing,
+            onDismiss = { if (!isProcessing) showShareDialog = false },
+            onShare = { range ->
+                isProcessing = true
+                shareAudioToWhatsApp(
+                    context = context,
+                    sourceFile = shareFile!!,
+                    startMs = range.start.toLong(),
+                    endMs = range.endInclusive.toLong(),
+                    onComplete = {
+                        isProcessing = false
+                        showShareDialog = false
+                    },
+                    onError = {
+                        isProcessing = false
+                        Toast.makeText(context, "Fehler: $it", Toast.LENGTH_LONG).show()
+                    }
+                )
+            }
+        )
+    }
+}
+
+// --- Composable Sub-Components ---
+
+@Composable
+fun PlayerSection(
+    file: File,
+    isPlaying: Boolean,
+    currentPosition: Float,
+    duration: Float,
+    onPlayPause: () -> Unit,
+    onStop: () -> Unit,
+    onSeek: (Float) -> Unit,
+    onClose: () -> Unit,
+    onShare: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF333333))
+            .padding(16.dp)
+    ) {
+        Text("▶️ Player: ${file.name}", color = Color.White)
+        
+        Slider(
+            value = currentPosition,
+            onValueChange = onSeek,
+            valueRange = 0f..duration,
+            colors = SliderDefaults.colors(
+                thumbColor = Color(0xFF4CAF50),
+                activeTrackColor = Color(0xFF4CAF50)
+            )
+        )
+        
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(formatTime(currentPosition.toInt()), color = Color.Gray, fontSize = 12.sp)
+            Text(formatTime(duration.toInt()), color = Color.Gray, fontSize = 12.sp)
+        }
+        
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Button(onClick = onPlayPause, colors = ButtonDefaults.buttonColors(Color(0xFF4CAF50))) {
+                Text(if (isPlaying) "⏸️" else "▶️")
+            }
+            Spacer(Modifier.width(8.dp))
+            Button(onClick = onStop, colors = ButtonDefaults.buttonColors(Color.Red)) {
+                Text("⏹️")
+            }
+            Spacer(Modifier.width(8.dp))
+            Button(onClick = onShare, colors = ButtonDefaults.buttonColors(Color(0xFF25D366))) {
+                Text("📤")
+            }
+            Spacer(Modifier.width(8.dp))
+            Button(onClick = onClose, colors = ButtonDefaults.buttonColors(Color.Gray)) {
+                Text("✖️")
+            }
+        }
+    }
+}
+
+@Composable
+fun FileItem(
+    file: File,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onShareDirect: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .background(if (isSelected) Color(0xFF444444) else Color(0xFF333333))
+            .clickable { onClick() }
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(file.name, color = Color.White)
+            Text(
+                SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(file.lastModified())),
+                color = Color.Gray,
+                fontSize = 11.sp
+            )
+        }
+        Row {
+            Text("📤", fontSize = 20.sp, modifier = Modifier
+                .padding(end = 12.dp)
+                .clickable { onShareDirect() })
+        }
+    }
+}
+
+@Composable
+fun ShareDialog(
+    initialRange: ClosedFloatingPointRange<Float>,
+    maxDuration: Float,
+    isProcessing: Boolean,
+    onDismiss: () -> Unit,
+    onShare: (ClosedFloatingPointRange<Float>) -> Unit
+) {
+    var currentRange by remember { mutableStateOf(initialRange) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Audio teilen") },
+        text = {
+            Column {
+                Text("Bereich auswählen:", modifier = Modifier.padding(bottom = 16.dp))
+                RangeSlider(
+                    value = currentRange,
+                    onValueChange = { currentRange = it },
+                    valueRange = 0f..maxDuration,
+                    enabled = !isProcessing,
+                    colors = SliderDefaults.colors(thumbColor = Color(0xFF4CAF50), activeTrackColor = Color(0xFF4CAF50))
+                )
+                Text(
+                    "Dauer: ${formatTime((currentRange.endInclusive - currentRange.start).toInt())}",
+                    color = Color(0xFF4CAF50),
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                if (isProcessing) Text("⏳ Verarbeite...", color = Color(0xFFFFA500), modifier = Modifier.padding(top = 8.dp))
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onShare(currentRange) },
+                enabled = !isProcessing,
+                colors = ButtonDefaults.buttonColors(Color(0xFF25D366))
+            ) { Text("WhatsApp") }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss, enabled = !isProcessing, colors = ButtonDefaults.buttonColors(Color.Gray)) {
+                Text("Abbrechen")
+            }
+        }
+    )
+}
+
+// --- Helpers & Service ---
+
+fun createAudioFile(context: Context): File {
+    val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+    return File(context.getExternalFilesDir(null), "audio_$timestamp.m4a")
+}
+
+fun startAudioService(context: Context, path: String) {
+    val intent = Intent(context, AudioForegroundService::class.java).apply {
+        putExtra("filePath", path)
+    }
+    ContextCompat.startForegroundService(context, intent)
+}
+
+fun stopAudioService(context: Context) {
+    context.stopService(Intent(context, AudioForegroundService::class.java))
 }
 
 fun formatTime(millis: Int): String {
     val seconds = (millis / 1000) % 60
     val minutes = (millis / (1000 * 60)) % 60
     val hours = (millis / (1000 * 60 * 60))
-    return if (hours > 0) {
-        String.format("%d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format("%d:%02d", minutes, seconds)
-    }
+    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds)
+    else "%d:%02d".format(minutes, seconds)
 }
 
 fun shareAudioToWhatsApp(
@@ -552,20 +459,10 @@ fun shareAudioToWhatsApp(
     onError: (String) -> Unit
 ) {
     try {
-        // Erstelle temporäre Datei mit .opus Extension (WhatsApp-kompatibel)
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val outputFile = File(context.cacheDir, "voice_message_$timestamp.opus")
-
-        // Trimme die Audio-Datei
+        val outputFile = File(context.cacheDir, "share_${System.currentTimeMillis()}.opus")
         trimAudioFile(sourceFile, outputFile, startMs, endMs)
 
-        // Teile via Intent
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.provider",
-            outputFile
-        )
-
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", outputFile)
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = "audio/ogg"
             putExtra(Intent.EXTRA_STREAM, uri)
@@ -576,17 +473,10 @@ fun shareAudioToWhatsApp(
         try {
             context.startActivity(shareIntent)
             onComplete()
-        } catch (e: Exception) {
-            // Fallback: Alle Apps anzeigen
-            val chooserIntent = Intent.createChooser(
-                Intent(Intent.ACTION_SEND).apply {
-                    type = "audio/ogg"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                },
-                "Audio teilen"
-            )
-            context.startActivity(chooserIntent)
+        } catch (_: Exception) {
+            // Fallback
+            val chooser = Intent.createChooser(shareIntent.apply { setPackage(null) }, "Teilen")
+            context.startActivity(chooser)
             onComplete()
         }
     } catch (e: Exception) {
@@ -595,148 +485,105 @@ fun shareAudioToWhatsApp(
     }
 }
 
-fun trimAudioFile(
-    sourceFile: File,
-    outputFile: File,
-    startMs: Long,
-    endMs: Long
-) {
-    // Für WhatsApp-Kompatibilität: verwende M4A statt OPUS
-    // WhatsApp akzeptiert auch AAC in M4A Container als Sprachnachricht
-    val tempOutputFile = File(outputFile.parent, outputFile.nameWithoutExtension + ".m4a")
-
+fun trimAudioFile(sourceFile: File, outputFile: File, startMs: Long, endMs: Long) {
+    // M4A Container für AAC (WhatsApp kompatibel)
+    val tempFile = File(outputFile.parent, outputFile.nameWithoutExtension + ".m4a")
+    
     val extractor = MediaExtractor()
     extractor.setDataSource(sourceFile.absolutePath)
+    
+    val trackIndex = (0 until extractor.trackCount).find { 
+        extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true 
+    } ?: throw IllegalArgumentException("Kein Audio-Track")
 
-    var audioTrack = -1
-    for (i in 0 until extractor.trackCount) {
-        val format = extractor.getTrackFormat(i)
-        val mime = format.getString(MediaFormat.KEY_MIME) ?: ""
-        if (mime.startsWith("audio/")) {
-            audioTrack = i
-            break
-        }
-    }
-
-    if (audioTrack == -1) {
-        throw IllegalArgumentException("Keine Audio-Spur gefunden")
-    }
-
-    extractor.selectTrack(audioTrack)
-    val format = extractor.getTrackFormat(audioTrack)
-
-    // Verwende MPEG_4 Container (M4A) für AAC Audio
-    val muxer = MediaMuxer(tempOutputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-
-    // Füge Audio-Track hinzu
-    val muxerTrack = muxer.addTrack(format)
+    extractor.selectTrack(trackIndex)
+    val format = extractor.getTrackFormat(trackIndex)
+    
+    val muxer = MediaMuxer(tempFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+    val muxerTrackIndex = muxer.addTrack(format)
     muxer.start()
 
-    // Springe zum Startpunkt
     extractor.seekTo(startMs * 1000, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
-
     val buffer = ByteBuffer.allocate(1024 * 1024)
     val bufferInfo = MediaCodec.BufferInfo()
 
     while (true) {
         val sampleSize = extractor.readSampleData(buffer, 0)
         if (sampleSize < 0) break
-
-        val presentationTimeUs = extractor.sampleTime
-
-        // Stoppe bei Endzeit
-        if (presentationTimeUs > endMs * 1000) break
-
-        // Schreibe nur Samples ab Startzeit
-        if (presentationTimeUs >= startMs * 1000) {
+        
+        val timeUs = extractor.sampleTime
+        if (timeUs > endMs * 1000) break
+        
+        if (timeUs >= startMs * 1000) {
             bufferInfo.offset = 0
             bufferInfo.size = sampleSize
-            bufferInfo.presentationTimeUs = presentationTimeUs - (startMs * 1000)
-
-            // Konvertiere MediaExtractor flags zu MediaCodec flags
-            val sampleFlags = extractor.sampleFlags
-            bufferInfo.flags = when {
-                (sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0 -> MediaCodec.BUFFER_FLAG_KEY_FRAME
-                else -> 0
-            }
-
-            muxer.writeSampleData(muxerTrack, buffer, bufferInfo)
+            bufferInfo.presentationTimeUs = timeUs - (startMs * 1000)
+            bufferInfo.flags = if ((extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0
+            muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
         }
-
+        
         extractor.advance()
-        buffer.clear()
     }
 
     muxer.stop()
     muxer.release()
     extractor.release()
 
-    // Benenne in finale Datei um
-    if (tempOutputFile.exists()) {
-        tempOutputFile.copyTo(outputFile, overwrite = true)
-        tempOutputFile.delete()
+    if (tempFile.exists()) {
+        tempFile.copyTo(outputFile, overwrite = true)
+        tempFile.delete()
     }
 }
 
-fun startForegroundAudioService(context: Context, filePath: String) {
-    val intent = Intent(context, AudioForegroundService::class.java).apply {
-        putExtra("filePath", filePath)
-    }
-    ContextCompat.startForegroundService(context, intent)
-}
-
+// Service class kept in same file for simplicity as requested
 class AudioForegroundService : Service() {
     private var recorder: MediaRecorder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val filePath = intent?.getStringExtra("filePath") ?: return START_NOT_STICKY
+        
+        createNotificationChannel()
+        startForeground(1, createNotification())
+        
+        startRecording(filePath)
+        
+        return START_STICKY
+    }
 
+    private fun startRecording(path: String) {
+        recorder = (MediaRecorder(this)).apply {
+            setAudioSource(MediaRecorder.AudioSource.MIC)
+            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            setOutputFile(path)
+            prepare()
+            start()
+        }
+    }
+
+    private fun createNotification() = NotificationCompat.Builder(this, "audio_channel")
+        .setContentTitle("🎙️ Aufnahme läuft")
+        .setSmallIcon(android.R.drawable.ic_dialog_info)
+        .setOngoing(true)
+        .build()
+
+    private fun createNotificationChannel() {
         val channel = NotificationChannel(
             "audio_channel",
             "Audio Aufnahme",
             NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Foreground-Service für Audioaufnahme"
-        }
-        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(channel)
-
-        startForeground(
-            1,
-            NotificationCompat.Builder(this, "audio_channel")
-                .setContentTitle("🎙️ Aufnahme läuft")
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setOngoing(true)
-                .build()
         )
-
-        recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            MediaRecorder(this)
-        } else {
-            @Suppress("DEPRECATION")
-            MediaRecorder()
-        }.apply {
-            setAudioSource(MediaRecorder.AudioSource.MIC)
-            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            setOutputFile(filePath)
-            prepare()
-            start()
-        }
-
-        return START_STICKY
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     override fun onDestroy() {
-        super.onDestroy()
-        recorder?.apply {
-            try {
-                stop()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-            release()
+        try {
+            recorder?.stop()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
+        recorder?.release()
+        super.onDestroy()
     }
 
     override fun onBind(intent: Intent?) = null

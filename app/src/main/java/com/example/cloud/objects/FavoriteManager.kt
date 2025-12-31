@@ -9,7 +9,7 @@ object FavoriteManager {
 
     fun saveFavorites(context: Context, favorites: Set<String>) {
         val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-        prefs.edit {
+        prefs.edit(commit = true) {
             putStringSet(KEY_FAVORITES, favorites)
         }
     }

@@ -40,8 +40,11 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.example.cloud.MainActivity
+import com.example.cloud.musicstatstab.MusicStatsManager
 import java.io.File
 import java.net.URLDecoder
+
+private var statsManager: MusicStatsManager? = null
 
 class MusicPlayerService : MediaSessionService() {
 
@@ -109,6 +112,7 @@ class MusicPlayerService : MediaSessionService() {
 
         createNotificationChannel()
         loadPlaylist()
+        statsManager = MusicStatsManager(this)  // Neue Zeile
 
         // MediaSession ohne Player erstellen (nur für Notification/Lock Screen Control)
         mediaSession = MediaSession.Builder(this, DummyPlayer())
@@ -307,6 +311,12 @@ class MusicPlayerService : MediaSessionService() {
             }
 
             if (mediaPlayer != null && !isPlaying) {
+                // Resume aufzeichnen (NEUE ZEILE)
+                val song = playlist.getOrNull(currentSongIndex)
+                if (song != null) {
+                    statsManager?.recordSongResume(song.path)
+                }
+
                 mediaPlayer?.start()
                 isPlaying = true
                 Log.d("MusicPlayerService", "▶ Resumed playback")
@@ -328,6 +338,20 @@ class MusicPlayerService : MediaSessionService() {
             if (playlist.isEmpty() || index < 0 || index >= playlist.size) {
                 Log.w("MusicPlayerService", "Invalid song index: $index")
                 return
+            }
+
+            val previousSong = playlist.getOrNull(currentSongIndex)
+            if (previousSong != null && mediaPlayer != null) {
+                val currentPosition = (mediaPlayer?.currentPosition ?: 0L).toLong()
+                val duration = mediaPlayer?.duration ?: 0L
+
+                statsManager?.recordSongEnd(
+                    previousSong.path,
+                    previousSong.name,
+                    duration.toLong(),
+                    currentPosition,
+                    isCompleted = false
+                )
             }
 
             mediaPlayer?.release()
@@ -361,6 +385,9 @@ class MusicPlayerService : MediaSessionService() {
                 start()
             }
 
+            val duration = mediaPlayer?.duration ?: 0L
+            statsManager?.recordSongStart(song.path, song.name, duration.toLong())
+
             isPlaying = true
             currentSongIndex = index
             saveCurrentIndex()
@@ -390,6 +417,20 @@ class MusicPlayerService : MediaSessionService() {
     private fun pauseMusic() {
         try {
             if (isPlaying && mediaPlayer?.isPlaying == true) {
+                // Pause aufzeichnen (NEUE ZEILE)
+                val song = playlist.getOrNull(currentSongIndex)
+                if (song != null) {
+                    val currentPosition = (mediaPlayer?.currentPosition ?: 0L).toLong()
+                    val duration = mediaPlayer?.duration ?: 0L
+
+                    statsManager?.recordSongPause(
+                        song.path,
+                        song.name,
+                        duration.toLong(),
+                        currentPosition
+                    )
+                }
+
                 mediaPlayer?.pause()
                 isPlaying = false
                 updateNotification()
@@ -403,6 +444,12 @@ class MusicPlayerService : MediaSessionService() {
     private fun nextSong() {
         try {
             if (playlist.isEmpty()) return
+
+            // Skip aufzeichnen (NEUE ZEILE)
+            val currentSong = playlist.getOrNull(currentSongIndex)
+            if (currentSong != null) {
+                statsManager?.recordSongSkip(currentSong.path)
+            }
 
             currentSongIndex = (currentSongIndex + 1) % playlist.size
             mediaPlayer?.release()
@@ -448,6 +495,20 @@ class MusicPlayerService : MediaSessionService() {
 
     private fun onSongComplete() {
         Log.d("MusicPlayerService", "Song completed at index $currentSongIndex")
+
+        // Song komplett aufzeichnen (NEUE ZEILE)
+        if (currentSongIndex < playlist.size) {
+            val song = playlist[currentSongIndex]
+            val duration = (mediaPlayer?.duration ?: 0L).toLong()
+
+            statsManager?.recordSongEnd(
+                song.path,
+                song.name,
+                duration.toLong(),
+                duration,
+                isCompleted = true
+            )
+        }
 
         if (isRepeatEnabled) {
             try {
@@ -560,6 +621,20 @@ class MusicPlayerService : MediaSessionService() {
 
     override fun onDestroy() {
         super.onDestroy()
+
+        // Service-Interrupt aufzeichnen (NEUE ZEILE)
+        val currentSong = playlist.getOrNull(currentSongIndex)
+        if (currentSong != null && mediaPlayer != null) {
+            val currentPosition = (mediaPlayer?.currentPosition ?: 0L).toLong()
+            val duration = mediaPlayer?.duration ?: 0L
+
+            statsManager?.recordServiceInterrupt(
+                currentSong.path,
+                currentPosition,
+                duration.toLong()
+            )
+        }
+
         mediaPlayer?.release()
         mediaPlayer = null
         mediaSession?.release()

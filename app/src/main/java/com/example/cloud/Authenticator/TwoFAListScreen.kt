@@ -160,7 +160,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                         ).show()
                     } else {
                         // Sync-Timestamp speichern
-                        prefs.edit { putLong("last_sync_timestamp", System.currentTimeMillis()) }
+                        prefs.edit(commit = true) { putLong("last_sync_timestamp", System.currentTimeMillis()) }
 
                         if (result.uploaded > 0 || result.downloaded > 0) {
                             Toast.makeText(
@@ -669,7 +669,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                         if (favIndex != null) {
                             Button(
                                 onClick = {
-                                    favPrefs.edit().apply {
+                                    favPrefs.edit(commit = true) {
                                         remove("fav${favIndex}_name")
                                         remove("fav${favIndex}_secret")
                                         apply()
@@ -702,7 +702,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                             else -> null
                                         }
                                         slot?.let {
-                                            favPrefs.edit().apply {
+                                            favPrefs.edit(commit = true) {
                                                 putString("fav${it}_name", entry.name)
                                                 putString("fav${it}_secret", entry.secret)
                                                 apply()
@@ -736,7 +736,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                                     "favorites",
                                                     Context.MODE_PRIVATE
                                                 )
-                                                favPrefs.edit().apply {
+                                                favPrefs.edit(commit = true) {
                                                     if (favPrefs.getString(
                                                             "fav1_secret",
                                                             null
@@ -1042,7 +1042,7 @@ fun SettingsScreenWithScreenshotProtection(onBackClick: () -> Unit) {
                     checked = lockEnabled,
                     onCheckedChange = { enabled ->
                         lockEnabled = enabled
-                        prefs.edit().apply {
+                        prefs.edit(commit = true) {
                             putBoolean("lockEnabled", enabled)
                             putBoolean("authenticated", !enabled)
                             apply()
@@ -1069,7 +1069,7 @@ fun SettingsScreenWithScreenshotProtection(onBackClick: () -> Unit) {
                     checked = screenshotProtectionEnabled,
                     onCheckedChange = { enabled ->
                         screenshotProtectionEnabled = enabled
-                        prefs.edit().apply {
+                        prefs.edit(commit = true) {
                             putBoolean("screenshotProtectionEnabled", enabled)
                             apply()
                         }

@@ -240,12 +240,8 @@ class PodcastPlayerService : Service() {
                             normalizedPath.contains("/downloads/cloud/podcasts/") ||
                             data.contains("/Cloud/Podcasts/", ignoreCase = true)
 
-                    val mimeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
-                    val mime = cursor.getString(mimeColumn)
-                    val supported = mime == "audio/mpeg" || mime == "audio/mp4"
 
-
-                    if (isInPodcasts && supported) {
+                    if (isInPodcasts && (name.endsWith(".mp3") || name.endsWith(".m4a"))) {
                         val contentUri = Uri.withAppendedPath(
                             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                             id.toString()
