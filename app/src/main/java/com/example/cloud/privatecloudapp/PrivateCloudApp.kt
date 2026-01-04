@@ -127,13 +127,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsetsController
 import android.view.WindowManager
-import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
-import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
-import android.webkit.WebView.setWebContentsDebuggingEnabled
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import androidx.compose.foundation.layout.WindowInsets
@@ -165,7 +162,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.sqrt
 import androidx.core.content.edit
-import com.example.cloud.Authenticator.AuthenticatorTab
+import com.example.cloud.authenticator.AuthenticatorTab
 import com.example.cloud.audiorecorder.AudioRecorderContent
 import com.example.cloud.contactstab.ContactsRepository
 import com.example.cloud.contactstab.ContactsTabContent
@@ -183,6 +180,7 @@ import java.time.Instant
 import java.time.ZoneId
 
 var isFullScreen by mutableStateOf(false)
+var webViewUrl by mutableStateOf("https://www.google.com")
 
 enum class MenuItem(
     val title: String,
@@ -203,9 +201,7 @@ enum class MenuItem(
         "Browser",
         "🌐",
         {
-            val context = LocalContext.current
-            var webViewUrl by remember { mutableStateOf(loadLastUrl(context)) }
-
+            loadLastUrl(LocalContext.current)
             BrowserTabContent(
                 url = webViewUrl,
                 onUrlChange = { webViewUrl = it },
@@ -329,8 +325,6 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?) {
             saveLastUrl(context, url)
         }
     }
-
-    var webViewUrl by remember { mutableStateOf(loadLastUrl(context)) }
     var webViewState by remember { mutableStateOf<WebView?>(null) }
 
     val drawerState = rememberDrawerState(
@@ -2386,7 +2380,6 @@ fun showBatteryInfo(context: Context) {
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
 
-        // Notification erstellen
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("🔋 Batterie-Info")
