@@ -10,12 +10,14 @@ import android.content.SharedPreferences
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.IBinder
+import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import android.view.KeyEvent
 import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
+import androidx.core.os.postDelayed
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.DeviceInfo
 import androidx.media3.common.MediaItem
@@ -32,6 +34,7 @@ import androidx.media3.common.util.Size
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import java.util.concurrent.TimeUnit
+import java.util.logging.Handler
 import kotlin.math.abs
 
 class PodcastPlayerService : Service() {
@@ -61,6 +64,7 @@ class PodcastPlayerService : Service() {
 
         private const val ACTION_DELETE_COMPLETED = "com.example.cloud.ACTION_DELETE_COMPLETED"
         private const val ACTION_DELETE_SINGLE = "com.example.cloud.ACTION_DELETE_SINGLE_"
+        private const val KEY_PODCAST_QUEUE = "podcast_queue"
 
         fun startService(context: Context) {
             val intent = Intent(context, PodcastPlayerService::class.java)
@@ -99,6 +103,7 @@ class PodcastPlayerService : Service() {
     private var mediaSession: MediaSession? = null
     private var isPlaying = false
     private var podcasts: List<Podcast> = emptyList()
+    private var podcastQueue: MutableList<String> = mutableListOf()
     private var currentPodcast: Podcast? = null
     private lateinit var sharedPreferences: SharedPreferences
     private lateinit var mediaStatePrefs: SharedPreferences
@@ -113,6 +118,7 @@ class PodcastPlayerService : Service() {
 
         createNotificationChannel()
         loadPodcasts()
+        loadPodcastQueue()
 
         val lastPodcastPath = sharedPreferences.getString(KEY_CURRENT_PODCAST, null)
         if (lastPodcastPath != null) {
@@ -120,7 +126,7 @@ class PodcastPlayerService : Service() {
         }
 
         startForeground(NOTIFICATION_ID, createNotification(), getServiceForegroundType())
-
+        var downTime = 0L
         // MediaSession hinzufügen, damit Kopfhörer-Tasten funktionieren
         try {
             mediaSession = MediaSession.Builder(this, object : Player {
@@ -295,6 +301,20 @@ class PodcastPlayerService : Service() {
                                         Log.d("PodcastPlayerService", "⏪ MediaButton: PodcastService active, handling -15s")
                                         rewind()
                                         return true
+                                    }
+                                    KeyEvent.ACTION_DOWN -> {
+                                        downTime = System.currentTimeMillis()
+                                    }
+
+                                    KeyEvent.ACTION_UP -> {
+                                        val duration = System.currentTimeMillis() - downTime
+
+                                        if (duration > 600) {
+                                            playNextInQueue()
+                                        } else {
+                                            if (isPlaying) pausePodcast() else playPodcast()
+                                            return true
+                                        }
                                     }
                                 }
                             }
@@ -831,6 +851,10 @@ class PodcastPlayerService : Service() {
                 if (it.path == podcast.path) updatedPodcast else it
             }
             currentPodcast = updatedPodcast
+
+            android.os.Handler(Looper.getMainLooper()).postDelayed({
+                playNextInQueue()
+            }, 2000)
         }
 
         isPlaying = false
@@ -939,6 +963,71 @@ class PodcastPlayerService : Service() {
             )
 
         return builder.build()
+    }
+
+    private fun savePodcastQueue() {
+        val queueJson = podcastQueue.joinToString("|||")
+        sharedPreferences.edit(commit = true) {
+            putString(KEY_PODCAST_QUEUE, queueJson)
+        }
+        Log.d("PodcastPlayerService", "Queue saved: ${podcastQueue.size} items")
+    }
+
+    private fun loadPodcastQueue() {
+        val queueJson = sharedPreferences.getString(KEY_PODCAST_QUEUE, null)
+        if (queueJson != null && queueJson.isNotEmpty()) {
+            podcastQueue = queueJson.split("|||").toMutableList()
+            Log.d("PodcastPlayerService", "Queue loaded: ${podcastQueue.size} items")
+        } else {
+            podcastQueue = mutableListOf()
+        }
+    }
+
+    fun getPodcastQueue(): List<String> {
+        return podcastQueue.toList()
+    }
+
+    fun addToPodcastQueue(podcastPath: String) {
+        if (!podcastQueue.contains(podcastPath)) {
+            podcastQueue.add(podcastPath)
+            savePodcastQueue()
+            Log.d("PodcastPlayerService", "Added to queue: $podcastPath")
+        }
+    }
+
+    fun removeFromPodcastQueue(podcastPath: String) {
+        if (podcastQueue.remove(podcastPath)) {
+            savePodcastQueue()
+            Log.d("PodcastPlayerService", "Removed from queue: $podcastPath")
+        }
+    }
+
+    fun clearPodcastQueue() {
+        podcastQueue.clear()
+        savePodcastQueue()
+        Log.d("PodcastPlayerService", "Queue cleared")
+    }
+
+    private fun playNextInQueue() {
+        if (podcastQueue.isEmpty()) {
+            Log.d("PodcastPlayerService", "Queue is empty, nothing to play")
+            return
+        }
+
+        val nextPath = podcastQueue.removeAt(0)
+        savePodcastQueue()
+
+        val nextPodcast = podcasts.find { it.path == nextPath }
+        if (nextPodcast != null) {
+            currentPodcast = nextPodcast
+            val savedPos = getSavedPosition(nextPodcast.path)
+            currentPodcast = nextPodcast.copy(savedPosition = savedPos)
+            loadPodcast(currentPodcast!!)
+            Log.d("PodcastPlayerService", "Playing next from queue: ${nextPodcast.name}")
+        } else {
+            Log.w("PodcastPlayerService", "Next podcast not found: $nextPath")
+            playNextInQueue()
+        }
     }
 
     override fun onDestroy() {
