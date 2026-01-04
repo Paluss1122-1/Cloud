@@ -1,4 +1,4 @@
-package com.example.cloud.Authenticator
+package com.example.cloud.authenticator
 
 import androidx.room.Database
 import androidx.room.Room
