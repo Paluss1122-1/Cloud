@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
+import com.example.cloud.ERRORINSERT
+import com.example.cloud.ERRORINSERTDATA
+import java.time.Instant
 
 data class ContactsTabState(
     val contacts: List<Contact> = emptyList(),
@@ -24,6 +27,14 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
                 state = state.copy(loading = false, contacts = contacts)
             } catch (e: Exception) {
                 state = state.copy(loading = false, error = e.message)
+                ERRORINSERT(
+                    ERRORINSERTDATA(
+                        "ContactsViewModel",
+                        "❌ Fehler beim Laden von von Kontakten: ${e.message}",
+                        Instant.now().toString(),
+                        "Error"
+                    )
+                )
             }
         }
     }
@@ -33,12 +44,28 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
             try {
                 val success = repository.saveContact(contact)
                 if (success) {
-                    loadContacts() // Neu laden nach Speichern
+                    loadContacts()
                 } else {
                     state = state.copy(error = "Fehler beim Speichern")
+                    ERRORINSERT(
+                        ERRORINSERTDATA(
+                            "ContactsViewModel",
+                            "❌ Fehler beim Speichern von Kontakten",
+                            Instant.now().toString(),
+                            "Error"
+                        )
+                    )
                 }
             } catch (e: Exception) {
                 state = state.copy(error = e.message)
+                ERRORINSERT(
+                    ERRORINSERTDATA(
+                        "ContactsViewModel",
+                        "❌ Fehler beim Speichern von Kontakten: ${e.message}",
+                        Instant.now().toString(),
+                        "Error"
+                    )
+                )
             }
         }
     }
@@ -48,12 +75,28 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
             try {
                 val success = repository.deleteContact(id)
                 if (success) {
-                    loadContacts() // Neu laden nach Löschen
+                    loadContacts()
                 } else {
                     state = state.copy(error = "Fehler beim Löschen")
+                    ERRORINSERT(
+                        ERRORINSERTDATA(
+                            "ContactsViewModel",
+                            "❌ Fehler beim Löschen von Kontakten",
+                            Instant.now().toString(),
+                            "Error"
+                        )
+                    )
                 }
             } catch (e: Exception) {
                 state = state.copy(error = e.message)
+                ERRORINSERT(
+                    ERRORINSERTDATA(
+                        "ContactsViewModel",
+                        "❌ Fehler beim Löschen von Kontakten: ${e.message}",
+                        Instant.now().toString(),
+                        "Error"
+                    )
+                )
             }
         }
     }
