@@ -8,9 +8,14 @@ import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import androidx.annotation.RequiresPermission
+import com.example.cloud.ERRORINSERT
+import com.example.cloud.ERRORINSERTDATA
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.io.File
+import java.time.Instant
 
-// Füge diese Klasse außerhalb der Composable hinzu:
 class AudioRecorder {
     private var audioRecord: AudioRecord? = null
     private var recordingThread: Thread? = null
@@ -37,7 +42,6 @@ class AudioRecorder {
             bufferSize
         )
 
-        // Ändere Dateiendung zu .m4a (AAC komprimiert)
         val m4aFile = File(outputFile.parent, outputFile.nameWithoutExtension + ".m4a")
 
         audioRecord?.startRecording()
@@ -47,7 +51,16 @@ class AudioRecorder {
             try {
                 encodeToAAC(m4aFile, sampleRate)
             } catch (e: Exception) {
-                e.printStackTrace()
+                CoroutineScope(Dispatchers.IO).launch {
+                    ERRORINSERT(
+                        ERRORINSERTDATA(
+                            "AudioRecorder",
+                            "Fehler bei Starten von Recording: ${e.message}",
+                            Instant.now().toString(),
+                            "Error"
+                        )
+                    )
+                }
             } finally {
                 audioRecord?.stop()
                 audioRecord?.release()
@@ -63,10 +76,10 @@ class AudioRecorder {
         val format = MediaFormat.createAudioFormat(
             MediaFormat.MIMETYPE_AUDIO_AAC,
             sampleRate,
-            2 // Stereo
+            2
         )
         format.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
-        format.setInteger(MediaFormat.KEY_BIT_RATE, 128000) // 128 kbps
+        format.setInteger(MediaFormat.KEY_BIT_RATE, 128000)
         format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384)
 
         val codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
@@ -80,10 +93,8 @@ class AudioRecorder {
         val buffer = ByteArray(4096)
 
         while (isRecording) {
-            // PCM Daten lesen
             val read = audioRecord?.read(buffer, 0, buffer.size) ?: -1
             if (read > 0) {
-                // PCM in Codec eingeben
                 val inputBufferIndex = codec.dequeueInputBuffer(10000)
                 if (inputBufferIndex >= 0) {
                     val inputBuffer = codec.getInputBuffer(inputBufferIndex)
@@ -93,7 +104,6 @@ class AudioRecorder {
                 }
             }
 
-            // Encoded Daten holen
             var outputBufferIndex = codec.dequeueOutputBuffer(bufferInfo, 0)
             while (outputBufferIndex >= 0) {
                 if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) {
@@ -110,9 +120,7 @@ class AudioRecorder {
                         muxerStarted = true
                     }
 
-                    if (muxerStarted) {
-                        muxer.writeSampleData(trackIndex, outputBuffer, bufferInfo)
-                    }
+                    muxer.writeSampleData(trackIndex, outputBuffer, bufferInfo)
                 }
 
                 codec.releaseOutputBuffer(outputBufferIndex, false)
@@ -120,7 +128,6 @@ class AudioRecorder {
             }
         }
 
-        // Finalisieren
         val inputBufferIndex = codec.dequeueInputBuffer(10000)
         if (inputBufferIndex >= 0) {
             codec.queueInputBuffer(inputBufferIndex, 0, 0, System.nanoTime() / 1000, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
