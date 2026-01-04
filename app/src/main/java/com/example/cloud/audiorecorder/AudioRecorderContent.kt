@@ -1,8 +1,10 @@
 package com.example.cloud.audiorecorder
 
 import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -12,7 +14,6 @@ import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.media.MediaPlayer
 import android.media.MediaRecorder
-import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,11 +32,18 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.content.PermissionChecker
+import com.example.cloud.ERRORINSERT
+import com.example.cloud.ERRORINSERTDATA
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
+import java.time.Instant
 import java.util.*
 
 @Composable
@@ -59,9 +67,24 @@ fun AudioRecorderContent(
         return
     }
 
+    LaunchedEffect(Unit) {
+        if (!hasPermission) {
+            scope.launch {
+                ERRORINSERT(
+                    data = ERRORINSERTDATA(
+                        "Audio Recorder",
+                        "Keine Mikrofon Berechtigung",
+                        Instant.now().toString(),
+                        "Error"
+                    )
+                )
+            }
+        }
+    }
+
     var isRecording by remember { mutableStateOf(false) }
     var audioFiles by remember { mutableStateOf<List<File>>(emptyList()) }
-    
+
     // Player State
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
@@ -80,7 +103,7 @@ fun AudioRecorderContent(
         val dir = context.getExternalFilesDir(null)
         audioFiles = dir?.listFiles()
             ?.filter { it.extension == "m4a" }
-            ?.sortedByDescending { it.lastModified() } 
+            ?.sortedByDescending { it.lastModified() }
             ?: emptyList()
     }
 
@@ -175,7 +198,7 @@ fun AudioRecorderContent(
                             mediaPlayer = MediaPlayer().apply {
                                 setDataSource(file.absolutePath)
                                 prepare()
-                                setOnCompletionListener { 
+                                setOnCompletionListener {
                                     isPlaying = false
                                     currentPosition = 0f
                                 }
@@ -242,7 +265,7 @@ fun AudioRecorderContent(
                         mp.prepare()
                         val dur = mp.duration.toFloat()
                         mp.release()
-                        
+
                         shareFile = file
                         shareRange = 0f..dur
                         showShareDialog = true
@@ -272,7 +295,16 @@ fun AudioRecorderContent(
                     },
                     onError = {
                         isProcessing = false
-                        Toast.makeText(context, "Fehler: $it", Toast.LENGTH_LONG).show()
+                        scope.launch {
+                            ERRORINSERT(
+                                data = ERRORINSERTDATA(
+                                    "Audio Recorder",
+                                    it,
+                                    Instant.now().toString(),
+                                    "Error"
+                                )
+                            )
+                        }
                     }
                 )
             }
@@ -301,7 +333,7 @@ fun PlayerSection(
             .padding(16.dp)
     ) {
         Text("▶️ Player: ${file.name}", color = Color.White)
-        
+
         Slider(
             value = currentPosition,
             onValueChange = onSeek,
@@ -311,7 +343,7 @@ fun PlayerSection(
                 activeTrackColor = Color(0xFF4CAF50)
             )
         )
-        
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -319,7 +351,7 @@ fun PlayerSection(
             Text(formatTime(currentPosition.toInt()), color = Color.Gray, fontSize = 12.sp)
             Text(formatTime(duration.toInt()), color = Color.Gray, fontSize = 12.sp)
         }
-        
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -365,15 +397,19 @@ fun FileItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(file.name, color = Color.White)
             Text(
-                SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(file.lastModified())),
+                SimpleDateFormat(
+                    "dd.MM.yyyy HH:mm",
+                    Locale.getDefault()
+                ).format(Date(file.lastModified())),
                 color = Color.Gray,
                 fontSize = 11.sp
             )
         }
         Row {
-            Text("📤", fontSize = 20.sp, modifier = Modifier
-                .padding(end = 12.dp)
-                .clickable { onShareDirect() })
+            Text(
+                "📤", fontSize = 20.sp, modifier = Modifier
+                    .padding(end = 12.dp)
+                    .clickable { onShareDirect() })
         }
     }
 }
@@ -399,14 +435,21 @@ fun ShareDialog(
                     onValueChange = { currentRange = it },
                     valueRange = 0f..maxDuration,
                     enabled = !isProcessing,
-                    colors = SliderDefaults.colors(thumbColor = Color(0xFF4CAF50), activeTrackColor = Color(0xFF4CAF50))
+                    colors = SliderDefaults.colors(
+                        thumbColor = Color(0xFF4CAF50),
+                        activeTrackColor = Color(0xFF4CAF50)
+                    )
                 )
                 Text(
                     "Dauer: ${formatTime((currentRange.endInclusive - currentRange.start).toInt())}",
                     color = Color(0xFF4CAF50),
                     modifier = Modifier.padding(top = 8.dp)
                 )
-                if (isProcessing) Text("⏳ Verarbeite...", color = Color(0xFFFFA500), modifier = Modifier.padding(top = 8.dp))
+                if (isProcessing) Text(
+                    "⏳ Verarbeite...",
+                    color = Color(0xFFFFA500),
+                    modifier = Modifier.padding(top = 8.dp)
+                )
             }
         },
         confirmButton = {
@@ -417,7 +460,11 @@ fun ShareDialog(
             ) { Text("WhatsApp") }
         },
         dismissButton = {
-            Button(onClick = onDismiss, enabled = !isProcessing, colors = ButtonDefaults.buttonColors(Color.Gray)) {
+            Button(
+                onClick = onDismiss,
+                enabled = !isProcessing,
+                colors = ButtonDefaults.buttonColors(Color.Gray)
+            ) {
                 Text("Abbrechen")
             }
         }
@@ -480,7 +527,6 @@ fun shareAudioToWhatsApp(
             onComplete()
         }
     } catch (e: Exception) {
-        e.printStackTrace()
         onError(e.message ?: "Unbekannter Fehler")
     }
 }
@@ -488,17 +534,17 @@ fun shareAudioToWhatsApp(
 fun trimAudioFile(sourceFile: File, outputFile: File, startMs: Long, endMs: Long) {
     // M4A Container für AAC (WhatsApp kompatibel)
     val tempFile = File(outputFile.parent, outputFile.nameWithoutExtension + ".m4a")
-    
+
     val extractor = MediaExtractor()
     extractor.setDataSource(sourceFile.absolutePath)
-    
-    val trackIndex = (0 until extractor.trackCount).find { 
-        extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true 
+
+    val trackIndex = (0 until extractor.trackCount).find {
+        extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
     } ?: throw IllegalArgumentException("Kein Audio-Track")
 
     extractor.selectTrack(trackIndex)
     val format = extractor.getTrackFormat(trackIndex)
-    
+
     val muxer = MediaMuxer(tempFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
     val muxerTrackIndex = muxer.addTrack(format)
     muxer.start()
@@ -510,18 +556,19 @@ fun trimAudioFile(sourceFile: File, outputFile: File, startMs: Long, endMs: Long
     while (true) {
         val sampleSize = extractor.readSampleData(buffer, 0)
         if (sampleSize < 0) break
-        
+
         val timeUs = extractor.sampleTime
         if (timeUs > endMs * 1000) break
-        
+
         if (timeUs >= startMs * 1000) {
             bufferInfo.offset = 0
             bufferInfo.size = sampleSize
             bufferInfo.presentationTimeUs = timeUs - (startMs * 1000)
-            bufferInfo.flags = if ((extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0
+            bufferInfo.flags =
+                if ((extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0
             muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
         }
-        
+
         extractor.advance()
     }
 
@@ -535,18 +582,20 @@ fun trimAudioFile(sourceFile: File, outputFile: File, startMs: Long, endMs: Long
     }
 }
 
-// Service class kept in same file for simplicity as requested
 class AudioForegroundService : Service() {
     private var recorder: MediaRecorder? = null
+    private val serviceScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO
+    )
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val filePath = intent?.getStringExtra("filePath") ?: return START_NOT_STICKY
-        
+
         createNotificationChannel()
         startForeground(1, createNotification())
-        
+
         startRecording(filePath)
-        
+
         return START_STICKY
     }
 
@@ -561,11 +610,27 @@ class AudioForegroundService : Service() {
         }
     }
 
-    private fun createNotification() = NotificationCompat.Builder(this, "audio_channel")
-        .setContentTitle("🎙️ Aufnahme läuft")
-        .setSmallIcon(android.R.drawable.ic_dialog_info)
-        .setOngoing(true)
-        .build()
+    private fun createNotification(): Notification {
+        val launchCloudIntent =
+            packageManager.getLaunchIntentForPackage("com.example.cloud")?.apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+        val launchCloudPendingIntent = PendingIntent.getActivity(
+            this,
+            1002,
+            launchCloudIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(this, "audio_channel")
+            .setContentTitle("🎙️ Aufnahme läuft")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setOngoing(true)
+            .setContentIntent(launchCloudPendingIntent)
+            .build()
+
+        return builder
+    }
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
@@ -573,14 +638,27 @@ class AudioForegroundService : Service() {
             "Audio Aufnahme",
             NotificationManager.IMPORTANCE_LOW
         )
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        manager.createNotificationChannel(channel)
     }
 
     override fun onDestroy() {
+        stopForeground(STOP_FOREGROUND_REMOVE)
         try {
             recorder?.stop()
         } catch (e: Exception) {
-            e.printStackTrace()
+            serviceScope.launch {
+                ERRORINSERT(
+                    ERRORINSERTDATA(
+                        "Audio Recorder",
+                        "Fehler bei Service beenden: ${e.message}",
+                        Instant.now().toString(),
+                        "Info"
+                    )
+                )
+            }
+
+            serviceScope.cancel()
         }
         recorder?.release()
         super.onDestroy()
