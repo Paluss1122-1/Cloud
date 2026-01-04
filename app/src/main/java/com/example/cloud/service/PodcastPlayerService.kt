@@ -10,10 +10,32 @@ import android.content.SharedPreferences
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.IBinder
+import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
+import android.view.KeyEvent
+import android.view.Surface
+import android.view.SurfaceHolder
+import android.view.SurfaceView
+import android.view.TextureView
+import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.DeviceInfo
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.Player
+import androidx.media3.common.Timeline
+import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.Tracks
+import androidx.media3.common.VideoSize
+import androidx.media3.common.text.CueGroup
+import androidx.media3.common.util.Size
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaSession
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
@@ -56,6 +78,7 @@ class PodcastPlayerService : Service() {
     )
 
     private var mediaPlayer: MediaPlayer? = null
+    private var mediaSession: MediaSession? = null
     private var isPlaying = false
     private var podcasts: List<Podcast> = emptyList()
     private var currentPodcast: Podcast? = null
@@ -63,6 +86,7 @@ class PodcastPlayerService : Service() {
     private var positionSaveRunnable: Runnable? = null
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
 
+    @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
         sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -76,6 +100,189 @@ class PodcastPlayerService : Service() {
         }
 
         startForeground(NOTIFICATION_ID, createNotification(), getServiceForegroundType())
+
+        // MediaSession hinzufügen, damit Kopfhörer-Tasten funktionieren
+        try {
+            mediaSession = MediaSession.Builder(this, object : Player {
+                override fun getApplicationLooper() = android.os.Looper.getMainLooper()
+                override fun addListener(listener: Player.Listener) {}
+                override fun removeListener(listener: Player.Listener) {}
+                override fun setMediaItems(mediaItems: MutableList<MediaItem>) {}
+                override fun setMediaItems(mediaItems: MutableList<MediaItem>, resetPosition: Boolean) {}
+                override fun setMediaItems(mediaItems: MutableList<MediaItem>, startIndex: Int, startPositionMs: Long) {}
+                override fun setMediaItem(mediaItem: MediaItem) {}
+                override fun setMediaItem(mediaItem: MediaItem, startPositionMs: Long) {}
+                override fun setMediaItem(mediaItem: MediaItem, resetPosition: Boolean) {}
+                override fun addMediaItem(mediaItem: MediaItem) {}
+                override fun addMediaItem(index: Int, mediaItem: MediaItem) {}
+                override fun addMediaItems(mediaItems: MutableList<MediaItem>) {}
+                override fun addMediaItems(index: Int, mediaItems: MutableList<MediaItem>) {}
+                override fun moveMediaItem(currentIndex: Int, newIndex: Int) {}
+                override fun moveMediaItems(fromIndex: Int, toIndex: Int, newIndex: Int) {}
+                override fun replaceMediaItem(index: Int, mediaItem: MediaItem) {}
+                override fun replaceMediaItems(fromIndex: Int, toIndex: Int, mediaItems: MutableList<MediaItem>) {}
+                override fun removeMediaItem(index: Int) {}
+                override fun removeMediaItems(fromIndex: Int, toIndex: Int) {}
+                override fun clearMediaItems() {}
+                override fun isCommandAvailable(command: Int) = false
+                override fun canAdvertiseSession() = true
+                override fun getAvailableCommands() = Player.Commands.EMPTY
+                override fun prepare() {}
+                override fun getPlaybackState() = Player.STATE_IDLE
+                override fun getPlaybackSuppressionReason() = Player.PLAYBACK_SUPPRESSION_REASON_NONE
+                override fun isPlaying() = false
+                override fun getPlayerError(): PlaybackException? = null
+                override fun play() {}
+                override fun pause() {}
+                override fun setPlayWhenReady(playWhenReady: Boolean) {}
+                override fun getPlayWhenReady() = false
+                override fun setRepeatMode(repeatMode: Int) {}
+                override fun getRepeatMode() = Player.REPEAT_MODE_OFF
+                override fun setShuffleModeEnabled(shuffleModeEnabled: Boolean) {}
+                override fun getShuffleModeEnabled() = false
+                override fun isLoading() = false
+                override fun seekToDefaultPosition() {}
+                override fun seekToDefaultPosition(mediaItemIndex: Int) {}
+                override fun seekTo(positionMs: Long) {}
+                override fun seekTo(mediaItemIndex: Int, positionMs: Long) {}
+                override fun getSeekBackIncrement() = 0L
+                override fun seekBack() {}
+                override fun getSeekForwardIncrement() = 0L
+                override fun seekForward() {}
+                override fun hasPreviousMediaItem() = false
+                override fun seekToPreviousMediaItem() {}
+                override fun getMaxSeekToPreviousPosition() = 0L
+                override fun seekToPrevious() {}
+                override fun hasNextMediaItem() = false
+                override fun seekToNextMediaItem() {}
+                override fun seekToNext() {}
+                override fun setPlaybackParameters(playbackParameters: PlaybackParameters) {}
+                override fun setPlaybackSpeed(speed: Float) {}
+                override fun getPlaybackParameters() = PlaybackParameters.DEFAULT
+                override fun stop() {}
+                override fun release() {}
+                override fun getCurrentTracks() = Tracks.EMPTY
+
+                @androidx.annotation.OptIn(UnstableApi::class)
+                override fun getTrackSelectionParameters() = TrackSelectionParameters.DEFAULT_WITHOUT_CONTEXT
+                override fun setTrackSelectionParameters(parameters: TrackSelectionParameters) {}
+                override fun getMediaMetadata() = MediaMetadata.EMPTY
+                override fun getPlaylistMetadata() = MediaMetadata.EMPTY
+                override fun setPlaylistMetadata(mediaMetadata: MediaMetadata) {}
+                @androidx.annotation.OptIn(UnstableApi::class)
+                override fun getCurrentManifest(): Any? = null
+                override fun getCurrentTimeline() = Timeline.EMPTY
+                override fun getCurrentPeriodIndex() = 0
+                @androidx.annotation.OptIn(UnstableApi::class)
+                override fun getCurrentWindowIndex() = 0
+                override fun getCurrentMediaItemIndex() = 0
+                @androidx.annotation.OptIn(UnstableApi::class)
+                override fun getNextWindowIndex() = 0
+                override fun getNextMediaItemIndex() = 0
+                @androidx.annotation.OptIn(UnstableApi::class)
+                override fun getPreviousWindowIndex() = 0
+                override fun getPreviousMediaItemIndex() = 0
+                override fun getCurrentMediaItem(): MediaItem? = null
+                override fun getMediaItemCount() = 0
+                override fun getMediaItemAt(index: Int): MediaItem = throw IndexOutOfBoundsException()
+                override fun getDuration() = 0L
+                override fun getCurrentPosition() = 0L
+                override fun getBufferedPosition() = 0L
+                override fun getBufferedPercentage() = 0
+                override fun getTotalBufferedDuration() = 0L
+                @androidx.annotation.OptIn(UnstableApi::class)
+                override fun isCurrentWindowDynamic() = false
+                override fun isCurrentMediaItemDynamic() = false
+                @androidx.annotation.OptIn(UnstableApi::class)
+                override fun isCurrentWindowLive() = false
+                override fun isCurrentMediaItemLive() = false
+                override fun getCurrentLiveOffset() = 0L
+                @androidx.annotation.OptIn(UnstableApi::class)
+                override fun isCurrentWindowSeekable() = false
+                override fun isCurrentMediaItemSeekable() = false
+                override fun isPlayingAd() = false
+                override fun getCurrentAdGroupIndex() = 0
+                override fun getCurrentAdIndexInAdGroup() = 0
+                override fun getContentDuration() = 0L
+                override fun getContentPosition() = 0L
+                override fun getContentBufferedPosition() = 0L
+                override fun getAudioAttributes() = AudioAttributes.DEFAULT
+                override fun setVolume(volume: Float) {}
+                override fun getVolume() = 1f
+                override fun mute() {}
+                override fun unmute() {}
+                override fun clearVideoSurface() {}
+                override fun clearVideoSurface(surface: android.view.Surface?) {}
+                override fun setVideoSurface(surface: android.view.Surface?) {}
+                override fun setVideoSurfaceHolder(surfaceHolder: android.view.SurfaceHolder?) {}
+                override fun clearVideoSurfaceHolder(surfaceHolder: android.view.SurfaceHolder?) {}
+                override fun setVideoSurfaceView(surfaceView: android.view.SurfaceView?) {}
+                override fun clearVideoSurfaceView(surfaceView: android.view.SurfaceView?) {}
+                override fun setVideoTextureView(textureView: android.view.TextureView?) {}
+                override fun clearVideoTextureView(textureView: android.view.TextureView?) {}
+                override fun getVideoSize() = VideoSize.UNKNOWN
+                override fun getSurfaceSize() = Size.UNKNOWN
+                override fun getCurrentCues() = CueGroup.EMPTY_TIME_ZERO
+                override fun getDeviceInfo() = DeviceInfo.UNKNOWN
+                override fun getDeviceVolume() = 0
+                override fun isDeviceMuted() = false
+                @Deprecated("Deprecated in Java")
+                override fun setDeviceVolume(volume: Int) {}
+                override fun setDeviceVolume(volume: Int, flags: Int) {}
+                @Deprecated("Deprecated in Java")
+                override fun increaseDeviceVolume() {}
+                override fun increaseDeviceVolume(flags: Int) {}
+                @Deprecated("Deprecated in Java")
+                override fun decreaseDeviceVolume() {}
+                override fun decreaseDeviceVolume(flags: Int) {}
+                @Deprecated("Deprecated in Java")
+                override fun setDeviceMuted(muted: Boolean) {}
+                override fun setDeviceMuted(muted: Boolean, flags: Int) {}
+                override fun setAudioAttributes(audioAttributes: AudioAttributes, handleAudioFocus: Boolean) {}
+            })
+                .setCallback(object : MediaSession.Callback {
+                    override fun onMediaButtonEvent(
+                        session: MediaSession,
+                        controllerInfo: MediaSession.ControllerInfo,
+                        intent: Intent
+                    ): Boolean {
+                        try {
+                            val keyEvent = intent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
+                            if (keyEvent != null && keyEvent.action == KeyEvent.ACTION_DOWN) {
+                                when (keyEvent.keyCode) {
+                                    KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                                        Log.d("PodcastPlayerService", "Media button: play/pause -> toggle")
+                                        if (isPlaying) pausePodcast() else playPodcast()
+                                        return true
+                                    }
+                                    KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                                        Log.d("PodcastPlayerService", "Media button: pause")
+                                        pausePodcast()
+                                        return true
+                                    }
+                                    KeyEvent.KEYCODE_MEDIA_NEXT -> {
+                                        Log.d("PodcastPlayerService", "Media button: next -> +15s")
+                                        forward()
+                                        return true
+                                    }
+                                    KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
+                                        Log.d("PodcastPlayerService", "Media button: previous -> -15s")
+                                        rewind()
+                                        return true
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("PodcastPlayerService", "Error handling media button", e)
+                        }
+                        return super.onMediaButtonEvent(session, controllerInfo, intent)
+                    }
+                })
+                .build()
+
+        } catch (e: Exception) {
+            Log.w("PodcastPlayerService", "Could not create MediaSession", e)
+        }
 
         // Starte automatisches Speichern der Position
         startPositionSaving()
@@ -499,7 +706,6 @@ class PodcastPlayerService : Service() {
                 }
             }
 
-            // Summary Notification
             val summaryNotification = NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_menu_info_details)
                 .setContentTitle("Podcast auswählen")
@@ -671,7 +877,154 @@ class PodcastPlayerService : Service() {
             Log.e("PodcastPlayerService", "Error releasing MediaPlayer", e)
         }
 
+        // Release MediaSession
+        try {
+            mediaSession?.release()
+            mediaSession = null
+            Log.d("PodcastPlayerService", "MediaSession released")
+        } catch (e: Exception) {
+            Log.e("PodcastPlayerService", "Error releasing MediaSession", e)
+        }
+
         isPlaying = false
         Log.d("PodcastPlayerService", "PodcastPlayerService destroyed")
+    }
+
+    @UnstableApi
+    private inner class DummyPlayer : Player {
+        override fun getApplicationLooper(): Looper = Looper.getMainLooper()
+        override fun addListener(listener: Player.Listener) {}
+        override fun removeListener(listener: Player.Listener) {}
+        override fun setMediaItems(mediaItems: MutableList<MediaItem>) {}
+        override fun setMediaItems(mediaItems: MutableList<MediaItem>, resetPosition: Boolean) {}
+        override fun setMediaItems(mediaItems: MutableList<MediaItem>, startIndex: Int, startPositionMs: Long) {}
+        override fun setMediaItem(mediaItem: MediaItem) {}
+        override fun setMediaItem(mediaItem: MediaItem, startPositionMs: Long) {}
+        override fun setMediaItem(mediaItem: MediaItem, resetPosition: Boolean) {}
+        override fun addMediaItem(mediaItem: MediaItem) {}
+        override fun addMediaItem(index: Int, mediaItem: MediaItem) {}
+        override fun addMediaItems(mediaItems: MutableList<MediaItem>) {}
+        override fun addMediaItems(index: Int, mediaItems: MutableList<MediaItem>) {}
+        override fun moveMediaItem(currentIndex: Int, newIndex: Int) {}
+        override fun moveMediaItems(fromIndex: Int, toIndex: Int, newIndex: Int) {}
+        override fun replaceMediaItem(index: Int, mediaItem: MediaItem) {}
+        override fun replaceMediaItems(fromIndex: Int, toIndex: Int, mediaItems: MutableList<MediaItem>) {}
+        override fun removeMediaItem(index: Int) {}
+        override fun removeMediaItems(fromIndex: Int, toIndex: Int) {}
+        override fun clearMediaItems() {}
+        override fun isCommandAvailable(command: Int) = false
+        override fun canAdvertiseSession() = true
+        override fun getAvailableCommands() = Player.Commands.EMPTY
+        override fun prepare() {}
+        override fun getPlaybackState() = Player.STATE_IDLE
+        override fun getPlaybackSuppressionReason() = Player.PLAYBACK_SUPPRESSION_REASON_NONE
+        override fun isPlaying() = false
+        override fun getPlayerError(): PlaybackException? = null
+        override fun play() {}
+        override fun pause() {}
+        override fun setPlayWhenReady(playWhenReady: Boolean) {}
+        override fun getPlayWhenReady() = false
+        override fun setRepeatMode(repeatMode: Int) {}
+        override fun getRepeatMode() = Player.REPEAT_MODE_OFF
+        override fun setShuffleModeEnabled(shuffleModeEnabled: Boolean) {}
+        override fun getShuffleModeEnabled() = false
+        override fun isLoading() = false
+        override fun seekToDefaultPosition() {}
+        override fun seekToDefaultPosition(mediaItemIndex: Int) {}
+        override fun seekTo(positionMs: Long) {}
+        override fun seekTo(mediaItemIndex: Int, positionMs: Long) {}
+        override fun getSeekBackIncrement() = 0L
+        override fun seekBack() {}
+        override fun getSeekForwardIncrement() = 0L
+        override fun seekForward() {}
+        override fun hasPreviousMediaItem() = false
+        override fun seekToPreviousMediaItem() {}
+        override fun getMaxSeekToPreviousPosition() = 0L
+        override fun seekToPrevious() {}
+        override fun hasNextMediaItem() = false
+        override fun seekToNextMediaItem() {}
+        override fun seekToNext() {}
+        override fun setPlaybackParameters(playbackParameters: PlaybackParameters) {}
+        override fun setPlaybackSpeed(speed: Float) {}
+        override fun getPlaybackParameters() = PlaybackParameters.DEFAULT
+        override fun stop() {}
+        override fun release() {}
+        override fun getCurrentTracks() = Tracks.EMPTY
+
+        @androidx.annotation.OptIn(UnstableApi::class)
+        override fun getTrackSelectionParameters() = TrackSelectionParameters.DEFAULT_WITHOUT_CONTEXT
+        override fun setTrackSelectionParameters(parameters: TrackSelectionParameters) {}
+        override fun getMediaMetadata() = MediaMetadata.EMPTY
+        override fun getPlaylistMetadata() = MediaMetadata.EMPTY
+        override fun setPlaylistMetadata(mediaMetadata: MediaMetadata) {}
+        override fun getCurrentManifest(): Any? = null
+        override fun getCurrentTimeline() = Timeline.EMPTY
+        override fun getCurrentPeriodIndex() = 0
+        @Deprecated("Deprecated in Java")
+        override fun getCurrentWindowIndex() = 0
+        override fun getCurrentMediaItemIndex() = 0
+        @Deprecated("Deprecated in Java")
+        override fun getNextWindowIndex() = 0
+        override fun getNextMediaItemIndex() = 0
+        @Deprecated("Deprecated in Java")
+        override fun getPreviousWindowIndex() = 0
+        override fun getPreviousMediaItemIndex() = 0
+        override fun getCurrentMediaItem(): MediaItem? = null
+        override fun getMediaItemCount() = 0
+        override fun getMediaItemAt(index: Int): MediaItem = throw IndexOutOfBoundsException()
+        override fun getDuration() = 0L
+        override fun getCurrentPosition() = 0L
+        override fun getBufferedPosition() = 0L
+        override fun getBufferedPercentage() = 0
+        override fun getTotalBufferedDuration() = 0L
+        @Deprecated("Deprecated in Java")
+        override fun isCurrentWindowDynamic() = false
+        override fun isCurrentMediaItemDynamic() = false
+        @Deprecated("Deprecated in Java")
+        override fun isCurrentWindowLive() = false
+        override fun isCurrentMediaItemLive() = false
+        override fun getCurrentLiveOffset() = 0L
+        @Deprecated("Deprecated in Java")
+        override fun isCurrentWindowSeekable() = false
+        override fun isCurrentMediaItemSeekable() = false
+        override fun isPlayingAd() = false
+        override fun getCurrentAdGroupIndex() = 0
+        override fun getCurrentAdIndexInAdGroup() = 0
+        override fun getContentDuration() = 0L
+        override fun getContentPosition() = 0L
+        override fun getContentBufferedPosition() = 0L
+        override fun getAudioAttributes() = AudioAttributes.DEFAULT
+        override fun setVolume(volume: Float) {}
+        override fun getVolume() = 1f
+        override fun mute() {}
+        override fun unmute() {}
+        override fun clearVideoSurface() {}
+        override fun clearVideoSurface(surface: Surface?) {}
+        override fun setVideoSurface(surface: Surface?) {}
+        override fun setVideoSurfaceHolder(surfaceHolder: SurfaceHolder?) {}
+        override fun clearVideoSurfaceHolder(surfaceHolder: SurfaceHolder?) {}
+        override fun setVideoSurfaceView(surfaceView: SurfaceView?) {}
+        override fun clearVideoSurfaceView(surfaceView: SurfaceView?) {}
+        override fun setVideoTextureView(textureView: TextureView?) {}
+        override fun clearVideoTextureView(textureView: TextureView?) {}
+        override fun getVideoSize() = VideoSize.UNKNOWN
+        override fun getSurfaceSize() = Size.UNKNOWN
+        override fun getCurrentCues() = CueGroup.EMPTY_TIME_ZERO
+        override fun getDeviceInfo() = DeviceInfo.UNKNOWN
+        override fun getDeviceVolume() = 0
+        override fun isDeviceMuted() = false
+        @Deprecated("Deprecated in Java")
+        override fun setDeviceVolume(volume: Int) {}
+        override fun setDeviceVolume(volume: Int, flags: Int) {}
+        @Deprecated("Deprecated in Java")
+        override fun increaseDeviceVolume() {}
+        override fun increaseDeviceVolume(flags: Int) {}
+        @Deprecated("Deprecated in Java")
+        override fun decreaseDeviceVolume() {}
+        override fun decreaseDeviceVolume(flags: Int) {}
+        @Deprecated("Deprecated in Java")
+        override fun setDeviceMuted(muted: Boolean) {}
+        override fun setDeviceMuted(muted: Boolean, flags: Int) {}
+        override fun setAudioAttributes(audioAttributes: AudioAttributes, handleAudioFocus: Boolean) {}
     }
 }

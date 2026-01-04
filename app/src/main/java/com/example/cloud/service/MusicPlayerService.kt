@@ -20,6 +20,7 @@ import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.TextureView
+import android.view.KeyEvent
 import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
@@ -124,6 +125,44 @@ class MusicPlayerService : MediaSessionService() {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
             )
+            .setCallback(object : MediaSession.Callback {
+                override fun onMediaButtonEvent(
+                    session: MediaSession,
+                    controllerInfo: MediaSession.ControllerInfo,
+                    intent: Intent
+                ): Boolean {
+                    try {
+                        val keyEvent = intent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
+                        if (keyEvent != null && keyEvent.action == KeyEvent.ACTION_DOWN) {
+                            when (keyEvent.keyCode) {
+                                KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                                    Log.d("MusicPlayerService", "Media button: play/pause -> toggle")
+                                    if (isPlaying) pauseMusic() else playMusic()
+                                    return true
+                                }
+                                KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                                    Log.d("MusicPlayerService", "Media button: pause")
+                                    pauseMusic()
+                                    return true
+                                }
+                                KeyEvent.KEYCODE_MEDIA_NEXT -> {
+                                    Log.d("MusicPlayerService", "Media button: next")
+                                    nextSong()
+                                    return true
+                                }
+                                KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
+                                    Log.d("MusicPlayerService", "Media button: previous")
+                                    previousSong()
+                                    return true
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MusicPlayerService", "Error handling media button event", e)
+                    }
+                    return super.onMediaButtonEvent(session, controllerInfo, intent)
+                }
+            })
             .build()
 
         startForeground(NOTIFICATION_ID, createNotification(), getServiceForegroundType())
@@ -139,6 +178,9 @@ class MusicPlayerService : MediaSessionService() {
             ACTION_NEXT -> nextSong()
             ACTION_PREVIOUS -> previousSong()
             ACTION_TOGGLE_REPEAT -> toggleRepeat()
+            "ACTION_NOTIFICATION_DELETED" -> {
+                stopSelf()
+            }
         }
         return START_STICKY
     }
@@ -588,12 +630,23 @@ class MusicPlayerService : MediaSessionService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val deleteIntent = Intent(this, PodcastPlayerService::class.java).apply {
+            action = "ACTION_NOTIFICATION_DELETED"
+        }
+        val deletePendingIntent = PendingIntent.getService(
+            this,
+            4,
+            deleteIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle("🎵 Musik Player")
             .setContentText("$currentSong (${currentSongIndex + 1}/${playlist.size}) ${if (isRepeatEnabled) "🔁" else ""}")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setOngoing(true)
+            .setDeleteIntent(deletePendingIntent)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(toggleRepeatPendingIntent)
 
