@@ -71,7 +71,6 @@ fun BrowserTabContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Öffnen Button
         Button(
             onClick = { loadAndOpenUrl(url) },
             colors = ButtonDefaults.buttonColors(
@@ -87,7 +86,6 @@ fun BrowserTabContent(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Quick Links
         Text("Schnellzugriff:", color = Color.Gray, fontSize = 14.sp)
         Spacer(modifier = Modifier.height(16.dp))
         
