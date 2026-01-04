@@ -1,7 +1,6 @@
 package com.example.cloud.service
 
 import android.Manifest
-//noinspection SuspiciousImport
 import android.R
 import android.app.Activity
 import android.app.AlarmManager
@@ -46,7 +45,9 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import androidx.core.net.toUri
+import com.example.cloud.mediarecorder.AudioRecorder
 import com.example.cloud.SupabaseConfig
+import com.example.cloud.musicstatstab.MusicStatsTabContent
 import com.example.cloud.weathertab.fetchWeatherForecast
 import com.example.cloud.weathertab.getLastKnownLocation
 import com.example.cloud.weathertab.weathernot
@@ -114,6 +115,15 @@ class QuietHoursNotificationService : Service() {
         private const val ACTION_PREV_GALLERY_IMAGE = "com.example.cloud.ACTION_PREV_GALLERY_IMAGE"
         private const val GALLERY_CHANNEL_ID = "gallery_channel"
 
+        private const val SSN_CHANNEL_ID = "show_simple_not_channel"
+
+        private const val ACTION_CONFIRM_DELETE_IMAGE =
+            "com.example.cloud.ACTION_CONFIRM_DELETE_IMAGE"
+        private const val ACTION_DELETE_IMAGE = "com.example.cloud.ACTION_DELETE_IMAGE"
+        private const val ACTION_CANCEL_DELETE = "com.example.cloud.ACTION_CANCEL_DELETE"
+        private const val EXTRA_IMAGE_INDEX = "extra_image_index"
+        private const val DELETE_CONFIRMATION_CHANNEL_ID = "delete_confirmation_channel"
+
         fun startService(context: Context) {
             val intent = Intent(context, QuietHoursNotificationService::class.java)
             context.startForegroundService(intent)
@@ -148,6 +158,11 @@ class QuietHoursNotificationService : Service() {
     private var currentVoiceNoteIndex = 0
     private var voiceNoteFiles: List<File> = emptyList()
     private var currentSenderForVoiceNote: String? = null
+
+    // Audio recorder fields
+    private var audioRecorder: AudioRecorder? = null
+    private var currentRecordingFile: File? = null
+
     private var galleryImages: List<android.net.Uri> = emptyList()
     private var currentGalleryIndex = 0
 
@@ -300,10 +315,13 @@ class QuietHoursNotificationService : Service() {
             val messagesList =
                 WhatsAppNotificationListener.messagesByContact.getOrPut(sender) { mutableListOf() }
 
-            val isDuplicate = messagesList.takeLast(3).any { existingMsg ->
-                existingMsg.text == messageText &&
-                        existingMsg.isOwnMessage &&
-                        (System.currentTimeMillis() - existingMsg.timestamp) < 2000
+            val lastMessage = messagesList.lastOrNull()
+            val isDuplicate = if (lastMessage != null) {
+                messagesList.takeLast(3).any { existingMsg ->
+                    existingMsg.text == messageText
+                }
+            } else {
+                false
             }
 
             if (!isDuplicate) {
@@ -366,7 +384,6 @@ class QuietHoursNotificationService : Service() {
         }
     }
 
-
     private fun getAvailableCommands(): List<Command> {
         return listOf(
             Command(
@@ -381,6 +398,7 @@ class QuietHoursNotificationService : Service() {
                 aliases = listOf("m", "play", "player", "musik"),
                 description = "Startet Musik Player"
             ) {
+                PodcastPlayerService.stopService(this)
                 restartMusicPlayer()
             },
             Command(
@@ -388,8 +406,50 @@ class QuietHoursNotificationService : Service() {
                 aliases = listOf("pd", "pc", "Podcast"),
                 description = "Startet PodcastPlayerService"
             ) {
+                MusicPlayerService.stopService(this)
                 PodcastPlayerService.startService(this)
                 PodcastPlayerService.sendPlayAction(this)
+            },
+            Command(
+                name = "managepodcast",
+                aliases = listOf("mpd", "pd", "ManagePodcast"),
+                description = "Startet PodcastPlayerService"
+            ) {
+                PodcastPlayerService.managePodcast(this)
+            },
+            Command(
+                name = "queue",
+                aliases = listOf("q", "warteschlange", "playlist"),
+                description = "Zeigt Podcast-Warteschlange"
+            ) {
+                showPodcastQueue()
+            },
+            Command(
+                name = "qadd",
+                aliases = listOf("qa", "queueadd", "addqueue"),
+                description = "Fügt Podcast zur Queue hinzu (Syntax: qadd [nummer])"
+            ) {
+                showSimpleNotification(
+                    "ℹ️ Queue Add",
+                    "Syntax: qadd [podcast-nummer]\nVerwende 'podcast' um Nummern zu sehen"
+                )
+            },
+            Command(
+                name = "qremove",
+                aliases = listOf("qr", "queueremove", "removequeue"),
+                description = "Entfernt Podcast aus Queue (Syntax: qremove [position])"
+            ) {
+                showSimpleNotification(
+                    "ℹ️ Queue Remove",
+                    "Syntax: qremove [position in queue 1-X]"
+                )
+            },
+            Command(
+                name = "qclear",
+                aliases = listOf("qc", "queueclear", "clearqueue"),
+                description = "Leert die komplette Queue"
+            ) {
+                clearPodcastQueue()
             },
             Command(
                 name = "cloud",
@@ -404,6 +464,17 @@ class QuietHoursNotificationService : Service() {
                 description = "Spielt Voice Notes ab"
             ) {
                 playLatestVoiceNote("Manual Command")
+            },
+            Command(
+                name = "record",
+                aliases = listOf("rec", "aufnahme", "audiorec", "recording"),
+                description = "Startet/Stoppt Audioaufnahme (Syntax: record start|stop)"
+            ) {
+                showSimpleNotification(
+                    "ℹ️ Aufnahme",
+                    "Verwende: record start | record stop",
+                    20.seconds
+                )
             },
             Command(
                 name = "help",
@@ -461,18 +532,13 @@ class QuietHoursNotificationService : Service() {
             },
             Command(
                 name = "stopmusic",
-                aliases = listOf("stopm", "musicstop"),
+                aliases = listOf("stopm", "musicstop", "sm"),
                 description = "Stoppt NUR Musik Player Service"
             ) {
                 try {
                     val musicIntent = Intent(this, MusicPlayerService::class.java)
 
                     stopService(musicIntent)
-
-                    showSimpleNotification(
-                        "✅ Musik Player gestoppt",
-                        "Nur Music Player wurde gestoppt"
-                    )
                 } catch (e: Exception) {
                     Log.e("QuietHoursService", "Error in stopmusic command", e)
                     showSimpleNotification(
@@ -483,20 +549,13 @@ class QuietHoursNotificationService : Service() {
             },
             Command(
                 name = "stoppodcast",
-                aliases = listOf("stopp", "podcaststop"),
+                aliases = listOf("stopp", "podcaststop", "sp"),
                 description = "Stoppt NUR Podcast Player Service"
             ) {
                 try {
-                    Log.d("QuietHoursService", "=== STOPPODCAST COMMAND STARTED ===")
-
                     val podcastIntent = Intent(this, PodcastPlayerService::class.java)
 
                     stopService(podcastIntent)
-
-                    showSimpleNotification(
-                        "✅ Podcast Player gestoppt",
-                        "Nur Podcast Player wurde gestoppt"
-                    )
                 } catch (e: Exception) {
                     Log.e("QuietHoursService", "Error in stoppodcast command", e)
                     showSimpleNotification(
@@ -552,13 +611,6 @@ class QuietHoursNotificationService : Service() {
                 showGallery()
             },
             Command(
-                name = "uploadsnap",
-                aliases = listOf("snap", "upload", "snapupload"),
-                description = "Lädt neue Snap-Bilder zu Supabase hoch"
-            ) {
-                uploadSnapImages()
-            },
-            Command(
                 name = "setdowntime",
                 aliases = listOf("set", "dt", "setdr"),
                 description = "Lege Downtime fest (setdowntime [Uhrzeit])"
@@ -599,6 +651,13 @@ class QuietHoursNotificationService : Service() {
                     "ℹ️ Sound Befehle",
                     "sound vibrate - Nur Vibration\nsound silent - Stumm\nsound normal - Normal mit Ton"
                 )
+            },
+            Command(
+                name = "clearpodcasts",
+                aliases = listOf("cp", "clearpod", "removepod"),
+                description = "Löscht alle Podcast-Auswahl Notifications"
+            ) {
+                clearPodcastSelectionNotifications()
             },
         )
     }
@@ -729,13 +788,10 @@ class QuietHoursNotificationService : Service() {
                 val commandText = RemoteInput.getResultsFromIntent(intent)
                     ?.getCharSequence("key_command_input")?.toString()
 
-                val notification = createNotification(isCurrentlyQuietHours)
-                startForeground(NOTIFICATION_ID, notification)
+                startForeground(NOTIFICATION_ID, createNotification(isCurrentlyQuietHours))
 
                 if (commandText != null && context != null) {
-                    Handler(Looper.getMainLooper()).post @RequiresPermission(
-                        Manifest.permission.BLUETOOTH_CONNECT
-                    ) {
+                    Handler(Looper.getMainLooper()).post {
                         executeCommand(commandText.trim())
                     }
                 }
@@ -743,7 +799,6 @@ class QuietHoursNotificationService : Service() {
         }
     }
 
-    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     @OptIn(DelicateCoroutinesApi::class)
     private fun executeCommand(commandText: String) {
         val actualCommand = when (commandText) {
@@ -820,6 +875,27 @@ class QuietHoursNotificationService : Service() {
                 return
             }
 
+            "record", "rec", "aufnahme", "audiorec", "recording" -> {
+                if (argument != null) {
+                    when (argument.lowercase()) {
+                        "start" -> startAudioRecording()
+                        "stop" -> stopAudioRecording()
+                        else -> showSimpleNotification(
+                            "❌ Fehler",
+                            "Syntax: record start | record stop",
+                            20.seconds
+                        )
+                    }
+                } else {
+                    showSimpleNotification(
+                        "ℹ️ Aufnahme",
+                        "Verwende: record start | record stop",
+                        20.seconds
+                    )
+                }
+                return
+            }
+
             "saved", "info", "gespeichert", "data" -> {
                 showSavedReplyInfo()
                 return
@@ -827,10 +903,10 @@ class QuietHoursNotificationService : Service() {
 
             "weather", "w", "wetter", "forecast" -> {
                 if (argument != null) {
-                    val parts = argument.split(" ")
-                    if (parts.size == 2) {
-                        val dayNum = parts[0].toIntOrNull()
-                        val hour = parts[1]
+                    val parts = actualCommand.split(" ")
+                    if (parts.size == 3) {
+                        val dayNum = parts[1].toIntOrNull()
+                        val hour = parts[2]
 
                         val day = when (dayNum) {
                             0 -> "heute"
@@ -966,6 +1042,55 @@ class QuietHoursNotificationService : Service() {
                 }
                 return
             }
+
+            "qadd", "qa", "queueadd", "addqueue" -> {
+                if (argument != null) {
+                    val index = argument.toIntOrNull()
+                    if (index != null && index > 0) {
+                        addPodcastToQueue(index - 1) // -1 weil User 1-basiert eingibt
+                    } else {
+                        showSimpleNotification(
+                            "❌ Ungültige Nummer",
+                            "Syntax: qadd [podcast-nummer]",
+                            20.seconds
+                        )
+                    }
+                } else {
+                    showSimpleNotification(
+                        "ℹ️ Verwendung",
+                        "Syntax: qadd [podcast-nummer]\nVerwende 'podcast' um Nummern zu sehen",
+                        20.seconds
+                    )
+                }
+                return
+            }
+
+            "qremove", "qr", "queueremove", "removequeue" -> {
+                if (argument != null) {
+                    val position = argument.toIntOrNull()
+                    if (position != null && position > 0) {
+                        removePodcastFromQueue(position - 1)
+                    } else {
+                        showSimpleNotification(
+                            "❌ Ungültige Position",
+                            "Syntax: qremove [position]",
+                            20.seconds
+                        )
+                    }
+                } else {
+                    showSimpleNotification(
+                        "ℹ️ Verwendung",
+                        "Syntax: qremove [position]\nVerwende 'queue' um Positionen zu sehen",
+                        20.seconds
+                    )
+                }
+                return
+            }
+
+            "qclear", "qc", "queueclear", "clearqueue" -> {
+                clearPodcastQueue()
+                return
+            }
         }
 
         val commands = getAvailableCommands()
@@ -1094,7 +1219,12 @@ class QuietHoursNotificationService : Service() {
                         }
 
                         ACTION_CHANGE_END -> {
-                            prefs.edit(commit = true) { putString("saved_number", timeValue.toString()) }
+                            prefs.edit(commit = true) {
+                                putString(
+                                    "saved_number",
+                                    timeValue.toString()
+                                )
+                            }
                             showSimpleNotification(
                                 "✓ Endzeit geändert",
                                 "Neue Endzeit: $timeValue:00 Uhr"
@@ -1579,6 +1709,26 @@ class QuietHoursNotificationService : Service() {
             ACTION_PREV_GALLERY_IMAGE -> {
                 showPreviousGalleryImage()
             }
+
+            ACTION_CONFIRM_DELETE_IMAGE -> {
+                val imageIndex = intent.getIntExtra(EXTRA_IMAGE_INDEX, -1)
+                if (imageIndex >= 0) {
+                    showDeleteConfirmation(imageIndex)
+                }
+            }
+
+            ACTION_DELETE_IMAGE -> {
+                val imageIndex = intent.getIntExtra(EXTRA_IMAGE_INDEX, -1)
+                if (imageIndex >= 0) {
+                    deleteGalleryImage(imageIndex)
+                }
+            }
+
+            ACTION_CANCEL_DELETE -> {
+                val notificationManager = getSystemService(NotificationManager::class.java)
+                notificationManager.cancel(80000)
+                showSimpleNotification("❌ Abgebrochen", "Bild wurde nicht gelöscht")
+            }
         }
         return START_STICKY
     }
@@ -1595,6 +1745,13 @@ class QuietHoursNotificationService : Service() {
             voiceNotePlayer = null
         } catch (e: Exception) {
             Log.e("QuietHoursService", "Error releasing MediaPlayer", e)
+        }
+
+        try {
+            // Ensure any running audio recording is stopped
+            stopAudioRecording()
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "Error stopping audio recorder on destroy", e)
         }
 
         try {
@@ -1690,6 +1847,28 @@ class QuietHoursNotificationService : Service() {
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         notificationManager.createNotificationChannel(galleryChannel)
+
+        val showsimplenotChannel = NotificationChannel(
+            SSN_CHANNEL_ID,
+            "Show Simple Notification",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Einfache Benachrichtigung"
+            setShowBadge(false)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        }
+        notificationManager.createNotificationChannel(showsimplenotChannel)
+
+        val deleteConfirmationChannel = NotificationChannel(
+            DELETE_CONFIRMATION_CHANNEL_ID,
+            "Löschbestätigungen",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Bestätigungen zum Löschen von Bildern"
+            setShowBadge(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        }
+        notificationManager.createNotificationChannel(deleteConfirmationChannel)
     }
 
     private fun isQuietHoursNow(): Boolean {
@@ -1729,7 +1908,9 @@ class QuietHoursNotificationService : Service() {
             .setOngoing(true)
             .setDeleteIntent(deletePendingIntent)
             .setContentIntent(launchCloudPendingIntent)
+            .setRequestPromotedOngoing(true)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setGroup("Ruhezeit")
 
         if (isQuietHours) {
             builder
@@ -1905,7 +2086,6 @@ class QuietHoursNotificationService : Service() {
     fun showUnreadMessages() {
         val replyActions = WhatsAppNotificationListener.replyActions
         val messagesByContact = WhatsAppNotificationListener.messagesByContact
-
         val mePerson = Person.Builder()
             .setName("Du")
             .setKey("me")
@@ -1913,7 +2093,6 @@ class QuietHoursNotificationService : Service() {
 
         try {
             val unreadMessages = WhatsAppNotificationListener.getMessages()
-
             if (unreadMessages.isEmpty()) {
                 Log.w("QuietHoursService", "No unread messages found")
                 showSimpleNotification(
@@ -1924,16 +2103,14 @@ class QuietHoursNotificationService : Service() {
             }
 
             val notificationManager = getSystemService(NotificationManager::class.java)
-
             messagesByContact.forEach { (sender, msgs) ->
                 val notificationId = sender.hashCode()
-
                 val senderPerson = Person.Builder()
                     .setName(sender)
                     .setKey(sender)
                     .build()
 
-                val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+                val builder = NotificationCompat.Builder(this, "whatsapp_listener_channel")
                     .setSmallIcon(R.drawable.stat_notify_chat)
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
                     .setAutoCancel(false)
@@ -1942,16 +2119,57 @@ class QuietHoursNotificationService : Service() {
                 val messagingStyle = NotificationCompat.MessagingStyle(mePerson)
                     .setConversationTitle(sender)
 
+                var partIndex = 0 // Globaler Counter für alle Parts dieses Senders
+
                 msgs.takeLast(10).forEach { msg ->
                     val timeText =
                         SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(msg.timestamp))
-                    messagingStyle.addMessage(
-                        NotificationCompat.MessagingStyle.Message(
-                            "${msg.text} • $timeText",
-                            msg.timestamp,
-                            if (msg.isOwnMessage) mePerson else senderPerson
+
+                    val maxMessageLength = 200
+                    val messageText = msg.text
+
+                    if (messageText.length > maxMessageLength) {
+                        val parts = messageText.chunked(maxMessageLength)
+                        val totalParts = parts.size
+
+                        parts.forEachIndexed { index, part ->
+                            val partNotificationId = notificationId + 10000 + partIndex
+                            partIndex++
+
+                            val contentText = part.take(100) + if (part.length > 100) "..." else ""
+
+                            val partNotification = NotificationCompat.Builder(this, CHANNEL_ID)
+                                .setSmallIcon(R.drawable.stat_notify_chat)
+                                .setContentTitle("💬 $sender (Teil ${index + 1}/$totalParts)")
+                                .setContentText(contentText)
+                                .setStyle(
+                                    NotificationCompat.BigTextStyle()
+                                        .bigText(part)
+                                        .setBigContentTitle("💬 $sender (Teil ${index + 1}/$totalParts)")
+                                        .setSummaryText("⏰ $timeText")
+                                )
+                                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                                .setGroup("whatsapp_long_$sender")
+                                .setAutoCancel(true)
+                                .build()
+
+                            if (ContextCompat.checkSelfPermission(
+                                    this,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) == PackageManager.PERMISSION_GRANTED
+                            ) {
+                                notificationManager.notify(partNotificationId, partNotification)
+                            }
+                        }
+                    } else {
+                        messagingStyle.addMessage(
+                            NotificationCompat.MessagingStyle.Message(
+                                "$messageText • $timeText",
+                                msg.timestamp,
+                                if (msg.isOwnMessage) mePerson else senderPerson
+                            )
                         )
-                    )
+                    }
                 }
 
                 builder.setStyle(messagingStyle)
@@ -1986,15 +2204,13 @@ class QuietHoursNotificationService : Service() {
 
                     builder.addAction(replyAction)
                 } else {
-                    Log.w("QuietHoursService", "  No reply action available for $sender")
+                    Log.w("QuietHoursService", "No reply action available for $sender")
                 }
 
                 val messagesWithImages = msgs.filter { it.imageUri != null }
-
                 if (messagesWithImages.isNotEmpty()) {
                     messagesWithImages.forEachIndexed { index, msg ->
                         val imageNotificationId = notificationId + 1000 + index
-
                         val imageNotification = NotificationCompat.Builder(this, CHANNEL_ID)
                             .setSmallIcon(R.drawable.ic_menu_gallery)
                             .setContentTitle("📷 Bild von $sender")
@@ -2034,20 +2250,21 @@ class QuietHoursNotificationService : Service() {
                         if (ContextCompat.checkSelfPermission(
                                 this,
                                 Manifest.permission.POST_NOTIFICATIONS
-                            )
-                            == PackageManager.PERMISSION_GRANTED
+                            ) == PackageManager.PERMISSION_GRANTED
                         ) {
                             notificationManager.notify(imageNotificationId, imageNotification)
                         }
                     }
                 }
 
-                if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                    == PackageManager.PERMISSION_GRANTED
+                if (ContextCompat.checkSelfPermission(
+                        this,
+                        Manifest.permission.POST_NOTIFICATIONS
+                    ) == PackageManager.PERMISSION_GRANTED
                 ) {
                     notificationManager.notify(notificationId, builder.build())
                 } else {
-                    Log.e("QuietHoursService", "  ✗ Missing POST_NOTIFICATIONS permission")
+                    Log.e("QuietHoursService", "✗ Missing POST_NOTIFICATIONS permission")
                 }
             }
         } catch (e: Exception) {
@@ -2103,16 +2320,57 @@ class QuietHoursNotificationService : Service() {
         val messagingStyle = NotificationCompat.MessagingStyle(mePerson)
             .setConversationTitle(sender)
 
+        var partIndex = 0
+
         messages.takeLast(10).forEach { msg ->
             val timeText =
                 SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(msg.timestamp))
-            messagingStyle.addMessage(
-                NotificationCompat.MessagingStyle.Message(
-                    "${msg.text} • $timeText",
-                    msg.timestamp,
-                    if (msg.isOwnMessage) mePerson else senderPerson
+            val maxMessageLength = 250
+            val messageText = msg.text
+
+            if (messageText.length > maxMessageLength) {
+                val parts = messageText.chunked(maxMessageLength)
+                val totalParts = parts.size
+
+                parts.forEachIndexed { index, part ->
+                    val partNotificationId = notificationId + 10000 + partIndex
+                    partIndex++
+
+                    val contentText = part.take(100) + if (part.length > 100) "..." else ""
+
+                    val partNotification = NotificationCompat.Builder(this, CHANNEL_ID)
+                        .setSmallIcon(R.drawable.stat_notify_chat)
+                        .setContentTitle("💬 $sender (Teil ${index + 1}/$totalParts)")
+                        .setContentText(contentText)
+                        .setStyle(
+                            NotificationCompat.BigTextStyle()
+                                .bigText(part)
+                                .setBigContentTitle("💬 $sender (Teil ${index + 1}/$totalParts)")
+                                .setSummaryText("⏰ $timeText")
+                        )
+                        .setPriority(NotificationCompat.PRIORITY_HIGH)
+                        .setGroup("whatsapp_long_$sender")
+                        .setAutoCancel(true)
+                        .build()
+
+                    if (ContextCompat.checkSelfPermission(
+                            this,
+                            Manifest.permission.POST_NOTIFICATIONS
+                        ) == PackageManager.PERMISSION_GRANTED
+                    ) {
+                        val notificationManager = getSystemService(NotificationManager::class.java)
+                        notificationManager.notify(partNotificationId, partNotification)
+                    }
+                }
+            } else {
+                messagingStyle.addMessage(
+                    NotificationCompat.MessagingStyle.Message(
+                        "$messageText • $timeText",
+                        msg.timestamp,
+                        if (msg.isOwnMessage) mePerson else senderPerson
+                    )
                 )
-            )
+            }
         }
 
         builder.setStyle(messagingStyle)
@@ -2171,11 +2429,12 @@ class QuietHoursNotificationService : Service() {
     ) {
         val notificationId = System.currentTimeMillis().toInt()
 
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(this, SSN_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setGroup("SSN")
             .build()
 
         val notificationManager = getSystemService(NotificationManager::class.java)
@@ -2235,10 +2494,13 @@ class QuietHoursNotificationService : Service() {
             val messagesList =
                 WhatsAppNotificationListener.messagesByContact.getOrPut(sender) { mutableListOf() }
 
-            val isDuplicate = messagesList.takeLast(3).any { existingMsg ->
-                existingMsg.text == messageText &&
-                        existingMsg.isOwnMessage &&
-                        (System.currentTimeMillis() - existingMsg.timestamp) < 2000
+            val lastMessage = messagesList.lastOrNull()
+            val isDuplicate = if (lastMessage != null) {
+                messagesList.takeLast(3).any { existingMsg ->
+                    existingMsg.text == messageText && messageText.length > 5
+                }
+            } else {
+                false
             }
 
             if (!isDuplicate) {
@@ -2252,7 +2514,6 @@ class QuietHoursNotificationService : Service() {
             }
 
             updateChatNotification(sender)
-
         } catch (e: Exception) {
             Log.e("QuietHoursService", "Error handling sent message", e)
             e.printStackTrace()
@@ -2278,16 +2539,59 @@ class QuietHoursNotificationService : Service() {
 
             val messages = WhatsAppNotificationListener.messagesByContact[sender] ?: emptyList()
 
+            var partIndex = 0
+
             messages.takeLast(10).forEach { msg ->
                 val timeText =
                     SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(msg.timestamp))
-                messagingStyle.addMessage(
-                    NotificationCompat.MessagingStyle.Message(
-                        "${msg.text} • $timeText",
-                        msg.timestamp,
-                        if (msg.isOwnMessage) mePerson else senderPerson
+
+                val maxMessageLength = 250
+                val messageText = msg.text
+
+                if (messageText.length > maxMessageLength) {
+                    val parts = messageText.chunked(maxMessageLength)
+                    val totalParts = parts.size
+
+                    parts.forEachIndexed { index, part ->
+                        val partNotificationId = notificationId + 10000 + partIndex
+                        partIndex++
+
+                        val contentText = part.take(100) + if (part.length > 100) "..." else ""
+
+                        val partNotification = NotificationCompat.Builder(this, CHANNEL_ID)
+                            .setSmallIcon(R.drawable.stat_notify_chat)
+                            .setContentTitle("💬 $sender (Teil ${index + 1}/$totalParts)")
+                            .setContentText(contentText)
+                            .setStyle(
+                                NotificationCompat.BigTextStyle()
+                                    .bigText(part)
+                                    .setBigContentTitle("💬 $sender (Teil ${index + 1}/$totalParts)")
+                                    .setSummaryText("⏰ $timeText")
+                            )
+                            .setPriority(NotificationCompat.PRIORITY_HIGH)
+                            .setGroup("whatsapp_long_$sender")
+                            .setAutoCancel(true)
+                            .build()
+
+                        if (ContextCompat.checkSelfPermission(
+                                this,
+                                Manifest.permission.POST_NOTIFICATIONS
+                            ) == PackageManager.PERMISSION_GRANTED
+                        ) {
+                            val notificationManager =
+                                getSystemService(NotificationManager::class.java)
+                            notificationManager.notify(partNotificationId, partNotification)
+                        }
+                    }
+                } else {
+                    messagingStyle.addMessage(
+                        NotificationCompat.MessagingStyle.Message(
+                            "$messageText • $timeText",
+                            msg.timestamp,
+                            if (msg.isOwnMessage) mePerson else senderPerson
+                        )
                     )
-                )
+                }
             }
 
             val newRemoteInput = RemoteInput.Builder("key_text_reply")
@@ -2351,18 +2655,7 @@ class QuietHoursNotificationService : Service() {
 
     private fun restartMusicPlayer() {
         try {
-            // Service stoppen
-            MusicPlayerService.stopService(this)
-
-            // Kurz warten und dann mit Play-Action neu starten
-            Handler(Looper.getMainLooper()).postDelayed({
-                MusicPlayerService.startAndPlay(this)
-
-                showSimpleNotification(
-                    "🎵 Musik Player",
-                    "Musik Player wurde neu gestartet"
-                )
-            }, 500)
+            MusicPlayerService.startAndPlay(this)
         } catch (e: Exception) {
             Log.e("QuietHoursService", "Error restarting music player", e)
             showSimpleNotification(
@@ -2552,6 +2845,60 @@ class QuietHoursNotificationService : Service() {
             notificationManager.cancel(40000)
         } catch (e: Exception) {
             Log.e("QuietHoursService", "Error stopping voice note", e)
+        }
+    }
+
+    // Audio recording helpers
+    private fun startAudioRecording() {
+        try {
+            if (audioRecorder != null) {
+                showSimpleNotification("⚠️ Aufnahme läuft", "Es läuft bereits eine Aufnahme")
+                return
+            }
+
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                showSimpleNotification(
+                    "❌ Berechtigung fehlt",
+                    "RECORD_AUDIO fehlt. Bitte gewähre die Berechtigung in den Einstellungen."
+                )
+                return
+            }
+
+            val dir = getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: filesDir
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            val outFile = File(dir, "rec_${timestamp}.m4a")
+
+            audioRecorder = AudioRecorder()
+            audioRecorder?.startRecording(outFile)
+            currentRecordingFile = outFile
+
+            showSimpleNotification("✅ Aufnahme gestartet", "Datei: ${outFile.name}")
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "Error starting audio recording", e)
+            showSimpleNotification("❌ Fehler", "Aufnahme konnte nicht gestartet werden")
+            audioRecorder = null
+            currentRecordingFile = null
+        }
+    }
+
+    private fun stopAudioRecording() {
+        try {
+            if (audioRecorder == null) {
+                showSimpleNotification("ℹ️ Keine Aufnahme", "Es läuft keine Aufnahme")
+                return
+            }
+
+            audioRecorder?.stopRecording()
+            audioRecorder = null
+
+            val filename = currentRecordingFile?.name ?: "unbekannt"
+            showSimpleNotification("✅ Aufnahme beendet", "Datei gespeichert: $filename")
+            currentRecordingFile = null
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "Error stopping audio recording", e)
+            showSimpleNotification("❌ Fehler", "Aufnahme konnte nicht gestoppt werden")
         }
     }
 
@@ -2857,7 +3204,7 @@ class QuietHoursNotificationService : Service() {
                     )
                     images.add(uri)
 
-                    if (images.size >= 100) break
+                    if (images.size >= 300) break
                 }
             }
 
@@ -2884,14 +3231,139 @@ class QuietHoursNotificationService : Service() {
         }
     }
 
+    private fun showDeleteConfirmation(imageIndex: Int) {
+        try {
+            if (galleryImages.isEmpty() || imageIndex < 0 || imageIndex >= galleryImages.size) {
+                showSimpleNotification("❌ Fehler", "Ungültiger Bildindex")
+                return
+            }
+
+            val imageUri = galleryImages[imageIndex]
+
+            // Lade Vorschaubild
+            val bitmap = try {
+                android.graphics.ImageDecoder.decodeBitmap(
+                    android.graphics.ImageDecoder.createSource(contentResolver, imageUri)
+                )
+            } catch (e: Exception) {
+                null
+            }
+
+            val deleteIntent = Intent(this, QuietHoursNotificationService::class.java).apply {
+                action = ACTION_DELETE_IMAGE
+                putExtra(EXTRA_IMAGE_INDEX, imageIndex)
+            }
+            val deletePendingIntent = PendingIntent.getService(
+                this, 81, deleteIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val cancelIntent = Intent(this, QuietHoursNotificationService::class.java).apply {
+                action = ACTION_CANCEL_DELETE
+            }
+            val cancelPendingIntent = PendingIntent.getService(
+                this, 82, cancelIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val builder = NotificationCompat.Builder(this, DELETE_CONFIRMATION_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_delete)
+                .setContentTitle("🗑️ Bild löschen?")
+                .setContentText("Bild ${imageIndex + 1} von ${galleryImages.size} wirklich löschen?")
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .addAction(R.drawable.ic_delete, "Löschen", deletePendingIntent)
+                .addAction(R.drawable.ic_menu_close_clear_cancel, "Abbrechen", cancelPendingIntent)
+
+            // Füge Vorschaubild hinzu falls vorhanden
+            if (bitmap != null) {
+                builder.setLargeIcon(bitmap)
+                    .setStyle(
+                        NotificationCompat.BigPictureStyle()
+                            .bigPicture(bitmap)
+                            .bigLargeIcon(null as android.graphics.Bitmap?)
+                    )
+            }
+
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                == PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationManager.notify(80000, builder.build())
+            }
+
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "Error showing delete confirmation", e)
+            showSimpleNotification(
+                "❌ Fehler",
+                "Löschbestätigung konnte nicht angezeigt werden: ${e.message}",
+                20.seconds
+            )
+        }
+    }
+
+    private fun deleteGalleryImage(imageIndex: Int) {
+        try {
+            if (galleryImages.isEmpty() || imageIndex < 0 || imageIndex >= galleryImages.size) {
+                showSimpleNotification("❌ Fehler", "Ungültiger Bildindex")
+                return
+            }
+
+            val imageUri = galleryImages[imageIndex]
+
+            // Versuche Bild zu löschen
+            val deleted = contentResolver.delete(imageUri, null, null)
+
+            if (deleted > 0) {
+                // Entferne aus Liste
+                val mutableList = galleryImages.toMutableList()
+                mutableList.removeAt(imageIndex)
+                galleryImages = mutableList
+
+                // Lösche Bestätigungsnotification
+                val notificationManager = getSystemService(NotificationManager::class.java)
+                notificationManager.cancel(80000)
+
+                showSimpleNotification(
+                    "✅ Gelöscht",
+                    "Bild wurde erfolgreich gelöscht (${galleryImages.size} verbleibend)"
+                )
+
+                // Zeige nächstes Bild oder schließe Galerie
+                if (galleryImages.isNotEmpty()) {
+                    // Passe Index an wenn nötig
+                    if (currentGalleryIndex >= galleryImages.size) {
+                        currentGalleryIndex = galleryImages.size - 1
+                    }
+                    showGalleryImage(currentGalleryIndex)
+                } else {
+                    // Keine Bilder mehr, schließe Galerie-Notification
+                    notificationManager.cancel(70000)
+                    showSimpleNotification("📷 Galerie leer", "Alle Bilder wurden gelöscht")
+                }
+
+            } else {
+                showSimpleNotification(
+                    "❌ Löschen fehlgeschlagen",
+                    "Bild konnte nicht gelöscht werden (keine Berechtigung?)",
+                    20.seconds
+                )
+            }
+
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "Error deleting gallery image", e)
+            showSimpleNotification(
+                "❌ Fehler",
+                "Fehler beim Löschen: ${e.message}",
+                20.seconds
+            )
+        }
+    }
+
     private fun showGalleryImage(index: Int) {
         try {
             if (galleryImages.isEmpty() || index < 0 || index >= galleryImages.size) {
-                showSimpleNotification(
-                    "❌ Fehler",
-                    "Ungültiger Image-Index",
-                    20.seconds
-                )
+                showSimpleNotification("❌ Fehler", "Ungültiger Image-Index", 20.seconds)
                 return
             }
 
@@ -2903,20 +3375,11 @@ class QuietHoursNotificationService : Service() {
                 )
             } catch (e: Exception) {
                 Log.e("QuietHoursService", "Error decoding image at index $index", e)
-                showSimpleNotification(
-                    "❌ Fehler",
-                    "Bild konnte nicht geladen werden",
-                    20.seconds
-                )
+                showSimpleNotification("❌ Fehler", "Bild konnte nicht geladen werden", 20.seconds)
                 return
             }
 
-            // Bild NICHT skalieren - Original verwenden
             val bitmap = originalBitmap
-
-            // Custom RemoteViews für bessere Bilddarstellung
-            val customView =
-                android.widget.RemoteViews(packageName, R.layout.simple_list_item_1)
 
             val prevIntent = Intent(this, QuietHoursNotificationService::class.java).apply {
                 action = ACTION_PREV_GALLERY_IMAGE
@@ -2934,13 +3397,24 @@ class QuietHoursNotificationService : Service() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            // Intent zum Öffnen des Bildes in der Standard-Galerie-App
+            // GEÄNDERT: Content Intent zeigt jetzt Löschbestätigung
+            val confirmDeleteIntent =
+                Intent(this, QuietHoursNotificationService::class.java).apply {
+                    action = ACTION_CONFIRM_DELETE_IMAGE
+                    putExtra(EXTRA_IMAGE_INDEX, index)
+                }
+            val confirmDeletePendingIntent = PendingIntent.getService(
+                this, 73, confirmDeleteIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            // Optional: Zusätzliche Action zum direkten Öffnen in Galerie
             val openIntent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(imageUri, "image/*")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
             }
             val openPendingIntent = PendingIntent.getActivity(
-                this, 73, openIntent,
+                this, 74, openIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
@@ -2953,12 +3427,12 @@ class QuietHoursNotificationService : Service() {
                         .bigPicture(bitmap)
                         .bigLargeIcon(null as android.graphics.Bitmap?)
                         .showBigPictureWhenCollapsed(true)
-                        .setSummaryText("Wische nach unten für vollständiges Bild")
+                        .setSummaryText("Tippen zum Löschen • Wischen für Details")
                 )
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setOngoing(true)
                 .setAutoCancel(false)
-                .setContentIntent(openPendingIntent)
+                .setContentIntent(confirmDeletePendingIntent) // GEÄNDERT
                 .addAction(R.drawable.ic_media_previous, "◀", prevPendingIntent)
                 .addAction(R.drawable.ic_menu_view, "Öffnen", openPendingIntent)
                 .addAction(R.drawable.ic_media_next, "▶", nextPendingIntent)
@@ -2983,11 +3457,7 @@ class QuietHoursNotificationService : Service() {
 
     private fun showGallery() {
         try {
-            if (galleryImages.isEmpty()) {
-                loadGalleryImages()
-            } else {
-                showGalleryImage(currentGalleryIndex)
-            }
+            loadGalleryImages()
         } catch (e: Exception) {
             Log.e("QuietHoursService", "Error showing gallery", e)
             showSimpleNotification(
@@ -3027,556 +3497,6 @@ class QuietHoursNotificationService : Service() {
             currentGalleryIndex - 1
         }
         showGalleryImage(currentGalleryIndex)
-    }
-
-    // Cache für Ordner-Counts (wird während des Uploads aktualisiert)
-    private val folderCountCache = mutableMapOf<String, Int>()
-
-    /**
-     * Ermittelt den besten Upload-Ordner basierend auf dem Datum
-     * Erstellt automatisch (1), (2), (3) etc. wenn ein Ordner >100 Dateien hat
-     */
-    private suspend fun getOrCreateUploadFolder(baseFolder: String): String {
-        return withContext(Dispatchers.IO) {
-            try {
-                // Prüfe Basis-Ordner
-                val currentCount = folderCountCache[baseFolder] ?: countFilesInFolder(baseFolder)
-                folderCountCache[baseFolder] = currentCount
-
-                Log.d("SnapUpload", "📊 Folder '$baseFolder' hat $currentCount Dateien")
-
-                // Wenn unter 100, nutze den Basis-Ordner
-                if (currentCount < 100) {
-                    return@withContext baseFolder
-                }
-
-                // Sonst finde den nächsten verfügbaren (1), (2), (3) etc.
-                var suffix = 1
-
-                while (suffix < 50) { // Max 50 Unterordner als Sicherheit
-                    val targetFolder = "$baseFolder ($suffix)"
-                    val count = folderCountCache[targetFolder] ?: countFilesInFolder(targetFolder)
-                    folderCountCache[targetFolder] = count
-
-                    Log.d("SnapUpload", "📊 Checking '$targetFolder': $count Dateien")
-
-                    if (count < 100) {
-                        return@withContext targetFolder
-                    }
-                    suffix++
-                }
-
-                // Fallback: Nutze letzten Ordner mit Zeitstempel
-                Log.w("SnapUpload", "⚠️ Alle Unterordner voll, erstelle neuen mit Zeitstempel")
-                "$baseFolder (${System.currentTimeMillis()})"
-
-            } catch (e: Exception) {
-                Log.e("SnapUpload", "Fehler bei Ordner-Ermittlung, nutze Basis-Ordner", e)
-                baseFolder
-            }
-        }
-    }
-
-    /**
-     * Zählt Dateien in einem spezifischen Ordner (schnelle Variante)
-     */
-    private suspend fun countFilesInFolder(folder: String): Int {
-        return withContext(Dispatchers.IO) {
-            try {
-                val supabaseUrl = SupabaseConfig.SUPABASE_URL
-                val supabaseKey = SupabaseConfig.SUPABASE_ANON_KEY
-                val bucketName = "snaps"
-
-                val prefix = if (folder.isEmpty()) "" else "$folder/"
-
-                val url = java.net.URL(
-                    "$supabaseUrl/storage/v1/object/list/$bucketName?limit=1000"
-                )
-                val connection = url.openConnection() as java.net.HttpURLConnection
-
-                connection.requestMethod = "POST"
-                connection.setRequestProperty("Authorization", "Bearer $supabaseKey")
-                connection.setRequestProperty("apikey", supabaseKey)
-                connection.setRequestProperty("Content-Type", "application/json")
-                connection.connectTimeout = 10000
-                connection.readTimeout = 10000
-                connection.doOutput = true
-
-                val body = """{"prefix":"$prefix"}"""
-                connection.outputStream.use { it.write(body.toByteArray()) }
-
-                val responseCode = connection.responseCode
-
-                if (responseCode in 200..299) {
-                    val response = connection.inputStream.bufferedReader().use { it.readText() }
-                    val count = parseFileNamesFromJson(response).size
-                    Log.d("SnapUpload", "✅ Folder '$folder': $count Dateien gefunden")
-                    return@withContext count
-                } else {
-                    Log.w("SnapUpload", "⚠️ Folder '$folder' nicht gefunden oder leer")
-                    return@withContext 0
-                }
-
-            } catch (e: Exception) {
-                Log.e("SnapUpload", "Fehler beim Zählen von Ordner '$folder'", e)
-                0
-            }
-        }
-    }
-
-    /**
-     * Holt alle existierenden Dateien aus ALLEN Ordnern
-     * (mit mehreren Monaten und Unterordnern)
-     */
-    private suspend fun getExistingFilesFromSupabase(): Set<String> {
-        return withContext(Dispatchers.IO) {
-            try {
-                val supabaseUrl = SupabaseConfig.SUPABASE_URL
-                val supabaseKey = SupabaseConfig.SUPABASE_ANON_KEY
-                val bucketName = "snaps"
-                val allFileNames = mutableSetOf<String>()
-
-                Log.d("SnapUpload", "🔍 Lade bestehende Dateinamen von Supabase...")
-
-                // Generiere mögliche Ordner (letzte 18 Monate + aktuelle)
-                val calendar = Calendar.getInstance()
-                val foldersToCheck = mutableListOf<String>()
-
-                for (i in 0..18) {
-                    val baseFolder = SimpleDateFormat("yyyy-MM", Locale.getDefault())
-                        .format(calendar.time)
-                    foldersToCheck.add(baseFolder)
-
-                    // Auch (1), (2), (3) etc. prüfen
-                    for (suffix in 1..10) {
-                        foldersToCheck.add("$baseFolder ($suffix)")
-                    }
-
-                    calendar.add(Calendar.MONTH, -1)
-                }
-
-                foldersToCheck.add("") // Root-Ordner
-
-                Log.d("SnapUpload", "Prüfe ${foldersToCheck.size} mögliche Ordner...")
-
-                var totalFilesFound = 0
-
-                foldersToCheck.forEach { folder ->
-                    try {
-                        val prefix = if (folder.isEmpty()) "" else "$folder/"
-
-                        val url = java.net.URL(
-                            "$supabaseUrl/storage/v1/object/list/$bucketName?limit=1000"
-                        )
-                        val connection = url.openConnection() as java.net.HttpURLConnection
-
-                        connection.requestMethod = "POST"
-                        connection.setRequestProperty("Authorization", "Bearer $supabaseKey")
-                        connection.setRequestProperty("apikey", supabaseKey)
-                        connection.setRequestProperty("Content-Type", "application/json")
-                        connection.connectTimeout = 8000
-                        connection.readTimeout = 8000
-                        connection.doOutput = true
-
-                        val body = """{"prefix":"$prefix"}"""
-                        connection.outputStream.use { it.write(body.toByteArray()) }
-
-                        val responseCode = connection.responseCode
-
-                        if (responseCode in 200..299) {
-                            val response = connection.inputStream.bufferedReader().use { it.readText() }
-                            val files = parseFileNamesFromJson(response)
-
-                            // Extrahiere nur die Dateinamen (ohne Pfad)
-                            files.forEach { fullPath ->
-                                val fileName = fullPath.substringAfterLast("/")
-                                if (fileName.isNotEmpty()) {
-                                    allFileNames.add(fileName)
-                                }
-                            }
-
-                            if (files.isNotEmpty()) {
-                                totalFilesFound += files.size
-                                Log.d("SnapUpload", "  📁 $folder: ${files.size} Dateien")
-                            }
-                        }
-
-                        // Kleine Pause um Rate Limits zu vermeiden
-                        kotlinx.coroutines.delay(50)
-
-                    } catch (e: Exception) {
-                        // Ignoriere Fehler bei einzelnen Ordnern
-                    }
-                }
-
-                Log.d("SnapUpload", "========================================")
-                Log.d("SnapUpload", "✅ $totalFilesFound Dateien in ${allFileNames.size} eindeutigen Namen gefunden")
-                Log.d("SnapUpload", "========================================")
-
-                allFileNames
-
-            } catch (e: Exception) {
-                Log.e("SnapUpload", "Kritischer Fehler", e)
-                emptySet()
-            }
-        }
-    }
-
-    private fun parseFileNamesFromJson(json: String): List<String> {
-        val fileNames = mutableListOf<String>()
-
-        try {
-            var remaining = json.trim()
-
-            while (remaining.contains("\"name\"")) {
-                val nameStart = remaining.indexOf("\"name\"")
-                if (nameStart == -1) break
-
-                val valueStart = remaining.indexOf("\"", nameStart + 6) + 1
-                val valueEnd = remaining.indexOf("\"", valueStart)
-
-                if (valueEnd == -1) break
-
-                val fileName = remaining.substring(valueStart, valueEnd)
-
-                if (fileName.isNotEmpty() &&
-                    !fileName.endsWith("/") &&
-                    fileName.contains(".")
-                ) {
-                    fileNames.add(fileName)
-                }
-
-                remaining = remaining.substring(valueEnd + 1)
-            }
-
-        } catch (e: Exception) {
-            Log.e("SnapUpload", "Error parsing JSON", e)
-        }
-
-        return fileNames
-    }
-
-    private fun findFilesToUpload(
-        localFiles: List<File>,
-        existingServerFileNames: Set<String>
-    ): List<File> {
-
-        val maxFileSize = 50 * 1024 * 1024L // 50 MB
-
-        return localFiles.filter { file ->
-            if (file.length() > maxFileSize) {
-                val sizeMB = file.length() / 1024 / 1024
-                Log.w("SnapUpload", "⚠️ Skipping ${file.name} - Zu groß: ${sizeMB}MB")
-                return@filter false
-            }
-
-            // Einfacher Vergleich: Existiert der Dateiname bereits?
-            val exists = existingServerFileNames.contains(file.name)
-
-            if (exists) {
-                Log.d("SnapUpload", "⏭️ Skipping ${file.name} (bereits hochgeladen)")
-            }
-
-            !exists
-        }
-    }
-
-    @OptIn(DelicateCoroutinesApi::class)
-    private fun uploadSnapImages() {
-        try {
-            uploadedCount = 0
-            failedCount = 0
-
-            showSimpleNotification(
-                "📤 Snap Upload",
-                "Suche nach lokalen Medien...",
-                3.seconds
-            )
-
-            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    // Schritt 1: Lokale Dateien finden
-                    val localFiles = findSnapMedia()
-
-                    if (localFiles.isEmpty()) {
-                        Handler(Looper.getMainLooper()).post {
-                            showSimpleNotification(
-                                "ℹ️ Snap Upload",
-                                "Keine Medien in DCIM/Snap gefunden"
-                            )
-                        }
-                        return@launch
-                    }
-
-                    Handler(Looper.getMainLooper()).post {
-                        showSimpleNotification(
-                            "🔍 Snap Upload",
-                            "Prüfe welche Dateien bereits hochgeladen sind...\nDas kann 10-30 Sek. dauern",
-                            10.seconds
-                        )
-                    }
-
-                    // Schritt 2: Bestehende Dateien holen (aus ALLEN Ordnern)
-                    val existingFileNames = getExistingFilesFromSupabase()
-
-                    // Schritt 3: Vergleichen
-                    val filesToUpload = findFilesToUpload(localFiles, existingFileNames)
-
-                    if (filesToUpload.isEmpty()) {
-                        Handler(Looper.getMainLooper()).post {
-                            showSimpleNotification(
-                                "✅ Bereits aktuell",
-                                "Alle ${localFiles.size} Dateien bereits hochgeladen"
-                            )
-                        }
-                        return@launch
-                    }
-
-                    Handler(Looper.getMainLooper()).post {
-                        showSimpleNotification(
-                            "🚀 Upload startet",
-                            "${filesToUpload.size} neue Dateien werden hochgeladen...",
-                            5.seconds
-                        )
-                    }
-
-                    // Schritt 4: Cache zurücksetzen
-                    folderCountCache.clear()
-
-                    // Schritt 5: Upload mit intelligentem Batching
-                    val batchSize = 20 // Alle 20 Dateien Update-Notification
-
-                    filesToUpload.forEachIndexed { index, file ->
-                        try {
-                            val progress = "${index + 1}/${filesToUpload.size}"
-
-                            // Bestimme Upload-Ordner (mit Auto-Split bei >100 Dateien)
-                            val dateFolder = SimpleDateFormat("yyyy-MM", Locale.getDefault())
-                                .format(Date(file.lastModified()))
-
-                            val targetFolder = getOrCreateUploadFolder(dateFolder)
-
-                            val success = uploadMediaToSupabase(file, targetFolder)
-
-                            if (success) {
-                                uploadedCount++
-                                // Inkrementiere Cache
-                                folderCountCache[targetFolder] =
-                                    (folderCountCache[targetFolder] ?: 0) + 1
-
-                                Log.d("SnapUpload", "✅ [$progress] ${file.name} → $targetFolder")
-                            } else {
-                                failedCount++
-                                Log.e("SnapUpload", "❌ [$progress] ${file.name} fehlgeschlagen")
-                            }
-
-                            // Progress-Updates alle 20 Dateien
-                            if ((index + 1) % batchSize == 0) {
-                                Handler(Looper.getMainLooper()).post {
-                                    showSimpleNotification(
-                                        "📤 Upload läuft...",
-                                        "✅ $uploadedCount erfolgreich • ❌ $failedCount fehlgeschlagen\n" +
-                                                "Fortschritt: $progress",
-                                        3.seconds
-                                    )
-                                }
-                            }
-
-                            // Delay zwischen Uploads (angepasst nach Dateityp)
-                            if (isVideoFile(file)) {
-                                kotlinx.coroutines.delay(1500) // Videos
-                            } else {
-                                kotlinx.coroutines.delay(500) // Bilder
-                            }
-
-                        } catch (e: Exception) {
-                            failedCount++
-                            Log.e("SnapUpload", "Fehler beim Upload von ${file.name}", e)
-                        }
-                    }
-
-                    // Finale Zusammenfassung
-                    Handler(Looper.getMainLooper()).post {
-                        val emoji = if (failedCount == 0) "🎉" else "⚠️"
-                        showSimpleNotification(
-                            "$emoji Upload abgeschlossen",
-                            "✅ $uploadedCount erfolgreich hochgeladen\n" +
-                                    "❌ $failedCount fehlgeschlagen\n" +
-                                    "📁 Dateien automatisch auf Ordner verteilt"
-                        )
-                    }
-
-                } catch (e: Exception) {
-                    Log.e("SnapUpload", "Fehler im Upload-Prozess", e)
-                    Handler(Looper.getMainLooper()).post {
-                        showSimpleNotification(
-                            "❌ Kritischer Fehler",
-                            "Upload abgebrochen: ${e.message}",
-                            20.seconds
-                        )
-                    }
-                }
-            }
-
-        } catch (e: Exception) {
-            Log.e("SnapUpload", "Fehler beim Start", e)
-            showSimpleNotification(
-                "❌ Start-Fehler",
-                "Upload konnte nicht gestartet werden: ${e.message}",
-                20.seconds
-            )
-        }
-    }
-
-    private fun findSnapMedia(): List<File> {
-        val mediaFiles = mutableSetOf<File>()
-
-        try {
-            val possiblePaths = listOf(
-                "${Environment.getExternalStorageDirectory()}/DCIM/Snap",
-                "${Environment.getExternalStorageDirectory()}/DCIM/Snapchat"
-            )
-
-            possiblePaths.forEach { path ->
-                val directory = File(path)
-
-                if (directory.exists() && directory.isDirectory) {
-                    Log.d("SnapUpload", "📁 Scanne Verzeichnis: $path")
-
-                    directory.listFiles()?.forEach { file ->
-                        if (file.isFile && isMediaFile(file)) {
-                            mediaFiles.add(file)
-                        } else if (file.isDirectory) {
-                            // Auch Unterordner durchsuchen
-                            file.listFiles()?.forEach { subFile ->
-                                if (subFile.isFile && isMediaFile(subFile)) {
-                                    mediaFiles.add(subFile)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            val imageCount = mediaFiles.count { isImageFile(it) }
-            val videoCount = mediaFiles.count { isVideoFile(it) }
-
-            Log.d("SnapUpload", "========================================")
-            Log.d("SnapUpload", "📊 Gefunden: ${mediaFiles.size} Medien")
-            Log.d("SnapUpload", "  📷 Bilder: $imageCount")
-            Log.d("SnapUpload", "  🎥 Videos: $videoCount")
-            Log.d("SnapUpload", "========================================")
-
-            // Nach Datum sortieren (älteste zuerst für bessere Ordner-Verteilung)
-            return mediaFiles.sortedBy { it.lastModified() }
-
-        } catch (e: Exception) {
-            Log.e("SnapUpload", "Fehler beim Suchen der Medien", e)
-            return emptyList()
-        }
-    }
-
-    private fun isMediaFile(file: File): Boolean {
-        return isImageFile(file) || isVideoFile(file)
-    }
-
-    private fun isImageFile(file: File): Boolean {
-        val extension = file.extension.lowercase()
-        return extension in listOf("jpg", "jpeg", "png", "webp")
-    }
-
-    private fun isVideoFile(file: File): Boolean {
-        val extension = file.extension.lowercase()
-        return extension in listOf("mp4", "mov", "avi", "mkv", "webm", "3gp")
-    }
-
-    /**
-     * Upload mit spezifischem Zielordner
-     */
-    private fun uploadMediaToSupabase(file: File, targetFolder: String): Boolean {
-        return try {
-            if (!file.exists() || !file.canRead()) {
-                Log.e("SnapUpload", "❌ Datei nicht lesbar: ${file.absolutePath}")
-                return false
-            }
-
-            val supabaseUrl = SupabaseConfig.SUPABASE_URL
-            val supabaseKey = SupabaseConfig.SUPABASE_ANON_KEY
-            val bucketName = "snaps"
-
-            // Nutze den übergebenen Zielordner
-            val fileName = file.name // Original-Dateiname beibehalten
-            val storagePath = "$targetFolder/$fileName"
-
-            val mediaBytes = file.readBytes()
-
-            val url = java.net.URL("$supabaseUrl/storage/v1/object/$bucketName/$storagePath")
-            val connection = url.openConnection() as java.net.HttpURLConnection
-
-            connection.requestMethod = "POST"
-            connection.setRequestProperty("Authorization", "Bearer $supabaseKey")
-            connection.setRequestProperty("apikey", supabaseKey)
-            connection.setRequestProperty("Content-Type", getMimeType(file))
-            connection.setRequestProperty("x-upsert", "false")
-            connection.setRequestProperty("Content-Length", mediaBytes.size.toString())
-
-            connection.connectTimeout = 30000
-            connection.readTimeout = if (isVideoFile(file)) 120000 else 60000
-            connection.doOutput = true
-
-            connection.outputStream.use { output ->
-                output.write(mediaBytes)
-                output.flush()
-            }
-
-            val responseCode = connection.responseCode
-
-            when (responseCode) {
-                in 200..299 -> {
-                    Log.d("SnapUpload", "✅ Hochgeladen: $storagePath")
-                    true
-                }
-                400 -> {
-                    // Prüfe ob es ein "Duplicate" Fehler ist
-                    val error = connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-                    if (error.contains("Duplicate") || error.contains("already exists")) {
-                        Log.w("SnapUpload", "⚠️ Existiert bereits: $storagePath")
-                        true // Als Erfolg werten
-                    } else {
-                        Log.e("SnapUpload", "❌ Fehler 400: $error")
-                        false
-                    }
-                }
-                409 -> {
-                    Log.w("SnapUpload", "⚠️ Existiert bereits (409): $storagePath")
-                    true
-                }
-                else -> {
-                    val error = connection.errorStream?.bufferedReader()?.use { it.readText() }
-                    Log.e("SnapUpload", "❌ Fehler $responseCode: $error")
-                    false
-                }
-            }
-
-        } catch (e: Exception) {
-            Log.e("SnapUpload", "❌ Upload-Fehler für ${file.name}", e)
-            false
-        }
-    }
-
-    private fun getMimeType(file: File): String {
-        return when (file.extension.lowercase()) {
-            "jpg", "jpeg" -> "image/jpeg"
-            "png" -> "image/png"
-            "webp" -> "image/webp"
-            "mp4" -> "video/mp4"
-            "mov" -> "video/quicktime"
-            "avi" -> "video/x-msvideo"
-            "mkv" -> "video/x-matroska"
-            "webm" -> "video/webm"
-            "3gp" -> "video/3gpp"
-            else -> "application/octet-stream"
-        }
     }
 
     @OptIn(DelicateCoroutinesApi::class)
@@ -3675,7 +3595,10 @@ class QuietHoursNotificationService : Service() {
             ) {
                 notificationManager.notify(60100, notification)
 
-                Log.d("QuietHoursService", "✅ Friend messages notification shown (${messages.size} messages)")
+                Log.d(
+                    "QuietHoursService",
+                    "✅ Friend messages notification shown (${messages.size} messages)"
+                )
             }
 
         } catch (e: Exception) {
@@ -3805,6 +3728,274 @@ class QuietHoursNotificationService : Service() {
             checkSelfPermission(Manifest.permission.WRITE_SETTINGS) == PackageManager.PERMISSION_GRANTED
         }
     }
+
+    private fun showPodcastQueue() {
+        try {
+            val serviceIntent = Intent(this, PodcastPlayerService::class.java)
+
+            // Service muss laufen um Queue abzurufen
+            startService(serviceIntent)
+
+            Handler(Looper.getMainLooper()).postDelayed({
+                val queuePaths = getPodcastQueueFromService()
+
+                if (queuePaths.isEmpty()) {
+                    showSimpleNotification(
+                        "📋 Queue leer",
+                        "Keine Podcasts in der Warteschlange"
+                    )
+                    return@postDelayed
+                }
+
+                val queueText = queuePaths.mapIndexed { index, path ->
+                    val name = path.substringAfterLast("/").substringBeforeLast(".")
+                    "${index + 1}. $name"
+                }.joinToString("\n")
+
+                val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_menu_info_details)
+                    .setContentTitle("📋 Podcast Queue (${queuePaths.size})")
+                    .setContentText(queuePaths.firstOrNull()?.substringAfterLast("/")?.substringBeforeLast(".") ?: "")
+                    .setStyle(
+                        NotificationCompat.BigTextStyle()
+                            .bigText(queueText)
+                    )
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setAutoCancel(true)
+                    .build()
+
+                val notificationManager = getSystemService(NotificationManager::class.java)
+                if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                    == PackageManager.PERMISSION_GRANTED
+                ) {
+                    notificationManager.notify(50010, notification)
+                }
+            }, 300)
+
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "Error showing podcast queue", e)
+            showSimpleNotification("❌ Fehler", "Queue konnte nicht angezeigt werden")
+        }
+    }
+
+    private fun addPodcastToQueue(index: Int) {
+        try {
+            val prefs = getSharedPreferences("podcast_player_prefs", MODE_PRIVATE)
+            val allPodcasts = getAllPodcastsFromPrefs(prefs)
+
+            if (index < 0 || index >= allPodcasts.size) {
+                showSimpleNotification(
+                    "❌ Ungültiger Index",
+                    "Podcast ${index + 1} existiert nicht (1-${allPodcasts.size})",
+                    20.seconds
+                )
+                return
+            }
+
+            val podcast = allPodcasts[index]
+            addToQueueViaService(podcast.path)
+
+            showSimpleNotification(
+                "✅ Zur Queue hinzugefügt",
+                "${index + 1}. ${podcast.name}"
+            )
+
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "Error adding to queue", e)
+            showSimpleNotification("❌ Fehler", "Konnte nicht zur Queue hinzufügen")
+        }
+    }
+
+    private fun removePodcastFromQueue(position: Int) {
+        try {
+            val queuePaths = getPodcastQueueFromService()
+
+            if (position < 0 || position >= queuePaths.size) {
+                showSimpleNotification(
+                    "❌ Ungültige Position",
+                    "Position ${position + 1} existiert nicht (1-${queuePaths.size})",
+                    20.seconds
+                )
+                return
+            }
+
+            val path = queuePaths[position]
+            removeFromQueueViaService(path)
+
+            val name = path.substringAfterLast("/").substringBeforeLast(".")
+            showSimpleNotification(
+                "✅ Aus Queue entfernt",
+                "${position + 1}. $name"
+            )
+
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "Error removing from queue", e)
+            showSimpleNotification("❌ Fehler", "Konnte nicht aus Queue entfernen")
+        }
+    }
+
+    private fun clearPodcastQueue() {
+        try {
+            val prefs = getSharedPreferences("podcast_player_prefs", MODE_PRIVATE)
+            prefs.edit(commit = true) {
+                putString("podcast_queue", "")
+            }
+
+            showSimpleNotification(
+                "✅ Queue geleert",
+                "Alle Podcasts aus der Warteschlange entfernt"
+            )
+
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "Error clearing queue", e)
+            showSimpleNotification("❌ Fehler", "Queue konnte nicht geleert werden")
+        }
+    }
+
+    private fun getPodcastQueueFromService(): List<String> {
+        val prefs = getSharedPreferences("podcast_player_prefs", MODE_PRIVATE)
+        val queueJson = prefs.getString("podcast_queue", null)
+        return if (queueJson != null && queueJson.isNotEmpty()) {
+            queueJson.split("|||")
+        } else {
+            emptyList()
+        }
+    }
+
+    private fun addToQueueViaService(path: String) {
+        val prefs = getSharedPreferences("podcast_player_prefs", MODE_PRIVATE)
+        val currentQueue = getPodcastQueueFromService().toMutableList()
+
+        if (!currentQueue.contains(path)) {
+            currentQueue.add(path)
+            val queueJson = currentQueue.joinToString("|||")
+            prefs.edit(commit = true) {
+                putString("podcast_queue", queueJson)
+            }
+        }
+    }
+
+    private fun removeFromQueueViaService(path: String) {
+        val prefs = getSharedPreferences("podcast_player_prefs", MODE_PRIVATE)
+        val currentQueue = getPodcastQueueFromService().toMutableList()
+
+        currentQueue.remove(path)
+        val queueJson = currentQueue.joinToString("|||")
+        prefs.edit(commit = true) {
+            putString("podcast_queue", queueJson)
+        }
+    }
+
+    private data class SimplePodcast(val name: String, val path: String)
+
+    private fun getAllPodcastsFromPrefs(prefs: SharedPreferences): List<SimplePodcast> {
+        // Lade alle gespeicherten Podcasts anhand der Position-Keys
+        val allKeys = prefs.all.keys
+        val podcastPaths = allKeys
+            .filter { it.startsWith("podcast_position_") }
+            .map { key ->
+                val hash = key.removePrefix("podcast_position_").toIntOrNull() ?: return@map null
+                // Versuche Path zu rekonstruieren - funktioniert nur bedingt
+                // Besser: Verwende MediaStore oder separaten Key
+                null
+            }
+            .filterNotNull()
+
+        // Fallback: Lade über MediaStore wie im Service
+        return loadPodcastsFromMediaStore()
+    }
+
+    private fun loadPodcastsFromMediaStore(): List<SimplePodcast> {
+        val podcasts = mutableListOf<SimplePodcast>()
+
+        try {
+            val projection = arrayOf(
+                android.provider.MediaStore.Audio.Media.DISPLAY_NAME,
+                android.provider.MediaStore.Audio.Media.DATA,
+                android.provider.MediaStore.Audio.Media.TITLE
+            )
+
+            val sortOrder = "${android.provider.MediaStore.Audio.Media.DISPLAY_NAME} ASC"
+
+            contentResolver.query(
+                android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                projection,
+                null,
+                null,
+                sortOrder
+            )?.use { cursor ->
+                val nameColumn = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.DISPLAY_NAME)
+                val dataColumn = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.DATA)
+                val titleColumn = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.TITLE)
+
+                while (cursor.moveToNext()) {
+                    val name = cursor.getString(nameColumn) ?: continue
+                    val data = cursor.getString(dataColumn) ?: continue
+                    val title = cursor.getString(titleColumn)
+
+                    val normalizedPath = try {
+                        java.net.URLDecoder.decode(data, "UTF-8")
+                            .replace("\\", "/")
+                            .lowercase()
+                    } catch (_: Exception) {
+                        data.replace("\\", "/").lowercase()
+                    }
+
+                    val isInPodcasts = normalizedPath.contains("/download/cloud/podcasts/") ||
+                            normalizedPath.contains("/downloads/cloud/podcasts/") ||
+                            data.contains("/Cloud/Podcasts/", ignoreCase = true)
+
+                    if (isInPodcasts && (name.endsWith(".mp3") || name.endsWith(".m4a"))) {
+                        val displayName = if (!title.isNullOrBlank() && title != "<unknown>") {
+                            title
+                        } else {
+                            name.substringBeforeLast('.')
+                        }
+
+                        podcasts.add(SimplePodcast(displayName, data))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "Error loading podcasts from MediaStore", e)
+        }
+
+        return podcasts.sortedBy { it.name }
+    }
+
+    private fun clearPodcastSelectionNotifications() {
+        try {
+            val notificationManager = getSystemService(NotificationManager::class.java)
+
+            // Lösche alle einzelnen Podcast-Notifications (60000-60998)
+            for (i in 0..998) {
+                notificationManager.cancel(60000 + i)
+            }
+
+            // Lösche Summary-Notification
+            notificationManager.cancel(60999)
+
+            // Optional: Lösche auch die Delete-Completed Notifications (70000-70999)
+            for (i in 0..999) {
+                notificationManager.cancel(70000 + i)
+            }
+
+            showSimpleNotification(
+                "✅ Notifications gelöscht",
+                "Alle Podcast-Auswahl Notifications wurden entfernt"
+            )
+
+            Log.d("QuietHoursService", "Cleared all podcast selection notifications")
+
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "Error clearing podcast notifications", e)
+            showSimpleNotification(
+                "❌ Fehler",
+                "Konnte Notifications nicht löschen: ${e.message}",
+                20.seconds
+            )
+        }
+    }
 }
 
 class QuietActionReceiver : BroadcastReceiver() {
@@ -3817,7 +4008,7 @@ class QuietActionReceiver : BroadcastReceiver() {
             }
 
             "SET_END" -> {
-                    prefs.edit(commit = true) { putString("saved_number", "7") }
+                prefs.edit(commit = true) { putString("saved_number", "7") }
             }
         }
     }
