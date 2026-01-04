@@ -62,6 +62,11 @@ class MusicPlayerService : MediaSessionService() {
         private const val PREFS_NAME = "music_player_prefs"
         private const val KEY_CURRENT_SONG_INDEX = "current_song_index"
         private const val KEY_REPEAT_MODE = "repeat_mode"
+        private const val MEDIA_STATE_PREFS = "media_state_prefs"
+        private const val KEY_ACTIVE_SERVICE = "active_media_service"
+        private const val SERVICE_MUSIC = "music"
+        private const val SERVICE_PODCAST = "podcast"
+        private const val ACTION_NOTIFICATION_DELETED = "ACTION_NOTIFICATION_DELETED"
 
         fun startService(context: Context) {
             val intent = Intent(context, MusicPlayerService::class.java)
@@ -101,12 +106,14 @@ class MusicPlayerService : MediaSessionService() {
     private var currentSongIndex = 0
     private var isRepeatEnabled = false
     private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var mediaStatePrefs: SharedPreferences
     private val handler = Handler(Looper.getMainLooper())
 
     @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
         sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        mediaStatePrefs = getSharedPreferences(MEDIA_STATE_PREFS, MODE_PRIVATE)
 
         currentSongIndex = sharedPreferences.getInt(KEY_CURRENT_SONG_INDEX, 0)
         isRepeatEnabled = sharedPreferences.getBoolean(KEY_REPEAT_MODE, false)
@@ -117,6 +124,7 @@ class MusicPlayerService : MediaSessionService() {
 
         // MediaSession ohne Player erstellen (nur für Notification/Lock Screen Control)
         mediaSession = MediaSession.Builder(this, DummyPlayer())
+            .setId("MusicPlayerSession")
             .setSessionActivity(
                 PendingIntent.getActivity(
                     this,
@@ -131,27 +139,33 @@ class MusicPlayerService : MediaSessionService() {
                     controllerInfo: MediaSession.ControllerInfo,
                     intent: Intent
                 ): Boolean {
+                    // ========== ERSTE PRÜFUNG: Bin ich der aktive Service? ==========
+                    if (!isThisServiceActive()) {
+                        Log.d("MusicPlayerService", "⊘ Ignoring media button - not active service")
+                        return true // Event als behandelt markieren, aber nichts tun
+                    }
+
                     try {
                         val keyEvent = intent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
                         if (keyEvent != null && keyEvent.action == KeyEvent.ACTION_DOWN) {
                             when (keyEvent.keyCode) {
                                 KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                                    Log.d("MusicPlayerService", "Media button: play/pause -> toggle")
+                                    Log.d("MusicPlayerService", "▶ MediaButton: MusicService active, handling play/pause")
                                     if (isPlaying) pauseMusic() else playMusic()
                                     return true
                                 }
                                 KeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                                    Log.d("MusicPlayerService", "Media button: pause")
+                                    Log.d("MusicPlayerService", "⏸ MediaButton: MusicService active, handling pause")
                                     pauseMusic()
                                     return true
                                 }
                                 KeyEvent.KEYCODE_MEDIA_NEXT -> {
-                                    Log.d("MusicPlayerService", "Media button: next")
+                                    Log.d("MusicPlayerService", "⏭ MediaButton: MusicService active, handling next")
                                     nextSong()
                                     return true
                                 }
                                 KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
-                                    Log.d("MusicPlayerService", "Media button: previous")
+                                    Log.d("MusicPlayerService", "⏮ MediaButton: MusicService active, handling previous")
                                     previousSong()
                                     return true
                                 }
@@ -178,8 +192,10 @@ class MusicPlayerService : MediaSessionService() {
             ACTION_NEXT -> nextSong()
             ACTION_PREVIOUS -> previousSong()
             ACTION_TOGGLE_REPEAT -> toggleRepeat()
-            "ACTION_NOTIFICATION_DELETED" -> {
-                stopSelf()
+            ACTION_NOTIFICATION_DELETED -> {
+                Log.d("SAD","SADA")
+                val intent = Intent(this, MusicPlayerService::class.java)
+                stopService(intent)
             }
         }
         return START_STICKY
@@ -351,6 +367,7 @@ class MusicPlayerService : MediaSessionService() {
                 updateNotification()
                 return
             }
+            setActiveService()
 
             if (mediaPlayer != null && !isPlaying) {
                 // Resume aufzeichnen (NEUE ZEILE)
@@ -630,8 +647,8 @@ class MusicPlayerService : MediaSessionService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val deleteIntent = Intent(this, PodcastPlayerService::class.java).apply {
-            action = "ACTION_NOTIFICATION_DELETED"
+        val deleteIntent = Intent(this, MusicPlayerService::class.java).apply {
+            action = ACTION_NOTIFICATION_DELETED
         }
         val deletePendingIntent = PendingIntent.getService(
             this,
@@ -675,7 +692,8 @@ class MusicPlayerService : MediaSessionService() {
     override fun onDestroy() {
         super.onDestroy()
 
-        // Service-Interrupt aufzeichnen (NEUE ZEILE)
+        clearActiveService()
+
         val currentSong = playlist.getOrNull(currentSongIndex)
         if (currentSong != null && mediaPlayer != null) {
             val currentPosition = (mediaPlayer?.currentPosition ?: 0L).toLong()
@@ -693,6 +711,30 @@ class MusicPlayerService : MediaSessionService() {
         mediaSession?.release()
         mediaSession = null
         Log.d("MusicPlayerService", "Service destroyed")
+    }
+    private fun setActiveService() {
+        mediaStatePrefs.edit(commit = true) {
+            putString(
+                PodcastPlayerService.Companion.KEY_ACTIVE_SERVICE,
+                PodcastPlayerService.Companion.SERVICE_MUSIC
+            )
+        }
+        Log.d("MusicPlayerService", "✓ Set as active media service")
+    }
+
+    private fun clearActiveService() {
+        val currentActive = mediaStatePrefs.getString(PodcastPlayerService.Companion.KEY_ACTIVE_SERVICE, null)
+        if (currentActive == PodcastPlayerService.Companion.SERVICE_MUSIC) {
+            mediaStatePrefs.edit(commit = true) {
+                remove(PodcastPlayerService.Companion.KEY_ACTIVE_SERVICE)
+            }
+            Log.d("MusicPlayerService", "✓ Cleared active service state")
+        }
+    }
+
+    private fun isThisServiceActive(): Boolean {
+        val activeService = mediaStatePrefs.getString(PodcastPlayerService.Companion.KEY_ACTIVE_SERVICE, null)
+        return activeService == PodcastPlayerService.Companion.SERVICE_MUSIC
     }
 
     @UnstableApi
