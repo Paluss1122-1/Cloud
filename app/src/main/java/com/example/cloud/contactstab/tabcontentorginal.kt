@@ -12,6 +12,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.cloud.ERRORINSERT
+import com.example.cloud.ERRORINSERTDATA
+import kotlinx.coroutines.launch
+import java.time.Instant
 
 @Composable
 fun ContactsTabContent(
@@ -23,6 +27,7 @@ fun ContactsTabContent(
 ) {
     var selectedContact by remember { mutableStateOf<Contact?>(null) }
     var showDialog by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier = modifier
@@ -70,6 +75,18 @@ fun ContactsTabContent(
             }
             state.error != null -> {
                 Text("Fehler: ${state.error}", color = Color.Red)
+                LaunchedEffect(Unit) {
+                    scope.launch {
+                        ERRORINSERT(
+                            ERRORINSERTDATA(
+                                "tabcontentoriginal",
+                                "❌ Fehler beim Laden von Kontakten: ${state.error}",
+                                Instant.now().toString(),
+                                "Error"
+                            )
+                        )
+                    }
+                }
             }
             state.contacts.isEmpty() -> {
                 Text("Keine Kontakte vorhanden", color = Color.Gray, fontSize = 16.sp)
