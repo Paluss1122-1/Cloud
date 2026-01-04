@@ -7,8 +7,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.pulltorefresh.pullToRefresh
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
@@ -32,8 +34,9 @@ fun MusicStatsTabContent(modifier: Modifier = Modifier) {
 
     var searchQuery by remember { mutableStateOf("") }
     var songStats by remember { mutableStateOf<List<SongStats>>(emptyList()) }
-    var sortMode by remember { mutableStateOf(0) } // 0=PlayCount, 1=PlayTime, 2=Recent, 3=Skipped, 4=Paused
+    var sortMode by remember { mutableIntStateOf(0) } // 0=PlayCount, 1=PlayTime, 2=Recent, 3=Skipped, 4=Paused
     var isRefreshing by remember { mutableStateOf(false) }
+    var showResetDialog by remember { mutableStateOf(false) }
 
     val loadStats = {
         songStats = when (sortMode) {
@@ -84,10 +87,56 @@ fun MusicStatsTabContent(modifier: Modifier = Modifier) {
                 .background(Color(0xFF1a1a1a))
                 .padding(16.dp)
         ) {
-            SearchField(
-                query = searchQuery,
-                onQueryChange = { searchQuery = it }
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    SearchField(
+                        query = searchQuery,
+                        onQueryChange = { searchQuery = it }
+                    )
+                }
+
+                IconButton(
+                    onClick = { showResetDialog = true },
+                    modifier = Modifier
+                        .size(50.dp)
+                        .background(Color(0xFF2a2a2a), RoundedCornerShape(12.dp))
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Reset Stats",
+                        tint = Color(0xFFFF5252)
+                    )
+                }
+            }
+
+            if (showResetDialog) {
+                AlertDialog(
+                    onDismissRequest = { showResetDialog = false },
+                    title = { Text("Statistiken zurücksetzen?", color = Color.White) },
+                    text = { Text("Möchtest du wirklich alle Musik-Statistiken löschen? Dies kann nicht rückgängig gemacht werden.", color = Color.Gray) },
+                    containerColor = Color(0xFF2a2a2a),
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                statsManager.resetStats()
+                                loadStats()
+                                showResetDialog = false
+                            }
+                        ) {
+                            Text("Löschen", color = Color(0xFFFF5252))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showResetDialog = false }) {
+                            Text("Abbrechen", color = Color.White)
+                        }
+                    }
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -315,10 +364,10 @@ fun SongStatCard(stat: SongStats) {
                 }
             }
 
-            Divider(
-                color = Color(0xFF3a3a3a),
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 12.dp),
                 thickness = 0.5.dp,
-                modifier = Modifier.padding(vertical = 12.dp)
+                color = Color(0xFF3a3a3a)
             )
 
             // Completion Rate Progress Bar
