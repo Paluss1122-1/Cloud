@@ -3594,11 +3594,6 @@ class QuietHoursNotificationService : Service() {
                 == PackageManager.PERMISSION_GRANTED
             ) {
                 notificationManager.notify(60100, notification)
-
-                Log.d(
-                    "QuietHoursService",
-                    "✅ Friend messages notification shown (${messages.size} messages)"
-                )
             }
 
         } catch (e: Exception) {
