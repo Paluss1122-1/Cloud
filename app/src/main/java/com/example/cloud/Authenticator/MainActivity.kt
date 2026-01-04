@@ -1,4 +1,4 @@
-package com.example.cloud.Authenticator
+package com.example.cloud.authenticator
 
 import android.content.Context
 import android.content.ContextWrapper
@@ -16,22 +16,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.example.cloud.ERRORINSERT
+import com.example.cloud.ERRORINSERTDATA
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.time.Instant
 
 private const val TAG = "AuthenticatorDebug"
 
 @Composable
 fun AuthenticatorTab() {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
-    // Finde die FragmentActivity
     val activity = remember {
         var ctx = context
         while (ctx is ContextWrapper) {
@@ -42,7 +44,16 @@ fun AuthenticatorTab() {
     }
 
     if (activity == null) {
-        Log.e(TAG, "❌ Keine FragmentActivity gefunden!")
+        LaunchedEffect(activity) {
+            ERRORINSERT(
+                ERRORINSERTDATA(
+                    "Main Acivity (Authenticator)",
+                    "❌ Keine FragmentActivity gefunden!",
+                    Instant.now().toString(),
+                    "Error"
+                )
+            )
+        }
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
@@ -68,8 +79,6 @@ fun AuthenticatorTab() {
         return
     }
 
-    Log.d(TAG, "✅ FragmentActivity gefunden: ${activity.javaClass.simpleName}")
-
     val prefs = remember {
         context.getSharedPreferences("settings", Context.MODE_PRIVATE)
     }
@@ -82,15 +91,10 @@ fun AuthenticatorTab() {
     var errorMessage by remember { mutableStateOf("") }
     var shouldShowPrompt by remember { mutableStateOf(false) }
 
-    Log.d(TAG, "📱 Initial State - lockEnabled: $lockEnabled")
-
-    // Lifecycle Observer - warte bis Activity RESUMED ist
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            Log.d(TAG, "🔄 Lifecycle Event: $event")
             if (event == Lifecycle.Event.ON_RESUME) {
                 if (lockEnabled && !isAuthenticated && !shouldShowPrompt) {
-                    Log.d(TAG, "✅ Activity RESUMED - zeige Prompt")
                     shouldShowPrompt = true
                 }
             }
@@ -101,35 +105,51 @@ fun AuthenticatorTab() {
         }
     }
 
-    // Zeige Biometric Prompt wenn Activity bereit ist
+    val coroutineScope = rememberCoroutineScope()
+
     LaunchedEffect(shouldShowPrompt) {
         if (shouldShowPrompt && lockEnabled && !isAuthenticated) {
-            delay(300) // Kurze Verzögerung für UI-Stabilität
-
-            Log.d(TAG, "🔐 Zeige Biometric Prompt")
+            delay(100)
             showBiometricPrompt(
                 activity = activity,
                 onSuccess = {
-                    Log.d(TAG, "✅ AUTH SUCCESS")
                     isAuthenticated = true
                     showError = false
                     shouldShowPrompt = false
                 },
                 onError = { error, isCritical ->
-                    Log.e(TAG, "❌ AUTH ERROR: $error (critical: $isCritical)")
-
                     if (isCritical) {
-                        // Kritischer Hardware-Fehler - zeige Error Screen
                         errorMessage = error
                         showError = true
                         shouldShowPrompt = false
-                        isAuthenticated = false // App bleibt gesperrt
+                        isAuthenticated = false
+                        coroutineScope.launch {
+                            ERRORINSERT(
+                                ERRORINSERTDATA(
+                                    "Main Activity (Authenticator)",
+                                    "❌ AUTH ERROR: $error",
+                                    Instant.now().toString(),
+                                    "Error"
+                                )
+                            )
+                        }
                     } else {
-                        // User hat abgebrochen - bleibe auf Lock Screen
                         shouldShowPrompt = false
-                        // App bleibt gesperrt, kein Error Screen
                     }
                 }
+            )
+        }
+    }
+
+    LaunchedEffect(showError) {
+        if (showError) {
+            ERRORINSERT(
+                ERRORINSERTDATA(
+                    "Main Activity (Authenticator)",
+                    "⚠ Zeige Error Screen",
+                    Instant.now().toString(),
+                    "Warning"
+                )
             )
         }
     }
@@ -140,7 +160,6 @@ fun AuthenticatorTab() {
     ) {
         when {
             !isAuthenticated && showError -> {
-                Log.d(TAG, "⚠️ Zeige Error Screen")
                 ErrorScreen(
                     message = errorMessage,
                     onRetry = {
@@ -148,16 +167,13 @@ fun AuthenticatorTab() {
                         shouldShowPrompt = true
                     },
                     onUnlock = {
-                        Log.w(TAG, "⚠️ Notfall-Entsperrung deaktiviert")
-                        // isAuthenticated = true // SICHERHEITSLÜCKE: Deaktiviert
                         showError = false
-                        shouldShowPrompt = true // Versuch es nochmal
+                        shouldShowPrompt = true
                     }
                 )
             }
 
             !isAuthenticated -> {
-                Log.d(TAG, "🔒 Zeige LockScreen")
                 LockScreen(
                     onRetry = {
                         shouldShowPrompt = true
@@ -166,7 +182,6 @@ fun AuthenticatorTab() {
             }
 
             else -> {
-                Log.d(TAG, "🎯 Zeige MainApp")
                 val db = TwoFADatabase.getDatabase(context)
                 MainApp(db)
             }
@@ -177,7 +192,9 @@ fun AuthenticatorTab() {
 @Composable
 private fun LockScreen(onRetry: () -> Unit) {
     Box(
-        modifier = Modifier.fillMaxSize().background(Color.Black),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -218,7 +235,9 @@ private fun ErrorScreen(
     onUnlock: () -> Unit
 ) {
     Box(
-        modifier = Modifier.fillMaxSize().background(Color.Black),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -262,12 +281,7 @@ private fun showBiometricPrompt(
     onSuccess: () -> Unit,
     onError: (error: String, isCritical: Boolean) -> Unit
 ) {
-    Log.d(TAG, "🔍 showBiometricPrompt() aufgerufen")
-    Log.d(TAG, "🔍 Activity State: ${activity.lifecycle.currentState}")
-
-    // Prüfe ob Activity im richtigen Zustand ist
     if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-        Log.e(TAG, "❌ Activity ist nicht im STARTED State!")
         onError("Activity nicht bereit", true)
         return
     }
@@ -277,29 +291,29 @@ private fun showBiometricPrompt(
         Authenticators.BIOMETRIC_STRONG or Authenticators.DEVICE_CREDENTIAL
     )
 
-    Log.d(TAG, "🔐 Biometric Status: ${getBiometricStatusString(canAuth)}")
-
     when (canAuth) {
         BiometricManager.BIOMETRIC_SUCCESS -> {
-            // Biometric verfügbar - weiter unten
         }
+
         BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
-            Log.w(TAG, "⚠️ Keine Biometrics eingerichtet")
-            onError("Keine Authentifizierung eingerichtet. Bitte richte einen Fingerabdruck oder PIN ein.", true)
+            onError(
+                "Keine Authentifizierung eingerichtet. Bitte richte einen Fingerabdruck oder PIN ein.",
+                true
+            )
             return
         }
+
         BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> {
-            Log.w(TAG, "⚠️ Keine Biometric-Hardware")
             onError("Biometrische Hardware nicht verfügbar", true)
             return
         }
+
         BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> {
-            Log.w(TAG, "⚠️ Hardware temporär nicht verfügbar")
             onError("Hardware temporär nicht verfügbar", true)
             return
         }
+
         else -> {
-            Log.w(TAG, "⚠️ Biometric nicht verfügbar: $canAuth")
             onError("Authentifizierung nicht verfügbar", true)
             return
         }
@@ -313,16 +327,12 @@ private fun showBiometricPrompt(
         object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 super.onAuthenticationSucceeded(result)
-                Log.d(TAG, "🎉 onAuthenticationSucceeded!")
                 onSuccess()
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                 super.onAuthenticationError(errorCode, errString)
-                Log.e(TAG, "❌ onAuthenticationError: ${getErrorCodeName(errorCode)} - $errString")
-
                 when (errorCode) {
-                    // Hardware-Fehler - KRITISCH, zeige Error Screen und entsperre
                     BiometricPrompt.ERROR_NO_BIOMETRICS,
                     BiometricPrompt.ERROR_HW_UNAVAILABLE,
                     BiometricPrompt.ERROR_HW_NOT_PRESENT,
@@ -330,87 +340,40 @@ private fun showBiometricPrompt(
                         onError("Biometrische Authentifizierung nicht verfügbar", true)
                     }
 
-                    // User hat abgebrochen - NICHT kritisch, bleibe auf Lock Screen
                     BiometricPrompt.ERROR_USER_CANCELED,
                     BiometricPrompt.ERROR_NEGATIVE_BUTTON,
                     BiometricPrompt.ERROR_CANCELED -> {
-                        Log.d(TAG, "ℹ️ User hat abgebrochen - bleibe auf Lock Screen")
                         onError("Authentifizierung abgebrochen", false)
                     }
 
-                    // Lockout - NICHT kritisch, kann später wieder versuchen
                     BiometricPrompt.ERROR_LOCKOUT,
                     BiometricPrompt.ERROR_LOCKOUT_PERMANENT -> {
-                        onError("Zu viele Fehlversuche. Bitte warte einen Moment.", false)
+                        onError("Zu viele Fehlversuche. Bitte warte einen Moment.", true)
                     }
 
-                    // Timeout - NICHT kritisch
                     BiometricPrompt.ERROR_TIMEOUT -> {
                         onError("Zeitüberschreitung", false)
                     }
 
-                    // Andere Fehler - vorsichtshalber nicht kritisch
                     else -> {
                         onError("Fehler: $errString", false)
                     }
                 }
-            }
-
-            override fun onAuthenticationFailed() {
-                super.onAuthenticationFailed()
-                Log.w(TAG, "⚠️ onAuthenticationFailed (falscher Fingerabdruck)")
-                // Kein Callback hier - Prompt bleibt offen für weitere Versuche
             }
         }
     )
 
     val promptInfo = BiometricPrompt.PromptInfo.Builder()
         .setTitle("App-Sperre")
-        .setSubtitle("Authentifizieren, um die App zu öffnen")
+        .setSubtitle("Authentifizieren, um den Tab zu öffnen")
         .setAllowedAuthenticators(
             Authenticators.BIOMETRIC_STRONG or Authenticators.DEVICE_CREDENTIAL
         )
         .build()
 
     try {
-        Log.d(TAG, "🚀 biometricPrompt.authenticate() wird aufgerufen")
         biometricPrompt.authenticate(promptInfo)
-        Log.d(TAG, "✅ authenticate() erfolgreich aufgerufen")
     } catch (e: Exception) {
-        Log.e(TAG, "❌ Exception beim authenticate(): ${e.message}")
-        e.printStackTrace()
         onError("Fehler beim Starten der Authentifizierung: ${e.message}", true)
-    }
-}
-
-private fun getBiometricStatusString(status: Int): String {
-    return when (status) {
-        BiometricManager.BIOMETRIC_SUCCESS -> "SUCCESS"
-        BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> "HW_UNAVAILABLE"
-        BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> "NONE_ENROLLED"
-        BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> "NO_HARDWARE"
-        BiometricManager.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED -> "SECURITY_UPDATE_REQUIRED"
-        BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED -> "UNSUPPORTED"
-        BiometricManager.BIOMETRIC_STATUS_UNKNOWN -> "STATUS_UNKNOWN"
-        else -> "UNKNOWN ($status)"
-    }
-}
-
-private fun getErrorCodeName(errorCode: Int): String {
-    return when (errorCode) {
-        BiometricPrompt.ERROR_CANCELED -> "ERROR_CANCELED"
-        BiometricPrompt.ERROR_HW_NOT_PRESENT -> "ERROR_HW_NOT_PRESENT"
-        BiometricPrompt.ERROR_HW_UNAVAILABLE -> "ERROR_HW_UNAVAILABLE"
-        BiometricPrompt.ERROR_LOCKOUT -> "ERROR_LOCKOUT"
-        BiometricPrompt.ERROR_LOCKOUT_PERMANENT -> "ERROR_LOCKOUT_PERMANENT"
-        BiometricPrompt.ERROR_NEGATIVE_BUTTON -> "ERROR_NEGATIVE_BUTTON"
-        BiometricPrompt.ERROR_NO_BIOMETRICS -> "ERROR_NO_BIOMETRICS"
-        BiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL -> "ERROR_NO_DEVICE_CREDENTIAL"
-        BiometricPrompt.ERROR_NO_SPACE -> "ERROR_NO_SPACE"
-        BiometricPrompt.ERROR_TIMEOUT -> "ERROR_TIMEOUT"
-        BiometricPrompt.ERROR_UNABLE_TO_PROCESS -> "ERROR_UNABLE_TO_PROCESS"
-        BiometricPrompt.ERROR_USER_CANCELED -> "ERROR_USER_CANCELED"
-        BiometricPrompt.ERROR_VENDOR -> "ERROR_VENDOR"
-        else -> "UNKNOWN_ERROR ($errorCode)"
     }
 }
