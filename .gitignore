@@ -13,4 +13,4 @@
 .externalNativeBuild
 .cxx
 local.properties
-app/src/main/java/com/example/Config.kt
+app/src/main/java/com/example/cloud/Config.kt
