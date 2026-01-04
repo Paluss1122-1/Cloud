@@ -1,4 +1,4 @@
-package com.example.cloud.Authenticator
+package com.example.cloud.authenticator
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -10,7 +10,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
-import android.util.Log
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.LocalActivity
@@ -72,6 +71,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -79,11 +79,31 @@ import androidx.core.content.edit
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.cloud.ERRORINSERT
+import com.example.cloud.ERRORINSERTDATA
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.Instant
 
+/*@Composable
+@Preview
+fun Start() {
+    val navController = rememberNavController()
+    val context = LocalContext.current
+    NavHost(navController, startDestination = "list") {
+        composable("list") {
+            TwoFAListScreen(
+                db = TwoFADatabase.getDatabase(context),
+                onOpenSettings = { navController.navigate("settings") }
+            )
+        }
+        composable("settings") {
+            SettingsScreenWithScreenshotProtection(onBackClick = { navController.popBackStack() })
+        }
+    }
+}*/
 
 @SuppressLint("UseKtx")
 @Composable
@@ -109,58 +129,52 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
 
     LaunchedEffect(Unit) {
         entries = db.twoFADao().getAll()
-        Log.d("APP_STARTUP", "📱 ${entries.size} lokale Einträge geladen")
     }
 
-    // Initial-Sync beim Start
     LaunchedEffect(true) {
         if (isSyncing) return@LaunchedEffect
 
-        // 1. Sofort lokale Daten laden (schnell!)
         entries = db.twoFADao().getAll()
-        Log.d("APP_STARTUP", "📱 ${entries.size} lokale Einträge geladen (Initial)")
 
-        // 2. Prüfen, wann zuletzt synchronisiert wurde
         val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
         val lastSyncTime = prefs.getLong("last_sync_timestamp", 0L)
         val currentTime = System.currentTimeMillis()
-        val fiveMinutesInMillis = 1 * 20 * 1000L // 5 Minuten
+        val fiveMinutesInMillis = 1 * 20 * 1000L
 
-        // Nur synchronisieren, wenn letzte Sync länger als 5 Minuten her ist
-        // Nur synchronisieren, wenn letzte Sync länger als 5 Minuten her ist
         if (currentTime - lastSyncTime > fiveMinutesInMillis) {
-            Log.d(
-                "APP_STARTUP",
-                "🔄 Starte Synchronisation (letzte Sync vor ${(currentTime - lastSyncTime) / 1000}s)"
-            )
-
             isSyncing = true
             scope.launch {
                 try {
                     val result = syncTwoFaEntriesWithConfirmation(db)
 
-                    // Erst Liste aktualisieren
                     entries = db.twoFADao().getAll()
 
                     if (result.pendingDecisions.isNotEmpty()) {
                         pendingEntries = result.pendingDecisions
                         showSyncDialog = true
-                        Log.d(
-                            "APP_STARTUP",
-                            "⚠️ ${result.pendingDecisions.size} Einträge benötigen Bestätigung"
-                        )
                     }
 
                     if (result.error != null) {
-                        Log.e("APP_STARTUP", "❌ Sync-Fehler: ${result.error}")
                         Toast.makeText(
                             context,
                             "Offline: ${result.error}",
                             Toast.LENGTH_LONG
                         ).show()
+                        ERRORINSERT(
+                            ERRORINSERTDATA(
+                                "TwoFAListScreen",
+                                "❌ Sync-Fehler: ${result.error}",
+                                Instant.now().toString(),
+                                "Error"
+                            )
+                        )
                     } else {
-                        // Sync-Timestamp speichern
-                        prefs.edit(commit = true) { putLong("last_sync_timestamp", System.currentTimeMillis()) }
+                        prefs.edit(commit = true) {
+                            putLong(
+                                "last_sync_timestamp",
+                                System.currentTimeMillis()
+                            )
+                        }
 
                         if (result.uploaded > 0 || result.downloaded > 0) {
                             Toast.makeText(
@@ -168,26 +182,26 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                 "Synchronisiert: ${result.uploaded} hochgeladen, ${result.downloaded} heruntergeladen",
                                 Toast.LENGTH_SHORT
                             ).show()
-                        } else if (result.pendingDecisions.isEmpty()) {
-                            Log.d("APP_STARTUP", "✅ Bereits synchron")
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e("APP_STARTUP", "❌ Sync-Exception: ${e.message}")
                     Toast.makeText(
                         context,
                         "Synchronisation fehlgeschlagen: Keine Internetverbindung",
                         Toast.LENGTH_LONG
                     ).show()
+                    ERRORINSERT(
+                        ERRORINSERTDATA(
+                            "TwoFAListScreen",
+                            "❌ Sync-Exception: ${e.message}",
+                            Instant.now().toString(),
+                            "Error"
+                        )
+                    )
                 } finally {
                     isSyncing = false
                 }
             }
-        } else {
-            Log.d(
-                "APP_STARTUP",
-                "⏭️ Sync übersprungen (letzte Sync vor ${(currentTime - lastSyncTime) / 1000}s)"
-            )
         }
     }
 
@@ -245,7 +259,18 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                 entries.groupBy { it.folder ?: "Unsortiert" }
                     .toSortedMap(compareBy { if (it == "Unsortiert") "ZZZ" else it })
             } catch (e: Exception) {
-                Log.e("UI_ERROR", "Fehler beim Gruppieren: ${e.message}")
+                LaunchedEffect(Unit) {
+                    scope.launch {
+                        ERRORINSERT(
+                            ERRORINSERTDATA(
+                                "TwoFAListScreen",
+                                "Fehler beim Gruppieren: ${e.message}",
+                                Instant.now().toString(),
+                                "Error"
+                            )
+                        )
+                    }
+                }
                 emptyMap<String, List<TwoFAEntry>>()
             }
 
@@ -276,7 +301,6 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                         "Doppelte Namen gefunden: $duplicateNames",
                         Toast.LENGTH_SHORT
                     ).show()
-                    Log.d("duplicateNames", "Doppelte Namen gefunden: $duplicateNames")
                     return@Composable
                 }
 
@@ -389,12 +413,21 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                     }
                                     context.startActivity(fallbackIntent)
                                 } catch (e: Exception) {
-                                    Log.e("Settings", "Konnte Einstellungen nicht öffnen", e)
                                     Toast.makeText(
                                         context,
                                         "Bitte Einstellungen manuell öffnen",
                                         Toast.LENGTH_LONG
                                     ).show()
+                                    scope.launch {
+                                        ERRORINSERT(
+                                            ERRORINSERTDATA(
+                                                "TwoFAListScreen",
+                                                "Konnte Einstellungen nicht öffnen: ${e.message}",
+                                                Instant.now().toString(),
+                                                "Error"
+                                            )
+                                        )
+                                    }
                                 }
                             }
                             Toast.makeText(
@@ -411,7 +444,6 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
             }
         }
 
-        // Overlay für ausgewählten Eintrag
         selectedEntry?.let { entry ->
             Box(
                 Modifier
@@ -422,7 +454,6 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                     }
                     .pointerInput(Unit) {
                         detectTapGestures {
-                            // Klick auf Hintergrund schließt die Box
                             selectedEntry = null
                             isEditingEntry = false
                         }
@@ -539,15 +570,20 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                                 )
                                                 db.twoFADao().update(updatedEntry)
 
-                                                // In Supabase aktualisieren (nicht neu einfügen!)
                                                 val supabaseSuccess =
                                                     updateTwoFaEntryInSupabase(updatedEntry)
 
                                                 if (!supabaseSuccess) {
-                                                    Log.w(
-                                                        "EDIT",
-                                                        "⚠️ Supabase-Update fehlgeschlagen, aber lokal gespeichert"
-                                                    )
+                                                    scope.launch {
+                                                        ERRORINSERT(
+                                                            ERRORINSERTDATA(
+                                                                "TwoFAListScreen",
+                                                                "Supabase-Update fehlgeschlagen, aber lokal gespeichert",
+                                                                Instant.now().toString(),
+                                                                "Warning"
+                                                            )
+                                                        )
+                                                    }
                                                 }
 
                                                 entries = db.twoFADao().getAll()
@@ -584,8 +620,9 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                         } else {
                             Text(
                                 entry.name,
-                                fontSize = 22.sp,
+                                fontSize = 18.sp,
                                 color = Color.White,
+                                textAlign = TextAlign.Center,
                                 modifier = Modifier
                                     .clickable {
                                         isEditingEntry = true
@@ -598,7 +635,8 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                         Spacer(Modifier.height(8.dp))
                         Text(
                             "Code: $generatedCode",
-                            fontSize = 18.sp,
+                            fontSize = 30.sp,
+                            textAlign = TextAlign.Center,
                             color = Color(0xFFB388FF),
                             modifier = Modifier.clickable {
                                 val clipboard =
@@ -624,7 +662,8 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                             )
                             Text(
                                 "Codes die hier abgelaufen sind, sind generell noch bis zu 10sek gültig",
-                                color = Color.Gray
+                                color = Color.Gray,
+                                textAlign = TextAlign.Center,
                             )
                         }
                         Spacer(Modifier.height(4.dp))
@@ -783,7 +822,6 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
             }
         }
 
-        // Overlay für "Hinzufügen"
         if (showAddDialog) {
             Box(
                 Modifier
@@ -900,14 +938,11 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                             )
 
                                             try {
-                                                // 1. Lokal speichern
                                                 db.twoFADao().insert(newEntry)
 
-                                                // 2. In Supabase speichern und ID zurückbekommen
                                                 val supabaseSuccess =
                                                     saveTwoFaEntryToSupabase(newEntry, db)
 
-                                                // 3. User-Feedback basierend auf Erfolg
                                                 withContext(Dispatchers.Main) {
                                                     if (supabaseSuccess) {
                                                         Toast.makeText(
@@ -931,9 +966,18 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                                         Toast.LENGTH_LONG
                                                     ).show()
                                                 }
+                                                scope.launch {
+                                                    ERRORINSERT(
+                                                        ERRORINSERTDATA(
+                                                            "TwoFAListScreen",
+                                                            "Fehler beim Speichern: ${e.message}",
+                                                            Instant.now().toString(),
+                                                            "Error"
+                                                        )
+                                                    )
+                                                }
                                             }
 
-                                            // UI aktualisieren
                                             entries = db.twoFADao().getAll()
                                             name = ""
                                             secret = ""
@@ -950,6 +994,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                 }
             }
         }
+
         if (showSyncDialog && pendingEntries.isNotEmpty()) {
             SyncConfirmationDialog(
                 entries = pendingEntries,
@@ -1031,7 +1076,6 @@ fun SettingsScreenWithScreenshotProtection(onBackClick: () -> Unit) {
 
             Spacer(Modifier.height(8.dp))
 
-            // App-Sperre
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -1058,7 +1102,6 @@ fun SettingsScreenWithScreenshotProtection(onBackClick: () -> Unit) {
 
             Spacer(Modifier.height(8.dp))
 
-            // Screenshot-Schutz
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
