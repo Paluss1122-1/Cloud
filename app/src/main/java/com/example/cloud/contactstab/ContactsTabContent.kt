@@ -3,8 +3,11 @@ package com.example.cloud.contactstab
 import android.content.ContentProviderOperation
 import android.content.Context
 import android.provider.ContactsContract
+import com.example.cloud.ERRORINSERT
+import com.example.cloud.ERRORINSERTDATA
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.Instant
 
 data class Contact(
     val id: String,
@@ -85,45 +88,64 @@ class ContactsRepository(private val context: Context) {
             val ops = ArrayList<ContentProviderOperation>()
 
             if (contact.id.isEmpty()) {
-                // Neuen Kontakt erstellen
-                ops.add(ContentProviderOperation.newInsert(ContactsContract.RawContacts.CONTENT_URI)
-                    .withValue(ContactsContract.RawContacts.ACCOUNT_TYPE, null as String?)
-                    .withValue(ContactsContract.RawContacts.ACCOUNT_NAME, null as String?)
-                    .build())
+                ops.add(
+                    ContentProviderOperation.newInsert(ContactsContract.RawContacts.CONTENT_URI)
+                        .withValue(ContactsContract.RawContacts.ACCOUNT_TYPE, null as String?)
+                        .withValue(ContactsContract.RawContacts.ACCOUNT_NAME, null as String?)
+                        .build()
+                )
 
-                // Name
-                ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
-                    .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
-                    .withValue(ContactsContract.Data.MIMETYPE,
-                        ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
-                    .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, contact.name)
-                    .build())
-
-                // E-Mail
-                if (contact.email.isNotEmpty()) {
-                    ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                ops.add(
+                    ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
                         .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
-                        .withValue(ContactsContract.Data.MIMETYPE,
-                            ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE)
-                        .withValue(ContactsContract.CommonDataKinds.Email.ADDRESS, contact.email)
-                        .withValue(ContactsContract.CommonDataKinds.Email.TYPE,
-                            ContactsContract.CommonDataKinds.Email.TYPE_HOME)
-                        .build())
+                        .withValue(
+                            ContactsContract.Data.MIMETYPE,
+                            ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE
+                        )
+                        .withValue(
+                            ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME,
+                            contact.name
+                        )
+                        .build()
+                )
+
+                if (contact.email.isNotEmpty()) {
+                    ops.add(
+                        ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                            .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
+                            .withValue(
+                                ContactsContract.Data.MIMETYPE,
+                                ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE
+                            )
+                            .withValue(
+                                ContactsContract.CommonDataKinds.Email.ADDRESS,
+                                contact.email
+                            )
+                            .withValue(
+                                ContactsContract.CommonDataKinds.Email.TYPE,
+                                ContactsContract.CommonDataKinds.Email.TYPE_HOME
+                            )
+                            .build()
+                    )
                 }
 
-                // Telefon
                 if (contact.phone.isNotEmpty()) {
-                    ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
-                        .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
-                        .withValue(ContactsContract.Data.MIMETYPE,
-                            ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
-                        .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, contact.phone)
-                        .withValue(ContactsContract.CommonDataKinds.Phone.TYPE,
-                            ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
-                        .build())
+                    ops.add(
+                        ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                            .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
+                            .withValue(
+                                ContactsContract.Data.MIMETYPE,
+                                ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE
+                            )
+                            .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, contact.phone)
+                            .withValue(
+                                ContactsContract.CommonDataKinds.Phone.TYPE,
+                                ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE
+                            )
+                            .build()
+                    )
                 }
             } else {
-                // Bestehenden Kontakt aktualisieren
                 updateContactName(contact.id, contact.name, ops)
                 updateContactEmail(contact.id, contact.email, ops)
                 updateContactPhone(contact.id, contact.phone, ops)
@@ -132,39 +154,67 @@ class ContactsRepository(private val context: Context) {
             context.contentResolver.applyBatch(ContactsContract.AUTHORITY, ops)
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            ERRORINSERT(
+                ERRORINSERTDATA(
+                    "ContactsTabContent",
+                    "Fehler beim Speichern von Kontakt: $contact: ${e.message}",
+                    Instant.now().toString(),
+                    "Error"
+                )
+            )
             false
         }
     }
 
-    private fun updateContactName(contactId: String, name: String, ops: ArrayList<ContentProviderOperation>) {
-        ops.add(ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
-            .withSelection(
-                "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
-                arrayOf(contactId, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
-            )
-            .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, name)
-            .build())
+    private fun updateContactName(
+        contactId: String,
+        name: String,
+        ops: ArrayList<ContentProviderOperation>
+    ) {
+        ops.add(
+            ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
+                .withSelection(
+                    "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+                    arrayOf(
+                        contactId,
+                        ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE
+                    )
+                )
+                .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, name)
+                .build()
+        )
     }
 
-    private fun updateContactEmail(contactId: String, email: String, ops: ArrayList<ContentProviderOperation>) {
-        ops.add(ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
-            .withSelection(
-                "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
-                arrayOf(contactId, ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE)
-            )
-            .withValue(ContactsContract.CommonDataKinds.Email.ADDRESS, email)
-            .build())
+    private fun updateContactEmail(
+        contactId: String,
+        email: String,
+        ops: ArrayList<ContentProviderOperation>
+    ) {
+        ops.add(
+            ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
+                .withSelection(
+                    "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+                    arrayOf(contactId, ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE)
+                )
+                .withValue(ContactsContract.CommonDataKinds.Email.ADDRESS, email)
+                .build()
+        )
     }
 
-    private fun updateContactPhone(contactId: String, phone: String, ops: ArrayList<ContentProviderOperation>) {
-        ops.add(ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
-            .withSelection(
-                "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
-                arrayOf(contactId, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
-            )
-            .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, phone)
-            .build())
+    private fun updateContactPhone(
+        contactId: String,
+        phone: String,
+        ops: ArrayList<ContentProviderOperation>
+    ) {
+        ops.add(
+            ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
+                .withSelection(
+                    "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+                    arrayOf(contactId, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
+                )
+                .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, phone)
+                .build()
+        )
     }
 
     suspend fun deleteContact(contactId: String): Boolean = withContext(Dispatchers.IO) {
@@ -180,7 +230,14 @@ class ContactsRepository(private val context: Context) {
             )
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            ERRORINSERT(
+                ERRORINSERTDATA(
+                    "ContactsTabContent",
+                    "Fehler bei Löschen von Kontakten: ${e.message}",
+                    Instant.now().toString(),
+                    "Error"
+                )
+            )
             false
         }
     }
