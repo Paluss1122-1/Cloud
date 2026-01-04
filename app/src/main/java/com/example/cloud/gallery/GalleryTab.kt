@@ -3,7 +3,6 @@ package com.example.cloud.gallery
 import android.app.Activity
 import android.content.ContentUris
 import android.provider.MediaStore
-import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
@@ -38,13 +37,18 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
+import com.example.cloud.ERRORINSERT
+import com.example.cloud.ERRORINSERTDATA
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.Instant
 
 data class GalleryMediaItem(
     val uri: String,
     val isVideo: Boolean,
-    val dateAdded: Long  // NEU: Datum hinzufügen
+    val dateAdded: Long
 )
 
 @Composable
@@ -72,7 +76,7 @@ fun GalleryTab() {
             val images = loadImagesFromMediaStore(context)
             val videos = loadVideosFromMediaStore(context)
             mediaItems.value = (images + videos).sortedByDescending {
-                it.dateAdded  // Geändert von it.uri zu it.dateAdded
+                it.dateAdded
             }
         }
     }
@@ -112,7 +116,6 @@ fun GalleryTab() {
                                 }
                         )
 
-                        // Play-Icon für Videos
                         if (mediaItem.isVideo) {
                             Box(
                                 modifier = Modifier
@@ -296,8 +299,6 @@ fun loadImagesFromMediaStore(context: android.content.Context): List<GalleryMedi
 
         val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
 
-        Log.d("IMAGES", "Starting image query...")
-
         val query = context.contentResolver.query(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             projection,
@@ -307,30 +308,33 @@ fun loadImagesFromMediaStore(context: android.content.Context): List<GalleryMedi
         )
 
         if (query == null) {
-            Log.e("IMAGES", "Query returned null!")
             return images
         }
 
-        Log.d("IMAGES", "Query successful, cursor count: ${query.count}")
-
         query.use { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
-            val dateColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)  // NEU
-
+            val dateColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
-                val dateAdded = cursor.getLong(dateColumn)  // NEU
+                val dateAdded = cursor.getLong(dateColumn)
                 val uri = ContentUris.withAppendedId(
                     MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                     id
                 )
-                images.add(GalleryMediaItem(uri.toString(), isVideo = false, dateAdded = dateAdded))  // dateAdded hinzugefügt
+                images.add(GalleryMediaItem(uri.toString(), isVideo = false, dateAdded = dateAdded))
             }
         }
-
-        Log.d("IMAGES", "Total images loaded: ${images.size}")
     } catch (e: Exception) {
-        Log.e("IMAGES", "Error loading images", e)
+        CoroutineScope(Dispatchers.IO).launch {
+            ERRORINSERT(
+                ERRORINSERTDATA(
+                    "GalleryTab",
+                    "Fehler bei Laden von Bildern: ${e.message}",
+                    Instant.now().toString(),
+                    "Error"
+                )
+            )
+        }
     }
 
     return images
@@ -348,8 +352,6 @@ fun loadVideosFromMediaStore(context: android.content.Context): List<GalleryMedi
 
         val sortOrder = "${MediaStore.Video.Media.DATE_ADDED} DESC"
 
-        Log.d("VIDEOS", "Starting video query...")
-
         val query = context.contentResolver.query(
             MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
             projection,
@@ -359,33 +361,34 @@ fun loadVideosFromMediaStore(context: android.content.Context): List<GalleryMedi
         )
 
         if (query == null) {
-            Log.e("VIDEOS", "Query returned null!")
             return videos
         }
 
-        Log.d("VIDEOS", "Query successful, cursor count: ${query.count}")
-
         query.use { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
-            val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
-            val dateColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)  // NEU
+            val dateColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
-                val name = cursor.getString(nameColumn)
-                val dateAdded = cursor.getLong(dateColumn)  // NEU
+                val dateAdded = cursor.getLong(dateColumn)
                 val uri = ContentUris.withAppendedId(
                     MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
                     id
                 )
-                Log.d("VIDEOS", "Found video: $name - $uri")
-                videos.add(GalleryMediaItem(uri.toString(), isVideo = true, dateAdded = dateAdded))  // dateAdded hinzugefügt
+                videos.add(GalleryMediaItem(uri.toString(), isVideo = true, dateAdded = dateAdded))
             }
         }
-
-        Log.d("VIDEOS", "Total videos loaded: ${videos.size}")
     } catch (e: Exception) {
-        Log.e("VIDEOS", "Error loading videos", e)
+        CoroutineScope(Dispatchers.IO).launch {
+            ERRORINSERT(
+                ERRORINSERTDATA(
+                    "GalleryTab",
+                    "Fehler bei Laden von Videos: ${e.message}",
+                    Instant.now().toString(),
+                    "Error"
+                )
+            )
+        }
     }
 
     return videos
