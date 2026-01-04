@@ -25,11 +25,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
+import com.example.cloud.ERRORINSERT
+import com.example.cloud.ERRORINSERTDATA
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
 import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
+import java.time.Instant
 import java.util.Date
 import java.util.Locale
 
@@ -68,14 +72,12 @@ fun MediaRecorderContent(
     var isTrimPlaying by remember { mutableStateOf(false) }
     var trimCurrentPosition by remember { mutableFloatStateOf(0f) }
 
-    // Lade alle Musikdateien
     LaunchedEffect(Unit) {
         loadMusicFiles { files ->
             musicFiles = files
         }
     }
 
-    // Update Position während Wiedergabe
     LaunchedEffect(isPlaying) {
         while (isPlaying) {
             mediaPlayer?.let {
@@ -282,7 +284,16 @@ fun MediaRecorderContent(
                                 isProcessing = false
                                 showTrimDialog = false
                             } catch (e: Exception) {
-                                e.printStackTrace()
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    ERRORINSERT(
+                                        ERRORINSERTDATA(
+                                            "MediaRecorderContent",
+                                            "Fehler bei Konvertieren von m4a zu mp3: ${e.message}",
+                                            Instant.now().toString(),
+                                            "Error"
+                                        )
+                                    )
+                                }
                                 isProcessing = false
                             }
                         }
@@ -337,7 +348,6 @@ fun MediaRecorderContent(
         Button(
             onClick = {
                 if (isRecording) {
-                    // Aufnahme stoppen
                     audioRecorder?.stopRecording()
                     audioRecorder = null
                     isRecording = false
@@ -345,7 +355,6 @@ fun MediaRecorderContent(
                         musicFiles = files
                     }
                 } else {
-                    // Aufnahme starten
                     scope.launch(Dispatchers.IO) {
                         try {
                             val timestamp = SimpleDateFormat(
@@ -363,7 +372,16 @@ fun MediaRecorderContent(
                             audioRecorder = AudioRecorder()
                             audioRecorder?.startRecording(audioFile)
                         } catch (e: Exception) {
-                            e.printStackTrace()
+                            CoroutineScope(Dispatchers.IO).launch {
+                                ERRORINSERT(
+                                    ERRORINSERTDATA(
+                                        "MediaRecorderContent",
+                                        "Fehler bei Starten von Recording: ${e.message}",
+                                        Instant.now().toString(),
+                                        "Error"
+                                    )
+                                )
+                            }
                             isRecording = false
                             audioRecorder = null
                         }
@@ -386,7 +404,6 @@ fun MediaRecorderContent(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Player Sektion
         if (selectedFile != null) {
             Column(
                 modifier = Modifier
@@ -579,41 +596,6 @@ fun MediaRecorderContent(
     }
 }
 
-@RequiresPermission(Manifest.permission.RECORD_AUDIO)
-fun recordAudioPlayback(outputFile: File) {
-    val bufferSize = AudioRecord.getMinBufferSize(
-        44100,
-        AudioFormat.CHANNEL_IN_STEREO,
-        AudioFormat.ENCODING_PCM_16BIT
-    )
-
-    val audioRecord = AudioRecord(
-        android.media.MediaRecorder.AudioSource.MIC,
-        44100,
-        AudioFormat.CHANNEL_IN_STEREO,
-        AudioFormat.ENCODING_PCM_16BIT,
-        bufferSize
-    )
-
-    audioRecord.startRecording()
-
-    val buffer = ByteArray(4096)
-    val pcmData = mutableListOf<ByteArray>()
-
-    Thread {
-        while (audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-            val read = audioRecord.read(buffer, 0, buffer.size)
-            if (read > 0) {
-                pcmData.add(buffer.copyOf(read))
-            }
-        }
-        audioRecord.stop()
-        audioRecord.release()
-
-        writePcmToWav(outputFile, pcmData, 44100, 2, 16)
-    }.start()
-}
-
 fun writePcmToWav(
     outputFile: File,
     pcmData: List<ByteArray>,
@@ -624,14 +606,12 @@ fun writePcmToWav(
     val totalSize = pcmData.sumOf { it.size }
 
     outputFile.outputStream().use { fos ->
-        // WAV Header
         fos.write("RIFF".toByteArray())
         fos.write(
             intToLittleEndian(36 + totalSize)
         )
         fos.write("WAVE".toByteArray())
 
-        // fmt sub-chunk
         fos.write("fmt ".toByteArray())
         fos.write(intToLittleEndian(16))
         fos.write(shortToLittleEndian(1)) // PCM
@@ -641,7 +621,6 @@ fun writePcmToWav(
         fos.write(shortToLittleEndian((channels * bitsPerSample / 8).toShort()))
         fos.write(shortToLittleEndian(bitsPerSample.toShort()))
 
-        // data sub-chunk
         fos.write("data".toByteArray())
         fos.write(intToLittleEndian(totalSize))
 
@@ -655,7 +634,6 @@ fun trimAudioToMp3(
     startMs: Long,
     endMs: Long
 ) {
-    // Konvertiere WAV zu MP3 mit Trimming
     val tempWavFile = File(outputFile.parent, "temp_${outputFile.nameWithoutExtension}.wav")
 
     val mediaExtractor = android.media.MediaExtractor()
