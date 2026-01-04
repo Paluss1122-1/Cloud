@@ -1,6 +1,7 @@
 package com.example.cloud
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.WindowManager
@@ -18,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
+import com.example.cloud.errorreportsclaude.ErrorMonitorService
 
 class MainActivity : FragmentActivity() {
     private lateinit var policyManager: PolicyManager
@@ -74,56 +76,6 @@ class MainActivity : FragmentActivity() {
             )
         )
 
-        // MP4-Dateien von 'Other' nach 'videos' verschieben
-        // Erste 100 Dateien in Unterordner '1' verschieben
-        /*lifecycleScope.launch {
-            try {
-                // Erste 100 Dateien listen
-                val listResult = supabase.storage.from("Other").list()
-
-                println("Gefundene Dateien: ${listResult.size}")
-
-                var movedCount = 0
-
-                listResult.forEach { file ->
-                    if (file.name.startsWith("VID")) {
-                        try {
-                            println("Versuche zu verschieben: ${file.name}")
-
-                            // Datei herunterladen
-                            val downloadedBytes = supabase.storage.from("Other")
-                                .downloadAuthenticated(file.name)
-
-                            println("Heruntergeladen: ${downloadedBytes.size} bytes")
-
-                            // Datei in Unterordner '1' hochladen
-                            supabase.storage.from("Other")
-                                .upload("videos/${file.name}", downloadedBytes) {
-                                    upsert = true
-                                }
-
-                            println("Hochgeladen: 1/${file.name}")
-
-                            // Original löschen
-                            supabase.storage.from("Other")
-                                .delete(file.name)
-
-                            movedCount++
-                            println("✓ Erfolgreich verschoben ($movedCount): ${file.name} -> 1/${file.name}")
-                        } catch (e: Exception) {
-                            println("✗ Fehler beim Verschieben von ${file.name}: ${e.message}")
-                            e.printStackTrace()
-                        }
-                    }
-                }
-
-                println("=== Fertig! $movedCount Dateien in Ordner '1' verschoben ===")
-            } catch (e: Exception) {
-                println("Fehler: ${e.message}")
-                e.printStackTrace()
-            }
-        }*/
-
         val startTarget = intent.getStringExtra("target")
 
         // Content setzen
@@ -136,6 +88,13 @@ class MainActivity : FragmentActivity() {
                     PrivateCloudApp(supabase.storage, startTarget)
                 }
             }
+        }
+
+        try {
+            val serviceIntent = Intent(this, ErrorMonitorService::class.java)
+            startForegroundService(serviceIntent)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
 
         // Permissions für Notifications prüfen (Android 13+)
