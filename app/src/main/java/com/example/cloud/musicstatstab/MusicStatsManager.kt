@@ -49,7 +49,9 @@ class MusicStatsManager(context: Context) {
     }
 
     fun recordSongPause(songPath: String, songName: String, duration: Long, currentPosition: Long) {
-        val sessionStart = prefs.getLong(KEY_SESSION_START, System.currentTimeMillis())
+        val sessionStart = prefs.getLong(KEY_SESSION_START, 0L)
+        if (sessionStart <= 0L) return
+
         val sessionPlayTime = prefs.getLong(KEY_SESSION_PLAY_TIME, 0L)
         val playTimeMs = (System.currentTimeMillis() - sessionStart) + sessionPlayTime
 
@@ -87,11 +89,8 @@ class MusicStatsManager(context: Context) {
         val pauseTime = prefs.getLong(KEY_SESSION_PAUSE_TIME, 0L)
 
         if (pauseTime > 0) {
-            val sessionStart = prefs.getLong(KEY_SESSION_START, System.currentTimeMillis())
-            val pauseDuration = System.currentTimeMillis() - pauseTime
-
             prefs.edit(commit = true) {
-                putLong(KEY_SESSION_START, sessionStart + pauseDuration)
+                putLong(KEY_SESSION_START, System.currentTimeMillis())
                 putLong(KEY_SESSION_PAUSE_TIME, 0L)
             }
         }
@@ -177,7 +176,9 @@ class MusicStatsManager(context: Context) {
 
     fun recordServiceInterrupt(songPath: String, currentPosition: Long, duration: Long) {
         val sessionStart = prefs.getLong(KEY_SESSION_START, System.currentTimeMillis())
-        val playTimeMs = (System.currentTimeMillis() - sessionStart).coerceAtLeast(0L)
+        val sessionPlayTime = prefs.getLong(KEY_SESSION_PLAY_TIME, 0L)
+        val currentSessionTime = System.currentTimeMillis() - sessionStart
+        val playTimeMs = currentSessionTime + sessionPlayTime
 
         val stats = getAllStats().toMutableList()
         val existingIndex = stats.indexOfFirst { it.path == songPath }
@@ -192,11 +193,11 @@ class MusicStatsManager(context: Context) {
             val existing = stats[existingIndex]
             stats[existingIndex] = existing.copy(
                 interruptCount = existing.interruptCount + 1,
-                totalPlayTimeMs = existing.totalPlayTimeMs + playTimeMs,
-                totalTimePlayedMs = existing.totalTimePlayedMs + playTimeMs,
+                totalPlayTimeMs = existing.totalPlayTimeMs + currentSessionTime,
+                totalTimePlayedMs = existing.totalTimePlayedMs + currentSessionTime,
                 lastPlayedTime = System.currentTimeMillis(),
                 averagePlaybackPosition = (existing.averagePlaybackPosition + currentPosition) / 2,
-                longestSessionMs = maxOf(existing.longestSessionMs, playTimeMs),
+                longestSessionMs = maxOf(existing.longestSessionMs, currentSessionTime),
                 abruptStopsCount = existing.abruptStopsCount + 1,
                 completionRate = completionPercent
             )
@@ -277,5 +278,15 @@ class MusicStatsManager(context: Context) {
     private fun saveStats(stats: List<SongStats>) {
         val json = gson.toJson(stats)
         prefs.edit(commit = true) { putString(KEY_STATS, json) }
+    }
+
+    fun resetStats() {
+        prefs.edit(commit = true) {
+            remove(KEY_STATS)
+            remove(KEY_SESSION_START)
+            remove(KEY_SESSION_PLAY_TIME)
+            remove(KEY_SESSION_PAUSE_TIME)
+            remove(KEY_LAST_SONG)
+        }
     }
 }
