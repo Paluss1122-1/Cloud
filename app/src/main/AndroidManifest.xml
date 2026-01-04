@@ -47,6 +47,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH"/>
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <uses-permission android:name="android.permission.MANAGE_MEDIA"/>
 
 
     <application
@@ -178,14 +179,33 @@
         </activity>
 
         <service
+            android:name=".audiorecorder.AudioForegroundService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <service
             android:name=".service.ChatService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <service
+            android:name=".errorreportsclaude.ErrorMonitorService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <activity
-            android:name=".Authenticator.SilentCaptureActivity"
+            android:name=".authenticator.SilentCaptureActivity"
             android:exported="false" />
+
+        <receiver android:name="androidx.media3.session.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
