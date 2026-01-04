@@ -26,7 +26,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     companion object {
         private val repository = WhatsAppMessageRepository()
         val replyActions = mutableMapOf<String, ReplyData>()
-        private var isYouthProtectionActive = false
 
         // Nachrichten pro Kontakt speichern
         val messagesByContact = mutableMapOf<String, MutableList<ChatMessage>>()
@@ -134,37 +133,23 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         val title = extras.getString(android.app.Notification.EXTRA_TITLE) ?: ""
         val text = extras.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString() ?: ""
 
-        // Prüfen, ob es eine Jugendschutzeinstellungen-Benachrichtigung ist
-        val isYouthProtectionNotification = sbn.packageName == "com.google.android.apps.kids.familycenter" ||
-                (text.contains("Deine Eltern haben dieses Gerät gesperrt", ignoreCase = true) ||
-                        text.contains("Tageslimit erreicht", ignoreCase = true))
-
-        if (isYouthProtectionNotification) {
-            isYouthProtectionActive = true
-            Log.d("isYouthProtectionNotification", "${true}")
-        }
-
-        if (isYouthProtectionActive) {
-            val newNotification = NotificationCompat.Builder(this, "whatsapp_listener_channel")
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentText("New value: true")
-                .setContentTitle("isYouthProtectionActive")
-                .build()
-
-            val notificationManager = getSystemService(NotificationManager::class.java)
-
-            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                notificationManager.notify(1, newNotification)
-            } else {
-                Log.w("WhatsAppListener", "POST_NOTIFICATIONS permission not granted")
-            }
-        }
-
         if (sbn.packageName == "com.whatsapp" || sbn.packageName == "com.whatsapp.w4b") {
             if (title.contains("Backup", ignoreCase = true) || title.contains("Du", ignoreCase = true)|| title.contains("WhatsApp", ignoreCase = true)) {
                 return
             }
-            Toast.makeText(this, title,Toast.LENGTH_SHORT).show()
+
+            val existingMessages = messagesByContact[title] ?: mutableListOf()
+            val lastMessage = existingMessages.lastOrNull()
+
+            if (lastMessage != null &&
+                !lastMessage.isOwnMessage &&
+                lastMessage.text == text &&
+                (System.currentTimeMillis() - lastMessage.timestamp) < 5000) { // Innerhalb 5 Sekunden
+                Log.d("WhatsAppListener", "Duplicate message detected from $title, ignoring")
+                return
+            }
+
+            Toast.makeText(this, title, Toast.LENGTH_SHORT).show()
             notification.actions?.forEach { action ->
                 action.remoteInputs?.firstOrNull()?.let { systemRemoteInput ->
                     val remoteInput = RemoteInput.Builder(systemRemoteInput.resultKey)
@@ -212,7 +197,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             val prefs = getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
             val quietEnd = prefs.getString("saved_number", null)?.toIntOrNull() ?: 21
             val quietStart = prefs.getString("saved_number_start", null)?.toIntOrNull() ?: 7
-            if ((hour >= quietStart && hour < quietEnd) && !isYouthProtectionNotification && !isYouthProtectionActive) {
+            if ((hour >= quietStart && hour < quietEnd)) {
                 return
             }
 
@@ -278,14 +263,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        if (sbn.packageName == "com.google.android.apps.kids.familycenter") {
-            val text = sbn.notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString() ?: ""
-            if (text.contains("Deine Eltern haben dieses Gerät gesperrt", ignoreCase = true) ||
-                text.contains("Tageslimit erreicht", ignoreCase = true)) {
-                isYouthProtectionActive = false
-            }
-        }
-
         if (sbn.packageName == "com.whatsapp") {
             val title = sbn.notification.extras.getString(android.app.Notification.EXTRA_TITLE)
             title?.let {
