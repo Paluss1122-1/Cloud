@@ -64,8 +64,8 @@ android {
         debug {
             buildConfigField(
                 "String",
-                "SUPABASE_ANON_KEY",
-                "\"${project.properties["SUPABASE_ANON_KEY"]}\""
+                "SUPABASE_PUBLISHABLE_KEY",
+                "\"${project.properties["SUPABASE_PUBLISHABLE_KEY"]}\""
             )
         }
         release {
@@ -76,8 +76,8 @@ android {
             )
             buildConfigField(
                 "String",
-                "SUPABASE_ANON_KEY",
-                "\"${project.properties["SUPABASE_ANON_KEY"]}\""
+                "SUPABASE_PUBLISHABLE_KEY",
+                "\"${project.properties["SUPABASE_PUBLISHABLE_KEY"]}\""
             )
             signingConfig = signingConfigs.getByName("release")
         }
@@ -152,6 +152,7 @@ dependencies {
     implementation(libs.ktor.ktor.client.android)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.websockets)
+    implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.utils)
     implementation(libs.accompanist.swiperefresh)
