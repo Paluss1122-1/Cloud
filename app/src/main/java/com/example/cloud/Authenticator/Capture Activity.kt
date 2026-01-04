@@ -1,4 +1,4 @@
-package com.example.cloud.Authenticator
+package com.example.cloud.authenticator
 
 import android.app.Activity
 import android.content.Context
@@ -20,7 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.room.Room
 import com.journeyapps.barcodescanner.BarcodeCallback
 import com.journeyapps.barcodescanner.BarcodeResult
 import com.journeyapps.barcodescanner.DecoratedBarcodeView
@@ -28,12 +27,14 @@ import kotlinx.coroutines.*
 import java.net.URLDecoder
 import kotlin.apply
 import kotlin.collections.any
-import kotlin.jvm.java
 import kotlin.let
 import kotlin.text.equals
 import kotlin.text.isNullOrBlank
 import kotlin.text.removePrefix
 import androidx.core.net.toUri
+import com.example.cloud.ERRORINSERT
+import com.example.cloud.ERRORINSERTDATA
+import java.time.Instant
 
 class SilentCaptureActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -110,6 +111,14 @@ suspend fun handleQrCode(qrText: String, context: Context) {
         if (uri.scheme != "otpauth") {
             withContext(Dispatchers.Main) {
                 Toast.makeText(context, "❌ Ungültiges Format!", Toast.LENGTH_LONG).show()
+                ERRORINSERT(
+                    ERRORINSERTDATA(
+                        "Capture Activity",
+                        "❌ Ungültiges Format! (${uri})",
+                        Instant.now().toString(),
+                        "Error"
+                    )
+                )
                 (context as? Activity)?.finish()
             }
             return
@@ -123,6 +132,14 @@ suspend fun handleQrCode(qrText: String, context: Context) {
         if (secretParam.isNullOrBlank()) {
             withContext(Dispatchers.Main) {
                 Toast.makeText(context, "❌ Kein Secret gefunden!", Toast.LENGTH_LONG).show()
+                ERRORINSERT(
+                    ERRORINSERTDATA(
+                        "Capture Activity",
+                        "❌ Kein Secret gefunden! (uri: $uri, secret: $secretParam)",
+                        Instant.now().toString(),
+                        "Error"
+                    )
+                )
                 (context as? Activity)?.finish()
             }
             return
@@ -141,23 +158,27 @@ suspend fun handleQrCode(qrText: String, context: Context) {
                 Toast.makeText(context, "⚠️ Eintrag existiert bereits!", Toast.LENGTH_LONG).show()
                 (context as? Activity)?.finish()
             }
+            ERRORINSERT(
+                ERRORINSERTDATA(
+                    "Capture Activity",
+                    "⚠️ Eintrag existiert bereits! (secret: ${secretParam}, name: $displayName)",
+                    Instant.now().toString(),
+                    "Warning"
+                )
+            )
             return
         }
 
-        // Neuen Eintrag erstellen
         val newEntry = TwoFAEntry(
             name = displayName,
             secret = secretParam,
             folder = null
         )
 
-        // 1. Lokal in Room speichern
         db.twoFADao().insert(newEntry)
 
-        // 2. Zu Supabase hochladen und ID zurückbekommen
         val supabaseSuccess = saveTwoFaEntryToSupabase(newEntry, db)
 
-        // 3. User-Feedback
         withContext(Dispatchers.Main) {
             val message = if (supabaseSuccess) {
                 "✅ Token für $displayName hinzugefügt (lokal & Cloud)!"
@@ -166,15 +187,21 @@ suspend fun handleQrCode(qrText: String, context: Context) {
             }
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
 
-            // Activity beenden und zurück zur Hauptseite
             (context as? Activity)?.finish()
         }
 
     } catch (e: Exception) {
-        Log.e("QR_SCAN", "Fehler beim Verarbeiten: ${e.message}", e)
         withContext(Dispatchers.Main) {
             Toast.makeText(context, "❌ Fehler: ${e.message}", Toast.LENGTH_LONG).show()
             (context as? Activity)?.finish()
         }
+        ERRORINSERT(
+            ERRORINSERTDATA(
+                "Capture Activity",
+                "❌ Fehler: ${e.message}",
+                Instant.now().toString(),
+                "Error"
+            )
+        )
     }
 }
