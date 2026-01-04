@@ -43,7 +43,6 @@ fun DateCalculatorContent(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(bottom = 32.dp)
         )
 
-        // Startdatum auswählen
         DateSelectionCard(
             label = "Startdatum",
             selectedDate = startDate,
