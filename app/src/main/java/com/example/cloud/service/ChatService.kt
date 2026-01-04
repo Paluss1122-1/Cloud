@@ -25,6 +25,11 @@ import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
 import java.util.*
 import androidx.core.content.edit
+import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.channel
+import io.github.jan.supabase.realtime.postgresChangeFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 
 class ChatService : Service() {
 
@@ -70,11 +75,17 @@ class ChatService : Service() {
                 ACTION_REPLY -> {
                     val replyText = RemoteInput.getResultsFromIntent(intent)
                         ?.getCharSequence(KEY_REPLY_TEXT)?.toString()
+                    val notificationId = intent.getIntExtra(KEY_NOTIFICATION_ID, -1)
 
                     if (replyText != null && context != null) {
                         serviceScope.launch {
                             sendMessage(replyText)
                             withContext(Dispatchers.Main) {
+                                if (notificationId != SERVICE_NOTIFICATION_ID && notificationId != -1) {
+                                    val notificationManager = getSystemService(NotificationManager::class.java)
+                                    notificationManager.cancel(notificationId)
+                                    Log.d("ChatService", "🗑️ Notification $notificationId removed after reply")
+                                }
                                 updateServiceNotification()
                             }
                         }
@@ -95,10 +106,8 @@ class ChatService : Service() {
     override fun onCreate() {
         super.onCreate()
 
-        // SharedPreferences initialisieren
         sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
 
-        // Gesehene Nachrichten aus Prefs laden
         loadSeenMessageIds()
 
         createNotificationChannel()
@@ -116,7 +125,7 @@ class ChatService : Service() {
         )
 
         serviceScope.launch {
-            pollForNewMessages()
+            setupRealtimeListener()
         }
 
         Log.d("ChatService", "Service created - Polling every ${POLL_INTERVAL_MS}ms")
@@ -332,10 +341,11 @@ class ChatService : Service() {
 
     // ============ Message Polling ============
 
-    private suspend fun pollForNewMessages() {
-        Log.d("ChatService", "Starting message polling...")
-
+    private suspend fun setupRealtimeListener() {
         try {
+            Log.d("ChatService", "Setting up Realtime listener...")
+
+            // Initiale Nachrichten laden
             val initialMessages = supabase.from("messages")
                 .select()
                 .decodeList<Message>()
@@ -345,51 +355,45 @@ class ChatService : Service() {
                 msg.id?.let { seenMessageIds.add(it) }
             }
             messageHistory.addAll(initialMessages.takeLast(5))
-
             saveSeenMessageIds()
-            Log.d("ChatService", "Initial ${seenMessageIds.size} messages marked as seen")
 
-        } catch (e: Exception) {
-            Log.e("ChatService", "Error loading initial messages", e)
-        }
+            // Realtime Channel erstellen
+            val channel = supabase.channel("chat:messages")
 
-        while (true) {
-            try {
-                val messages = supabase.from("messages")
-                    .select()
-                    .decodeList<Message>()
-
-                val newMessages = messages.filter { msg ->
-                    msg.id != null &&
-                            !seenMessageIds.contains(msg.id) &&
-                            msg.sender_id == friendUserId
+            // INSERT Listener für neue Nachrichten
+            val insertFlow = channel
+                .postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
+                    table = "messages"
                 }
 
-                newMessages.forEach { message ->
-                    Log.d("ChatService", "📩 New message: ${message.content}")
+            insertFlow.onEach { change ->
+                val message = Json.decodeFromString<Message>(change.record.toString())
+
+                // Nur Nachrichten vom Friend verarbeiten
+                if (message.sender_id == friendUserId &&
+                    message.id != null &&
+                    !seenMessageIds.contains(message.id)) {
+
+                    Log.d("ChatService", "📩 Realtime message: ${message.content}")
 
                     withContext(Dispatchers.Main) {
                         showMessageNotification(message)
                     }
 
-                    message.id?.let { seenMessageIds.add(it) }
-
-                    // Aktualisiere History (max. 5)
+                    seenMessageIds.add(message.id)
                     messageHistory.add(message)
                     if (messageHistory.size > 5) {
                         messageHistory.removeAt(0)
                     }
-                }
-
-                if (newMessages.isNotEmpty()) {
                     saveSeenMessageIds()
                 }
+            }.launchIn(serviceScope)
 
-            } catch (e: Exception) {
-                Log.e("ChatService", "Error polling messages", e)
-            }
+            channel.subscribe(blockUntilSubscribed = true)
+            Log.i("ChatService", "✅ Realtime channel subscribed")
 
-            delay(POLL_INTERVAL_MS)
+        } catch (e: Exception) {
+            Log.e("ChatService", "❌ Realtime setup failed, falling back to polling", e)
         }
     }
 
