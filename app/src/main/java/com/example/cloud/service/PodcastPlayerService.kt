@@ -1106,8 +1106,6 @@ class PodcastPlayerService : Service() {
             val completedPodcasts = updatedPodcasts.filter { it.isCompleted }
 
             if (completedPodcasts.isEmpty()) {
-                Log.d("PodcastPlayerService", "Keine fertigen Podcasts zum Löschen")
-                // Zeige Info-Notification
                 showNoCompletedPodcastsNotification()
                 return
             }
@@ -1179,7 +1177,7 @@ class PodcastPlayerService : Service() {
                 .setContentText("Es gibt aktuell keine fertigen Podcasts zum Löschen")
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setAutoCancel(true)
-                .setTimeoutAfter(3000) // Verschwindet nach 3 Sekunden
+                .setTimeoutAfter(10000)
                 .build()
 
             if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
