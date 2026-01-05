@@ -16,11 +16,13 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import android.Manifest
+import android.net.Uri
 import androidx.annotation.RequiresPermission
 import com.example.cloud.ERRORINSERT
 import com.example.cloud.ERRORINSERTDATA
 import com.example.cloud.SupabaseConfig
 import java.time.Instant
+import androidx.core.net.toUri
 
 data class ErrorReport(
     val id: Int,
@@ -59,12 +61,16 @@ class ErrorNotificationManager(private val context: Context) {
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     fun showErrorNotification(errorReport: ErrorReport) {
         try {
-            val intent =
-                context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                    putExtra("error_id", errorReport.id)
-                    putExtra("from_notification", true)
-                }
+            val severityEmoji = when (errorReport.severity) {
+                "Error" -> "🔴"
+                "Warning" -> "⚠️"
+                else -> "ℹ️"
+            }
+
+            val intent = Intent(
+                Intent.ACTION_VIEW,
+                "https://supabase.com/dashboard/project/oulgglfvobyjmfongnil/editor/94945?schema=public".toUri()
+            )
 
             val pendingIntent = PendingIntent.getActivity(
                 context,
@@ -72,12 +78,6 @@ class ErrorNotificationManager(private val context: Context) {
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-
-            val severityEmoji = when (errorReport.severity) {
-                "Error" -> "🔴"
-                "Warning" -> "⚠️"
-                else -> "ℹ️"
-            }
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_dialog_alert)
@@ -182,16 +182,16 @@ class ErrorMonitorService : Service() {
 
                 val channel = SupabaseConfig.client.channel("realtime:$tableName")
 
-                val insertFlow = channel
+                channel
                     .postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
                         table = tableName
                     }
+                    .onEach { change ->
+                        handleNewError(change.record)
+                    }
+                    .launchIn(this)
 
-                insertFlow.onEach { change ->
-                    handleNewError(change.record)
-                }.launchIn(this)
-
-                channel.subscribe(blockUntilSubscribed = true)
+                channel.subscribe()
             } catch (e: Exception) {
                 CoroutineScope(Dispatchers.IO).launch {
                     ERRORINSERT(
