@@ -480,6 +480,7 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?) {
                                         ViewGroup.LayoutParams.MATCH_PARENT
                                     )
                                 )
+                                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                                 customView = view
                                 customViewCallback = callback
 
@@ -502,6 +503,7 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?) {
                                 activity.window.insetsController?.show(
                                     android.view.WindowInsets.Type.systemBars()
                                 )
+                                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                             }
                         }
                     }
