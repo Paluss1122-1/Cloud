@@ -48,6 +48,14 @@ import androidx.core.net.toUri
 import com.example.cloud.mediarecorder.AudioRecorder
 import com.example.cloud.SupabaseConfig
 import com.example.cloud.musicstatstab.MusicStatsTabContent
+import com.example.cloud.quiethoursnotificationhelper.addPodcastToQueue
+import com.example.cloud.quiethoursnotificationhelper.clearPodcastQueue
+import com.example.cloud.quiethoursnotificationhelper.clearPodcastSelectionNotifications
+import com.example.cloud.quiethoursnotificationhelper.getAllPodcastsFromPrefs
+import com.example.cloud.quiethoursnotificationhelper.loadPodcastsFromMediaStore
+import com.example.cloud.quiethoursnotificationhelper.markMessageAsRead
+import com.example.cloud.quiethoursnotificationhelper.removePodcastFromQueue
+import com.example.cloud.quiethoursnotificationhelper.showPodcastQueue
 import com.example.cloud.weathertab.fetchWeatherForecast
 import com.example.cloud.weathertab.getLastKnownLocation
 import com.example.cloud.weathertab.weathernot
@@ -124,6 +132,9 @@ class QuietHoursNotificationService : Service() {
         private const val EXTRA_IMAGE_INDEX = "extra_image_index"
         private const val DELETE_CONFIRMATION_CHANNEL_ID = "delete_confirmation_channel"
 
+        private const val ACTION_MARK_PARTS_READ = "com.example.cloud.ACTION_MARK_PARTS_READ"
+        private const val EXTRA_MESSAGE_ID = "extra_message_id"
+
         fun startService(context: Context) {
             val intent = Intent(context, QuietHoursNotificationService::class.java)
             context.startForegroundService(intent)
@@ -151,7 +162,10 @@ class QuietHoursNotificationService : Service() {
         val resultKey: String
     )
 
+    data class SimplePodcast(val name: String, val path: String)
+
     private val handler = Handler(Looper.getMainLooper())
+    private val readMessageIds = mutableSetOf<String>()
     private var isCurrentlyQuietHours = false
 
     private var voiceNotePlayer: MediaPlayer? = null
@@ -412,8 +426,8 @@ class QuietHoursNotificationService : Service() {
             },
             Command(
                 name = "managepodcast",
-                aliases = listOf("mpd", "pd", "ManagePodcast"),
-                description = "Startet PodcastPlayerService"
+                aliases = listOf("mpd", "ManagePodcast"),
+                description = "Zeigt alle vollendeten Podcasts als Notification"
             ) {
                 PodcastPlayerService.managePodcast(this)
             },
@@ -422,7 +436,7 @@ class QuietHoursNotificationService : Service() {
                 aliases = listOf("q", "warteschlange", "playlist"),
                 description = "Zeigt Podcast-Warteschlange"
             ) {
-                showPodcastQueue()
+                showPodcastQueue(this)
             },
             Command(
                 name = "qadd",
@@ -449,7 +463,7 @@ class QuietHoursNotificationService : Service() {
                 aliases = listOf("qc", "queueclear", "clearqueue"),
                 description = "Leert die komplette Queue"
             ) {
-                clearPodcastQueue()
+                clearPodcastQueue(this)
             },
             Command(
                 name = "cloud",
@@ -488,11 +502,12 @@ class QuietHoursNotificationService : Service() {
                 aliases = listOf("flashl", "lightlevel", "torchlevel", "helligkeit", "flash", "f"),
                 description = "Setze Taschenlampen-Helligkeit (Syntax: flashlevel [1-max])"
             ) {
-                showSimpleNotification(
-                    "ℹ️ Flashlight Level",
-                    "Syntax: flashlevel [1-max]",
-                    20.seconds
-                )
+                val cameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
+                val cameraId = cameraManager.cameraIdList.firstOrNull()
+                if (cameraId != null) {
+                    val clampedLevel = 1
+                    cameraManager.turnOnTorchWithStrengthLevel(cameraId, clampedLevel)
+                }
             },
             Command(
                 name = "save",
@@ -616,26 +631,6 @@ class QuietHoursNotificationService : Service() {
                 description = "Lege Downtime fest (setdowntime [Uhrzeit])"
             ) {},
             Command(
-                name = "failed",
-                aliases = listOf(),
-                description = "Zeigt Anzahl fehlgeschlagener Uploads"
-            ) {
-                showSimpleNotification(
-                    "Failed Uploads",
-                    "$failedCount"
-                )
-            },
-            Command(
-                name = "success",
-                aliases = listOf("suc"),
-                description = "Zeigt Anzahl erfolgreicher Uploads"
-            ) {
-                showSimpleNotification(
-                    "Successful Uploads",
-                    "$uploadedCount"
-                )
-            },
-            Command(
                 name = "friendmessages",
                 aliases = listOf("fm", "friendmsgs", "lastmsgs", "friend"),
                 description = "Zeigt letzte 3 Nachrichten von friend"
@@ -657,7 +652,7 @@ class QuietHoursNotificationService : Service() {
                 aliases = listOf("cp", "clearpod", "removepod"),
                 description = "Löscht alle Podcast-Auswahl Notifications"
             ) {
-                clearPodcastSelectionNotifications()
+                clearPodcastSelectionNotifications(this@QuietHoursNotificationService)
             },
         )
     }
@@ -763,6 +758,22 @@ class QuietHoursNotificationService : Service() {
         }
     }
 
+    private val markReadReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == ACTION_MARK_PARTS_READ) {
+                val messageId = intent.getStringExtra(EXTRA_MESSAGE_ID)
+                if (messageId != null && context != null) {
+                    Handler(Looper.getMainLooper()).post {
+                        markMessageAsRead(
+                            messageId,
+                            readMessageIds,
+                            this@QuietHoursNotificationService
+                        )
+                    }
+                }
+            }
+        }
+    }
     private val messageSentReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == ACTION_MESSAGE_SENT) {
@@ -1047,7 +1058,7 @@ class QuietHoursNotificationService : Service() {
                 if (argument != null) {
                     val index = argument.toIntOrNull()
                     if (index != null && index > 0) {
-                        addPodcastToQueue(index - 1) // -1 weil User 1-basiert eingibt
+                        addPodcastToQueue(index - 1, this) // -1 weil User 1-basiert eingibt
                     } else {
                         showSimpleNotification(
                             "❌ Ungültige Nummer",
@@ -1069,7 +1080,7 @@ class QuietHoursNotificationService : Service() {
                 if (argument != null) {
                     val position = argument.toIntOrNull()
                     if (position != null && position > 0) {
-                        removePodcastFromQueue(position - 1)
+                        removePodcastFromQueue(position - 1, this)
                     } else {
                         showSimpleNotification(
                             "❌ Ungültige Position",
@@ -1088,7 +1099,7 @@ class QuietHoursNotificationService : Service() {
             }
 
             "qclear", "qc", "queueclear", "clearqueue" -> {
-                clearPodcastQueue()
+                clearPodcastQueue(this)
                 return
             }
         }
@@ -1639,6 +1650,9 @@ class QuietHoursNotificationService : Service() {
 
         val commandFilter = IntentFilter(ACTION_EXECUTE_COMMAND)
         registerReceiver(commandReceiver, commandFilter, RECEIVER_NOT_EXPORTED)
+
+        val markReadFilter = IntentFilter(ACTION_MARK_PARTS_READ)
+        registerReceiver(markReadReceiver, markReadFilter, RECEIVER_NOT_EXPORTED)
     }
 
 
@@ -1748,7 +1762,6 @@ class QuietHoursNotificationService : Service() {
         }
 
         try {
-            // Ensure any running audio recording is stopped
             stopAudioRecording()
         } catch (e: Exception) {
             Log.e("QuietHoursService", "Error stopping audio recorder on destroy", e)
@@ -1759,6 +1772,7 @@ class QuietHoursNotificationService : Service() {
             unregisterReceiver(notificationDismissReceiver)
             unregisterReceiver(timeChangeReceiver)
             unregisterReceiver(commandReceiver)
+            unregisterReceiver(markReadReceiver)
         } catch (e: Exception) {
             Log.e("QuietHoursService", "Error unregistering receivers", e)
         }
@@ -2119,9 +2133,17 @@ class QuietHoursNotificationService : Service() {
                 val messagingStyle = NotificationCompat.MessagingStyle(mePerson)
                     .setConversationTitle(sender)
 
-                var partIndex = 0 // Globaler Counter für alle Parts dieses Senders
+                var partIndex = 0
 
                 msgs.takeLast(10).forEach { msg ->
+                    // Generiere eindeutige Message-ID
+                    val messageId = "${sender}_${msg.timestamp}"
+
+                    // Überspringe gelesene Nachrichten
+                    if (readMessageIds.contains(messageId)) {
+                        return@forEach
+                    }
+
                     val timeText =
                         SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(msg.timestamp))
 
@@ -2134,9 +2156,22 @@ class QuietHoursNotificationService : Service() {
 
                         parts.forEachIndexed { index, part ->
                             val partNotificationId = notificationId + 10000 + partIndex
+                            val partMessageId = "${messageId}_${partIndex}"
                             partIndex++
 
                             val contentText = part.take(100) + if (part.length > 100) "..." else ""
+
+                            // Mark as Read Action
+                            val markReadIntent = Intent(ACTION_MARK_PARTS_READ).apply {
+                                putExtra(EXTRA_MESSAGE_ID, messageId)
+                                `package` = packageName
+                            }
+                            val markReadPendingIntent = PendingIntent.getBroadcast(
+                                this,
+                                partNotificationId + 500000,
+                                markReadIntent,
+                                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                            )
 
                             val partNotification = NotificationCompat.Builder(this, CHANNEL_ID)
                                 .setSmallIcon(R.drawable.stat_notify_chat)
@@ -2150,7 +2185,12 @@ class QuietHoursNotificationService : Service() {
                                 )
                                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                                 .setGroup("whatsapp_long_$sender")
-                                .setAutoCancel(true)
+                                .setAutoCancel(false)
+                                .addAction(
+                                    R.drawable.ic_menu_close_clear_cancel,
+                                    "Als gelesen markieren",
+                                    markReadPendingIntent
+                                )
                                 .build()
 
                             if (ContextCompat.checkSelfPermission(
@@ -2203,14 +2243,29 @@ class QuietHoursNotificationService : Service() {
                         .build()
 
                     builder.addAction(replyAction)
-                } else {
-                    Log.w("QuietHoursService", "No reply action available for $sender")
                 }
 
-                val messagesWithImages = msgs.filter { it.imageUri != null }
+                // Image notifications ebenfalls mit Mark Read Action
+                val messagesWithImages = msgs.filter {
+                    it.imageUri != null && !readMessageIds.contains("${sender}_${it.timestamp}")
+                }
+
                 if (messagesWithImages.isNotEmpty()) {
                     messagesWithImages.forEachIndexed { index, msg ->
                         val imageNotificationId = notificationId + 1000 + index
+                        val messageId = "${sender}_${msg.timestamp}"
+
+                        val markReadIntent = Intent(ACTION_MARK_PARTS_READ).apply {
+                            putExtra(EXTRA_MESSAGE_ID, messageId)
+                            `package` = packageName
+                        }
+                        val markReadPendingIntent = PendingIntent.getBroadcast(
+                            this,
+                            imageNotificationId + 500000,
+                            markReadIntent,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                        )
+
                         val imageNotification = NotificationCompat.Builder(this, CHANNEL_ID)
                             .setSmallIcon(R.drawable.ic_menu_gallery)
                             .setContentTitle("📷 Bild von $sender")
@@ -2244,7 +2299,12 @@ class QuietHoursNotificationService : Service() {
                             )
                             .setPriority(NotificationCompat.PRIORITY_HIGH)
                             .setGroup("whatsapp_images_$sender")
-                            .setAutoCancel(true)
+                            .setAutoCancel(false)
+                            .addAction(
+                                R.drawable.ic_menu_close_clear_cancel,
+                                "Als gelesen",
+                                markReadPendingIntent
+                            )
                             .build()
 
                         if (ContextCompat.checkSelfPermission(
@@ -2263,8 +2323,6 @@ class QuietHoursNotificationService : Service() {
                     ) == PackageManager.PERMISSION_GRANTED
                 ) {
                     notificationManager.notify(notificationId, builder.build())
-                } else {
-                    Log.e("QuietHoursService", "✗ Missing POST_NOTIFICATIONS permission")
                 }
             }
         } catch (e: Exception) {
@@ -3432,7 +3490,7 @@ class QuietHoursNotificationService : Service() {
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setOngoing(true)
                 .setAutoCancel(false)
-                .setContentIntent(confirmDeletePendingIntent) // GEÄNDERT
+                .setContentIntent(confirmDeletePendingIntent)
                 .addAction(R.drawable.ic_media_previous, "◀", prevPendingIntent)
                 .addAction(R.drawable.ic_menu_view, "Öffnen", openPendingIntent)
                 .addAction(R.drawable.ic_media_next, "▶", nextPendingIntent)
@@ -3501,7 +3559,7 @@ class QuietHoursNotificationService : Service() {
 
     @OptIn(DelicateCoroutinesApi::class)
     private fun showLastFriendMessages() {
-        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+        GlobalScope.launch(Dispatchers.IO) {
             try {
                 Handler(Looper.getMainLooper()).post {
                     showSimpleNotification(
@@ -3721,274 +3779,6 @@ class QuietHoursNotificationService : Service() {
             Settings.canDrawOverlays(this)
         } else {
             checkSelfPermission(Manifest.permission.WRITE_SETTINGS) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    private fun showPodcastQueue() {
-        try {
-            val serviceIntent = Intent(this, PodcastPlayerService::class.java)
-
-            // Service muss laufen um Queue abzurufen
-            startService(serviceIntent)
-
-            Handler(Looper.getMainLooper()).postDelayed({
-                val queuePaths = getPodcastQueueFromService()
-
-                if (queuePaths.isEmpty()) {
-                    showSimpleNotification(
-                        "📋 Queue leer",
-                        "Keine Podcasts in der Warteschlange"
-                    )
-                    return@postDelayed
-                }
-
-                val queueText = queuePaths.mapIndexed { index, path ->
-                    val name = path.substringAfterLast("/").substringBeforeLast(".")
-                    "${index + 1}. $name"
-                }.joinToString("\n")
-
-                val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-                    .setSmallIcon(R.drawable.ic_menu_info_details)
-                    .setContentTitle("📋 Podcast Queue (${queuePaths.size})")
-                    .setContentText(queuePaths.firstOrNull()?.substringAfterLast("/")?.substringBeforeLast(".") ?: "")
-                    .setStyle(
-                        NotificationCompat.BigTextStyle()
-                            .bigText(queueText)
-                    )
-                    .setPriority(NotificationCompat.PRIORITY_HIGH)
-                    .setAutoCancel(true)
-                    .build()
-
-                val notificationManager = getSystemService(NotificationManager::class.java)
-                if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                    == PackageManager.PERMISSION_GRANTED
-                ) {
-                    notificationManager.notify(50010, notification)
-                }
-            }, 300)
-
-        } catch (e: Exception) {
-            Log.e("QuietHoursService", "Error showing podcast queue", e)
-            showSimpleNotification("❌ Fehler", "Queue konnte nicht angezeigt werden")
-        }
-    }
-
-    private fun addPodcastToQueue(index: Int) {
-        try {
-            val prefs = getSharedPreferences("podcast_player_prefs", MODE_PRIVATE)
-            val allPodcasts = getAllPodcastsFromPrefs(prefs)
-
-            if (index < 0 || index >= allPodcasts.size) {
-                showSimpleNotification(
-                    "❌ Ungültiger Index",
-                    "Podcast ${index + 1} existiert nicht (1-${allPodcasts.size})",
-                    20.seconds
-                )
-                return
-            }
-
-            val podcast = allPodcasts[index]
-            addToQueueViaService(podcast.path)
-
-            showSimpleNotification(
-                "✅ Zur Queue hinzugefügt",
-                "${index + 1}. ${podcast.name}"
-            )
-
-        } catch (e: Exception) {
-            Log.e("QuietHoursService", "Error adding to queue", e)
-            showSimpleNotification("❌ Fehler", "Konnte nicht zur Queue hinzufügen")
-        }
-    }
-
-    private fun removePodcastFromQueue(position: Int) {
-        try {
-            val queuePaths = getPodcastQueueFromService()
-
-            if (position < 0 || position >= queuePaths.size) {
-                showSimpleNotification(
-                    "❌ Ungültige Position",
-                    "Position ${position + 1} existiert nicht (1-${queuePaths.size})",
-                    20.seconds
-                )
-                return
-            }
-
-            val path = queuePaths[position]
-            removeFromQueueViaService(path)
-
-            val name = path.substringAfterLast("/").substringBeforeLast(".")
-            showSimpleNotification(
-                "✅ Aus Queue entfernt",
-                "${position + 1}. $name"
-            )
-
-        } catch (e: Exception) {
-            Log.e("QuietHoursService", "Error removing from queue", e)
-            showSimpleNotification("❌ Fehler", "Konnte nicht aus Queue entfernen")
-        }
-    }
-
-    private fun clearPodcastQueue() {
-        try {
-            val prefs = getSharedPreferences("podcast_player_prefs", MODE_PRIVATE)
-            prefs.edit(commit = true) {
-                putString("podcast_queue", "")
-            }
-
-            showSimpleNotification(
-                "✅ Queue geleert",
-                "Alle Podcasts aus der Warteschlange entfernt"
-            )
-
-        } catch (e: Exception) {
-            Log.e("QuietHoursService", "Error clearing queue", e)
-            showSimpleNotification("❌ Fehler", "Queue konnte nicht geleert werden")
-        }
-    }
-
-    private fun getPodcastQueueFromService(): List<String> {
-        val prefs = getSharedPreferences("podcast_player_prefs", MODE_PRIVATE)
-        val queueJson = prefs.getString("podcast_queue", null)
-        return if (queueJson != null && queueJson.isNotEmpty()) {
-            queueJson.split("|||")
-        } else {
-            emptyList()
-        }
-    }
-
-    private fun addToQueueViaService(path: String) {
-        val prefs = getSharedPreferences("podcast_player_prefs", MODE_PRIVATE)
-        val currentQueue = getPodcastQueueFromService().toMutableList()
-
-        if (!currentQueue.contains(path)) {
-            currentQueue.add(path)
-            val queueJson = currentQueue.joinToString("|||")
-            prefs.edit(commit = true) {
-                putString("podcast_queue", queueJson)
-            }
-        }
-    }
-
-    private fun removeFromQueueViaService(path: String) {
-        val prefs = getSharedPreferences("podcast_player_prefs", MODE_PRIVATE)
-        val currentQueue = getPodcastQueueFromService().toMutableList()
-
-        currentQueue.remove(path)
-        val queueJson = currentQueue.joinToString("|||")
-        prefs.edit(commit = true) {
-            putString("podcast_queue", queueJson)
-        }
-    }
-
-    private data class SimplePodcast(val name: String, val path: String)
-
-    private fun getAllPodcastsFromPrefs(prefs: SharedPreferences): List<SimplePodcast> {
-        // Lade alle gespeicherten Podcasts anhand der Position-Keys
-        val allKeys = prefs.all.keys
-        val podcastPaths = allKeys
-            .filter { it.startsWith("podcast_position_") }
-            .map { key ->
-                val hash = key.removePrefix("podcast_position_").toIntOrNull() ?: return@map null
-                // Versuche Path zu rekonstruieren - funktioniert nur bedingt
-                // Besser: Verwende MediaStore oder separaten Key
-                null
-            }
-            .filterNotNull()
-
-        // Fallback: Lade über MediaStore wie im Service
-        return loadPodcastsFromMediaStore()
-    }
-
-    private fun loadPodcastsFromMediaStore(): List<SimplePodcast> {
-        val podcasts = mutableListOf<SimplePodcast>()
-
-        try {
-            val projection = arrayOf(
-                android.provider.MediaStore.Audio.Media.DISPLAY_NAME,
-                android.provider.MediaStore.Audio.Media.DATA,
-                android.provider.MediaStore.Audio.Media.TITLE
-            )
-
-            val sortOrder = "${android.provider.MediaStore.Audio.Media.DISPLAY_NAME} ASC"
-
-            contentResolver.query(
-                android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                projection,
-                null,
-                null,
-                sortOrder
-            )?.use { cursor ->
-                val nameColumn = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.DISPLAY_NAME)
-                val dataColumn = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.DATA)
-                val titleColumn = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.TITLE)
-
-                while (cursor.moveToNext()) {
-                    val name = cursor.getString(nameColumn) ?: continue
-                    val data = cursor.getString(dataColumn) ?: continue
-                    val title = cursor.getString(titleColumn)
-
-                    val normalizedPath = try {
-                        java.net.URLDecoder.decode(data, "UTF-8")
-                            .replace("\\", "/")
-                            .lowercase()
-                    } catch (_: Exception) {
-                        data.replace("\\", "/").lowercase()
-                    }
-
-                    val isInPodcasts = normalizedPath.contains("/download/cloud/podcasts/") ||
-                            normalizedPath.contains("/downloads/cloud/podcasts/") ||
-                            data.contains("/Cloud/Podcasts/", ignoreCase = true)
-
-                    if (isInPodcasts && (name.endsWith(".mp3") || name.endsWith(".m4a"))) {
-                        val displayName = if (!title.isNullOrBlank() && title != "<unknown>") {
-                            title
-                        } else {
-                            name.substringBeforeLast('.')
-                        }
-
-                        podcasts.add(SimplePodcast(displayName, data))
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("QuietHoursService", "Error loading podcasts from MediaStore", e)
-        }
-
-        return podcasts.sortedBy { it.name }
-    }
-
-    private fun clearPodcastSelectionNotifications() {
-        try {
-            val notificationManager = getSystemService(NotificationManager::class.java)
-
-            // Lösche alle einzelnen Podcast-Notifications (60000-60998)
-            for (i in 0..998) {
-                notificationManager.cancel(60000 + i)
-            }
-
-            // Lösche Summary-Notification
-            notificationManager.cancel(60999)
-
-            // Optional: Lösche auch die Delete-Completed Notifications (70000-70999)
-            for (i in 0..999) {
-                notificationManager.cancel(70000 + i)
-            }
-
-            showSimpleNotification(
-                "✅ Notifications gelöscht",
-                "Alle Podcast-Auswahl Notifications wurden entfernt"
-            )
-
-            Log.d("QuietHoursService", "Cleared all podcast selection notifications")
-
-        } catch (e: Exception) {
-            Log.e("QuietHoursService", "Error clearing podcast notifications", e)
-            showSimpleNotification(
-                "❌ Fehler",
-                "Konnte Notifications nicht löschen: ${e.message}",
-                20.seconds
-            )
         }
     }
 }
