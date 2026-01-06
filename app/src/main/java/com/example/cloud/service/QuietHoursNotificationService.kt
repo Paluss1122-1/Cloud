@@ -11,7 +11,6 @@ import android.app.PendingIntent
 import androidx.core.app.RemoteInput
 import android.app.Service
 import android.app.admin.DevicePolicyManager
-import android.bluetooth.BluetoothAdapter
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -19,7 +18,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
-import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.media.MediaPlayer
 import android.os.Bundle
@@ -30,7 +28,6 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
-import android.widget.Toast
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
@@ -47,12 +44,9 @@ import java.util.Locale
 import androidx.core.net.toUri
 import com.example.cloud.mediarecorder.AudioRecorder
 import com.example.cloud.SupabaseConfig
-import com.example.cloud.musicstatstab.MusicStatsTabContent
 import com.example.cloud.quiethoursnotificationhelper.addPodcastToQueue
 import com.example.cloud.quiethoursnotificationhelper.clearPodcastQueue
 import com.example.cloud.quiethoursnotificationhelper.clearPodcastSelectionNotifications
-import com.example.cloud.quiethoursnotificationhelper.getAllPodcastsFromPrefs
-import com.example.cloud.quiethoursnotificationhelper.loadPodcastsFromMediaStore
 import com.example.cloud.quiethoursnotificationhelper.markMessageAsRead
 import com.example.cloud.quiethoursnotificationhelper.removePodcastFromQueue
 import com.example.cloud.quiethoursnotificationhelper.showPodcastQueue
@@ -63,16 +57,12 @@ import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.withContext
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 class QuietHoursNotificationService : Service() {
 
     val context = this
-
-    var uploadedCount = 0
-    var failedCount = 0
 
     companion object {
         private const val CHANNEL_ID = "quiet_hours_channel"
@@ -1028,7 +1018,12 @@ class QuietHoursNotificationService : Service() {
                         )
                     }
                 } else {
-                    showFlashlightLevelInfo()
+                    val cameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
+                    val cameraId = cameraManager.cameraIdList.firstOrNull()
+                    if (cameraId != null) {
+                        val clampedLevel = 1
+                        cameraManager.turnOnTorchWithStrengthLevel(cameraId, clampedLevel)
+                    }
                 }
                 return
             }
@@ -1916,6 +1911,31 @@ class QuietHoursNotificationService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+
+        val commandInput = RemoteInput.Builder("key_command_input")
+            .setLabel("Befehl eingeben...")
+            .build()
+
+        val commandIntent = Intent(ACTION_EXECUTE_COMMAND).apply {
+            `package` = packageName
+        }
+
+        val commandPendingIntent = PendingIntent.getBroadcast(
+            this,
+            200,
+            commandIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        )
+
+        val commandAction = NotificationCompat.Action.Builder(
+            R.drawable.ic_menu_search,
+            "Befehl",
+            commandPendingIntent
+        )
+            .addRemoteInput(commandInput)
+            .setShowsUserInterface(false)
+            .build()
+
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_lock_idle_alarm)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -1924,37 +1944,13 @@ class QuietHoursNotificationService : Service() {
             .setContentIntent(launchCloudPendingIntent)
             .setRequestPromotedOngoing(true)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setGroup("Ruhezeit")
+            .setGroup("Services")
+            .setGroupSummary(true)
+            .addAction(commandAction)
 
         if (isQuietHours) {
             builder
                 .setContentTitle("🌙 Ruhezeit aktiv")
-
-            val commandInput = RemoteInput.Builder("key_command_input")
-                .setLabel("Befehl eingeben...")
-                .build()
-
-            val commandIntent = Intent(ACTION_EXECUTE_COMMAND).apply {
-                `package` = packageName
-            }
-
-            val commandPendingIntent = PendingIntent.getBroadcast(
-                this,
-                200,
-                commandIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-            )
-
-            val commandAction = NotificationCompat.Action.Builder(
-                R.drawable.ic_menu_search,
-                "Befehl",
-                commandPendingIntent
-            )
-                .addRemoteInput(commandInput)
-                .setShowsUserInterface(false)
-                .build()
-
-            builder.addAction(commandAction)
 
             val settingsIntent = Intent(Settings.ACTION_SETTINGS).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -2003,30 +1999,6 @@ class QuietHoursNotificationService : Service() {
             val prefs = getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
             val currentStart = prefs.getString("saved_number_start", "21") ?: "21"
             val currentEnd = prefs.getString("saved_number", "7") ?: "7"
-
-            val commandInput = RemoteInput.Builder("key_command_input")
-                .setLabel("Befehl eingeben...")
-                .build()
-
-            val commandIntent = Intent(ACTION_EXECUTE_COMMAND).apply {
-                `package` = packageName
-            }
-
-            val commandPendingIntent = PendingIntent.getBroadcast(
-                this,
-                200,
-                commandIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-            )
-
-            val commandAction = NotificationCompat.Action.Builder(
-                R.drawable.ic_menu_search,
-                "Befehl",
-                commandPendingIntent
-            )
-                .addRemoteInput(commandInput)
-                .setShowsUserInterface(false)
-                .build()
 
             val startRemoteInput = RemoteInput.Builder("key_time_input")
                 .setLabel("Startzeit (0-23)")
@@ -2156,7 +2128,6 @@ class QuietHoursNotificationService : Service() {
 
                         parts.forEachIndexed { index, part ->
                             val partNotificationId = notificationId + 10000 + partIndex
-                            val partMessageId = "${messageId}_${partIndex}"
                             partIndex++
 
                             val contentText = part.take(100) + if (part.length > 100) "..." else ""
@@ -3024,38 +2995,6 @@ class QuietHoursNotificationService : Service() {
         }
     }
 
-    private fun showFlashlightLevelInfo() {
-        val cameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
-        try {
-            val cameraId = cameraManager.cameraIdList.firstOrNull() ?: return
-
-            val characteristics = cameraManager.getCameraCharacteristics(cameraId)
-            val maxLevel =
-                characteristics.get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL)
-                    ?: 1
-
-            if (maxLevel > 1) {
-                showSimpleNotification(
-                    "💡 Taschenlampe Info",
-                    "Max. Helligkeit: $maxLevel\nSyntax: flashlevel [1-$maxLevel]"
-                )
-            } else {
-                showSimpleNotification(
-                    "⚠️ Taschenlampe Info",
-                    "Gerät unterstützt keine Helligkeitssteuerung\nNur Ein/Aus verfügbar",
-                    20.seconds
-                )
-            }
-        } catch (e: Exception) {
-            Log.e("QuietHoursService", "Error getting flashlight info", e)
-            showSimpleNotification(
-                "❌ Fehler",
-                "Taschenlampen-Info konnte nicht abgerufen werden",
-                20.seconds
-            )
-        }
-    }
-
     private fun startTimeControlMethod1() {
         try {
             showSimpleNotification("🔄 Methode 1", "Starte TimeControl via ComponentName...")
@@ -3303,7 +3242,7 @@ class QuietHoursNotificationService : Service() {
                 android.graphics.ImageDecoder.decodeBitmap(
                     android.graphics.ImageDecoder.createSource(contentResolver, imageUri)
                 )
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 null
             }
 
@@ -3626,7 +3565,7 @@ class QuietHoursNotificationService : Service() {
                             .withZone(java.time.ZoneId.systemDefault())
                         formatter.format(instant)
                     }
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     msg.created_at?.take(16)?.replace("T", " ") // Fallback
                 } ?: "Unbekannt"
 
