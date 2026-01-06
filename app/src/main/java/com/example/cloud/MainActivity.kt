@@ -60,11 +60,7 @@ class MainActivity : FragmentActivity() {
 
         val launcher = registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
-        ) { permissions ->
-            permissions.entries.forEach {
-                println("${it.key} is granted: ${it.value}")
-            }
-        }
+        ) { permissions ->}
 
         launcher.launch(
             arrayOf(
