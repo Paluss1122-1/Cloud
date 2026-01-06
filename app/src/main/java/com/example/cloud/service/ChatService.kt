@@ -269,6 +269,8 @@ class ChatService : Service() {
             .addAction(replyAction)
             .addAction(historyAction)
             .setDeleteIntent(deletePendingIntent)
+            .setGroup("Services")
+            .setGroupSummary(true)
             .build()
     }
 
