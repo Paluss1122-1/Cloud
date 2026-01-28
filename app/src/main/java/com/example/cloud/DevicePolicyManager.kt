@@ -4,15 +4,16 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 
 class PolicyManager(private val activity: MainActivity) {
 
-    private val REQUEST_CODE_ENABLE_ADMIN = 1001
-    private lateinit var adminComponent: ComponentName
+    private val adminComponent: ComponentName = ComponentName(activity, MyDeviceAdminReceiver::class.java)
 
-    init {
-        adminComponent = ComponentName(activity, MyDeviceAdminReceiver::class.java)
-    }
+    private val adminRequestLauncher: ActivityResultLauncher<Intent> = activity.registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { _ ->}
 
     fun checkAndRequestAdminRights() {
         val dpm = activity.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
@@ -23,12 +24,7 @@ class PolicyManager(private val activity: MainActivity) {
                 putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION,
                     "Ermöglicht Sicherheitsfunktionen wie das Sperren des Geräts.")
             }
-            activity.startActivityForResult(intent, REQUEST_CODE_ENABLE_ADMIN)
+            adminRequestLauncher.launch(intent)
         }
-    }
-
-    fun isAdminActive(): Boolean {
-        val dpm = activity.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        return dpm.isAdminActive(adminComponent)
     }
 }
