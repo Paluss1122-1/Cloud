@@ -1,9 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<paths>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- External files directory -->
     <external-files-path
         name="external_files"
         path="." />
 
+    <!-- Cache directory for sharing -->
+    <cache-path
+        name="shared_audio"
+        path="." />
+
+    <!-- External paths -->
     <external-path
         name="dcim"
         path="DCIM/" />
@@ -12,6 +19,8 @@
         name="downloads"
         path="Download/" />
 
-    <cache-path name="shared_audio" path="/" />
-    <external-files-path name="audio_files" path="/" />
+    <!-- Root external storage (if needed) -->
+    <external-path
+        name="external"
+        path="." />
 </paths>
