@@ -3,27 +3,55 @@ package com.example.cloud
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
+import androidx.fragment.app.FragmentActivity
+import com.example.cloud.errorreportsclaude.ErrorMonitorService
+import com.example.cloud.jsoneditor.JsonEditorContent
 import com.example.cloud.privatecloudapp.PrivateCloudApp
 import com.example.cloud.quicksettingsfunctions.BatteryDataRepository
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.storage.storage
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.ui.Modifier
-import androidx.fragment.app.FragmentActivity
-import com.example.cloud.errorreportsclaude.ErrorMonitorService
+import java.io.File
+import java.io.FileOutputStream
 
 class MainActivity : FragmentActivity() {
     private lateinit var policyManager: PolicyManager
     val supabase: SupabaseClient = SupabaseConfig.client
+
+    // JSON Editor State
+    private var jsonFilePath by mutableStateOf<String?>(null)
+    private var jsonFileUri by mutableStateOf<Uri?>(null)
+    private var showJsonEditor by mutableStateOf(false)
+
+    // Berechtigungsanfrage für Dateizugriff (Android 6-12)
+    private val storagePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            handleIncomingIntent(intent)
+        } else {
+            Toast.makeText(
+                this,
+                "Berechtigung zum Lesen von Dateien erforderlich",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -49,18 +77,14 @@ class MainActivity : FragmentActivity() {
         BatteryDataRepository.init(this)
 
         val audioPermission = Manifest.permission.READ_MEDIA_AUDIO
-
         val imagesPermission = Manifest.permission.READ_MEDIA_IMAGES
-
         val locationPermission = Manifest.permission.ACCESS_FINE_LOCATION
-
         val cameraPermission = Manifest.permission.CAMERA
-
         val contactsPermission = Manifest.permission.READ_CONTACTS
 
         val launcher = registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
-        ) { permissions ->}
+        ) { permissions -> }
 
         launcher.launch(
             arrayOf(
@@ -72,6 +96,9 @@ class MainActivity : FragmentActivity() {
             )
         )
 
+        // JSON Intent prüfen
+        checkPermissionsAndHandleIntent(intent)
+
         val startTarget = intent.getStringExtra("target")
 
         // Content setzen
@@ -81,7 +108,22 @@ class MainActivity : FragmentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    PrivateCloudApp(supabase.storage, startTarget)
+                    // JSON Editor hat Vorrang, wenn eine JSON-Datei geöffnet werden soll
+                    if (showJsonEditor && jsonFilePath != null) {
+                        JsonEditorContent(
+                            filePath = jsonFilePath!!,
+                            fileUri = jsonFileUri,
+                            context = this@MainActivity,
+                            onClose = {
+                                showJsonEditor = false
+                                jsonFilePath = null
+                                jsonFileUri = null
+                            }
+                        )
+                    } else {
+                        // Normale App-Oberfläche
+                        PrivateCloudApp(supabase.storage, startTarget)
+                    }
                 }
             }
         }
@@ -103,5 +145,118 @@ class MainActivity : FragmentActivity() {
                 101
             )
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+
+        // Wichtig: Activity neu starten wenn im Hintergrund
+        if (!showJsonEditor) {
+            checkPermissionsAndHandleIntent(intent)
+        } else {
+            // Wenn bereits ein JSON-Editor offen ist, erst schließen
+            showJsonEditor = false
+            jsonFilePath = null
+            jsonFileUri = null
+
+            // Dann neuen Intent verarbeiten
+            checkPermissionsAndHandleIntent(intent)
+        }
+    }
+
+    private fun checkPermissionsAndHandleIntent(intent: Intent) {
+        // Prüfen ob es ein JSON-Intent ist
+        if (intent.action == Intent.ACTION_VIEW || intent.action == Intent.ACTION_EDIT) {
+            // Ab Android 13 (API 33) keine Storage-Berechtigung mehr nötig
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                handleIncomingIntent(intent)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                // Für Android 6-12: Berechtigung prüfen
+                when {
+                    ContextCompat.checkSelfPermission(
+                        this,
+                        Manifest.permission.READ_EXTERNAL_STORAGE
+                    ) == PackageManager.PERMISSION_GRANTED -> {
+                        handleIncomingIntent(intent)
+                    }
+                    else -> {
+                        storagePermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                    }
+                }
+            } else {
+                handleIncomingIntent(intent)
+            }
+        }
+    }
+
+    private fun handleIncomingIntent(intent: Intent) {
+        android.util.Log.d("MainActivity", "Intent Action: ${intent.action}")
+        android.util.Log.d("MainActivity", "Intent Data: ${intent.data}")
+        android.util.Log.d("MainActivity", "Intent Type: ${intent.type}")
+        when (intent.action) {
+            Intent.ACTION_VIEW, Intent.ACTION_EDIT -> {
+                intent.data?.let { uri ->
+                    loadFileFromUri(uri)
+                }
+            }
+        }
+    }
+
+    private fun loadFileFromUri(uri: Uri) {
+        try {
+            val filePath = when (uri.scheme) {
+                "file" -> {
+                    // Direkter Dateipfad
+                    uri.path ?: throw Exception("Ungültiger Dateipfad")
+                }
+                "content" -> {
+                    // Content URI (z.B. von Dateimanager)
+                    copyContentToTempFile(uri)
+                }
+                else -> throw Exception("Nicht unterstütztes URI-Schema: ${uri.scheme}")
+            }
+
+            jsonFilePath = filePath
+            jsonFileUri = uri  // URI speichern für späteres Speichern
+            showJsonEditor = true
+
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
+                "Fehler beim Laden der JSON-Datei: ${e.message}",
+                Toast.LENGTH_LONG
+            ).show()
+            e.printStackTrace()
+        }
+    }
+
+    private fun copyContentToTempFile(uri: Uri): String {
+        // Content URI in temporäre Datei kopieren
+        val inputStream = contentResolver.openInputStream(uri)
+            ?: throw Exception("Datei konnte nicht geöffnet werden")
+
+        // Dateiname aus URI extrahieren (optional)
+        val fileName = try {
+            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                cursor.moveToFirst()
+                cursor.getString(nameIndex)
+            } ?: "temp_${System.currentTimeMillis()}.json"
+        } catch (e: Exception) {
+            "temp_${System.currentTimeMillis()}.json"
+        }
+
+        // Temporäre Datei erstellen
+        val tempFile = File(cacheDir, fileName)
+        val outputStream = FileOutputStream(tempFile)
+
+        inputStream.use { input ->
+            outputStream.use { output ->
+                input.copyTo(output)
+            }
+        }
+
+        return tempFile.absolutePath
     }
 }
