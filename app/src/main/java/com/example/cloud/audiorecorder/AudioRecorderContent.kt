@@ -506,12 +506,22 @@ fun shareAudioToWhatsApp(
     onError: (String) -> Unit
 ) {
     try {
-        val outputFile = File(context.cacheDir, "share_${System.currentTimeMillis()}.opus")
+        val outputFile = File(context.cacheDir, "share_${System.currentTimeMillis()}.m4a")
         trimAudioFile(sourceFile, outputFile, startMs, endMs)
 
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", outputFile)
+        // Log for debugging
+        android.util.Log.d("AudioShare", "Output file: ${outputFile.absolutePath}")
+        android.util.Log.d("AudioShare", "File exists: ${outputFile.exists()}")
+        android.util.Log.d("AudioShare", "Authority: ${context.packageName}.provider")
+
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.provider",
+            outputFile
+        )
+
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "audio/ogg"
+            type = "audio/mp4"  // Changed from audio/ogg since we're now using .m4a
             putExtra(Intent.EXTRA_STREAM, uri)
             setPackage("com.whatsapp")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -520,21 +530,20 @@ fun shareAudioToWhatsApp(
         try {
             context.startActivity(shareIntent)
             onComplete()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            android.util.Log.e("AudioShare", "WhatsApp not found", e)
             // Fallback
             val chooser = Intent.createChooser(shareIntent.apply { setPackage(null) }, "Teilen")
             context.startActivity(chooser)
             onComplete()
         }
     } catch (e: Exception) {
+        android.util.Log.e("AudioShare", "Share failed", e)
         onError(e.message ?: "Unbekannter Fehler")
     }
 }
 
 fun trimAudioFile(sourceFile: File, outputFile: File, startMs: Long, endMs: Long) {
-    // M4A Container für AAC (WhatsApp kompatibel)
-    val tempFile = File(outputFile.parent, outputFile.nameWithoutExtension + ".m4a")
-
     val extractor = MediaExtractor()
     extractor.setDataSource(sourceFile.absolutePath)
 
@@ -545,7 +554,8 @@ fun trimAudioFile(sourceFile: File, outputFile: File, startMs: Long, endMs: Long
     extractor.selectTrack(trackIndex)
     val format = extractor.getTrackFormat(trackIndex)
 
-    val muxer = MediaMuxer(tempFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+    // Write directly to outputFile instead of creating a temp file
+    val muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
     val muxerTrackIndex = muxer.addTrack(format)
     muxer.start()
 
@@ -565,7 +575,9 @@ fun trimAudioFile(sourceFile: File, outputFile: File, startMs: Long, endMs: Long
             bufferInfo.size = sampleSize
             bufferInfo.presentationTimeUs = timeUs - (startMs * 1000)
             bufferInfo.flags =
-                if ((extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0
+                if ((extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0)
+                    MediaCodec.BUFFER_FLAG_KEY_FRAME
+                else 0
             muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
         }
 
@@ -575,11 +587,6 @@ fun trimAudioFile(sourceFile: File, outputFile: File, startMs: Long, endMs: Long
     muxer.stop()
     muxer.release()
     extractor.release()
-
-    if (tempFile.exists()) {
-        tempFile.copyTo(outputFile, overwrite = true)
-        tempFile.delete()
-    }
 }
 
 class AudioForegroundService : Service() {
@@ -601,9 +608,15 @@ class AudioForegroundService : Service() {
 
     private fun startRecording(path: String) {
         recorder = (MediaRecorder(this)).apply {
-            setAudioSource(MediaRecorder.AudioSource.MIC)
+            setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION) // Bessere Voice-Optimierung
             setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+
+            // ✅ Qualitäts-Einstellungen wie WhatsApp
+            setAudioEncodingBitRate(128000) // 128 kbps
+            setAudioSamplingRate(48000)      // 48 kHz
+            setAudioChannels(2)              // Mono (für Voice ausreichend)
+
             setOutputFile(path)
             prepare()
             start()
