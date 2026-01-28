@@ -68,6 +68,13 @@ class QuietHoursNotificationService : Service() {
         private const val CHANNEL_ID = "quiet_hours_channel"
         private const val NOTIFICATION_ID = 999999
 
+        private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
+        private val TELEGRAM_PACKAGES = setOf("org.telegram.messenger", "org.telegram.messenger.web")
+
+        private fun isSupportedMessenger(packageName: String): Boolean {
+            return WHATSAPP_PACKAGES.contains(packageName) || TELEGRAM_PACKAGES.contains(packageName)
+        }
+
         private const val ACTION_SHOW_MESSAGES = "com.example.cloud.ACTION_SHOW_MESSAGES"
         private const val ACTION_OPEN_SETTINGS = "com.example.cloud.ACTION_OPEN_SETTINGS"
 
@@ -124,6 +131,7 @@ class QuietHoursNotificationService : Service() {
 
         private const val ACTION_MARK_PARTS_READ = "com.example.cloud.ACTION_MARK_PARTS_READ"
         private const val EXTRA_MESSAGE_ID = "extra_message_id"
+        private const val ALARM_REQUEST_CODE = 1001
 
         fun startService(context: Context) {
             val intent = Intent(context, QuietHoursNotificationService::class.java)
@@ -154,6 +162,13 @@ class QuietHoursNotificationService : Service() {
 
     data class SimplePodcast(val name: String, val path: String)
 
+    data class GalleryImage(
+        val uri: android.net.Uri,
+        val lastModified: Long,
+        val createdAt: Long,
+        val displayName: String? = null
+    )
+
     private val handler = Handler(Looper.getMainLooper())
     private val readMessageIds = mutableSetOf<String>()
     private var isCurrentlyQuietHours = false
@@ -162,13 +177,13 @@ class QuietHoursNotificationService : Service() {
     private var currentVoiceNoteIndex = 0
     private var voiceNoteFiles: List<File> = emptyList()
     private var currentSenderForVoiceNote: String? = null
-
-    // Audio recorder fields
     private var audioRecorder: AudioRecorder? = null
     private var currentRecordingFile: File? = null
 
-    private var galleryImages: List<android.net.Uri> = emptyList()
+    private var galleryImages: List<GalleryImage> = emptyList()
     private var currentGalleryIndex = 0
+
+    private val THRESHOLD_MINUTES = 30
 
     private fun saveReplyDataPermanently(sender: String) {
         try {
@@ -224,6 +239,7 @@ class QuietHoursNotificationService : Service() {
         }
     }
 
+
     private fun sendMessageViaSavedReplyData(messageText: String) {
         try {
             val savedData = loadSavedReplyData()
@@ -241,45 +257,16 @@ class QuietHoursNotificationService : Service() {
             if (currentReplyData != null) {
                 sendMessageToWhatsApp(savedData.sender, messageText, currentReplyData)
             } else {
-                try {
-                    val intent = Intent().apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        setPackage(savedData.packageName)
-                    }
+                showSimpleNotification(
+                    "❌ Senden fehlgeschlagen",
+                    "Keine aktive Notification von ${savedData.sender}. Warte auf neue Nachricht.",
+                    20.seconds
+                )
 
-                    val bundle = Bundle().apply {
-                        putCharSequence(savedData.resultKey, messageText)
-                    }
-
-                    val reconstructedRemoteInput = RemoteInput.Builder(savedData.resultKey)
-                        .setLabel("Antwort")
-                        .setAllowFreeFormInput(true)
-                        .build()
-
-                    RemoteInput.addResultsToIntent(
-                        arrayOf(reconstructedRemoteInput),
-                        intent,
-                        bundle
-                    )
-
-                    showSimpleNotification(
-                        "❌ Senden fehlgeschlagen",
-                        "Keine aktive Notification von ${savedData.sender}. Warte auf neue Nachricht.",
-                        20.seconds
-                    )
-
-                    Log.w(
-                        "QuietHoursService",
-                        "Cannot send without current PendingIntent - saved data alone is not enough"
-                    )
-
-                } catch (e: Exception) {
-                    Log.e("QuietHoursService", "Failed to reconstruct reply intent", e)
-                    showSimpleNotification(
-                        "❌ Fehler",
-                        "Nachricht konnte nicht gesendet werden: ${e.message}"
-                    )
-                }
+                Log.w(
+                    "QuietHoursService",
+                    "Cannot send without current PendingIntent - saved data alone is not enough"
+                )
             }
 
         } catch (e: Exception) {
@@ -344,8 +331,8 @@ class QuietHoursNotificationService : Service() {
             )
 
         } catch (e: Exception) {
-            Log.e("QuietHoursService", "Error sending to WhatsApp", e)
-            showSimpleNotification("❌ Fehler", "WhatsApp-Versand fehlgeschlagen")
+            Log.e("QuietHoursService", "Error sending message", e)
+            showSimpleNotification("❌ Fehler", "Versand fehlgeschlagen")
         }
     }
 
@@ -643,6 +630,57 @@ class QuietHoursNotificationService : Service() {
                 description = "Löscht alle Podcast-Auswahl Notifications"
             ) {
                 clearPodcastSelectionNotifications(this@QuietHoursNotificationService)
+            },
+            Command(
+                name = "tb",
+                aliases = listOf("tagesbericht", "upload", "uploadimage"),
+                description = "Lädt aktuelles Galeriebild zu Supabase hoch (Syntax: tb [dd.mm.yy] [name])"
+            ) {
+                showSimpleNotification(
+                    "ℹ️ Tagesbericht Upload",
+                    "Syntax: tb [dd.mm.yy] [bildname]\nBeispiel: tb 08.01.26 sonnenuntergang"
+                )
+            },
+            Command(
+                name = "hoerbuch",
+                aliases = listOf("hb", "hörbuch", "audiobook"),
+                description = "Zeigt verfügbare Hörbücher"
+            ) {
+                HoerbuchPlayerService.showHoerbuecher(this)
+            },
+            Command(
+                name = "hoerbuchplay",
+                aliases = listOf("hbp", "hplay"),
+                description = "Startet Hörbuch Player"
+            ) {
+                MusicPlayerService.stopService(this)
+                PodcastPlayerService.stopService(this)
+                HoerbuchPlayerService.startService(this)
+                HoerbuchPlayerService.sendPlayAction(this)
+            },
+            Command(
+                name = "stophoerbuch",
+                aliases = listOf("stophb", "hoerbuchstop", "shb"),
+                description = "Stoppt Hörbuch Player Service"
+            ) {
+                try {
+                    val hoerbuchIntent = Intent(this, HoerbuchPlayerService::class.java)
+                    stopService(hoerbuchIntent)
+                    showSimpleNotification("✅ Gestoppt", "Hörbuch Player wurde gestoppt")
+                } catch (e: Exception) {
+                    Log.e("QuietHoursService", "Error in stophoerbuch command", e)
+                    showSimpleNotification(
+                        "❌ Fehler",
+                        "Hörbuch Player konnte nicht gestoppt werden: ${e.message}"
+                    )
+                }
+            },
+            Command(
+                name = "bitwarden",
+                aliases = listOf("bw", "btw", "b"),
+                description = "Bw MP!"
+            ) {
+                showSimpleNotification("BW MP", "Sec.P1122.!!\"\"")
             },
         )
     }
@@ -1053,7 +1091,7 @@ class QuietHoursNotificationService : Service() {
                 if (argument != null) {
                     val index = argument.toIntOrNull()
                     if (index != null && index > 0) {
-                        addPodcastToQueue(index - 1, this) // -1 weil User 1-basiert eingibt
+                        addPodcastToQueue(index - 1, this)
                     } else {
                         showSimpleNotification(
                             "❌ Ungültige Nummer",
@@ -1095,6 +1133,43 @@ class QuietHoursNotificationService : Service() {
 
             "qclear", "qc", "queueclear", "clearqueue" -> {
                 clearPodcastQueue(this)
+                return
+            }
+
+            "tb", "tagesbericht", "upload", "uploadimage" -> {
+                if (argument != null) {
+                    val parts = actualCommand.split(" ", limit = 2)
+                    if (parts.size >= 2) {
+                        val restOfCommand = parts[1]
+
+                        // Parse Datum und optionalen Namen (auch mit Leerzeichen in Quotes)
+                        val dateAndName = parseCommandWithQuotes(restOfCommand)
+
+                        if (dateAndName.isNotEmpty()) {
+                            val date = dateAndName[0]
+                            val name = if (dateAndName.size > 1) dateAndName[1] else null
+                            uploadCurrentGalleryImageToSupabase(date, name)
+                        } else {
+                            showSimpleNotification(
+                                "❌ Fehler",
+                                "Syntax: tb [dd.mm.yy] [\"name mit leerzeichen\"]",
+                                20.seconds
+                            )
+                        }
+                    } else {
+                        showSimpleNotification(
+                            "❌ Fehler",
+                            "Syntax: tb [dd.mm.yy] [\"name mit leerzeichen\"]",
+                            20.seconds
+                        )
+                    }
+                } else {
+                    showSimpleNotification(
+                        "ℹ️ Upload",
+                        "Syntax: tb [dd.mm.yy] [\"name\" (optional)]\nBeispiel: tb 08.01.26 \"schöner sonnenuntergang\"\noder: tb 08.01.26 sonnenuntergang\noder: tb 08.01.26",
+                        20.seconds
+                    )
+                }
                 return
             }
         }
@@ -1256,15 +1331,39 @@ class QuietHoursNotificationService : Service() {
 
     private fun scheduleNextCheck() {
         val now = Calendar.getInstance()
-
         val quietStart = getQuietStartHour()
         val quietEnd = getQuietEndHour()
 
-        val nextChange = Calendar.getInstance()
-        nextChange.set(Calendar.SECOND, 0)
-        nextChange.set(Calendar.MILLISECOND, 0)
+        // Nächste Statusänderung berechnen
+        val nextChange = calculateNextStatusChange(now, quietStart, quietEnd)
+
+        // Zeitdifferenz in Millisekunden
+        val delayMillis = nextChange.timeInMillis - now.timeInMillis
+        val delayMinutes = delayMillis / 1000 / 60
+
+        // Debug-Log
+        logScheduleInfo(now, nextChange, delayMillis, delayMinutes)
+
+        // Entscheidung: Handler oder AlarmManager?
+        if (delayMinutes < THRESHOLD_MINUTES) {
+            scheduleWithHandler(delayMillis)
+        } else {
+            scheduleWithAlarmManager(nextChange.timeInMillis)
+        }
+    }
+
+    private fun calculateNextStatusChange(
+        now: Calendar,
+        quietStart: Int,
+        quietEnd: Int
+    ): Calendar {
+        val nextChange = Calendar.getInstance().apply {
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
 
         if (isCurrentlyQuietHours) {
+            // In Ruhezeit → nächste Änderung ist quietEnd
             nextChange.set(Calendar.HOUR_OF_DAY, quietEnd)
             nextChange.set(Calendar.MINUTE, 0)
 
@@ -1272,6 +1371,7 @@ class QuietHoursNotificationService : Service() {
                 nextChange.add(Calendar.DAY_OF_YEAR, 1)
             }
         } else {
+            // Nicht in Ruhezeit → nächste Änderung ist quietStart
             nextChange.set(Calendar.HOUR_OF_DAY, quietStart)
             nextChange.set(Calendar.MINUTE, 0)
 
@@ -1280,19 +1380,79 @@ class QuietHoursNotificationService : Service() {
             }
         }
 
-        val timeToNextChange = nextChange.timeInMillis - now.timeInMillis
+        return nextChange
+    }
 
-        val delay: Long = if (timeToNextChange > 3 * 60 * 1000) {
-            val calculatedDelay = timeToNextChange - (2 * 60 * 1000)
-            calculatedDelay
-        } else {
-            60 * 1000L
+    private fun scheduleWithHandler(delayMillis: Long) {
+        // Sicherheitscheck: Mindestens 30 Sekunden
+        val finalDelay = maxOf(delayMillis, 30_000L)
+
+        handler.removeCallbacks(checkRunnable)
+        handler.postDelayed(checkRunnable, finalDelay)
+
+        Log.d("QuietHoursService", "📱 Handler scheduled: ${finalDelay / 1000}s")
+    }
+
+    @RequiresPermission(Manifest.permission.SCHEDULE_EXACT_ALARM)
+    private fun scheduleWithAlarmManager(triggerAtMillis: Long) {
+        try {
+            val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
+
+            // Handler stoppen
+            handler.removeCallbacks(checkRunnable)
+
+            // AlarmManager Intent
+            val intent = Intent(this, QuietHoursAlarmReceiver::class.java)
+            val pendingIntent = PendingIntent.getBroadcast(
+                this,
+                ALARM_REQUEST_CODE,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            // Alte Alarme canceln
+            alarmManager.cancel(pendingIntent)
+
+            // Neuen Alarm setzen
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pendingIntent
+                )
+            } else {
+                alarmManager.setExact(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pendingIntent
+                )
+            }
+
+            Log.d("QuietHoursService", "⏰ AlarmManager scheduled: ${
+                SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(triggerAtMillis))
+            }")
+
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "AlarmManager failed, falling back to Handler", e)
+            // Fallback: Handler nutzen
+            val delayMillis = triggerAtMillis - System.currentTimeMillis()
+            scheduleWithHandler(delayMillis)
         }
+    }
 
-        handler.postDelayed(checkRunnable, delay)
+    private fun logScheduleInfo(now: Calendar, nextChange: Calendar, delayMillis: Long, delayMinutes: Long) {
+        val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        val method = if (delayMinutes < THRESHOLD_MINUTES) "Handler" else "AlarmManager"
 
-        val nextCheckTime = Calendar.getInstance()
-        nextCheckTime.timeInMillis = now.timeInMillis + delay
+        Log.d("QuietHoursService", """
+        ⏰ Schedule Info:
+        ├─ Aktuell: ${timeFormat.format(now.time)}
+        ├─ Status: ${if (isCurrentlyQuietHours) "🌙 Ruhezeit" else "☀️ Aktiv"}
+        ├─ QuietHours: ${getQuietStartHour()}:00 - ${getQuietEndHour()}:00
+        ├─ Nächster Check: ${timeFormat.format(nextChange.time)}
+        ├─ Verzögerung: ${delayMinutes}min (${delayMillis / 1000}s)
+        └─ Methode: $method
+    """.trimIndent())
     }
 
     private fun getQuietStartHour(): Int {
@@ -1606,7 +1766,7 @@ class QuietHoursNotificationService : Service() {
     }
 
     private val prefChangeListener =
-        SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
+        SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == "saved_number" || key == "saved_number_start") {
                 handler.removeCallbacks(checkRunnable)
 
@@ -1661,6 +1821,24 @@ class QuietHoursNotificationService : Service() {
                 val sender = intent.getStringExtra("EXTRA_SENDER")
                 if (sender != null) {
                     updateSingleSenderNotification(sender)
+                }
+            }
+
+            "ACTION_CONTENT_INTENT" -> {
+                val cameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
+                try {
+                    val cameraId = cameraManager.cameraIdList.firstOrNull()
+
+                    if (cameraId != null) {
+                        cameraManager.turnOnTorchWithStrengthLevel(cameraId, 1)
+                    }
+                } catch (e: Exception) {
+                    Log.e("QuietHoursService", "Error setting flashlight level", e)
+                    showSimpleNotification(
+                        "❌ Taschenlampe",
+                        "Helligkeit konnte nicht gesetzt werden: ${e.message}",
+                        20.seconds
+                    )
                 }
             }
 
@@ -1900,17 +2078,15 @@ class QuietHoursNotificationService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val launchCloudIntent =
-            packageManager.getLaunchIntentForPackage("com.example.cloud")?.apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-        val launchCloudPendingIntent = PendingIntent.getActivity(
+        val contentIntent = Intent(this, QuietHoursNotificationService::class.java).apply {
+            action = "ACTION_CONTENT_INTENT"
+        }
+        val contentPendingIntent = PendingIntent.getService(
             this,
             1002,
-            launchCloudIntent,
+            contentIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
 
         val commandInput = RemoteInput.Builder("key_command_input")
             .setLabel("Befehl eingeben...")
@@ -1941,11 +2117,11 @@ class QuietHoursNotificationService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setDeleteIntent(deletePendingIntent)
-            .setContentIntent(launchCloudPendingIntent)
+            .setContentIntent(contentPendingIntent)
             .setRequestPromotedOngoing(true)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setGroup("Services")
-            .setGroupSummary(true)
+            .setGroup("group_services")
+            .setGroupSummary(false)
             .addAction(commandAction)
 
         if (isQuietHours) {
@@ -2047,7 +2223,6 @@ class QuietHoursNotificationService : Service() {
             builder
                 .setContentTitle("Ruhezeit-Überwachung")
                 .setContentText("Aktiv von $currentStart:00 bis $currentEnd:00 Uhr")
-                .addAction(commandAction)
                 .addAction(startAction)
                 .addAction(endAction)
         }
@@ -2056,11 +2231,27 @@ class QuietHoursNotificationService : Service() {
     }
 
     private fun checkQuietHours() {
-        val isQuietHours = isQuietHoursNow()
+        val wasQuietHours = isCurrentlyQuietHours
+        val nowQuietHours = isQuietHoursNow()
 
-        if (isQuietHours != isCurrentlyQuietHours) {
-            isCurrentlyQuietHours = isQuietHours
-            updateNotification(isQuietHours)
+        if (wasQuietHours != nowQuietHours) {
+            isCurrentlyQuietHours = nowQuietHours
+            updateNotification(nowQuietHours)
+
+            Log.d("QuietHoursService", "🔄 Status changed: $wasQuietHours → $nowQuietHours")
+
+            // Optional: User Feedback
+            showSimpleNotification(
+                if (nowQuietHours) "🌙 Ruhezeit aktiviert" else "☀️ Ruhezeit beendet",
+                if (nowQuietHours) {
+                    "Benachrichtigungen werden gesammelt"
+                } else {
+                    "Normale Benachrichtigungen aktiv"
+                },
+                3.seconds
+            )
+        } else {
+            Log.d("QuietHoursService", "✓ Status unchanged: $nowQuietHours")
         }
     }
 
@@ -2107,11 +2298,9 @@ class QuietHoursNotificationService : Service() {
 
                 var partIndex = 0
 
-                msgs.takeLast(10).forEach { msg ->
-                    // Generiere eindeutige Message-ID
+                msgs.takeLast(5).forEach { msg ->
                     val messageId = "${sender}_${msg.timestamp}"
 
-                    // Überspringe gelesene Nachrichten
                     if (readMessageIds.contains(messageId)) {
                         return@forEach
                     }
@@ -2132,7 +2321,6 @@ class QuietHoursNotificationService : Service() {
 
                             val contentText = part.take(100) + if (part.length > 100) "..." else ""
 
-                            // Mark as Read Action
                             val markReadIntent = Intent(ACTION_MARK_PARTS_READ).apply {
                                 putExtra(EXTRA_MESSAGE_ID, messageId)
                                 `package` = packageName
@@ -2216,7 +2404,6 @@ class QuietHoursNotificationService : Service() {
                     builder.addAction(replyAction)
                 }
 
-                // Image notifications ebenfalls mit Mark Read Action
                 val messagesWithImages = msgs.filter {
                     it.imageUri != null && !readMessageIds.contains("${sender}_${it.timestamp}")
                 }
@@ -2344,6 +2531,8 @@ class QuietHoursNotificationService : Service() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(false)
             .setOngoing(false)
+            .setGroup("group_whatsapp")
+            .setGroupSummary(false)
             .setContentIntent(voiceNotePendingIntent)
 
         val messagingStyle = NotificationCompat.MessagingStyle(mePerson)
@@ -2351,10 +2540,12 @@ class QuietHoursNotificationService : Service() {
 
         var partIndex = 0
 
-        messages.takeLast(10).forEach { msg ->
+        messages.takeLast(5).forEach { msg ->
+            val messageId = "${sender}_${msg.timestamp}"
             val timeText =
                 SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(msg.timestamp))
-            val maxMessageLength = 250
+
+            val maxMessageLength = 200
             val messageText = msg.text
 
             if (messageText.length > maxMessageLength) {
@@ -2366,6 +2557,17 @@ class QuietHoursNotificationService : Service() {
                     partIndex++
 
                     val contentText = part.take(100) + if (part.length > 100) "..." else ""
+
+                    val markReadIntent = Intent(ACTION_MARK_PARTS_READ).apply {
+                        putExtra(EXTRA_MESSAGE_ID, messageId)
+                        `package` = packageName
+                    }
+                    val markReadPendingIntent = PendingIntent.getBroadcast(
+                        this,
+                        partNotificationId + 500000,
+                        markReadIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
 
                     val partNotification = NotificationCompat.Builder(this, CHANNEL_ID)
                         .setSmallIcon(R.drawable.stat_notify_chat)
@@ -2379,7 +2581,12 @@ class QuietHoursNotificationService : Service() {
                         )
                         .setPriority(NotificationCompat.PRIORITY_HIGH)
                         .setGroup("whatsapp_long_$sender")
-                        .setAutoCancel(true)
+                        .setAutoCancel(false)
+                        .addAction(
+                            R.drawable.ic_menu_close_clear_cancel,
+                            "Als gelesen markieren",
+                            markReadPendingIntent
+                        )
                         .build()
 
                     if (ContextCompat.checkSelfPermission(
@@ -2463,7 +2670,8 @@ class QuietHoursNotificationService : Service() {
             .setContentTitle(title)
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setGroup("SSN")
+            .setGroup("group_info")
+            .setGroupSummary(false)
             .build()
 
         val notificationManager = getSystemService(NotificationManager::class.java)
@@ -2484,13 +2692,14 @@ class QuietHoursNotificationService : Service() {
 
     private fun handleMessageSent(sender: String, messageText: String) {
         try {
-
             val originalReplyData = WhatsAppNotificationListener.replyActions[sender]
-            val isRealWhatsApp =
-                originalReplyData?.pendingIntent?.creatorPackage == "com.whatsapp" ||
-                        originalReplyData?.pendingIntent?.creatorPackage == "com.whatsapp.w4b"
 
-            if (isRealWhatsApp) {
+            // Prüfe ob es ein unterstützter Messenger ist (WhatsApp oder Telegram)
+            val isSupportedMessenger = originalReplyData?.pendingIntent?.creatorPackage?.let { pkg ->
+                isSupportedMessenger(pkg)
+            } ?: false
+
+            if (isSupportedMessenger) {
                 try {
                     val intent = Intent().apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -2513,13 +2722,24 @@ class QuietHoursNotificationService : Service() {
                     )
                     originalReplyData.pendingIntent.send(this, 0, intent)
 
+                    Log.d("QuietHoursService", "Message sent via ${originalReplyData.pendingIntent.creatorPackage}")
+
                 } catch (e: Exception) {
-                    Log.e("QuietHoursService", "Failed to send to WhatsApp", e)
+                    Log.e("QuietHoursService", "Failed to send message", e)
                     showSimpleNotification("Fehler", "Nachricht konnte nicht gesendet werden")
                     return
                 }
+            } else {
+                Log.w("QuietHoursService", "Unsupported messenger: ${originalReplyData?.pendingIntent?.creatorPackage}")
+                showSimpleNotification(
+                    "⚠️ Nicht unterstützt",
+                    "Messenger wird nicht unterstützt",
+                    20.seconds
+                )
+                return
             }
 
+            // Nachricht zur lokalen Liste hinzufügen
             val messagesList =
                 WhatsAppNotificationListener.messagesByContact.getOrPut(sender) { mutableListOf() }
 
@@ -2552,6 +2772,10 @@ class QuietHoursNotificationService : Service() {
     private fun updateChatNotification(sender: String) {
         try {
             val notificationId = sender.hashCode()
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            for (i in 0 until 100) {
+                notificationManager.cancel(notificationId + 10000 + i)
+            }
 
             val mePerson = Person.Builder()
                 .setName("Du")
@@ -2570,46 +2794,69 @@ class QuietHoursNotificationService : Service() {
 
             var partIndex = 0
 
-            messages.takeLast(10).forEach { msg ->
+            messages.takeLast(5).forEach { msg ->
+                val messageId = "${sender}_${msg.timestamp}"
+
+                // WICHTIG: Gelesene Nachrichten überspringen
+                if (readMessageIds.contains(messageId)) {
+                    return@forEach
+                }
+
                 val timeText =
                     SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(msg.timestamp))
 
-                val maxMessageLength = 250
+                val maxMessageLength = 200
                 val messageText = msg.text
 
                 if (messageText.length > maxMessageLength) {
-                    val parts = messageText.chunked(maxMessageLength)
-                    val totalParts = parts.size
+                    if (!readMessageIds.contains(messageId)) {
+                        val parts = messageText.chunked(maxMessageLength)
+                        val totalParts = parts.size
 
-                    parts.forEachIndexed { index, part ->
-                        val partNotificationId = notificationId + 10000 + partIndex
-                        partIndex++
+                        parts.forEachIndexed { index, part ->
+                            val partNotificationId = notificationId + 10000 + partIndex
+                            partIndex++
 
-                        val contentText = part.take(100) + if (part.length > 100) "..." else ""
+                            val contentText = part.take(100) + if (part.length > 100) "..." else ""
 
-                        val partNotification = NotificationCompat.Builder(this, CHANNEL_ID)
-                            .setSmallIcon(R.drawable.stat_notify_chat)
-                            .setContentTitle("💬 $sender (Teil ${index + 1}/$totalParts)")
-                            .setContentText(contentText)
-                            .setStyle(
-                                NotificationCompat.BigTextStyle()
-                                    .bigText(part)
-                                    .setBigContentTitle("💬 $sender (Teil ${index + 1}/$totalParts)")
-                                    .setSummaryText("⏰ $timeText")
-                            )
-                            .setPriority(NotificationCompat.PRIORITY_HIGH)
-                            .setGroup("whatsapp_long_$sender")
-                            .setAutoCancel(true)
-                            .build()
-
-                        if (ContextCompat.checkSelfPermission(
+                            val markReadIntent = Intent(ACTION_MARK_PARTS_READ).apply {
+                                putExtra(EXTRA_MESSAGE_ID, messageId)
+                                `package` = packageName
+                            }
+                            val markReadPendingIntent = PendingIntent.getBroadcast(
                                 this,
-                                Manifest.permission.POST_NOTIFICATIONS
-                            ) == PackageManager.PERMISSION_GRANTED
-                        ) {
-                            val notificationManager =
-                                getSystemService(NotificationManager::class.java)
-                            notificationManager.notify(partNotificationId, partNotification)
+                                partNotificationId + 500000,
+                                markReadIntent,
+                                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                            )
+
+                            val partNotification = NotificationCompat.Builder(this, CHANNEL_ID)
+                                .setSmallIcon(R.drawable.stat_notify_chat)
+                                .setContentTitle("💬 $sender (Teil ${index + 1}/$totalParts)")
+                                .setContentText(contentText)
+                                .setStyle(
+                                    NotificationCompat.BigTextStyle()
+                                        .bigText(part)
+                                        .setBigContentTitle("💬 $sender (Teil ${index + 1}/$totalParts)")
+                                        .setSummaryText("⏰ $timeText")
+                                )
+                                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                                .setGroup("whatsapp_long_$sender")
+                                .setAutoCancel(false)
+                                .addAction(
+                                    R.drawable.ic_menu_close_clear_cancel,
+                                    "Als gelesen markieren",
+                                    markReadPendingIntent
+                                )
+                                .build()
+
+                            if (ContextCompat.checkSelfPermission(
+                                    this,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) == PackageManager.PERMISSION_GRANTED
+                            ) {
+                                notificationManager.notify(partNotificationId, partNotification)
+                            }
                         }
                     }
                 } else {
@@ -2658,11 +2905,9 @@ class QuietHoursNotificationService : Service() {
                 .setOnlyAlertOnce(true)
                 .addAction(replyAction)
 
-            val notificationManager = getSystemService(NotificationManager::class.java)
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                 == PackageManager.PERMISSION_GRANTED
             ) {
-
                 notificationManager.notify(notificationId, builder.build())
             }
 
@@ -2877,7 +3122,6 @@ class QuietHoursNotificationService : Service() {
         }
     }
 
-    // Audio recording helpers
     private fun startAudioRecording() {
         try {
             if (audioRecorder != null) {
@@ -2974,6 +3218,8 @@ class QuietHoursNotificationService : Service() {
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setOngoing(isPlaying)
                 .setAutoCancel(!isPlaying)
+                .setGroup("group_media")
+                .setGroupSummary(false)
                 .addAction(R.drawable.ic_media_previous, "Zurück", prevPendingIntent)
                 .addAction(
                     if (isPlaying) R.drawable.ic_media_pause else R.drawable.ic_media_play,
@@ -3171,12 +3417,13 @@ class QuietHoursNotificationService : Service() {
     private fun loadGalleryImages() {
         try {
             galleryImages = emptyList()
-            val images = mutableListOf<android.net.Uri>()
+            val images = mutableListOf<GalleryImage>()
 
             val projection = arrayOf(
                 android.provider.MediaStore.Images.Media._ID,
                 android.provider.MediaStore.Images.Media.DATE_MODIFIED,
-                android.provider.MediaStore.Images.Media.DATA
+                android.provider.MediaStore.Images.Media.DATE_ADDED,
+                android.provider.MediaStore.Images.Media.DISPLAY_NAME
             )
 
             val sortOrder = "${android.provider.MediaStore.Images.Media.DATE_MODIFIED} DESC"
@@ -3190,18 +3437,25 @@ class QuietHoursNotificationService : Service() {
             )
 
             cursor?.use {
-                val idColumn =
-                    it.getColumnIndexOrThrow(android.provider.MediaStore.Images.Media._ID)
+                val idColumn = it.getColumnIndexOrThrow(android.provider.MediaStore.Images.Media._ID)
+                val dateColumn = it.getColumnIndexOrThrow(android.provider.MediaStore.Images.Media.DATE_MODIFIED)
+                val createdColumn = it.getColumnIndexOrThrow(android.provider.MediaStore.Images.Media.DATE_ADDED)
+                val nameColumn = it.getColumnIndexOrThrow(android.provider.MediaStore.Images.Media.DISPLAY_NAME)
 
                 while (it.moveToNext()) {
                     val id = it.getLong(idColumn)
+                    val dateModified = it.getLong(dateColumn) * 1000 // Sekunden → Millisekunden
+                    val dateCreated = it.getLong(createdColumn) * 1000 // Sekunden → Millisekunden
+                    val displayName = it.getString(nameColumn)
+
                     val uri = android.net.Uri.withAppendedPath(
                         android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                         id.toString()
                     )
-                    images.add(uri)
 
-                    if (images.size >= 300) break
+                    images.add(GalleryImage(uri, dateModified, dateCreated, displayName))
+
+                    if (images.size >= 5000) break
                 }
             }
 
@@ -3215,9 +3469,9 @@ class QuietHoursNotificationService : Service() {
                 return
             }
 
+            // WICHTIG: Bild anzeigen nach dem Laden
             currentGalleryIndex = 0
             showGalleryImage(0)
-
         } catch (e: Exception) {
             Log.e("QuietHoursService", "Error loading gallery images", e)
             showSimpleNotification(
@@ -3235,9 +3489,8 @@ class QuietHoursNotificationService : Service() {
                 return
             }
 
-            val imageUri = galleryImages[imageIndex]
+            val imageUri = galleryImages[imageIndex].uri
 
-            // Lade Vorschaubild
             val bitmap = try {
                 android.graphics.ImageDecoder.decodeBitmap(
                     android.graphics.ImageDecoder.createSource(contentResolver, imageUri)
@@ -3269,10 +3522,10 @@ class QuietHoursNotificationService : Service() {
                 .setContentText("Bild ${imageIndex + 1} von ${galleryImages.size} wirklich löschen?")
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setAutoCancel(true)
+                .setGroup("group_confirmations")
                 .addAction(R.drawable.ic_delete, "Löschen", deletePendingIntent)
                 .addAction(R.drawable.ic_menu_close_clear_cancel, "Abbrechen", cancelPendingIntent)
 
-            // Füge Vorschaubild hinzu falls vorhanden
             if (bitmap != null) {
                 builder.setLargeIcon(bitmap)
                     .setStyle(
@@ -3306,18 +3559,15 @@ class QuietHoursNotificationService : Service() {
                 return
             }
 
-            val imageUri = galleryImages[imageIndex]
+            val imageUri = galleryImages[imageIndex].uri
 
-            // Versuche Bild zu löschen
             val deleted = contentResolver.delete(imageUri, null, null)
 
             if (deleted > 0) {
-                // Entferne aus Liste
                 val mutableList = galleryImages.toMutableList()
                 mutableList.removeAt(imageIndex)
                 galleryImages = mutableList
 
-                // Lösche Bestätigungsnotification
                 val notificationManager = getSystemService(NotificationManager::class.java)
                 notificationManager.cancel(80000)
 
@@ -3326,15 +3576,12 @@ class QuietHoursNotificationService : Service() {
                     "Bild wurde erfolgreich gelöscht (${galleryImages.size} verbleibend)"
                 )
 
-                // Zeige nächstes Bild oder schließe Galerie
                 if (galleryImages.isNotEmpty()) {
-                    // Passe Index an wenn nötig
                     if (currentGalleryIndex >= galleryImages.size) {
                         currentGalleryIndex = galleryImages.size - 1
                     }
                     showGalleryImage(currentGalleryIndex)
                 } else {
-                    // Keine Bilder mehr, schließe Galerie-Notification
                     notificationManager.cancel(70000)
                     showSimpleNotification("📷 Galerie leer", "Alle Bilder wurden gelöscht")
                 }
@@ -3364,7 +3611,14 @@ class QuietHoursNotificationService : Service() {
                 return
             }
 
-            val imageUri = galleryImages[index]
+            val galleryImage = galleryImages[index]
+            val imageUri = galleryImage.uri
+
+            val lastModifiedText = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+                .format(Date(galleryImage.lastModified))
+
+            val createdAtText = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+                .format(Date(galleryImage.createdAt))
 
             val originalBitmap = try {
                 android.graphics.ImageDecoder.decodeBitmap(
@@ -3375,8 +3629,6 @@ class QuietHoursNotificationService : Service() {
                 showSimpleNotification("❌ Fehler", "Bild konnte nicht geladen werden", 20.seconds)
                 return
             }
-
-            val bitmap = originalBitmap
 
             val prevIntent = Intent(this, QuietHoursNotificationService::class.java).apply {
                 action = ACTION_PREV_GALLERY_IMAGE
@@ -3394,7 +3646,6 @@ class QuietHoursNotificationService : Service() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            // GEÄNDERT: Content Intent zeigt jetzt Löschbestätigung
             val confirmDeleteIntent =
                 Intent(this, QuietHoursNotificationService::class.java).apply {
                     action = ACTION_CONFIRM_DELETE_IMAGE
@@ -3405,7 +3656,6 @@ class QuietHoursNotificationService : Service() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            // Optional: Zusätzliche Action zum direkten Öffnen in Galerie
             val openIntent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(imageUri, "image/*")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -3417,21 +3667,23 @@ class QuietHoursNotificationService : Service() {
 
             val notification = NotificationCompat.Builder(this, GALLERY_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_menu_gallery)
-                .setContentTitle("📷 Galerie")
-                .setContentText("Bild ${index + 1} von ${galleryImages.size} • ${bitmap.width}x${bitmap.height}")
+                .setContentTitle("📷 ${galleryImage.displayName ?: "Galerie"}")
+                .setContentText("Tippen zum Löschen • Wischen für Details")
                 .setStyle(
                     NotificationCompat.BigPictureStyle()
-                        .bigPicture(bitmap)
+                        .bigPicture(originalBitmap)
                         .bigLargeIcon(null as android.graphics.Bitmap?)
                         .showBigPictureWhenCollapsed(true)
-                        .setSummaryText("Tippen zum Löschen • Wischen für Details")
+                        .setSummaryText("Bild ${index + 1}/${galleryImages.size} • $lastModifiedText • $createdAtText")
                 )
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setOngoing(true)
                 .setAutoCancel(false)
-                .setContentIntent(confirmDeletePendingIntent)
+                .setGroup("group_services")
+                .setGroupSummary(false)
+                .setContentIntent(openPendingIntent)
                 .addAction(R.drawable.ic_media_previous, "◀", prevPendingIntent)
-                .addAction(R.drawable.ic_menu_view, "Öffnen", openPendingIntent)
+                .addAction(R.drawable.ic_menu_view, "Löschen", confirmDeletePendingIntent)
                 .addAction(R.drawable.ic_media_next, "▶", nextPendingIntent)
                 .build()
 
@@ -3441,7 +3693,6 @@ class QuietHoursNotificationService : Service() {
             ) {
                 notificationManager.notify(70000, notification)
             }
-
         } catch (e: Exception) {
             Log.e("QuietHoursService", "Error showing gallery image", e)
             showSimpleNotification(
@@ -3510,7 +3761,6 @@ class QuietHoursNotificationService : Service() {
 
                 val supabase = SupabaseConfig.client
 
-                // Letzte 10 Nachrichten von friend abrufen
                 val response = supabase.from("messages")
                     .select {
                         filter {
@@ -3521,9 +3771,8 @@ class QuietHoursNotificationService : Service() {
                         limit(10)
                     }
 
-                // Manuelles Parsen falls nötig
                 val messages = response.decodeList<ChatService.Message>()
-                    .reversed() // Chronologische Reihenfolge (älteste zuerst)
+                    .reversed()
 
                 if (messages.isEmpty()) {
                     Handler(Looper.getMainLooper()).post {
@@ -3535,7 +3784,6 @@ class QuietHoursNotificationService : Service() {
                     return@launch
                 }
 
-                // Nachrichten als Notification anzeigen
                 Handler(Looper.getMainLooper()).post {
                     showFriendMessagesNotification(messages)
                 }
@@ -3558,7 +3806,6 @@ class QuietHoursNotificationService : Service() {
             val messageText = messages.joinToString("\n\n") { msg ->
                 val timeStr = try {
                     msg.created_at?.let {
-                        // Parse ISO 8601 String zu lesbarem Format
                         val instant = java.time.Instant.parse(it)
                         val formatter = java.time.format.DateTimeFormatter
                             .ofPattern("dd.MM.yyyy HH:mm")
@@ -3566,7 +3813,7 @@ class QuietHoursNotificationService : Service() {
                         formatter.format(instant)
                     }
                 } catch (_: Exception) {
-                    msg.created_at?.take(16)?.replace("T", " ") // Fallback
+                    msg.created_at?.take(16)?.replace("T", " ")
                 } ?: "Unbekannt"
 
                 "🕐 $timeStr\n${msg.content}"
@@ -3605,9 +3852,8 @@ class QuietHoursNotificationService : Service() {
 
     private fun setSoundMode(mode: String) {
         try {
-            val audioManager = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+            val audioManager = getSystemService(AUDIO_SERVICE) as android.media.AudioManager
 
-            // Prüfe WRITE_SETTINGS Permission
             if (!canWriteSettings()) {
                 showSimpleNotification(
                     "❌ Keine Berechtigung",
@@ -3619,10 +3865,8 @@ class QuietHoursNotificationService : Service() {
 
             when (mode.lowercase()) {
                 "vibrate", "vib", "v" -> {
-                    // Stumm mit Vibration
                     audioManager.ringerMode = android.media.AudioManager.RINGER_MODE_VIBRATE
 
-                    // Zusätzlich: Stille System-Sounds
                     try {
                         Settings.System.putInt(
                             contentResolver,
@@ -3645,7 +3889,6 @@ class QuietHoursNotificationService : Service() {
                 }
 
                 "silent", "mute", "m" -> {
-                    // Komplett stumm
                     audioManager.ringerMode = android.media.AudioManager.RINGER_MODE_SILENT
 
                     try {
@@ -3670,7 +3913,6 @@ class QuietHoursNotificationService : Service() {
                 }
 
                 "normal", "loud", "l", "on" -> {
-                    // Normal mit Ton
                     audioManager.ringerMode = android.media.AudioManager.RINGER_MODE_NORMAL
 
                     try {
@@ -3720,6 +3962,208 @@ class QuietHoursNotificationService : Service() {
             checkSelfPermission(Manifest.permission.WRITE_SETTINGS) == PackageManager.PERMISSION_GRANTED
         }
     }
+
+    @OptIn(DelicateCoroutinesApi::class)
+    private fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?) {
+        GlobalScope.launch(Dispatchers.IO) {
+            try {
+                if (galleryImages.isEmpty()) {
+                    Handler(Looper.getMainLooper()).post {
+                        showSimpleNotification(
+                            "❌ Keine Galerie",
+                            "Öffne zuerst die Galerie mit 'gallery'",
+                            20.seconds
+                        )
+                    }
+                    return@launch
+                }
+
+                if (currentGalleryIndex < 0 || currentGalleryIndex >= galleryImages.size) {
+                    Handler(Looper.getMainLooper()).post {
+                        showSimpleNotification(
+                            "❌ Fehler",
+                            "Ungültiger Galerie-Index",
+                            20.seconds
+                        )
+                    }
+                    return@launch
+                }
+
+                val imageUri = galleryImages[currentGalleryIndex].uri
+
+                val imageName = if (imageName == null) {
+                    val cursor = contentResolver.query(
+                        imageUri,
+                        arrayOf(android.provider.MediaStore.Images.Media.DISPLAY_NAME),
+                        null,
+                        null,
+                        null
+                    )
+                    val name = cursor?.use {
+                        if (it.moveToFirst()) {
+                            it.getString(0)?.substringBeforeLast(".") ?: "image"
+                        } else {
+                            "image"
+                        }
+                    } ?: "image"
+                    cursor?.close()
+                    name
+                } else {
+                    imageName
+                }
+
+                // Bild als ByteArray laden
+                val inputStream = contentResolver.openInputStream(imageUri)
+                val imageBytes = inputStream?.readBytes()
+                inputStream?.close()
+
+                if (imageBytes == null) {
+                    Handler(Looper.getMainLooper()).post {
+                        showSimpleNotification(
+                            "❌ Fehler",
+                            "Bild konnte nicht gelesen werden",
+                            20.seconds
+                        )
+                    }
+                    return@launch
+                }
+
+                // Dateiendung ermitteln
+                val mimeType = contentResolver.getType(imageUri) ?: "image/jpeg"
+                val extension = when (mimeType) {
+                    "image/jpeg" -> "jpg"
+                    "image/png" -> "png"
+                    "image/webp" -> "webp"
+                    else -> "jpg"
+                }
+
+                val supabaseUrl = SupabaseConfig.SUPABASE_URL
+                val supabaseKey = SupabaseConfig.SUPABASE_PUBLISHABLE_KEY
+                val bucketName = "Tagesberichte"
+                val imagename = imageName.replace(" ", "_")
+                val fileName = imagename
+                val storagePath = "$date/${imagename}.${extension}"
+
+                val url = java.net.URL("$supabaseUrl/storage/v1/object/$bucketName/$storagePath")
+                val connection = url.openConnection() as java.net.HttpURLConnection
+
+                connection.requestMethod = "POST"
+                connection.setRequestProperty("Authorization", "Bearer $supabaseKey")
+                connection.setRequestProperty("apikey", supabaseKey)
+                connection.setRequestProperty("Content-Type", mimeType)
+                connection.setRequestProperty("x-upsert", "false")
+                connection.setRequestProperty("Content-Length", imageBytes.size.toString())
+                connection.connectTimeout = 30000
+                connection.readTimeout = 60000
+                connection.doOutput = true
+
+                connection.outputStream.use { output ->
+                    output.write(imageBytes)
+                    output.flush()
+                }
+
+                val responseCode = connection.responseCode
+
+                when (responseCode) {
+                    in 200..299 -> {
+                        Log.d("QuietHoursService", "✅ Hochgeladen: $fileName")
+                        Handler(Looper.getMainLooper()).post {
+                            showSimpleNotification(
+                                "✅ Upload erfolgreich",
+                                "Bild '$fileName' wurde hochgeladen"
+                            )
+                        }
+                    }
+
+                    400 -> {
+                        val error =
+                            connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                        if (error.contains("Duplicate") || error.contains("already exists")) {
+                            Log.w("QuietHoursService", "⚠️ Existiert bereits: $fileName")
+                            Handler(Looper.getMainLooper()).post {
+                                showSimpleNotification(
+                                    "⚠️ Bereits vorhanden",
+                                    "Bild '$fileName' existiert bereits"
+                                )
+                            }
+                        } else {
+                            Log.e("QuietHoursService", "❌ Fehler 400: $error")
+                            Handler(Looper.getMainLooper()).post {
+                                showSimpleNotification(
+                                    "❌ Upload fehlgeschlagen",
+                                    "Fehler 400: $error",
+                                    20.seconds
+                                )
+                            }
+                        }
+                    }
+
+                    409 -> {
+                        Log.w("QuietHoursService", "⚠️ Existiert bereits (409): $fileName")
+                        Handler(Looper.getMainLooper()).post {
+                            showSimpleNotification(
+                                "⚠️ Bereits vorhanden",
+                                "Bild '$fileName' existiert bereits"
+                            )
+                        }
+                    }
+
+                    else -> {
+                        val error = connection.errorStream?.bufferedReader()?.use { it.readText() }
+                        Log.e("QuietHoursService", "❌ Fehler $responseCode: $error")
+                        Handler(Looper.getMainLooper()).post {
+                            showSimpleNotification(
+                                "❌ Upload fehlgeschlagen",
+                                "Fehler $responseCode: $error",
+                                20.seconds
+                            )
+                        }
+                    }
+                }
+
+            } catch (e: Exception) {
+                Log.e("QuietHoursService", "❌ Upload-Fehler", e)
+                Handler(Looper.getMainLooper()).post {
+                    showSimpleNotification(
+                        "❌ Upload fehlgeschlagen",
+                        "Fehler: ${e.message}",
+                        20.seconds
+                    )
+                }
+            }
+        }
+    }
+
+    private fun parseCommandWithQuotes(input: String): List<String> {
+        val result = mutableListOf<String>()
+        var current = StringBuilder()
+        var inQuotes = false
+        var i = 0
+
+        while (i < input.length) {
+            when (val char = input[i]) {
+                '"' -> {
+                    inQuotes = !inQuotes
+                }
+                ' ' if !inQuotes -> {
+                    if (current.isNotEmpty()) {
+                        result.add(current.toString())
+                        current = StringBuilder()
+                    }
+                }
+                else -> {
+                    current.append(char)
+                }
+            }
+            i++
+        }
+
+        if (current.isNotEmpty()) {
+            result.add(current.toString())
+        }
+
+        return result
+    }
 }
 
 class QuietActionReceiver : BroadcastReceiver() {
@@ -3734,6 +4178,23 @@ class QuietActionReceiver : BroadcastReceiver() {
             "SET_END" -> {
                 prefs.edit(commit = true) { putString("saved_number", "7") }
             }
+        }
+    }
+}
+
+class QuietHoursAlarmReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        Log.d("QuietHoursAlarmReceiver", "⏰ Alarm triggered!")
+
+        // Service mit Check-Action starten
+        val serviceIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
+            action = "com.example.cloud.ACTION_CHECK_QUIET_HOURS"
+        }
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            context.startForegroundService(serviceIntent)
+        } else {
+            context.startService(serviceIntent)
         }
     }
 }
