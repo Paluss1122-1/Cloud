@@ -1,8 +1,12 @@
 package com.example.cloud.privatecloudapp
 
+import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.MediaStore
+import android.provider.OpenableColumns
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -10,7 +14,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,32 +22,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
-import com.example.cloud.AesEncryption
-import com.example.cloud.SupabaseConfig
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.createSupabaseClient
-import io.github.jan.supabase.storage.Storage
-import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.*
 
 class ShareActivity : ComponentActivity() {
-    lateinit var storage : Storage
-    private val supabase: SupabaseClient = SupabaseConfig.client
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        storage = supabase.storage
-
         when (intent?.action) {
-            Intent.ACTION_SEND -> {
-                handleSingleShare(intent)
-            }
-            Intent.ACTION_SEND_MULTIPLE -> {
-                handleMultipleShare(intent)
-            }
+            Intent.ACTION_SEND -> handleSingleShare(intent)
+            Intent.ACTION_SEND_MULTIPLE -> handleMultipleShare(intent)
             else -> {
                 Toast.makeText(this, "Ungültiger Share-Intent", Toast.LENGTH_SHORT).show()
                 finish()
@@ -55,30 +47,46 @@ class ShareActivity : ComponentActivity() {
     private fun handleSingleShare(intent: Intent) {
         val uri = intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
         if (uri != null) {
-            showBucketSelectionDialog(listOf(uri))
+            showConfirmationDialog(listOf(uri))
         } else {
-            Toast.makeText(this, "Keine Datei zum Hochladen", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Keine Datei gefunden", Toast.LENGTH_SHORT).show()
             finish()
         }
+    }
+
+    private fun getFileFromUri(uri: Uri): File? {
+        // Nur wenn es eine Downloads-URI ist
+        if (uri.scheme == "content") {
+            val cursor = contentResolver.query(uri, arrayOf("_data"), null, null, null)
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val path = it.getString(0)
+                    if (path != null) return File(path)
+                }
+            }
+        } else if (uri.scheme == "file") {
+            return File(uri.path!!)
+        }
+        return null
     }
 
     private fun handleMultipleShare(intent: Intent) {
-        val uris =intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        val uris = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
         if (uris != null && uris.isNotEmpty()) {
-            showBucketSelectionDialog(uris)
+            showConfirmationDialog(uris)
         } else {
-            Toast.makeText(this, "Keine Dateien zum Hochladen", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Keine Dateien gefunden", Toast.LENGTH_SHORT).show()
             finish()
         }
     }
 
-    private fun showBucketSelectionDialog(uris: List<Uri>) {
+    private fun showConfirmationDialog(uris: List<Uri>) {
         setContent {
             MaterialTheme {
-                BucketSelectionScreen(
+                MetadataUpdateScreen(
                     fileCount = uris.size,
-                    onBucketSelected = { targetPath ->
-                        uploadFilesToBucket(uris, targetPath)
+                    onConfirm = {
+                        updateFileMetadata(uris)
                     },
                     onCancel = {
                         finish()
@@ -88,26 +96,27 @@ class ShareActivity : ComponentActivity() {
         }
     }
 
-    private fun uploadFilesToBucket(uris: List<Uri>, targetPath: String) {
-        // targetPath ist z.B. "Other/1", "Other/videos", "Files"
-        val bucketName = if (targetPath.contains("/")) {
-            targetPath.substringBefore("/")
-        } else {
-            targetPath
+    private fun getFileNameFromUri(uri: Uri): String {
+        var fileName = "unknown_file"
+        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (nameIndex != -1) {
+                    fileName = cursor.getString(nameIndex) ?: fileName
+                }
+            }
         }
+        return fileName
+    }
 
-        val folder = if (targetPath.contains("/")) {
-            targetPath.substringAfter("/")
-        } else {
-            ""
-        }
+    private fun getCurrentTimestamp(): Long {
+        return System.currentTimeMillis()
+    }
 
+    private fun updateFileMetadata(uris: List<Uri>) {
         setContent {
             MaterialTheme {
-                UploadProgressScreen(
-                    fileCount = uris.size,
-                    targetName = targetPath
-                )
+                ProcessingScreen(fileCount = uris.size)
             }
         }
 
@@ -118,32 +127,25 @@ class ShareActivity : ComponentActivity() {
             try {
                 for (uri in uris) {
                     try {
-                        val fileName = getFileNameFromUri(uri, this@ShareActivity) ?: "unnamed_file_${System.currentTimeMillis()}"
-                        val inputStream = contentResolver.openInputStream(uri)
+                        val fileName = getFileNameFromUri(uri)
+                        val currentTime = getCurrentTimestamp()
 
+                        // Datei einlesen
+                        val inputStream = contentResolver.openInputStream(uri)
                         if (inputStream != null) {
-                            val rawData = inputStream.readBytes()
+                            val fileData = inputStream.readBytes()
                             inputStream.close()
 
-                            // Verschlüsseln, wenn es kein Bild/Video ist
-                            val dataToUpload = if (isImageFile(fileName) || isVideoFile(fileName)) {
-                                rawData
+                            // Metadaten aktualisieren und Datei überschreiben
+                            val success = withContext(Dispatchers.IO) {
+                                updateFileWithMetadata(uri, fileData, currentTime)
+                            }
+
+                            if (success) {
+                                successCount++
                             } else {
-                                AesEncryption.encrypt(rawData)
+                                failCount++
                             }
-
-                            // Upload mit korrektem Pfad
-                            val uploadPath = if (folder.isNotEmpty()) {
-                                "$folder/$fileName"
-                            } else {
-                                fileName
-                            }
-
-                            withContext(Dispatchers.IO) {
-                                storage.from(bucketName).upload(uploadPath, dataToUpload)
-                            }
-
-                            successCount++
                         } else {
                             failCount++
                         }
@@ -155,8 +157,8 @@ class ShareActivity : ComponentActivity() {
 
                 withContext(Dispatchers.Main) {
                     val message = when {
-                        failCount == 0 -> "✅ ${if (successCount == 1) "Datei" else "$successCount Dateien"} erfolgreich hochgeladen!"
-                        successCount == 0 -> "❌ Upload fehlgeschlagen"
+                        failCount == 0 -> "✅ ${if (successCount == 1) "Datei" else "$successCount Dateien"} aktualisiert!"
+                        successCount == 0 -> "❌ Aktualisierung fehlgeschlagen"
                         else -> "⚠️ $successCount erfolgreich, $failCount fehlgeschlagen"
                     }
                     Toast.makeText(this@ShareActivity, message, Toast.LENGTH_LONG).show()
@@ -171,12 +173,52 @@ class ShareActivity : ComponentActivity() {
             }
         }
     }
+
+    private fun updateFileWithMetadata(uri: Uri, fileData: ByteArray, timestamp: Long): Boolean {
+        return try {
+            Log.d("ShareActivity", "Versuche Datei zu aktualisieren: $uri")
+
+            val file = getFileFromUri(uri)
+            if (file != null) {
+                Log.d("ShareActivity", "Gefundener Pfad: ${file.absolutePath}")
+                if (file.canWrite()) {
+                    Log.d("ShareActivity", "Datei beschreibbar, schreibe Daten...")
+                    file.writeBytes(fileData)
+                    Log.d("ShareActivity", "Datei erfolgreich überschrieben")
+                } else {
+                    Log.w("ShareActivity", "Datei nicht beschreibbar: ${file.absolutePath}")
+                    return false
+                }
+            } else {
+                Log.w("ShareActivity", "Kein echter Pfad gefunden für URI: $uri")
+                return false
+            }
+
+            // Optional: Metadaten setzen, falls MediaStore-Zugriff möglich
+            try {
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DATE_MODIFIED, timestamp / 1000)
+                    put(MediaStore.MediaColumns.DATE_TAKEN, timestamp)
+                }
+                val updatedRows = contentResolver.update(uri, values, null, null)
+                Log.d("ShareActivity", "MediaStore update: $updatedRows Zeilen aktualisiert")
+            } catch (e: Exception) {
+                Log.w("ShareActivity", "MediaStore update fehlgeschlagen: ${e.message}")
+            }
+
+            true
+        } catch (e: Exception) {
+            Log.e("ShareActivity", "Fehler beim Überschreiben der Datei: ${e.message}", e)
+            false
+        }
+    }
+
 }
 
 @Composable
-fun BucketSelectionScreen(
+fun MetadataUpdateScreen(
     fileCount: Int,
-    onBucketSelected: (String) -> Unit,
+    onConfirm: () -> Unit,
     onCancel: () -> Unit
 ) {
     Box(
@@ -202,7 +244,7 @@ fun BucketSelectionScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "☁️ In Cloud hochladen",
+                    text = "📝 Metadaten aktualisieren",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -216,46 +258,52 @@ fun BucketSelectionScreen(
 
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 8.dp),
-                    thickness = DividerDefaults.Thickness, color = Color.Gray
+                    thickness = DividerDefaults.Thickness,
+                    color = Color.Gray
                 )
 
                 Text(
-                    text = "Ziel auswählen:",
-                    fontSize = 16.sp,
+                    text = "Die folgenden Metadaten werden aktualisiert:",
+                    fontSize = 14.sp,
                     color = Color.White,
                     fontWeight = FontWeight.Medium
                 )
 
-                // Bucket/Ordner-Buttons
-                BucketButton(
-                    icon = "📁",
-                    name = "Files",
-                    description = "Dokumente & Dateien",
-                    onClick = { onBucketSelected(SupabaseConfig.SUPABASE_BUCKET) }
-                )
-
-                BucketButton(
-                    icon = "🖼️",
-                    name = "Other - Bilder",
-                    description = "Bilder (Ordner 1)",
-                    onClick = { onBucketSelected("Other/1") }
-                )
-
-                BucketButton(
-                    icon = "🗂️",
-                    name = "Other - Ordner 2",
-                    description = "Bilder (Ordner 2)",
-                    onClick = { onBucketSelected("Other/2") }
-                )
-
-                BucketButton(
-                    icon = "🎥",
-                    name = "Other - Videos",
-                    description = "Video-Dateien",
-                    onClick = { onBucketSelected("Other/videos") }
-                )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF333333)
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        MetadataRow("📅 Änderungsdatum:", "Jetzt")
+                        MetadataRow("🕐 Zeitstempel:", "Aktuell")
+                        MetadataRow("💾 Speicherort:", "Original überschreiben")
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = onConfirm,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF4CAF50)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = "Aktualisieren",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
 
                 TextButton(
                     onClick = onCancel,
@@ -273,57 +321,28 @@ fun BucketSelectionScreen(
 }
 
 @Composable
-fun BucketButton(
-    icon: String,
-    name: String,
-    description: String,
-    onClick: () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(80.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Color(0xFF444444)
-        ),
-        shape = RoundedCornerShape(12.dp)
+fun MetadataRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Start
-        ) {
-            Text(
-                text = icon,
-                fontSize = 32.sp,
-                modifier = Modifier.padding(end = 16.dp)
-            )
-
-            Column(
-                horizontalAlignment = Alignment.Start
-            ) {
-                Text(
-                    text = name,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Text(
-                    text = description,
-                    fontSize = 12.sp,
-                    color = Color.LightGray
-                )
-            }
-        }
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            color = Color.LightGray
+        )
+        Text(
+            text = value,
+            fontSize = 14.sp,
+            color = Color.White,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 
 @Composable
-fun UploadProgressScreen(
-    fileCount: Int,
-    targetName: String
-) {
+fun ProcessingScreen(fileCount: Int) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -352,22 +371,16 @@ fun UploadProgressScreen(
                 )
 
                 Text(
-                    text = "Hochladen...",
+                    text = "Verarbeite...",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
 
                 Text(
-                    text = if (fileCount == 1) "1 Datei" else "$fileCount Dateien",
+                    text = if (fileCount == 1) "1 Datei wird aktualisiert" else "$fileCount Dateien werden aktualisiert",
                     fontSize = 14.sp,
                     color = Color.LightGray
-                )
-
-                Text(
-                    text = "→ $targetName",
-                    fontSize = 14.sp,
-                    color = Color(0xFF4CAF50)
                 )
             }
         }
