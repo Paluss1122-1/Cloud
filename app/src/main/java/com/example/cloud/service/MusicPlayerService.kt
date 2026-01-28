@@ -5,11 +5,15 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.bluetooth.BluetoothDevice
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Handler
@@ -108,6 +112,7 @@ class MusicPlayerService : MediaSessionService() {
     private lateinit var sharedPreferences: SharedPreferences
     private lateinit var mediaStatePrefs: SharedPreferences
     private val handler = Handler(Looper.getMainLooper())
+    private var bluetoothReceiver: BroadcastReceiver? = null
 
     @OptIn(UnstableApi::class)
     override fun onCreate() {
@@ -121,6 +126,7 @@ class MusicPlayerService : MediaSessionService() {
         createNotificationChannel()
         loadPlaylist()
         statsManager = MusicStatsManager(this)  // Neue Zeile
+        registerBluetoothReceiver()
 
         // MediaSession ohne Player erstellen (nur für Notification/Lock Screen Control)
         mediaSession = MediaSession.Builder(this, DummyPlayer())
@@ -150,22 +156,18 @@ class MusicPlayerService : MediaSessionService() {
                         if (keyEvent != null && keyEvent.action == KeyEvent.ACTION_DOWN) {
                             when (keyEvent.keyCode) {
                                 KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                                    Log.d("MusicPlayerService", "▶ MediaButton: MusicService active, handling play/pause")
                                     if (isPlaying) pauseMusic() else playMusic()
                                     return true
                                 }
                                 KeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                                    Log.d("MusicPlayerService", "⏸ MediaButton: MusicService active, handling pause")
                                     pauseMusic()
                                     return true
                                 }
                                 KeyEvent.KEYCODE_MEDIA_NEXT -> {
-                                    Log.d("MusicPlayerService", "⏭ MediaButton: MusicService active, handling next")
                                     nextSong()
                                     return true
                                 }
                                 KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
-                                    Log.d("MusicPlayerService", "⏮ MediaButton: MusicService active, handling previous")
                                     previousSong()
                                     return true
                                 }
@@ -873,5 +875,30 @@ class MusicPlayerService : MediaSessionService() {
         override fun setDeviceMuted(muted: Boolean) {}
         override fun setDeviceMuted(muted: Boolean, flags: Int) {}
         override fun setAudioAttributes(audioAttributes: AudioAttributes, handleAudioFocus: Boolean) {}
+    }
+
+    private fun registerBluetoothReceiver() {
+        bluetoothReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                when (intent?.action) {
+                    BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
+                        Log.d("MusicPlayerService", "🔌 Bluetooth disconnected - stopping playback")
+                        pauseMusic()
+                    }
+                    AudioManager.ACTION_AUDIO_BECOMING_NOISY -> {
+                        Log.d("MusicPlayerService", "🎧 Audio output disconnected - pausing")
+                        pauseMusic()
+                    }
+                }
+            }
+        }
+
+        val filter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+            addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        }
+
+        registerReceiver(bluetoothReceiver, filter)
+        Log.d("MusicPlayerService", "✓ Bluetooth receiver registered")
     }
 }
