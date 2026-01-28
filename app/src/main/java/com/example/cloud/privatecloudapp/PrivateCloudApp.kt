@@ -164,6 +164,7 @@ import kotlin.math.sqrt
 import androidx.core.content.edit
 import com.example.cloud.authenticator.AuthenticatorTab
 import com.example.cloud.audiorecorder.AudioRecorderContent
+import com.example.cloud.autoclickertab.AutoClickerTabContent
 import com.example.cloud.contactstab.ContactsRepository
 import com.example.cloud.contactstab.ContactsTabContent
 import com.example.cloud.contactstab.ContactsViewModel
@@ -295,6 +296,11 @@ enum class MenuItem(
         "Media Recorder",
         "🎵 ",
         { MediaRecorderContent() }
+    ),
+    AUTOKLICKER(
+    "Autoklicker",
+    "⌨️ ",
+    { AutoClickerTabContent() }
     )
 }
 
