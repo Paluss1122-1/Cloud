@@ -230,8 +230,6 @@ class ErrorMonitorService : Service() {
                 severity = errorData["severity"]?.toString()?.removeSurrounding("\"") ?: "Unknown"
             )
 
-            throw Exception("Test exception")
-
             withContext(Dispatchers.Main) {
                 notificationManager.showErrorNotification(errorReport)
             }
