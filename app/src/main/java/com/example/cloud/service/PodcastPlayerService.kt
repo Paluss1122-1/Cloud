@@ -4,9 +4,13 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.bluetooth.BluetoothDevice
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.IBinder
@@ -17,7 +21,6 @@ import android.view.KeyEvent
 import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
-import androidx.core.os.postDelayed
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.DeviceInfo
 import androidx.media3.common.MediaItem
@@ -34,7 +37,6 @@ import androidx.media3.common.util.Size
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import java.util.concurrent.TimeUnit
-import java.util.logging.Handler
 import kotlin.math.abs
 
 class PodcastPlayerService : Service() {
@@ -53,7 +55,7 @@ class PodcastPlayerService : Service() {
         private const val KEY_PREFIX_POSITION = "podcast_position_"
         private const val KEY_CURRENT_PODCAST = "current_podcast_path"
 
-        private const val SKIP_TIME_MS = 15000 // 15 Sekunden
+        private const val SKIP_TIME_MS = 15000
 
         private const val MEDIA_STATE_PREFS = "media_state_prefs"
         const val KEY_ACTIVE_SERVICE = "active_media_service"
@@ -62,7 +64,6 @@ class PodcastPlayerService : Service() {
 
         private const val KEY_PREFIX_COMPLETED = "podcast_completed_"
 
-        private const val ACTION_DELETE_COMPLETED = "com.example.cloud.ACTION_DELETE_COMPLETED"
         private const val ACTION_DELETE_SINGLE = "com.example.cloud.ACTION_DELETE_SINGLE_"
         private const val KEY_PODCAST_QUEUE = "podcast_queue"
 
@@ -109,6 +110,7 @@ class PodcastPlayerService : Service() {
     private lateinit var mediaStatePrefs: SharedPreferences
     private var positionSaveRunnable: Runnable? = null
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var bluetoothReceiver: BroadcastReceiver? = null
 
     @OptIn(UnstableApi::class)
     override fun onCreate() {
@@ -268,6 +270,9 @@ class PodcastPlayerService : Service() {
             })
                 .setId("PodcastPlayerSession")
                 .setCallback(object : MediaSession.Callback {
+                    private var clickCount = 0
+                    private var lastClickTime = 0L
+                    private val MULTI_CLICK_TIMEOUT = 500L
                     override fun onMediaButtonEvent(
                         session: MediaSession,
                         controllerInfo: MediaSession.ControllerInfo,
@@ -283,8 +288,40 @@ class PodcastPlayerService : Service() {
                             if (keyEvent != null && keyEvent.action == KeyEvent.ACTION_DOWN) {
                                 when (keyEvent.keyCode) {
                                     KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                                        Log.d("PodcastPlayerService", "🎙️ MediaButton: PodcastService active, handling play/pause")
-                                        if (isPlaying) pausePodcast() else playPodcast()
+                                        val currentTime = System.currentTimeMillis()
+
+                                        // Prüfe ob dieser Klick zum vorherigen Klick-Muster gehört
+                                        if (currentTime - lastClickTime < MULTI_CLICK_TIMEOUT) {
+                                            clickCount++
+                                        } else {
+                                            clickCount = 1
+                                        }
+                                        lastClickTime = currentTime
+
+                                        // Verzögere die Ausführung, um auf weitere Klicks zu warten
+                                        handler.removeCallbacksAndMessages(null)
+                                        handler.postDelayed({
+                                            when (clickCount) {
+                                                1 -> {
+                                                    Log.d("PodcastPlayerService", "🎙️ 1x Klick: Play/Pause")
+                                                    if (isPlaying) pausePodcast() else playPodcast()
+                                                }
+                                                2 -> {
+                                                    Log.d("PodcastPlayerService", "⏩ 2x Klick: +15s")
+                                                    forward()
+                                                }
+                                                3 -> {
+                                                    Log.d("PodcastPlayerService", "⏪ 3x Klick: -15s")
+                                                    rewind()
+                                                }
+                                                4 -> {
+                                                    Log.d("PodcastPlayerService", "⏭️ 4x Klick: Nächste Episode")
+                                                    playNextInQueue()
+                                                }
+                                            }
+                                            clickCount = 0
+                                        }, MULTI_CLICK_TIMEOUT)
+
                                         return true
                                     }
                                     KeyEvent.KEYCODE_MEDIA_PAUSE -> {
@@ -332,8 +369,7 @@ class PodcastPlayerService : Service() {
 
         // Starte automatisches Speichern der Position
         startPositionSaving()
-
-        Log.d("PodcastPlayerService", "Service created. Podcasts found: ${podcasts.size}")
+        registerBluetoothReceiver()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -463,7 +499,6 @@ class PodcastPlayerService : Service() {
             val podcasts = mutableListOf<Podcast>()
             loadFromMediaStore(podcasts)
 
-            // Lade gespeicherte Positionen UND Completed-Status für jeden Podcast
             this.podcasts = podcasts.map { podcast ->
                 val savedPosition = getSavedPosition(podcast.path)
                 val isCompleted = getCompletedStatus(podcast.path)
@@ -641,6 +676,12 @@ class PodcastPlayerService : Service() {
             Log.d("PodcastPlayerService", "Loading: ${podcast.name}")
             Log.d("PodcastPlayerService", "Saved position: ${formatTime(podcast.savedPosition)}")
 
+            if (currentPodcast?.path != podcast.path) {
+                currentPodcast = podcast
+                saveCurrentPodcast(podcast.path)
+                Log.d("PodcastPlayerService", "Set currentPodcast to: ${podcast.name}")
+            }
+
             // Wenn der Podcast als fertig markiert war, setze zurück
             if (podcast.isCompleted) {
                 setCompletedStatus(podcast.path, false)
@@ -787,7 +828,7 @@ class PodcastPlayerService : Service() {
 
                 val notification = NotificationCompat.Builder(this, CHANNEL_ID)
                     .setSmallIcon(android.R.drawable.ic_menu_info_details)
-                    .setContentTitle("$statusIcon ${podcast.name}")
+                    .setContentTitle("${index - 1} $statusIcon ${podcast.name}")
                     .setContentText("Antippen zum Abspielen$progressText")
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
                     .setAutoCancel(true)
@@ -833,8 +874,6 @@ class PodcastPlayerService : Service() {
     }
 
     private fun onPodcastComplete() {
-        Log.d("PodcastPlayerService", "✓ Podcast completed: ${currentPodcast?.name}")
-
         currentPodcast?.let { podcast ->
             // Setze Position auf 0
             savePosition(podcast.path, 0)
@@ -850,17 +889,49 @@ class PodcastPlayerService : Service() {
             podcasts = podcasts.map {
                 if (it.path == podcast.path) updatedPodcast else it
             }
-            currentPodcast = updatedPodcast
+        }
 
-            android.os.Handler(Looper.getMainLooper()).postDelayed({
-                playNextInQueue()
-            }, 2000)
+        // MediaPlayer KOMPLETT freigeben
+        try {
+            mediaPlayer?.stop()
+            mediaPlayer?.release()
+            mediaPlayer = null
+        } catch (e: Exception) {
+            Log.e("PodcastPlayerService", "Error releasing MediaPlayer", e)
         }
 
         isPlaying = false
-        mediaPlayer?.release()
-        mediaPlayer = null
-        updateNotification()
+
+        loadPodcastQueue()
+
+        // WICHTIG: currentPodcast erst NACH Queue-Check auf null setzen
+        if (podcastQueue.isNotEmpty()) {
+            val nextPath = podcastQueue.removeAt(0)
+            savePodcastQueue()
+
+            val nextPodcast = podcasts.find { it.path == nextPath }
+            if (nextPodcast != null) {
+                val savedPos = getSavedPosition(nextPodcast.path)
+                currentPodcast = nextPodcast.copy(savedPosition = savedPos) // Setze HIER
+                saveCurrentPodcast(nextPodcast.path) // Speichere HIER
+                loadPodcast(currentPodcast!!)
+                Log.d("PodcastPlayerService", "✓ Auto-playing next from queue: ${nextPodcast.name}")
+            } else {
+                Log.w("PodcastPlayerService", "Next podcast not found: $nextPath")
+                // Wenn Podcast nicht gefunden, versuche den nächsten in der Queue
+                if (podcastQueue.isNotEmpty()) {
+                    onPodcastComplete() // Rekursiv
+                } else {
+                    currentPodcast = null // Nur wenn Queue leer
+                    updateNotification()
+                }
+            }
+        } else {
+            // Queue ist leer
+            currentPodcast = null
+            updateNotification()
+            Log.d("PodcastPlayerService", "Queue empty - playback finished")
+        }
     }
 
     private fun formatTime(milliseconds: Long): String {
@@ -946,6 +1017,9 @@ class PodcastPlayerService : Service() {
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(selectPendingIntent)
             .setDeleteIntent(deletePendingIntent)
+            .setRequestPromotedOngoing(true)
+            .setGroup("group_services")
+            .setGroupSummary(false)
             .addAction(
                 android.R.drawable.ic_media_rew,
                 "-15s",
@@ -1031,6 +1105,14 @@ class PodcastPlayerService : Service() {
     }
 
     override fun onDestroy() {
+        try {
+            bluetoothReceiver?.let {
+                unregisterReceiver(it)
+                bluetoothReceiver = null
+            }
+        } catch (e: Exception) {
+            Log.e("MusicPlayerService", "Error unregistering receiver", e)
+        }
         super.onDestroy()
         clearActiveService()
 
@@ -1304,5 +1386,30 @@ class PodcastPlayerService : Service() {
         } catch (e: Exception) {
             Log.e("PodcastPlayerService", "Error showing error notification", e)
         }
+    }
+
+    private fun registerBluetoothReceiver() {
+        bluetoothReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                when (intent?.action) {
+                    BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
+                        Log.d("MusicPlayerService", "🔌 Bluetooth disconnected - stopping playback")
+                        pausePodcast()
+                    }
+                    AudioManager.ACTION_AUDIO_BECOMING_NOISY -> {
+                        Log.d("MusicPlayerService", "🎧 Audio output disconnected - pausing")
+                        pausePodcast()
+                    }
+                }
+            }
+        }
+
+        val filter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+            addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        }
+
+        registerReceiver(bluetoothReceiver, filter)
+        Log.d("MusicPlayerService", "✓ Bluetooth receiver registered")
     }
 }
