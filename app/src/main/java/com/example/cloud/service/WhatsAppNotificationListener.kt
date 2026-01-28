@@ -26,22 +26,23 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     companion object {
         private val repository = WhatsAppMessageRepository()
         val replyActions = mutableMapOf<String, ReplyData>()
-
-        // Nachrichten pro Kontakt speichern
         val messagesByContact = mutableMapOf<String, MutableList<ChatMessage>>()
+
+        // Unterstützte Apps
+        private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
+        private val TELEGRAM_PACKAGES = setOf("org.telegram.messenger", "org.telegram.messenger.web")
 
         data class ChatMessage(
             val text: String,
             val timestamp: Long = System.currentTimeMillis(),
             val isOwnMessage: Boolean,
-            val imageUri: Uri? = null  // NEU
+            val imageUri: Uri? = null
         )
 
-        // In der companion object Klasse von WhatsAppNotificationListener
         data class ReplyData(
             val pendingIntent: android.app.PendingIntent,
             val remoteInput: RemoteInput,
-            val originalResultKey: String, // <-- NEU: Speichert den originalen Key von WhatsApp
+            val originalResultKey: String,
             val timestamp: Long = System.currentTimeMillis()
         )
 
@@ -57,7 +58,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             return synchronized(replyActions) {
                 val replyData = replyActions[sender]
                 if (replyData == null) {
-                    Log.w("WhatsAppListener", "No reply action found for $sender")
+                    Log.w("MessageListener", "No reply action found for $sender")
                     Handler(Looper.getMainLooper()).post {
                         Toast.makeText(context, "Antwort nicht mehr verfügbar", Toast.LENGTH_LONG)
                             .show()
@@ -87,7 +88,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                         ChatMessage(replyText, isOwnMessage = true)
                     )
 
-                    Log.d("WhatsAppListener", "Reply sent successfully to $sender: $replyText")
+                    Log.d("MessageListener", "Reply sent successfully to $sender: $replyText")
                     Handler(Looper.getMainLooper()).post {
                         Toast.makeText(context, "Nachricht gesendet ✓", Toast.LENGTH_SHORT).show()
                     }
@@ -101,7 +102,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                         .setContentText("An $sender: $replyText")
                         .setPriority(NotificationCompat.PRIORITY_LOW)
                         .setAutoCancel(true)
-                        .setTimeoutAfter(3000) // Verschwindet nach 3 Sekunden
+                        .setTimeoutAfter(3000)
                         .build()
 
                     if (ContextCompat.checkSelfPermission(
@@ -114,7 +115,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
                     true
                 } catch (e: Exception) {
-                    Log.e("WhatsAppListener", "Error sending reply", e)
+                    Log.e("MessageListener", "Error sending reply", e)
                     Handler(Looper.getMainLooper()).post {
                         Toast.makeText(context, "Fehler beim Senden: ${e.message}", Toast.LENGTH_LONG).show()
                     }
@@ -123,152 +124,168 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             }
         }
 
+        private fun isSupportedApp(packageName: String): Boolean {
+            return WHATSAPP_PACKAGES.contains(packageName) || TELEGRAM_PACKAGES.contains(packageName)
+        }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         super.onNotificationPosted(sbn)
+
+        // Prüfen ob es WhatsApp oder Telegram ist
+        if (!isSupportedApp(sbn.packageName)) {
+            return
+        }
 
         val notification = sbn.notification
         val extras = notification.extras
         val title = extras.getString(android.app.Notification.EXTRA_TITLE) ?: ""
         val text = extras.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString() ?: ""
 
-        if (sbn.packageName == "com.whatsapp" || sbn.packageName == "com.whatsapp.w4b") {
-            if (title.contains("Backup", ignoreCase = true) || title.contains("Du", ignoreCase = true)|| title.contains("WhatsApp", ignoreCase = true)) {
-                return
+        // System-Nachrichten filtern
+        if (title.contains("Backup", ignoreCase = true) ||
+            title.contains("Du", ignoreCase = true) ||
+            title.contains("WhatsApp", ignoreCase = true) ||
+            title.contains("Telegram", ignoreCase = true)) {
+            return
+        }
+
+        // Duplikate vermeiden
+        val existingMessages = messagesByContact[title] ?: mutableListOf()
+        val lastMessage = existingMessages.lastOrNull()
+
+        if (lastMessage != null &&
+            !lastMessage.isOwnMessage &&
+            lastMessage.text == text &&
+            (System.currentTimeMillis() - lastMessage.timestamp) < 5000) {
+            Log.d("MessageListener", "Duplicate message detected from $title, ignoring")
+            return
+        }
+
+        Toast.makeText(this, title, Toast.LENGTH_SHORT).show()
+
+        // Reply-Action extrahieren
+        notification.actions?.forEach { action ->
+            action.remoteInputs?.firstOrNull()?.let { systemRemoteInput ->
+                val remoteInput = RemoteInput.Builder(systemRemoteInput.resultKey)
+                    .setLabel(systemRemoteInput.label)
+                    .setChoices(systemRemoteInput.choices)
+                    .setAllowFreeFormInput(systemRemoteInput.allowFreeFormInput)
+                    .build()
+
+                replyActions[title] = ReplyData(
+                    pendingIntent = action.actionIntent,
+                    remoteInput = remoteInput,
+                    originalResultKey = systemRemoteInput.resultKey,
+                    timestamp = System.currentTimeMillis()
+                )
+                Log.d("MessageListener", "Saved reply action for $title with originalResultKey: ${systemRemoteInput.resultKey}")
             }
+        }
 
-            val existingMessages = messagesByContact[title] ?: mutableListOf()
-            val lastMessage = existingMessages.lastOrNull()
+        // Empfangene Nachricht zur Liste hinzufügen
+        messagesByContact.getOrPut(title) { mutableListOf() }.add(
+            ChatMessage(text, isOwnMessage = false)
+        )
 
-            if (lastMessage != null &&
-                !lastMessage.isOwnMessage &&
-                lastMessage.text == text &&
-                (System.currentTimeMillis() - lastMessage.timestamp) < 5000) { // Innerhalb 5 Sekunden
-                Log.d("WhatsAppListener", "Duplicate message detected from $title, ignoring")
-                return
+        // In Datenbank speichern
+        CoroutineScope(Dispatchers.IO).launch {
+            val exists = repository.getAll().any {
+                it.sender == title && it.text == text
             }
-
-            Toast.makeText(this, title, Toast.LENGTH_SHORT).show()
-            notification.actions?.forEach { action ->
-                action.remoteInputs?.firstOrNull()?.let { systemRemoteInput ->
-                    val remoteInput = RemoteInput.Builder(systemRemoteInput.resultKey)
-                        .setLabel(systemRemoteInput.label)
-                        .setChoices(systemRemoteInput.choices)
-                        .setAllowFreeFormInput(systemRemoteInput.allowFreeFormInput)
-                        .build()
-
-                    replyActions[title] = ReplyData(
-                        pendingIntent = action.actionIntent,
-                        remoteInput = remoteInput,
-                        originalResultKey = systemRemoteInput.resultKey,
-                                timestamp = System.currentTimeMillis()
+            if (!exists && !title.contains("Du")) {
+                repository.insert(
+                    WhatsAppMessage(
+                        sender = title,
+                        text = text,
+                        timestamp = System.currentTimeMillis()
                     )
-                    Log.d("WhatsAppListener", "Saved reply action for $title with originalResultKey: ${systemRemoteInput.resultKey}")
+                )
+                val broadcastIntent = Intent("WHATSAPP_MESSAGE_RECEIVED").apply {
+                    setPackage(applicationContext.packageName)
                 }
+                sendBroadcast(broadcastIntent)
             }
+        }
 
-            // Empfangene Nachricht zur Liste hinzufügen
-            messagesByContact.getOrPut(title) { mutableListOf() }.add(
-                ChatMessage(text, isOwnMessage = false)
+        // Uhrzeit prüfen (Quiet Hours)
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        val prefs = getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
+        val quietEnd = prefs.getString("saved_number", null)?.toIntOrNull() ?: 21
+        val quietStart = prefs.getString("saved_number_start", null)?.toIntOrNull() ?: 7
+        if ((hour >= quietStart && hour < quietEnd)) {
+            return
+        }
+
+        QuietHoursNotificationService.updateSingleSenderNotification(this, title)
+
+        // Notification Channel erstellen
+        val channelId = "whatsapp_listener_channel"
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        if (notificationManager.getNotificationChannel(channelId) == null) {
+            val channel = NotificationChannel(
+                channelId,
+                "Messenger Listener",
+                NotificationManager.IMPORTANCE_HIGH
             )
+            notificationManager.createNotificationChannel(channel)
+        }
 
-            CoroutineScope(Dispatchers.IO).launch {
-                val exists = repository.getAll().any {
-                    it.sender == title && it.text == text
-                }
-                if (!exists && !title.contains("Du")) {
-                    repository.insert(
-                        WhatsAppMessage(
-                            sender = title,
-                            text = text,
-                            timestamp = System.currentTimeMillis()
-                        )
+        // Notification mit Reply-Action erstellen
+        val replyData = replyActions[title]
+        if (replyData != null) {
+            val action = NotificationCompat.Action.Builder(
+                android.R.drawable.ic_menu_send,
+                "Antworten",
+                replyData.pendingIntent
+            )
+                .addRemoteInput(replyData.remoteInput)
+                .setShowsUserInterface(false)
+                .build()
+
+            // Nachrichten für diesen Kontakt holen
+            val messages = messagesByContact[title] ?: mutableListOf()
+
+            // MessagingStyle für Chat-Darstellung
+            val messagingStyle = NotificationCompat.MessagingStyle("Du")
+                .setConversationTitle(title)
+
+            // Nur die letzten 5 Nachrichten anzeigen
+            val recentMessages = messages.takeLast(5)
+
+            recentMessages.forEach { msg ->
+                messagingStyle.addMessage(
+                    NotificationCompat.MessagingStyle.Message(
+                        msg.text,
+                        msg.timestamp,
+                        if (msg.isOwnMessage) "Du" else title
                     )
-                    val broadcastIntent = Intent("WHATSAPP_MESSAGE_RECEIVED").apply {
-                        setPackage(applicationContext.packageName)
-                    }
-                    sendBroadcast(broadcastIntent)
-                }
-            }
-
-            // Uhrzeit prüfen
-            val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-            val prefs = getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
-            val quietEnd = prefs.getString("saved_number", null)?.toIntOrNull() ?: 21
-            val quietStart = prefs.getString("saved_number_start", null)?.toIntOrNull() ?: 7
-            if ((hour >= quietStart && hour < quietEnd)) {
-                return
-            }
-
-            QuietHoursNotificationService.updateSingleSenderNotification(this, title)
-
-            val channelId = "whatsapp_listener_channel"
-            val notificationManager = getSystemService(NotificationManager::class.java)
-            if (notificationManager.getNotificationChannel(channelId) == null) {
-                val channel = NotificationChannel(
-                    channelId,
-                    "WhatsApp Listener",
-                    NotificationManager.IMPORTANCE_HIGH
                 )
-                notificationManager.createNotificationChannel(channel)
             }
 
-            val replyData = replyActions[title]
-            if (replyData != null) {
-                val action = NotificationCompat.Action.Builder(
-                    android.R.drawable.ic_menu_send,
-                    "Antworten",
-                    replyData.pendingIntent
-                )
-                    .addRemoteInput(replyData.remoteInput)
-                    .setShowsUserInterface(false)
-                    .build()
+            val newNotification = NotificationCompat.Builder(this, channelId)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setStyle(messagingStyle)
+                .addAction(action)
+                .setAutoCancel(true)
+                .setOnlyAlertOnce(true)
+                .build()
 
-                // Nachrichten für diesen Kontakt holen
-                val messages = messagesByContact[title] ?: mutableListOf()
-
-                // MessagingStyle für Chat-Darstellung
-                val messagingStyle = NotificationCompat.MessagingStyle("Du")
-                    .setConversationTitle(title)
-
-                // Nur die letzten 5 Nachrichten anzeigen
-                val recentMessages = messages.takeLast(5)
-
-                recentMessages.forEach { msg ->
-                    messagingStyle.addMessage(
-                        NotificationCompat.MessagingStyle.Message(
-                            msg.text,
-                            msg.timestamp,
-                            if (msg.isOwnMessage) "Du" else title
-                        )
-                    )
-                }
-
-                val newNotification = NotificationCompat.Builder(this, channelId)
-                    .setSmallIcon(android.R.drawable.ic_dialog_info)
-                    .setStyle(messagingStyle)
-                    .addAction(action)
-                    .setAutoCancel(true)
-                    .setOnlyAlertOnce(true)
-                    .build()
-
-                if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                    notificationManager.notify(title.hashCode(), newNotification)
-                } else {
-                    Log.w("WhatsAppListener", "POST_NOTIFICATIONS permission not granted")
-                }
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                notificationManager.notify(title.hashCode(), newNotification)
+            } else {
+                Log.w("MessageListener", "POST_NOTIFICATIONS permission not granted")
             }
         }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        if (sbn.packageName == "com.whatsapp") {
+        if (isSupportedApp(sbn.packageName)) {
             val title = sbn.notification.extras.getString(android.app.Notification.EXTRA_TITLE)
             title?.let {
                 replyActions.remove(it)
-                messagesByContact.remove(it) // Nachrichten auch löschen
-                Log.d("WhatsAppListener", "Removed reply action for $title")
+                messagesByContact.remove(it)
+                Log.d("MessageListener", "Removed reply action for $title")
             }
         }
         super.onNotificationRemoved(sbn)
