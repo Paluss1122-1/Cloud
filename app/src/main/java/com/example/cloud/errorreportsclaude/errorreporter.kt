@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import android.Manifest
 import android.net.Uri
+import android.util.Log
 import androidx.annotation.RequiresPermission
 import com.example.cloud.ERRORINSERT
 import com.example.cloud.ERRORINSERTDATA
@@ -25,11 +26,10 @@ import java.time.Instant
 import androidx.core.net.toUri
 
 data class ErrorReport(
-    val id: Int,
     val service_name: String,
     val error_message: String,
     val created_at: String,
-    val severity: String? = "error"
+    val severity: String = "Error"
 )
 
 class ErrorNotificationManager(private val context: Context) {
@@ -61,11 +61,16 @@ class ErrorNotificationManager(private val context: Context) {
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     fun showErrorNotification(errorReport: ErrorReport) {
         try {
-            val severityEmoji = when (errorReport.severity) {
+            android.util.Log.d("ErrorMonitor", "Severity value: ${errorReport.severity}")
+            /*val severityEmoji = when (errorReport.severity.trim()) {
                 "Error" -> "🔴"
                 "Warning" -> "⚠️"
                 else -> "ℹ️"
-            }
+            }*/
+
+            val severityEmoji = if (errorReport.severity == "Error") {"🔴"} else {"ℹ️"}
+            Log.d("ErrorMonitor",errorReport.severity)
+            android.util.Log.d("ErrorMonitor", "$severityEmoji")
 
             val intent = Intent(
                 Intent.ACTION_VIEW,
@@ -108,6 +113,7 @@ class ErrorNotificationManager(private val context: Context) {
 class ErrorMonitorService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private lateinit var notificationManager: ErrorNotificationManager
+    private var isListenerActive = false
 
     companion object {
         private const val NOTIFICATION_ID = 1
@@ -176,18 +182,25 @@ class ErrorMonitorService : Service() {
 
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     private fun startRealtimeListener() {
+        if (isListenerActive) {
+            return // ✅ Verhindere doppeltes Starten
+        }
+        isListenerActive = true
         serviceScope.launch {
             try {
                 val tableName = "error_reports"
 
                 val channel = SupabaseConfig.client.channel("realtime:$tableName")
 
-                channel
+                val changeFlow = channel
                     .postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
                         table = tableName
                     }
+
+                changeFlow
                     .onEach { change ->
                         handleNewError(change.record)
+                        Log.d("ErrorMonitor","${change.record}")
                     }
                     .launchIn(this)
 
@@ -211,12 +224,13 @@ class ErrorMonitorService : Service() {
     private suspend fun handleNewError(errorData: Map<String, Any>) {
         try {
             val errorReport = ErrorReport(
-                id = (errorData["id"] as? Number)?.toInt() ?: 0,
-                service_name = errorData["service_name"] as? String ?: "Unknown",
-                error_message = errorData["error_message"] as? String ?: "",
-                created_at = errorData["created_at"] as? String ?: "",
-                severity = errorData["severity"] as? String ?: "error"
+                service_name = errorData["service_name"]?.toString() ?: "Unknown",  // ✅ toString() statt as String
+                error_message = errorData["error_message"]?.toString() ?: "Unknown",  // ✅ toString() statt as String
+                created_at = errorData["created_at"]?.toString() ?: "Unknown",  // ✅ toString() statt as String
+                severity = errorData["severity"]?.toString()?.removeSurrounding("\"") ?: "Unknown"
             )
+
+            throw Exception("Test exception")
 
             withContext(Dispatchers.Main) {
                 notificationManager.showErrorNotification(errorReport)
@@ -236,6 +250,7 @@ class ErrorMonitorService : Service() {
     }
 
     override fun onDestroy() {
+        isListenerActive = false
         serviceScope.cancel()
         super.onDestroy()
     }
