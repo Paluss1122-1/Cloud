@@ -2,10 +2,10 @@ import com.android.build.api.dsl.Packaging
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    kotlin("kapt")
-    kotlin("plugin.serialization") version "1.9.20"
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.serialization)
+    id("kotlin-parcelize")
 }
 
 android {
@@ -20,12 +20,6 @@ android {
     }
     namespace = "com.example.cloud"
     compileSdk = 36
-
-    fun Packaging.() {
-        jniLibs {
-            useLegacyPackaging = false
-        }
-    }
 
     packaging {
         resources {
@@ -86,8 +80,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    kotlinOptions {
-        jvmTarget = "11"
+    kotlin {
+        jvmToolchain(11)
     }
     buildFeatures {
         compose = true
@@ -148,7 +142,7 @@ dependencies {
     implementation(libs.androidx.biometric)
     implementation(libs.core)
     implementation(libs.zxing.android.embedded)
-    kapt(libs.androidx.room.compiler)
+    ksp(libs.androidx.room.compiler)
     implementation(libs.ktor.ktor.client.android)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.websockets)
