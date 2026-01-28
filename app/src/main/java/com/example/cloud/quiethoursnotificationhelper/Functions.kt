@@ -27,8 +27,6 @@ fun markMessageAsRead(messageId: String, readMessageIds:  MutableSet<String>, co
                 notificationManager.cancel(partNotificationId)
             }
         }
-
-        showSimpleNotificationExtern("✅ Markiert","Nachricht wurde als gelesen markiert", Duration.ZERO, context)
     } catch (e: Exception) {
         CoroutineScope(Dispatchers.IO).launch {
             ERRORINSERT(
