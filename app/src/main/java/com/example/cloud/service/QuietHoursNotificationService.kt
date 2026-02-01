@@ -44,6 +44,7 @@ import java.util.Locale
 import androidx.core.net.toUri
 import com.example.cloud.mediarecorder.AudioRecorder
 import com.example.cloud.SupabaseConfig
+import com.example.cloud.privatecloudapp.showBatteryInfo
 import com.example.cloud.quiethoursnotificationhelper.addPodcastToQueue
 import com.example.cloud.quiethoursnotificationhelper.clearPodcastQueue
 import com.example.cloud.quiethoursnotificationhelper.clearPodcastSelectionNotifications
@@ -681,6 +682,13 @@ class QuietHoursNotificationService : Service() {
                 description = "Bw MP!"
             ) {
                 showSimpleNotification("BW MP", "Sec.P1122.!!\"\"")
+            },
+            Command(
+                name = "battery",
+                aliases = listOf("bat", "btt"),
+                description = "Bw MP!"
+            ) {
+                showBatteryInfo(this)
             },
         )
     }
@@ -4191,10 +4199,6 @@ class QuietHoursAlarmReceiver : BroadcastReceiver() {
             action = "com.example.cloud.ACTION_CHECK_QUIET_HOURS"
         }
 
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            context.startForegroundService(serviceIntent)
-        } else {
-            context.startService(serviceIntent)
-        }
+        context.startForegroundService(serviceIntent)
     }
 }
