@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import android.widget.Toast
@@ -17,11 +16,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
 import com.example.cloud.errorreportsclaude.ErrorMonitorService
 import com.example.cloud.jsoneditor.JsonEditorContent
+import com.example.cloud.privatecloudapp.LandingPageOrApp
 import com.example.cloud.privatecloudapp.PrivateCloudApp
 import com.example.cloud.quicksettingsfunctions.BatteryDataRepository
 import io.github.jan.supabase.SupabaseClient
@@ -37,21 +36,6 @@ class MainActivity : FragmentActivity() {
     private var jsonFilePath by mutableStateOf<String?>(null)
     private var jsonFileUri by mutableStateOf<Uri?>(null)
     private var showJsonEditor by mutableStateOf(false)
-
-    // Berechtigungsanfrage für Dateizugriff (Android 6-12)
-    private val storagePermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
-            handleIncomingIntent(intent)
-        } else {
-            Toast.makeText(
-                this,
-                "Berechtigung zum Lesen von Dateien erforderlich",
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -84,7 +68,7 @@ class MainActivity : FragmentActivity() {
 
         val launcher = registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
-        ) { permissions -> }
+        ) { _ -> }
 
         launcher.launch(
             arrayOf(
@@ -108,7 +92,6 @@ class MainActivity : FragmentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // JSON Editor hat Vorrang, wenn eine JSON-Datei geöffnet werden soll
                     if (showJsonEditor && jsonFilePath != null) {
                         JsonEditorContent(
                             filePath = jsonFilePath!!,
@@ -121,8 +104,7 @@ class MainActivity : FragmentActivity() {
                             }
                         )
                     } else {
-                        // Normale App-Oberfläche
-                        PrivateCloudApp(supabase.storage, startTarget)
+                        LandingPageOrApp(supabase.storage, startTarget)
                     }
                 }
             }
@@ -166,27 +148,8 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun checkPermissionsAndHandleIntent(intent: Intent) {
-        // Prüfen ob es ein JSON-Intent ist
         if (intent.action == Intent.ACTION_VIEW || intent.action == Intent.ACTION_EDIT) {
-            // Ab Android 13 (API 33) keine Storage-Berechtigung mehr nötig
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                handleIncomingIntent(intent)
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                // Für Android 6-12: Berechtigung prüfen
-                when {
-                    ContextCompat.checkSelfPermission(
-                        this,
-                        Manifest.permission.READ_EXTERNAL_STORAGE
-                    ) == PackageManager.PERMISSION_GRANTED -> {
-                        handleIncomingIntent(intent)
-                    }
-                    else -> {
-                        storagePermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
-                    }
-                }
-            } else {
-                handleIncomingIntent(intent)
-            }
+            handleIncomingIntent(intent)
         }
     }
 
@@ -243,7 +206,7 @@ class MainActivity : FragmentActivity() {
                 cursor.moveToFirst()
                 cursor.getString(nameIndex)
             } ?: "temp_${System.currentTimeMillis()}.json"
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             "temp_${System.currentTimeMillis()}.json"
         }
 
