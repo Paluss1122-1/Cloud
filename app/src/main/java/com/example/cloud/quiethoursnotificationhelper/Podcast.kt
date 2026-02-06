@@ -210,7 +210,7 @@ fun addPodcastToQueue(index: Int, context: Context) {
         if (index < 0 || index >= allPodcasts.size) {
             showSimpleNotificationExtern(
                 "❌ Ungültiger Index",
-                "Podcast ${index + 1} existiert nicht (1-${allPodcasts.size})",
+                "Podcast ${index - 1} existiert nicht (1-${allPodcasts.size})",
                 20.seconds,
                 context
             )
