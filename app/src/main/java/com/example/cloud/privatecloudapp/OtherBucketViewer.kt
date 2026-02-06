@@ -1,10 +1,10 @@
+@file:Suppress("AssignedValueIsNeverRead")
+
 package com.example.cloud.privatecloudapp
 
 import android.content.Context
 import android.content.Intent
-import android.media.MediaScannerConnection
 import android.net.Uri
-import android.os.Environment
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -12,7 +12,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,7 +27,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
@@ -46,7 +44,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -77,33 +74,38 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache.Builder
 import com.example.cloud.ui.theme.gruen
 import com.example.cloud.ui.theme.hellgruen
-import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
-import kotlin.time.Duration.Companion.seconds
+import java.text.SimpleDateFormat
+import java.util.*
 import kotlin.time.ExperimentalTime
+
+data class LocalFileInfo(
+    val file: File,
+    val fileName: String,
+    val fileSize: Long,
+    val lastModified: Long,
+    val isVideo: Boolean
+)
 
 @OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class)
 @Composable
 fun OtherBucketViewer(
-    storage: Storage,
     onBackPressed: () -> Unit
 ) {
-    var fileList by remember { mutableStateOf<List<String>>(emptyList()) }
-    var isDownloading by remember { mutableStateOf<String?>(null) }
+    var fileList by remember { mutableStateOf<List<LocalFileInfo>>(emptyList()) }
     var isUploading by remember { mutableStateOf(false) }
     var uploadProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    var showDownloadProgress by remember { mutableStateOf(false) }
-    var showFullscreenImage by rememberSaveable { mutableStateOf<Pair<String, String>?>(null) }
-    var showVideoPlayer by rememberSaveable { mutableStateOf<Pair<String, String>?>(null) }
+    var showFullscreenImage by rememberSaveable { mutableStateOf<LocalFileInfo?>(null) }
+    var showVideoPlayer by rememberSaveable { mutableStateOf<LocalFileInfo?>(null) }
     var selectedFilter by remember { mutableStateOf("all") } // "all", "videos", "images"
     val context = LocalContext.current
     var currentVideoIndex by rememberSaveable { mutableIntStateOf(0) }
+    var currentImageIndex by rememberSaveable { mutableIntStateOf(0) }
     val imageLoader = remember {
         ImageLoader.Builder(context)
             .crossfade(true)
@@ -125,43 +127,37 @@ fun OtherBucketViewer(
 
     val cacheDirectory = context.cacheDir.resolve("image_cache")
     cacheDirectory.deleteRecursively()
-    val urlCache = remember { mutableMapOf<String, String>() }
 
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
-    var ispictureupload by remember { mutableStateOf(false) }
 
-    suspend fun loadFiles() {
-        try {
-            // Lade alle Dateien aus dem 'Other' Bucket mit Unterordnern
-            val videoFiles = withContext(Dispatchers.IO) {
-                storage.from("Other").list("videos")
-            }
+    // Funktion zum Laden der Dateien aus dem privaten Speicher
+    suspend fun loadFilesFromPrivateStorage() {
+        withContext(Dispatchers.IO) {
+            try {
+                val privateDir = File(context.filesDir, "shared_files")
+                if (!privateDir.exists()) {
+                    privateDir.mkdirs()
+                }
 
-            val videoFiles1 = withContext(Dispatchers.IO) {
-                storage.from("Other").list("videos2")
-            }
+                val files = privateDir.listFiles()?.filter { it.isFile } ?: emptyList()
 
-            val folder1Files = withContext(Dispatchers.IO) {
-                storage.from("Other").list("1")
-            }
+                fileList = files.map { file ->
+                    val isVideo = isVideoFile(file.name)
+                    LocalFileInfo(
+                        file = file,
+                        fileName = file.name,
+                        fileSize = file.length(),
+                        lastModified = file.lastModified(),
+                        isVideo = isVideo
+                    )
+                }.sortedByDescending { it.lastModified } // Neueste zuerst
 
-            val folder2Files = withContext(Dispatchers.IO) {
-                storage.from("Other").list("2")
-            }
-
-            // Format: "folder|fileName|updatedAt|size"
-            fileList = (
-                    videoFiles.map { "videos|${it.name}|${it.updatedAt}|${it.metadata?.get("size") ?: 0}" } +
-                            videoFiles1.map { "videos2|${it.name}|${it.updatedAt}|${it.metadata?.get("size") ?: 0}" } +
-                            folder1Files.map { "1|${it.name}|${it.updatedAt}|${it.metadata?.get("size") ?: 0}" } +
-                            folder2Files.map { "2|${it.name}|${it.updatedAt}|${it.metadata?.get("size") ?: 0}" }
-                    ).filter { !it.contains(".emptyFolderPlaceholder") }
-
-        } catch (e: Exception) {
-            e.printStackTrace()
-            withContext(Dispatchers.Main) {
-                Toast.makeText(context, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -180,7 +176,7 @@ fun OtherBucketViewer(
 
                     uris.forEachIndexed { index, uri ->
                         try {
-                            uploadImage(context, storage, uri)
+                            saveFileToPrivateStorage(context, uri)
                             successCount++
                             uploadProgress = Pair(index + 1, uris.size)
                             delay(100)
@@ -191,16 +187,16 @@ fun OtherBucketViewer(
                     }
 
                     val message = when {
-                        failCount == 0 -> "✅ Alle $successCount ${if(ispictureupload) "Bilder" else "Videos"} hochgeladen!"
-                        successCount == 0 -> "❌ Upload fehlgeschlagen"
-                        else -> "⚠️ $successCount hochgeladen, $failCount fehlgeschlagen"
+                        failCount == 0 -> "✅ Alle $successCount Dateien gespeichert!"
+                        successCount == 0 -> "❌ Speichern fehlgeschlagen"
+                        else -> "⚠️ $successCount gespeichert, $failCount fehlgeschlagen"
                     }
 
                     Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-                    loadFiles()
+                    loadFilesFromPrivateStorage()
 
                 } catch (e: Exception) {
-                    Toast.makeText(context, "Fehler beim Upload: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_LONG).show()
                 } finally {
                     isUploading = false
                     uploadProgress = null
@@ -209,36 +205,31 @@ fun OtherBucketViewer(
         }
     }
 
-    suspend fun deleteFile(fileWithMetadata: String) {
+    suspend fun deleteFile(fileInfo: LocalFileInfo) {
         try {
-            val parts = fileWithMetadata.split("|")
-            val folder = parts.getOrNull(0) ?: return
-            val fileName = parts.getOrNull(1) ?: return
-
-            fileList = fileList.filter { it != fileWithMetadata }
-
             withContext(Dispatchers.IO) {
-                // Lösche aus dem 'Other' Bucket mit dem richtigen Pfad
-                storage.from("Other").delete("$folder/$fileName")
+                fileInfo.file.delete()
+            }
+
+            fileList = fileList.filter { it.file.absolutePath != fileInfo.file.absolutePath }
+
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "✅ Datei gelöscht", Toast.LENGTH_SHORT).show()
             }
 
             delay(300)
-            loadFiles()
+            loadFilesFromPrivateStorage()
         } catch (e: Exception) {
             withContext(Dispatchers.Main) {
                 Toast.makeText(context, "Fehler beim Löschen: ${e.message}", Toast.LENGTH_LONG).show()
             }
             e.printStackTrace()
-            loadFiles()
+            loadFilesFromPrivateStorage()
         }
     }
 
     LaunchedEffect(Unit) {
-        if (!isOnline(context)) {
-            Toast.makeText(context, "🚫 Keine Internetverbindung", Toast.LENGTH_LONG).show()
-        } else {
-            loadFiles()
-        }
+        loadFilesFromPrivateStorage()
     }
 
     val gradient = Brush.linearGradient(
@@ -265,19 +256,19 @@ fun OtherBucketViewer(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FilterButton(
-                    text = "Alle",
+                    text = "Alle (${fileList.size})",
                     isSelected = selectedFilter == "all",
                     onClick = { selectedFilter = "all" },
                     modifier = Modifier.weight(1f)
                 )
                 FilterButton(
-                    text = "Videos",
+                    text = "Videos (${fileList.count { it.isVideo }})",
                     isSelected = selectedFilter == "videos",
                     onClick = { selectedFilter = "videos" },
                     modifier = Modifier.weight(1f)
                 )
                 FilterButton(
-                    text = "Bilder",
+                    text = "Bilder (${fileList.count { !it.isVideo }})",
                     isSelected = selectedFilter == "images",
                     onClick = { selectedFilter = "images" },
                     modifier = Modifier.weight(1f)
@@ -285,15 +276,30 @@ fun OtherBucketViewer(
             }
 
             if (fileList.isEmpty()) {
-                Text(
-                    "Keine Dateien vorhanden",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color.White
-                )
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "📁 Keine Dateien vorhanden",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color.White
+                        )
+                        Text(
+                            "Tippe auf + um Dateien hinzuzufügen",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.7f)
+                        )
+                    }
+                }
             } else {
                 val filteredList = when (selectedFilter) {
-                    "videos" -> fileList.filter { it.startsWith("videos|") || it.startsWith("videos2|") }
-                    "images" -> fileList.filter { it.startsWith("1|") || it.startsWith("2|") }
+                    "videos" -> fileList.filter { it.isVideo }
+                    "images" -> fileList.filter { !it.isVideo }
                     else -> fileList
                 }
 
@@ -308,39 +314,35 @@ fun OtherBucketViewer(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            rowFiles.forEach { file ->
-                                val parts = file.split("|")
-                                val folder = parts.getOrNull(0) ?: "1"
-                                val fileName = parts.getOrNull(1) ?: "Unbekannt"
-                                val fileDate = parts.getOrNull(2)?.replace("T", " ")?.substringBefore(".") ?: "Unbekannt"
-                                val filesize = parts.getOrNull(3) ?: "0"
-                                val fullPath = "$folder/$fileName"
+                            rowFiles.forEach { fileInfo ->
+                                val dateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+                                val fileDate = dateFormat.format(Date(fileInfo.lastModified))
 
                                 Card(
                                     modifier = Modifier
                                         .weight(1f)
                                         .aspectRatio(1f),
                                     onClick = {
-                                        if (!isUploading && isDownloading == null) {
-                                            if (isVideoFile(fileName)) {
-                                                val videoFiles = when (selectedFilter) {
-                                                    "videos" -> filteredList.filter { it.startsWith("videos|") || it.startsWith("videos2|") }
-                                                    "images" -> emptyList()
-                                                    else -> filteredList.filter { it.startsWith("videos|") || it.startsWith("videos2|") }
-                                                }
-                                                currentVideoIndex = videoFiles.indexOfFirst { it == file }.coerceAtLeast(0)
-                                                showVideoPlayer = Pair(fullPath, file)
+                                        if (!isUploading) {
+                                            if (fileInfo.isVideo) {
+                                                val videoFiles = filteredList.filter { it.isVideo }
+                                                currentVideoIndex = videoFiles.indexOfFirst {
+                                                    it.file.absolutePath == fileInfo.file.absolutePath
+                                                }.coerceAtLeast(0)
+                                                showVideoPlayer = fileInfo
                                             } else {
-                                                showFullscreenImage = Pair(fullPath, file)
+                                                val imageFiles = filteredList.filter { !it.isVideo }
+                                                currentImageIndex = imageFiles.indexOfFirst {
+                                                    it.file.absolutePath == fileInfo.file.absolutePath
+                                                }.coerceAtLeast(0)
+                                                showFullscreenImage = fileInfo
                                             }
                                         }
                                     }
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize()) {
-                                        if (isVideoFile(fileName)) {
-                                            // Zeige Video-Thumbnail oder Icon
-                                            val localVideoFile = videoExistsInPrivateStorage(context, fileName)
-
+                                        if (fileInfo.isVideo) {
+                                            // Video-Thumbnail
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxSize()
@@ -353,42 +355,21 @@ fun OtherBucketViewer(
                                                     tint = Color.White,
                                                     modifier = Modifier.size(48.dp)
                                                 )
-
-                                                // Zeige Indikator wenn Video lokal gespeichert ist
-                                                if (localVideoFile != null) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .align(Alignment.TopEnd)
-                                                            .padding(4.dp)
-                                                            .size(12.dp)
-                                                            .background(gruen, shape = MaterialTheme.shapes.small)
-                                                    )
-                                                }
                                             }
                                         } else {
-                                            var publicUrl by remember(fullPath) { mutableStateOf<String?>(null) }
-
-                                            LaunchedEffect(fullPath) {
-                                                try {
-                                                    publicUrl = urlCache.getOrPut(fullPath) {
-                                                        storage.from("Other").createSignedUrl(fullPath, 600.seconds)
-                                                    }
-                                                } catch (e: Exception) {
-                                                    e.printStackTrace()
-                                                }
-                                            }
-
+                                            // Bild anzeigen
                                             Image(
                                                 painter = rememberAsyncImagePainter(
-                                                    model = publicUrl,
+                                                    model = fileInfo.file,
                                                     imageLoader = imageLoader
                                                 ),
-                                                contentDescription = fileName,
+                                                contentDescription = fileInfo.fileName,
                                                 contentScale = ContentScale.Crop,
                                                 modifier = Modifier.fillMaxSize()
                                             )
                                         }
 
+                                        // Datei-Informationen
                                         Column(
                                             modifier = Modifier
                                                 .align(Alignment.BottomCenter)
@@ -400,88 +381,28 @@ fun OtherBucketViewer(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
-                                                val remoteSize = filesize.toLongOrNull() ?: -1L
-                                                val imageAlreadyDownloaded = remoteSize >= 0 &&
-                                                        fileExistsLocallyWithSameSize(fileName, remoteSize)
-
-                                                val sizeBytes = filesize.toLongOrNull() ?: 0L
                                                 val sizeText = when {
-                                                    sizeBytes >= 1_000_000_000 -> "%.2f GB".format(sizeBytes / 1_000_000_000.0)
-                                                    sizeBytes >= 1_000_000 -> "%.2f MB".format(sizeBytes / 1_000_000.0)
-                                                    else -> "%.1f KB".format(sizeBytes / 1_000.0)
+                                                    fileInfo.fileSize >= 1_000_000_000 -> "%.2f GB".format(fileInfo.fileSize / 1_000_000_000.0)
+                                                    fileInfo.fileSize >= 1_000_000 -> "%.2f MB".format(fileInfo.fileSize / 1_000_000.0)
+                                                    else -> "%.1f KB".format(fileInfo.fileSize / 1_000.0)
                                                 }
 
                                                 Text(
-                                                    text = "$fileName\n$fileDate\n$sizeText",
+                                                    text = "${fileInfo.fileName}\n$fileDate\n$sizeText",
                                                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp),
                                                     color = Color.White,
-                                                    maxLines = 3
+                                                    maxLines = 3,
+                                                    modifier = Modifier.weight(1f)
                                                 )
 
-                                                if (!imageAlreadyDownloaded && !isVideoFile(fileName)) {
+                                                // Öffnen-Button (nur für Bilder)
+                                                if (!fileInfo.isVideo) {
                                                     IconButton(
                                                         onClick = {
-                                                            isDownloading = file
-                                                            scope.launch {
-                                                                showDownloadProgress = true
-                                                                try {
-                                                                    val data = withContext(Dispatchers.IO) {
-                                                                        storage.from("Other").downloadAuthenticated(fullPath)
-                                                                    }
-
-                                                                    val dcimDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
-                                                                    val appFolder = File(dcimDir, "Cloud")
-                                                                    if (!appFolder.exists()) appFolder.mkdirs()
-                                                                    val outputFile = File(appFolder, fileName)
-
-                                                                    withContext(Dispatchers.IO) {
-                                                                        FileOutputStream(outputFile).use { fos ->
-                                                                            fos.write(data)
-                                                                        }
-                                                                    }
-
-                                                                    MediaScannerConnection.scanFile(
-                                                                        context,
-                                                                        arrayOf(outputFile.absolutePath),
-                                                                        null
-                                                                    ) { _, _ ->
-                                                                        // Scan complete
-                                                                    }
-
-                                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                                } catch (e: Exception) {
-                                                                    Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_LONG).show()
-                                                                } finally {
-                                                                    isDownloading = null
-                                                                    delay(500)
-                                                                    showDownloadProgress = false
-                                                                }
-                                                            }
-                                                        },
-                                                        enabled = isDownloading != file,
-                                                        modifier = Modifier.size(32.dp)
-                                                    ) {
-                                                        if (isDownloading == file) {
-                                                            CircularProgressIndicator(
-                                                                modifier = Modifier.size(16.dp),
-                                                                color = Color.White
-                                                            )
-                                                        } else {
-                                                            Icon(
-                                                                imageVector = Icons.Default.ArrowDropDown,
-                                                                contentDescription = "Download",
-                                                                tint = Color.White
-                                                            )
-                                                        }
-                                                    }
-                                                } else if (imageAlreadyDownloaded) {
-                                                    IconButton(
-                                                        onClick = {
-                                                            val localImageFile = fileExistsInDCIM(fileName)!!
                                                             val fileUri = FileProvider.getUriForFile(
                                                                 context,
                                                                 "${context.packageName}.fileprovider",
-                                                                localImageFile
+                                                                fileInfo.file
                                                             )
                                                             val intent = Intent(Intent.ACTION_VIEW).apply {
                                                                 setDataAndType(fileUri, "image/*")
@@ -501,13 +422,14 @@ fun OtherBucketViewer(
                                                     }
                                                 }
 
+                                                // Löschen-Button
                                                 IconButton(
                                                     onClick = {
                                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                        scope.launch { deleteFile(file) }
+                                                        scope.launch { deleteFile(fileInfo) }
                                                     },
                                                     modifier = Modifier.size(40.dp).padding(4.dp),
-                                                    enabled = !isUploading && isDownloading == null
+                                                    enabled = !isUploading
                                                 ) {
                                                     Icon(
                                                         imageVector = Icons.Default.Delete,
@@ -530,41 +452,14 @@ fun OtherBucketViewer(
             }
         }
 
-        var lastTapTime by remember { mutableLongStateOf(0L) }
-        var singleTapJob by remember { mutableStateOf<Job?>(null) }
-        val doubleTapTimeout = 300L
-
+        // FAB für Datei-Upload
         FloatingActionButton(
             onClick = {
-                val currentTime = System.currentTimeMillis()
-                if (currentTime - lastTapTime <= doubleTapTimeout) {
-                    singleTapJob?.cancel()
-                    singleTapJob = null
-                    ispictureupload = false
-                    imagePickerLauncher.launch("video/*")
-                    lastTapTime = 0L
-                } else {
-                    lastTapTime = currentTime
-                    singleTapJob?.cancel()
-                    singleTapJob = scope.launch {
-                        delay(doubleTapTimeout)
-                        ispictureupload = true
-                        imagePickerLauncher.launch("image/*")
-                    }
-                }
+                imagePickerLauncher.launch("*/*") // Alle Dateitypen
             },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(16.dp)
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onLongPress = {
-                            singleTapJob?.cancel()
-                            singleTapJob = null
-                            imagePickerLauncher.launch("video/*")
-                        }
-                    )
-                },
+                .padding(16.dp),
             containerColor = gruen
         ) {
             if (isUploading) {
@@ -572,12 +467,13 @@ fun OtherBucketViewer(
             } else {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = "Hochladen",
+                    contentDescription = "Datei hinzufügen",
                     tint = Color.White
                 )
             }
         }
 
+        // Upload-Fortschritt
         uploadProgress?.let { (current, total) ->
             Box(
                 modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)),
@@ -590,16 +486,16 @@ fun OtherBucketViewer(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
-                            text = "${if(ispictureupload) "Bilder" else "Videos"} werden hochgeladen",
+                            text = "Dateien werden gespeichert",
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(text = "$current von $total", style = MaterialTheme.typography.bodyLarge)
                         LinearProgressIndicator(
-                        progress = { current.toFloat() / total.toFloat() },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = gruen,
-                        trackColor = ProgressIndicatorDefaults.linearTrackColor,
-                        strokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
+                            progress = { current.toFloat() / total.toFloat() },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = gruen,
+                            trackColor = ProgressIndicatorDefaults.linearTrackColor,
+                            strokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
                         )
                         Text(
                             text = "${((current.toFloat() / total.toFloat()) * 100).toInt()}%",
@@ -610,114 +506,50 @@ fun OtherBucketViewer(
                 }
             }
         }
-
-        if (showDownloadProgress) {
-            Box(
-                modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Card(modifier = Modifier.padding(16.dp).size(100.dp)) {
-                    Column(
-                        modifier = Modifier.fillMaxSize().padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        CircularProgressIndicator(color = gruen, modifier = Modifier.size(40.dp))
-                    }
-                }
-            }
-        }
     }
 
-    showFullscreenImage?.let { (fullPath, fileWithMetadata) ->
-        val parts = fileWithMetadata.split("|")
-        val fileName = parts.getOrNull(1) ?: fullPath
-        val remoteSize = parts.getOrNull(3)?.toLongOrNull() ?: -1L
-        val isDownloaded = remoteSize >= 0 && fileExistsLocallyWithSameSize(fileName, remoteSize)
-
-        var imageUrl by remember(fullPath) { mutableStateOf<String?>(null) }
-
-        LaunchedEffect(fullPath) {
-            try {
-                imageUrl = storage.from("Other").createSignedUrl(fullPath, 600.seconds)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+    showFullscreenImage?.let { _ ->
+        val imageFiles = when (selectedFilter) {
+            "videos" -> emptyList()
+            "images" -> fileList.filter { !it.isVideo }
+            else -> fileList.filter { !it.isVideo }
         }
 
-        FullscreenImageDialog(
-            imageUrl = imageUrl,
-            fileName = fileName,
-            isDownloaded = isDownloaded,
+        FullscreenImageDialogLocal(
+            fileInfo = imageFiles[currentImageIndex],
+            allImages = imageFiles,
+            currentIndex = currentImageIndex,
             onDismiss = { showFullscreenImage = null },
-            onDownload = {
-                scope.launch {
-                    isDownloading = fileWithMetadata
-                    showDownloadProgress = true
-                    try {
-                        val data = withContext(Dispatchers.IO) {
-                            storage.from("Other").downloadAuthenticated(fullPath)
-                        }
-
-                        val dcimDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
-                        val appFolder = File(dcimDir, "Cloud")
-                        if (!appFolder.exists()) appFolder.mkdirs()
-                        val outputFile = File(appFolder, fileName)
-
-                        withContext(Dispatchers.IO) {
-                            FileOutputStream(outputFile).use { fos -> fos.write(data) }
-                        }
-
-                        MediaScannerConnection.scanFile(
-                            context,
-                            arrayOf(outputFile.absolutePath),
-                            null
-                        ) { _, _ ->
-                            // Scan complete
-                        }
-
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-
-                        showFullscreenImage = null
-                        loadFiles()
-                    } catch (e: Exception) {
-                        Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_LONG).show()
-                    } finally {
-                        isDownloading = null
-                        delay(500)
-                        showDownloadProgress = false
-                    }
-                }
-            },
             onOpenInGallery = {
-                val localImageFile = fileExistsInDCIM(fileName)
-                if (localImageFile != null) {
-                    val fileUri = FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        localImageFile
-                    )
-                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(fileUri, "image/*")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    context.startActivity(intent)
-                    showFullscreenImage = null
+                val currentFile = imageFiles[currentImageIndex]
+                val fileUri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    currentFile.file
+                )
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(fileUri, "image/*")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
+                context.startActivity(intent)
+                showFullscreenImage = null
+            },
+            onIndexChanged = { newIndex ->
+                currentImageIndex = newIndex
             }
         )
     }
 
-    showVideoPlayer?.let { (_, _) ->
+    // Video Player Dialog
+    showVideoPlayer?.let { _ ->
         val videoFiles = when (selectedFilter) {
-            "videos" -> fileList.filter { it.startsWith("videos|") || it.startsWith("videos2|") }
+            "videos" -> fileList.filter { it.isVideo }
             "images" -> emptyList()
-            else -> fileList.filter { it.startsWith("videos|") || it.startsWith("videos2|") }
+            else -> fileList.filter { it.isVideo }
         }
 
-        VideoPlayerDialog(
-            storage = storage,
+        VideoPlayerDialogLocal(
             videoFiles = videoFiles,
             initialIndex = currentVideoIndex,
             onDismiss = { showVideoPlayer = null },
@@ -726,95 +558,160 @@ fun OtherBucketViewer(
     }
 }
 
-suspend fun uploadImage(context: Context, storage: Storage, uri: Uri) {
+// Funktion zum Speichern von Dateien im privaten Speicher
+suspend fun saveFileToPrivateStorage(context: Context, uri: Uri) {
     withContext(Dispatchers.IO) {
-        val inputStream = context.contentResolver.openInputStream(uri)
-        val bytes = inputStream?.readBytes()
-        inputStream?.close()
+        try {
+            val inputStream = context.contentResolver.openInputStream(uri)
+            val bytes = inputStream?.readBytes()
+            inputStream?.close()
 
-        if (bytes != null) {
-            val mimeType = context.contentResolver.getType(uri)
-            val isVideo = mimeType?.startsWith("video/") == true
-
-            val extension = when {
-                isVideo -> when {
-                    mimeType.contains("mp4") -> ".mp4"
-                    mimeType.contains("quicktime") -> ".mov"
-                    mimeType.contains("avi") -> ".avi"
-                    mimeType.contains("mkv") -> ".mkv"
-                    mimeType.contains("3gpp") -> ".3gp"
-                    else -> ".mp4"
+            if (bytes != null) {
+                // Dateinamen extrahieren
+                var fileName = "file_${System.currentTimeMillis()}"
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (nameIndex != -1) {
+                            fileName = cursor.getString(nameIndex) ?: fileName
+                        }
+                    }
                 }
-                else -> ".jpg"
+
+                val privateDir = File(context.filesDir, "shared_files")
+                if (!privateDir.exists()) {
+                    privateDir.mkdirs()
+                }
+
+                // Eindeutigen Dateinamen sicherstellen
+                var targetFile = File(privateDir, fileName)
+                var counter = 1
+                while (targetFile.exists()) {
+                    val nameWithoutExt = fileName.substringBeforeLast(".")
+                    val extension = if (fileName.contains(".")) ".${fileName.substringAfterLast(".")}" else ""
+                    targetFile = File(privateDir, "${nameWithoutExt}_$counter$extension")
+                    counter++
+                }
+
+                FileOutputStream(targetFile).use { fos ->
+                    fos.write(bytes)
+                }
             }
-
-            val prefix = if (isVideo) "VID" else "IMG"
-            val fileName = "${prefix}_${System.currentTimeMillis()}${extension}"
-
-            // Speichere Videos in 'Other/videos/' und Bilder in 'Other/1/'
-            val targetPath = if (isVideo) "videos2/$fileName" else "1/$fileName"
-
-            storage.from("Other").upload(targetPath, bytes)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            throw e
         }
     }
 }
 
-// NEUE FUNKTIONEN FÜR PRIVATE VIDEO-SPEICHERUNG
+@Composable
+fun FullscreenImageDialogLocal(
+    fileInfo: LocalFileInfo,
+    allImages: List<LocalFileInfo>,
+    currentIndex: Int,
+    onDismiss: () -> Unit,
+    onOpenInGallery: () -> Unit,
+    onIndexChanged: (Int) -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var isSwiping by remember { mutableStateOf(false) }
 
-// Prüft ob ein Video im privaten App-Ordner existiert
-fun videoExistsInPrivateStorage(context: Context, fileName: String): File? {
-    val privateVideoDir = File(context.filesDir, "videos")
-    val file = File(privateVideoDir, fileName)
-    return if (file.exists()) file else null
-}
+    BackHandler {
+        onDismiss()
+    }
 
-// Lädt ein Video in den privaten App-Ordner herunter
-suspend fun downloadVideoToPrivateStorage(
-    context: Context,
-    storage: Storage,
-    fullPath: String,
-    fileName: String
-): File? {
-    return withContext(Dispatchers.IO) {
-        try {
-            val data = storage.from("Other").downloadAuthenticated(fullPath)
-
-            // Privater App-Ordner (nur für diese App zugänglich)
-            val privateVideoDir = File(context.filesDir, "videos")
-            if (!privateVideoDir.exists()) {
-                privateVideoDir.mkdirs()
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .pointerInput(currentIndex) { // Key geändert, damit bei jedem Index-Wechsel neu initialisiert wird
+                detectHorizontalDragGestures(
+                    onDragStart = { isSwiping = false },
+                    onDragEnd = {
+                        scope.launch {
+                            delay(100) // Kurze Verzögerung vor dem Reset
+                            isSwiping = false
+                        }
+                    },
+                    onDragCancel = {
+                        scope.launch {
+                            delay(100)
+                            isSwiping = false
+                        }
+                    }
+                ) { _, dragAmount ->
+                    if (!isSwiping) {
+                        if (dragAmount > 20 && currentIndex > 0) {
+                            isSwiping = true
+                            onIndexChanged(currentIndex - 1)
+                        } else if (dragAmount < -20 && currentIndex < allImages.size - 1) {
+                            isSwiping = true
+                            onIndexChanged(currentIndex + 1)
+                        }
+                    }
+                }
             }
+    ) {
+        Image(
+            painter = rememberAsyncImagePainter(model = fileInfo.file),
+            contentDescription = fileInfo.fileName,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxSize()
+        )
 
-            val outputFile = File(privateVideoDir, fileName)
-
-            FileOutputStream(outputFile).use { fos ->
-                fos.write(data)
+        // Dateiname und Counter oben
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(16.dp)
+                .background(Color.Black.copy(alpha = 0.6f), shape = MaterialTheme.shapes.small)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (allImages.size > 1) {
+                    Text(
+                        text = "${currentIndex + 1} / ${allImages.size}",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+                Text(
+                    text = fileInfo.fileName,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
+        }
 
-            outputFile
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
+        // Öffnen-Button unten
+        FloatingActionButton(
+            onClick = onOpenInGallery,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            containerColor = gruen
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                contentDescription = "In Gallery öffnen",
+                tint = Color.White
+            )
         }
     }
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-fun VideoPlayerDialog(
-    storage: Storage,
-    videoFiles: List<String>,
+fun VideoPlayerDialogLocal(
+    videoFiles: List<LocalFileInfo>,
     initialIndex: Int,
     onDismiss: () -> Unit,
     onIndexChanged: (Int) -> Unit
 ) {
     val context = LocalContext.current
     var currentIndex by rememberSaveable { mutableIntStateOf(initialIndex) }
-    var isLoading by remember { mutableStateOf(false) }
-    var downloadProgress by remember { mutableStateOf<Float?>(null) }
     val scope = rememberCoroutineScope()
 
-    // ExoPlayer außerhalb von remember, damit er bei URL-Änderung aktualisiert wird
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
             repeatMode = Player.REPEAT_MODE_ONE
@@ -825,75 +722,21 @@ fun VideoPlayerDialog(
         onDismiss()
     }
 
-    suspend fun loadVideoAtIndex(index: Int) {
+    fun loadVideoAtIndex(index: Int) {
         if (index !in videoFiles.indices) return
 
-        isLoading = true
-        downloadProgress = null
+        val fileInfo = videoFiles[index]
 
-        try {
-            val fileWithMetadata = videoFiles[index]
-            val parts = fileWithMetadata.split("|")
-            val folder = parts.getOrNull(0) ?: return
-            val fileName = parts.getOrNull(1) ?: return
-            val fullPath = "$folder/$fileName"
-
-            // Prüfe ob Video bereits lokal existiert
-            val localFile = videoExistsInPrivateStorage(context, fileName)
-
-            if (localFile != null) {
-                // Video ist bereits heruntergeladen - spiele lokal ab
-                exoPlayer.apply {
-                    stop()
-                    clearMediaItems()
-                    setMediaItem(MediaItem.fromUri(Uri.fromFile(localFile)))
-                    prepare()
-                    playWhenReady = true
-                }
-            } else {
-                // Video muss heruntergeladen werden
-                downloadProgress = 0f
-                Toast.makeText(context, "⬇️ Video wird heruntergeladen...", Toast.LENGTH_SHORT).show()
-
-                val downloadedFile = downloadVideoToPrivateStorage(context, storage, fullPath, fileName)
-
-                if (downloadedFile != null) {
-                    // Video erfolgreich heruntergeladen - spiele lokal ab
-                    exoPlayer.apply {
-                        stop()
-                        clearMediaItems()
-                        setMediaItem(MediaItem.fromUri(Uri.fromFile(downloadedFile)))
-                        prepare()
-                        playWhenReady = true
-                    }
-                    Toast.makeText(context, "✅ Video gespeichert und wird abgespielt", Toast.LENGTH_SHORT).show()
-                } else {
-                    // Fehler beim Download - spiele Stream ab
-                    val url = withContext(Dispatchers.IO) {
-                        storage.from("Other").createSignedUrl(fullPath, 600.seconds)
-                    }
-
-                    exoPlayer.apply {
-                        stop()
-                        clearMediaItems()
-                        setMediaItem(MediaItem.fromUri(url))
-                        prepare()
-                        playWhenReady = true
-                    }
-                    Toast.makeText(context, "⚠️ Download fehlgeschlagen - Streaming", Toast.LENGTH_LONG).show()
-                }
-            }
-
-            currentIndex = index
-            onIndexChanged(index)
-            isLoading = false
-            downloadProgress = null
-        } catch (e: Exception) {
-            e.printStackTrace()
-            isLoading = false
-            downloadProgress = null
-            Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_LONG).show()
+        exoPlayer.apply {
+            stop()
+            clearMediaItems()
+            setMediaItem(MediaItem.fromUri(Uri.fromFile(fileInfo.file)))
+            prepare()
+            playWhenReady = true
         }
+
+        currentIndex = index
+        onIndexChanged(index)
     }
 
     LaunchedEffect(initialIndex) {
@@ -935,14 +778,14 @@ fun VideoPlayerDialog(
                         }
                     }
                 }
-            }) {
-        // PlayerView wird nur einmal erstellt
+            }
+    ) {
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     player = exoPlayer
                     useController = true
-                    controllerAutoShow = false // Controller nur bei Touch zeigen
+                    controllerAutoShow = false
                     controllerHideOnTouch = true
                     playerView = this
                 }
@@ -950,46 +793,6 @@ fun VideoPlayerDialog(
             modifier = Modifier.fillMaxSize()
         )
 
-        if (isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(48.dp))
-
-                    downloadProgress?.let { progress ->
-                        Card(
-                            modifier = Modifier.padding(16.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    "Video wird heruntergeladen...",
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                LinearProgressIndicator(
-                                progress = { progress },
-                                modifier = Modifier.fillMaxWidth(),
-                                color = gruen,
-                                trackColor = ProgressIndicatorDefaults.linearTrackColor,
-                                strokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Video Counter
         if (videoFiles.size > 1) {
             Box(
                 modifier = Modifier
@@ -998,28 +801,11 @@ fun VideoPlayerDialog(
                     .background(Color.Black.copy(alpha = 0.6f), shape = MaterialTheme.shapes.small)
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                val currentFile = videoFiles.getOrNull(currentIndex)
-                val fileName = currentFile?.split("|")?.getOrNull(1) ?: ""
-                val isLocallyStored = videoExistsInPrivateStorage(context, fileName) != null
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "${currentIndex + 1} / ${videoFiles.size}",
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-
-                    if (isLocallyStored) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .background(gruen, shape = MaterialTheme.shapes.small)
-                        )
-                    }
-                }
+                Text(
+                    text = "${currentIndex + 1} / ${videoFiles.size}",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyLarge
+                )
             }
         }
     }
