@@ -1,10 +1,8 @@
 package com.example.cloud.privatecloudapp
 
-import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.util.Log
 import android.widget.Toast
@@ -54,22 +52,6 @@ class ShareActivity : ComponentActivity() {
         }
     }
 
-    private fun getFileFromUri(uri: Uri): File? {
-        // Nur wenn es eine Downloads-URI ist
-        if (uri.scheme == "content") {
-            val cursor = contentResolver.query(uri, arrayOf("_data"), null, null, null)
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val path = it.getString(0)
-                    if (path != null) return File(path)
-                }
-            }
-        } else if (uri.scheme == "file") {
-            return File(uri.path!!)
-        }
-        return null
-    }
-
     private fun handleMultipleShare(intent: Intent) {
         val uris = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
         if (uris != null && uris.isNotEmpty()) {
@@ -83,10 +65,10 @@ class ShareActivity : ComponentActivity() {
     private fun showConfirmationDialog(uris: List<Uri>) {
         setContent {
             MaterialTheme {
-                MetadataUpdateScreen(
+                SaveToPrivateStorageScreen(
                     fileCount = uris.size,
                     onConfirm = {
-                        updateFileMetadata(uris)
+                        saveFilesToPrivateStorage(uris)
                     },
                     onCancel = {
                         finish()
@@ -97,7 +79,7 @@ class ShareActivity : ComponentActivity() {
     }
 
     private fun getFileNameFromUri(uri: Uri): String {
-        var fileName = "unknown_file"
+        var fileName = "unknown_file_${System.currentTimeMillis()}"
         contentResolver.query(uri, null, null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) {
                 val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
@@ -109,11 +91,17 @@ class ShareActivity : ComponentActivity() {
         return fileName
     }
 
-    private fun getCurrentTimestamp(): Long {
-        return System.currentTimeMillis()
+    private fun getPrivateStorageDirectory(): File {
+        // filesDir ist der private App-Speicher, nicht für andere Apps zugänglich
+        // Alternative: getExternalFilesDir(null) für privaten externen Speicher
+        val privateDir = File(filesDir, "shared_files")
+        if (!privateDir.exists()) {
+            privateDir.mkdirs()
+        }
+        return privateDir
     }
 
-    private fun updateFileMetadata(uris: List<Uri>) {
+    private fun saveFilesToPrivateStorage(uris: List<Uri>) {
         setContent {
             MaterialTheme {
                 ProcessingScreen(fileCount = uris.size)
@@ -125,40 +113,36 @@ class ShareActivity : ComponentActivity() {
             var failCount = 0
 
             try {
+                val privateDir = getPrivateStorageDirectory()
+
                 for (uri in uris) {
                     try {
                         val fileName = getFileNameFromUri(uri)
-                        val currentTime = getCurrentTimestamp()
 
-                        // Datei einlesen
-                        val inputStream = contentResolver.openInputStream(uri)
-                        if (inputStream != null) {
-                            val fileData = inputStream.readBytes()
-                            inputStream.close()
+                        // Sicherstellen, dass der Dateiname eindeutig ist
+                        val targetFile = getUniqueFile(privateDir, fileName)
 
-                            // Metadaten aktualisieren und Datei überschreiben
-                            val success = withContext(Dispatchers.IO) {
-                                updateFileWithMetadata(uri, fileData, currentTime)
-                            }
+                        // Datei einlesen und in privaten Speicher kopieren
+                        val success = withContext(Dispatchers.IO) {
+                            copyUriToFile(uri, targetFile)
+                        }
 
-                            if (success) {
-                                successCount++
-                            } else {
-                                failCount++
-                            }
+                        if (success) {
+                            Log.d("ShareActivity", "Datei gespeichert: ${targetFile.absolutePath}")
+                            successCount++
                         } else {
                             failCount++
                         }
                     } catch (e: Exception) {
-                        e.printStackTrace()
+                        Log.e("ShareActivity", "Fehler beim Speichern: ${e.message}", e)
                         failCount++
                     }
                 }
 
                 withContext(Dispatchers.Main) {
                     val message = when {
-                        failCount == 0 -> "✅ ${if (successCount == 1) "Datei" else "$successCount Dateien"} aktualisiert!"
-                        successCount == 0 -> "❌ Aktualisierung fehlgeschlagen"
+                        failCount == 0 -> "✅ ${if (successCount == 1) "Datei" else "$successCount Dateien"} gespeichert!"
+                        successCount == 0 -> "❌ Speichern fehlgeschlagen"
                         else -> "⚠️ $successCount erfolgreich, $failCount fehlgeschlagen"
                     }
                     Toast.makeText(this@ShareActivity, message, Toast.LENGTH_LONG).show()
@@ -174,49 +158,38 @@ class ShareActivity : ComponentActivity() {
         }
     }
 
-    private fun updateFileWithMetadata(uri: Uri, fileData: ByteArray, timestamp: Long): Boolean {
+    private fun getUniqueFile(directory: File, fileName: String): File {
+        var file = File(directory, fileName)
+        var counter = 1
+
+        // Wenn Datei bereits existiert, füge Nummer hinzu
+        while (file.exists()) {
+            val nameWithoutExt = fileName.substringBeforeLast(".")
+            val extension = if (fileName.contains(".")) ".${fileName.substringAfterLast(".")}" else ""
+            file = File(directory, "${nameWithoutExt}_$counter$extension")
+            counter++
+        }
+
+        return file
+    }
+
+    private fun copyUriToFile(uri: Uri, targetFile: File): Boolean {
         return try {
-            Log.d("ShareActivity", "Versuche Datei zu aktualisieren: $uri")
-
-            val file = getFileFromUri(uri)
-            if (file != null) {
-                Log.d("ShareActivity", "Gefundener Pfad: ${file.absolutePath}")
-                if (file.canWrite()) {
-                    Log.d("ShareActivity", "Datei beschreibbar, schreibe Daten...")
-                    file.writeBytes(fileData)
-                    Log.d("ShareActivity", "Datei erfolgreich überschrieben")
-                } else {
-                    Log.w("ShareActivity", "Datei nicht beschreibbar: ${file.absolutePath}")
-                    return false
+            contentResolver.openInputStream(uri)?.use { inputStream ->
+                targetFile.outputStream().use { outputStream ->
+                    inputStream.copyTo(outputStream)
                 }
-            } else {
-                Log.w("ShareActivity", "Kein echter Pfad gefunden für URI: $uri")
-                return false
             }
-
-            // Optional: Metadaten setzen, falls MediaStore-Zugriff möglich
-            try {
-                val values = ContentValues().apply {
-                    put(MediaStore.MediaColumns.DATE_MODIFIED, timestamp / 1000)
-                    put(MediaStore.MediaColumns.DATE_TAKEN, timestamp)
-                }
-                val updatedRows = contentResolver.update(uri, values, null, null)
-                Log.d("ShareActivity", "MediaStore update: $updatedRows Zeilen aktualisiert")
-            } catch (e: Exception) {
-                Log.w("ShareActivity", "MediaStore update fehlgeschlagen: ${e.message}")
-            }
-
             true
         } catch (e: Exception) {
-            Log.e("ShareActivity", "Fehler beim Überschreiben der Datei: ${e.message}", e)
+            Log.e("ShareActivity", "Fehler beim Kopieren: ${e.message}", e)
             false
         }
     }
-
 }
 
 @Composable
-fun MetadataUpdateScreen(
+fun SaveToPrivateStorageScreen(
     fileCount: Int,
     onConfirm: () -> Unit,
     onCancel: () -> Unit
@@ -244,7 +217,7 @@ fun MetadataUpdateScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "📝 Metadaten aktualisieren",
+                    text = "🔒 Privat speichern",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -263,7 +236,7 @@ fun MetadataUpdateScreen(
                 )
 
                 Text(
-                    text = "Die folgenden Metadaten werden aktualisiert:",
+                    text = "Die Dateien werden in einem privaten Speicherbereich gespeichert:",
                     fontSize = 14.sp,
                     color = Color.White,
                     fontWeight = FontWeight.Medium
@@ -280,9 +253,9 @@ fun MetadataUpdateScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        MetadataRow("📅 Änderungsdatum:", "Jetzt")
-                        MetadataRow("🕐 Zeitstempel:", "Aktuell")
-                        MetadataRow("💾 Speicherort:", "Original überschreiben")
+                        InfoRow("🔒 Sichtbarkeit:", "Nur diese App")
+                        InfoRow("📁 Speicherort:", "App-interner Speicher")
+                        InfoRow("🚫 Gallery-Zugriff:", "Nein")
                     }
                 }
 
@@ -299,7 +272,7 @@ fun MetadataUpdateScreen(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(
-                        text = "Aktualisieren",
+                        text = "Speichern",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -321,7 +294,7 @@ fun MetadataUpdateScreen(
 }
 
 @Composable
-fun MetadataRow(label: String, value: String) {
+fun InfoRow(label: String, value: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -371,14 +344,14 @@ fun ProcessingScreen(fileCount: Int) {
                 )
 
                 Text(
-                    text = "Verarbeite...",
+                    text = "Speichere...",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
 
                 Text(
-                    text = if (fileCount == 1) "1 Datei wird aktualisiert" else "$fileCount Dateien werden aktualisiert",
+                    text = if (fileCount == 1) "1 Datei wird gespeichert" else "$fileCount Dateien werden gespeichert",
                     fontSize = 14.sp,
                     color = Color.LightGray
                 )
