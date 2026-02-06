@@ -8,13 +8,18 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
+import android.media.Image
 import android.net.Uri
 import android.provider.Settings
+import android.util.Base64
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.LocalActivity
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.content.MediaType.Companion.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
@@ -27,6 +32,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -63,11 +70,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role.Companion.Image
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -79,8 +89,10 @@ import androidx.core.content.edit
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import coil.compose.AsyncImage
 import com.example.cloud.ERRORINSERT
 import com.example.cloud.ERRORINSERTDATA
+import io.ktor.http.ContentType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -319,7 +331,13 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                         )
                     }
 
+                    // Innerhalb des LazyColumn Items für jeden Eintrag
                     items(folderEntries, key = { it.name }) { entry ->
+                        val iconPrefs = context.getSharedPreferences("entry_icons", Context.MODE_PRIVATE)
+                        var iconUrl by remember { mutableStateOf(iconPrefs.getString(entry.secret, null) ?: "") }
+                        var showIconDialog by remember { mutableStateOf(false) }
+                        var inputUrl by remember { mutableStateOf(iconUrl) }
+
                         Card(
                             shape = RoundedCornerShape(8.dp),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF2D2D2D)),
@@ -334,34 +352,93 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                             val code = TotpGenerator.generateTOTP(entry.secret, now)
                                             val clipboard =
                                                 context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                            clipboard.setPrimaryClip(
-                                                ClipData.newPlainText(
-                                                    "Generated Code",
-                                                    code
-                                                )
-                                            )
-                                            Toast.makeText(
-                                                context,
-                                                "Code für ${entry.name} kopiert!",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                                            clipboard.setPrimaryClip(ClipData.newPlainText("Generated Code", code))
+                                            Toast.makeText(context, "Code für ${entry.name} kopiert!", Toast.LENGTH_SHORT).show()
                                         }
                                     )
                                 }
                         ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(16.dp)
                             ) {
-                                Text(
-                                    entry.name,
-                                    color = Color.White,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                if (iconUrl.isNotBlank()) {
+                                    if (iconUrl.startsWith("data:image")) {
+                                        // Base64 Image
+                                        val base64String = iconUrl.substringAfter("base64,")
+                                        val imageBytes = Base64.decode(base64String, Base64.DEFAULT)
+                                        val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+
+                                        IconButton(onClick = {
+                                            inputUrl = iconUrl
+                                            showIconDialog = true
+                                        }) {
+                                            Image(
+                                                bitmap = bitmap.asImageBitmap(),
+                                                contentDescription = "Icon für ${entry.name}",
+                                                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(16.dp))
+                                            )
+                                        }
+                                    } else {
+                                        IconButton(onClick = {
+                                            inputUrl = iconUrl
+                                            showIconDialog = true
+                                        }) {
+                                            AsyncImage(
+                                                model = iconUrl,
+                                                contentDescription = "Icon für ${entry.name}",
+                                                modifier = Modifier.size(40.dp)
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    IconButton(onClick = {
+                                        inputUrl = iconUrl
+                                        showIconDialog = true
+                                    }) {
+                                        Icon(Icons.Default.Info, contentDescription = "Icon ändern", tint = Color.White,modifier = Modifier.size(40.dp))
+                                    }
+                                }
+
+                                Spacer(Modifier.width(12.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        entry.name,
+                                        color = Color.White,
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
                             }
+                        }
+
+                        if (showIconDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showIconDialog = false },
+                                title = { Text("Icon-URL ändern") },
+                                text = {
+                                    OutlinedTextField(
+                                        value = inputUrl,
+                                        onValueChange = { inputUrl = it },
+                                        label = { Text("URL eingeben") },
+                                        singleLine = true
+                                    )
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        iconPrefs.edit(commit = true) {
+                                            putString(entry.secret, inputUrl)
+                                            apply()
+                                        }
+                                        iconUrl = inputUrl
+                                        showIconDialog = false
+                                    }) { Text("Speichern") }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showIconDialog = false }) { Text("Abbrechen") }
+                                }
+                            )
                         }
                     }
                 }
