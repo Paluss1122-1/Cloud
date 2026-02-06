@@ -25,6 +25,7 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.TextureView
 import android.view.KeyEvent
+import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
@@ -54,6 +55,8 @@ private var statsManager: MusicStatsManager? = null
 class MusicPlayerService : MediaSessionService() {
 
     companion object {
+        private const val EXTRA_SONG_INDEX = "extra_song_index"
+
         private const val CHANNEL_ID = "music_player_channel"
         private const val NOTIFICATION_ID = 888888
 
@@ -71,6 +74,7 @@ class MusicPlayerService : MediaSessionService() {
         private const val SERVICE_MUSIC = "music"
         private const val SERVICE_PODCAST = "podcast"
         private const val ACTION_NOTIFICATION_DELETED = "ACTION_NOTIFICATION_DELETED"
+        private const val SERVICE_SWITCH_TIMEOUT = 20000L // 20 Sekunden
 
         fun startService(context: Context) {
             val intent = Intent(context, MusicPlayerService::class.java)
@@ -89,9 +93,10 @@ class MusicPlayerService : MediaSessionService() {
             context.startService(intent)
         }
 
-        fun startAndPlay(context: Context) {
+        fun startAndPlay(context: Context, number: Int?) {
             val intent = Intent(context, MusicPlayerService::class.java).apply {
                 action = ACTION_PLAY
+                putExtra(EXTRA_SONG_INDEX, number)
             }
             context.startForegroundService(intent)
         }
@@ -113,6 +118,8 @@ class MusicPlayerService : MediaSessionService() {
     private lateinit var mediaStatePrefs: SharedPreferences
     private val handler = Handler(Looper.getMainLooper())
     private var bluetoothReceiver: BroadcastReceiver? = null
+    private var lastPlayPauseTime = 0L
+    private var playPauseCount = 0
 
     @OptIn(UnstableApi::class)
     override fun onCreate() {
@@ -152,10 +159,27 @@ class MusicPlayerService : MediaSessionService() {
                     }
 
                     try {
-                        val keyEvent = intent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
+                        val keyEvent = intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
                         if (keyEvent != null && keyEvent.action == KeyEvent.ACTION_DOWN) {
                             when (keyEvent.keyCode) {
                                 KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                                    val currentTime = System.currentTimeMillis()
+
+                                    // Service-Switch-Logik
+                                    if (currentTime - lastPlayPauseTime < SERVICE_SWITCH_TIMEOUT) {
+                                        playPauseCount++
+                                        if (playPauseCount >= 3) {
+                                            Log.d("MusicPlayerService", "🔄 Switching to Podcast Player")
+                                            switchToPodcastPlayer()
+                                            playPauseCount = 0
+                                            return true
+                                        }
+                                    } else {
+                                        playPauseCount = 1
+                                    }
+                                    lastPlayPauseTime = currentTime
+
+                                    // Normale Play/Pause-Logik
                                     if (isPlaying) pauseMusic() else playMusic()
                                     return true
                                 }
@@ -188,6 +212,11 @@ class MusicPlayerService : MediaSessionService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+        intent?.getIntExtra(EXTRA_SONG_INDEX, -1)?.let { receivedIndex ->
+            if (receivedIndex != -1) {
+                currentSongIndex = receivedIndex - 1
+            }
+        }
         when (intent?.action) {
             ACTION_PLAY -> playMusic()
             ACTION_PAUSE -> pauseMusic()
@@ -372,7 +401,6 @@ class MusicPlayerService : MediaSessionService() {
             setActiveService()
 
             if (mediaPlayer != null && !isPlaying) {
-                // Resume aufzeichnen (NEUE ZEILE)
                 val song = playlist.getOrNull(currentSongIndex)
                 if (song != null) {
                     statsManager?.recordSongResume(song.path)
@@ -689,6 +717,34 @@ class MusicPlayerService : MediaSessionService() {
         }
 
         return builder.build()
+    }
+
+    private fun switchToPodcastPlayer() {
+        try {
+            // Musik pausieren
+            if (isPlaying && mediaPlayer?.isPlaying == true) {
+                mediaPlayer?.pause()
+                isPlaying = false
+
+                val song = playlist.getOrNull(currentSongIndex)
+                if (song != null) {
+                    val currentPosition = (mediaPlayer?.currentPosition ?: 0L).toLong()
+                    val duration = mediaPlayer?.duration ?: 0L
+                    statsManager?.recordSongPause(song.path, song.name, duration.toLong(), currentPosition)
+                }
+            }
+
+            clearActiveService()
+
+            PodcastPlayerService.sendPlayAction(this)
+
+            Log.d("MusicPlayerService", "✓ Switched to Podcast Player")
+
+            val intent = Intent(this, MusicPlayerService::class.java)
+            stopService(intent)
+        } catch (e: Exception) {
+            Log.e("MusicPlayerService", "Error switching to Podcast Player", e)
+        }
     }
 
     override fun onDestroy() {
