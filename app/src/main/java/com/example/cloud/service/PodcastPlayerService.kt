@@ -67,6 +67,10 @@ class PodcastPlayerService : Service() {
         private const val ACTION_DELETE_SINGLE = "com.example.cloud.ACTION_DELETE_SINGLE_"
         private const val KEY_PODCAST_QUEUE = "podcast_queue"
 
+        const val EXTRA_FORWARD_MS = "extra_forward_ms"
+
+        private const val SERVICE_SWITCH_TIMEOUT = 20000L // 20 Sekunden
+
         fun startService(context: Context) {
             val intent = Intent(context, PodcastPlayerService::class.java)
             context.startForegroundService(intent)
@@ -75,6 +79,14 @@ class PodcastPlayerService : Service() {
         fun sendPlayAction(context: Context) {
             val intent = Intent(context, PodcastPlayerService::class.java).apply {
                 action = ACTION_PLAY
+            }
+            context.startService(intent)
+        }
+
+        fun sendForwardAction(context: Context, ms: Int) {
+            val intent = Intent(context, PodcastPlayerService::class.java).apply {
+                action = ACTION_FORWARD
+                putExtra(EXTRA_FORWARD_MS, ms)
             }
             context.startService(intent)
         }
@@ -111,6 +123,8 @@ class PodcastPlayerService : Service() {
     private var positionSaveRunnable: Runnable? = null
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var bluetoothReceiver: BroadcastReceiver? = null
+    private var lastPlayPauseTime = 0L
+    private var playPauseCount = 0
 
     @OptIn(UnstableApi::class)
     override fun onCreate() {
@@ -290,7 +304,20 @@ class PodcastPlayerService : Service() {
                                     KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                                         val currentTime = System.currentTimeMillis()
 
-                                        // Prüfe ob dieser Klick zum vorherigen Klick-Muster gehört
+                                        if (currentTime - lastPlayPauseTime < SERVICE_SWITCH_TIMEOUT) {
+                                            playPauseCount++
+                                            if (playPauseCount >= 3) {
+                                                Log.d("PodcastPlayerService", "🔄 Switching to Music Player")
+                                                switchToMusicPlayer()
+                                                playPauseCount = 0
+                                                return true
+                                            }
+                                        } else {
+                                            playPauseCount = 1
+                                        }
+                                        lastPlayPauseTime = currentTime
+
+                                        // Normale Multi-Click-Logik
                                         if (currentTime - lastClickTime < MULTI_CLICK_TIMEOUT) {
                                             clickCount++
                                         } else {
@@ -298,7 +325,6 @@ class PodcastPlayerService : Service() {
                                         }
                                         lastClickTime = currentTime
 
-                                        // Verzögere die Ausführung, um auf weitere Klicks zu warten
                                         handler.removeCallbacksAndMessages(null)
                                         handler.postDelayed({
                                             when (clickCount) {
@@ -327,6 +353,20 @@ class PodcastPlayerService : Service() {
                                     KeyEvent.KEYCODE_MEDIA_PAUSE -> {
                                         Log.d("PodcastPlayerService", "⏸ MediaButton: PodcastService active, handling pause")
                                         pausePodcast()
+                                        val currentTime = System.currentTimeMillis()
+
+                                        if (currentTime - lastPlayPauseTime < SERVICE_SWITCH_TIMEOUT) {
+                                            playPauseCount++
+                                            if (playPauseCount >= 3) {
+                                                Log.d("PodcastPlayerService", "🔄 Switching to Music Player")
+                                                switchToMusicPlayer()
+                                                playPauseCount = 0
+                                                return true
+                                            }
+                                        } else {
+                                            playPauseCount = 1
+                                        }
+                                        lastPlayPauseTime = currentTime
                                         return true
                                     }
                                     KeyEvent.KEYCODE_MEDIA_NEXT -> {
@@ -400,7 +440,8 @@ class PodcastPlayerService : Service() {
                 savePosition(currentPodcast!!.path, position)
             }
             action == ACTION_FORWARD -> {
-                forward()
+                val ms = intent.getIntExtra(EXTRA_FORWARD_MS, SKIP_TIME_MS)
+                forward(ms)
                 val position = mediaPlayer?.currentPosition?.toLong() ?: 0
                 savePosition(currentPodcast!!.path, position)
             }
@@ -643,22 +684,18 @@ class PodcastPlayerService : Service() {
             }
             setActiveService()
 
-            // Wenn bereits pausiert, fortsetzen
             if (mediaPlayer != null && !isPlaying) {
-                val currentPos = mediaPlayer?.currentPosition ?: 0
+                val currentPos = getSavedPosition(currentPodcast!!.path).toInt()
                 if (currentPos > 1000) {
                     val newPos = currentPos - 1000
                     mediaPlayer?.seekTo(newPos)
-                    Log.d("PodcastPlayerService", "⏪ Rewinded 2s before resume: ${formatTime(newPos.toLong())}")
                 }
                 mediaPlayer?.start()
                 isPlaying = true
-                Log.d("PodcastPlayerService", "▶ Resumed playback")
                 updateNotification()
                 return
             }
 
-            // Neuen Podcast laden
             if (mediaPlayer == null) {
                 loadPodcast(currentPodcast!!)
             }
@@ -764,12 +801,12 @@ class PodcastPlayerService : Service() {
         }
     }
 
-    private fun forward() {
+    private fun forward(skipMs: Int = SKIP_TIME_MS) {
         try {
             mediaPlayer?.let { player ->
                 val currentPos = player.currentPosition
                 val duration = player.duration
-                val newPos = minOf(duration, currentPos + SKIP_TIME_MS)
+                val newPos = minOf(duration, currentPos + skipMs)
                 player.seekTo(newPos)
 
                 currentPodcast?.let { podcast ->
@@ -1057,31 +1094,6 @@ class PodcastPlayerService : Service() {
         }
     }
 
-    fun getPodcastQueue(): List<String> {
-        return podcastQueue.toList()
-    }
-
-    fun addToPodcastQueue(podcastPath: String) {
-        if (!podcastQueue.contains(podcastPath)) {
-            podcastQueue.add(podcastPath)
-            savePodcastQueue()
-            Log.d("PodcastPlayerService", "Added to queue: $podcastPath")
-        }
-    }
-
-    fun removeFromPodcastQueue(podcastPath: String) {
-        if (podcastQueue.remove(podcastPath)) {
-            savePodcastQueue()
-            Log.d("PodcastPlayerService", "Removed from queue: $podcastPath")
-        }
-    }
-
-    fun clearPodcastQueue() {
-        podcastQueue.clear()
-        savePodcastQueue()
-        Log.d("PodcastPlayerService", "Queue cleared")
-    }
-
     private fun playNextInQueue() {
         if (podcastQueue.isEmpty()) {
             Log.d("PodcastPlayerService", "Queue is empty, nothing to play")
@@ -1101,6 +1113,31 @@ class PodcastPlayerService : Service() {
         } else {
             Log.w("PodcastPlayerService", "Next podcast not found: $nextPath")
             playNextInQueue()
+        }
+    }
+
+    private fun switchToMusicPlayer() {
+        try {
+            // Podcast pausieren und Position speichern
+            if (isPlaying && mediaPlayer != null && currentPodcast != null) {
+                val position = mediaPlayer?.currentPosition?.toLong() ?: 0
+                savePosition(currentPodcast!!.path, position)
+                mediaPlayer?.pause()
+                isPlaying = false
+            }
+
+            // Service-Status wechseln
+            clearActiveService()
+
+            // Music Player starten
+            MusicPlayerService.sendPlayAction(this)
+
+            Log.d("PodcastPlayerService", "✓ Switched to Music Player")
+
+            // Podcast-Service stoppen
+            stopSelf()
+        } catch (e: Exception) {
+            Log.e("PodcastPlayerService", "Error switching to Music Player", e)
         }
     }
 
