@@ -1,6 +1,5 @@
 package com.example.cloud
 
-// AesEncryption.kt
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -17,7 +16,7 @@ object AesEncryption {
         SecureRandom().nextBytes(iv)
         cipher.init(Cipher.ENCRYPT_MODE, secretKey, GCMParameterSpec(128, iv))
         val encrypted = cipher.doFinal(data)
-        return iv + encrypted // IV + Ciphertext
+        return iv + encrypted
     }
 
     fun decrypt(encryptedData: ByteArray): ByteArray {
