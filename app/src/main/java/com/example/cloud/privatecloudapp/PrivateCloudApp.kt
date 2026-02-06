@@ -1,3 +1,5 @@
+@file:Suppress("AssignedValueIsNeverRead")
+
 package com.example.cloud.privatecloudapp
 
 import com.example.cloud.quicksettingsfunctions.BatteryDataRepository
@@ -144,12 +146,15 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -175,13 +180,17 @@ import com.example.cloud.movietab.MovieDiscoveryTabContent
 import com.example.cloud.musicstatstab.MusicStatsTabContent
 import com.example.cloud.service.QuietHoursNotificationService
 import com.example.cloud.service.ChatService
+import com.example.cloud.ui.theme.Cloud
 import com.example.cloud.weathertab.WeatherTabContent
 import java.net.Inet4Address
 import java.time.Instant
 import java.time.ZoneId
+import java.util.Calendar
 
 var isFullScreen by mutableStateOf(false)
 var webViewUrl by mutableStateOf("https://www.google.com")
+private const val KEY_RECENT_TABS = "recent_tabs"
+private const val MAX_RECENT_TABS = 5
 
 enum class MenuItem(
     val title: String,
@@ -298,32 +307,282 @@ enum class MenuItem(
         { MediaRecorderContent() }
     ),
     AUTOKLICKER(
-    "Autoklicker",
-    "⌨️ ",
-    { AutoClickerTabContent() }
+        "Autoklicker",
+        "⌨️ ",
+        { AutoClickerTabContent() }
     )
+}
+
+fun saveRecentTab(context: Context, menuItem: MenuItem) {
+    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    val recentTabsString = prefs.getString(KEY_RECENT_TABS, "") ?: ""
+    val recentTabs = recentTabsString.split(",").filter { it.isNotEmpty() }.toMutableList()
+
+    recentTabs.remove(menuItem.name)
+    recentTabs.add(0, menuItem.name)
+    val trimmedTabs = recentTabs.take(MAX_RECENT_TABS)
+
+    prefs.edit {
+        putString(KEY_RECENT_TABS, trimmedTabs.joinToString(","))
+    }
+}
+
+fun loadRecentTabs(context: Context): List<MenuItem> {
+    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    val recentTabsString = prefs.getString(KEY_RECENT_TABS, "") ?: ""
+    return recentTabsString.split(",")
+        .filter { it.isNotEmpty() }
+        .mapNotNull { name ->
+            try {
+                MenuItem.valueOf(name)
+            } catch (_: Exception) {
+                null
+            }
+        }
+}
+
+@Composable
+fun LandingPageOrApp(storage: Storage, startTarget: String?) {
+    val context = LocalContext.current
+    var showLandingPage by rememberSaveable { mutableStateOf(startTarget == null) }
+    var selectedMenuItem by remember { mutableStateOf<MenuItem?>(null) }
+
+    LaunchedEffect(Unit) {
+        QuietHoursNotificationService.startService(context)
+        ChatService.startService(context)
+        BatteryDataRepository.init(context)
+    }
+
+    if (showLandingPage) {
+        LandingPage(
+            onTabSelected = { menuItem ->
+                selectedMenuItem = menuItem
+                saveRecentTab(context, menuItem)
+                showLandingPage = false
+            }
+        )
+    } else {
+        val targetMenuItem = selectedMenuItem ?: startTarget?.let { target ->
+            when (target) {
+                "weather" -> MenuItem.WEATHER
+                else -> null
+            }
+        }
+
+        if (targetMenuItem != null) {
+            PrivateCloudApp(storage = storage, startTarget = null, initialMenuItem = targetMenuItem)
+        } else {
+            PrivateCloudApp(storage = storage, startTarget = startTarget, initialMenuItem = null)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
+    val context = LocalContext.current
+    val recentTabs = remember { loadRecentTabs(context) }
+    val allTabsSorted = remember { MenuItem.entries.sortedBy { it.title } }
+    val haptic = LocalHapticFeedback.current
+    val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+
+    val gradient = remember {
+        val colors = when (currentHour) {
+            in 6..11 -> listOf(
+                Color(0xFFFFE29F).copy(alpha = 0.6f),
+                Color(0xFFFFC3A0).copy(alpha = 0.6f)
+            )
+            in 12..16 -> listOf(
+                Color(0xFF00F2FE).copy(alpha = 0.5f),
+                Color(0xFFDEFE4F).copy(alpha = 0.5f)
+            )
+            else -> listOf(
+                Cloud.copy(alpha = 0.7f),
+                Color(0xFF001A93).copy(alpha = 0.7f)
+            )
+        }
+
+        Brush.linearGradient(
+            colors = colors,
+            start = Offset.Zero,
+            end = Offset.Infinite
+        )
+    }
+
+    val txtcolors = remember {
+        when (currentHour) {
+            in 6..11 -> Color.Black // Morgen
+            in 12..16 -> Color.Black // Nachmittag
+            else -> Color.White
+        }
+    }
+
+    val bgpicture = remember {
+        when (currentHour) {
+            in 6..11 -> com.example.cloud.R.drawable.sunset // Morgen
+            in 12..16 -> com.example.cloud.R.drawable.mittag // Mittag
+            else -> com.example.cloud.R.drawable.night
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+    ) {
+        Image(
+            painter = painterResource(id = bgpicture),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(gradient)
+        )
+        CompositionLocalProvider(LocalContentColor provides txtcolors) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "Cloud",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .padding(bottom = 24.dp, top = 40.dp)
+                        .fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+
+                if (recentTabs.isNotEmpty()) {
+                    Text(
+                        text = "Zuletzt verwendet",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(items = recentTabs, key = { "recent_${it.ordinal}" }) { menuItem ->
+                            TabCard(
+                                menuItem = menuItem,
+                                isRecent = true,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onTabSelected(menuItem)
+                                }
+                            )
+                        }
+
+                        item(key = "divider") {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 16.dp),
+                                thickness = 1.dp,
+                                color = Color.White.copy(alpha = 0.3f)
+                            )
+
+                            Text(
+                                text = "Alle Tabs",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+                        }
+
+                        items(items = allTabsSorted, key = { "all_${it.ordinal}" }) { menuItem ->
+                            TabCard(
+                                menuItem = menuItem,
+                                isRecent = false,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onTabSelected(menuItem)
+                                }
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(
+                            items = allTabsSorted,
+                            key = { "all_${it.ordinal}" }
+                        ) { menuItem ->
+                            TabCard(
+                                menuItem = menuItem,
+                                isRecent = false,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onTabSelected(menuItem)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TabCard(
+    menuItem: MenuItem,
+    isRecent: Boolean,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(if (isRecent) 72.dp else 64.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isRecent) Color(0xFF4CAF50) else Color(0xFF333333)
+        ),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = menuItem.icon,
+                fontSize = if (isRecent) 32.sp else 28.sp,
+                modifier = Modifier.padding(end = 16.dp)
+            )
+
+            Text(
+                text = menuItem.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                fontWeight = if (isRecent) FontWeight.Bold else FontWeight.Normal,
+                fontSize = if (isRecent) 18.sp else 16.sp
+            )
+        }
+    }
 }
 
 @SuppressLint("ContextCastToActivity", "SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrivateCloudApp(storage: Storage, startTarget: String?) {
+fun PrivateCloudApp(storage: Storage, startTarget: String?, initialMenuItem: MenuItem? = null) {
     val context = LocalContext.current
-    var selectedMenuItem by remember { mutableStateOf(loadLastMenuItem(context)) }
+    var selectedMenuItem by remember {
+        mutableStateOf(initialMenuItem ?: loadLastMenuItem(context))
+    }
     val scope = rememberCoroutineScope()
     var currentUrl by rememberSaveable { mutableStateOf<String?>(null) }
-
-    QuietHoursNotificationService.startService(context)
-    ChatService.startService(context)
 
     LaunchedEffect(startTarget) {
         if (startTarget == "weather") {
             selectedMenuItem = MenuItem.WEATHER
         }
-    }
-
-    LaunchedEffect(Unit) {
-        BatteryDataRepository.init(context)
     }
 
     LaunchedEffect(currentUrl) {
@@ -403,6 +662,7 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?) {
                                 onClick = {
                                     selectedMenuItem = item
                                     saveLastMenuItem(context, item)
+                                    saveRecentTab(context, item)  // ✅ NEU: Recent Tab speichern
                                     scope.launch {
                                         drawerState.close()
                                     }
@@ -486,7 +746,8 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?) {
                                         ViewGroup.LayoutParams.MATCH_PARENT
                                     )
                                 )
-                                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                                activity.requestedOrientation =
+                                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                                 customView = view
                                 customViewCallback = callback
 
@@ -509,7 +770,8 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?) {
                                 activity.window.insetsController?.show(
                                     android.view.WindowInsets.Type.systemBars()
                                 )
-                                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                                activity.requestedOrientation =
+                                    ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                             }
                         }
                     }
@@ -608,16 +870,6 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?) {
                 } else {
                     isFullScreen = false
                 }
-            }
-        }
-
-        val activity = LocalActivity.current
-        DisposableEffect(Unit) {
-            val originalOrientation = activity?.requestedOrientation
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
-            onDispose {
-                activity?.requestedOrientation =
-                    originalOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             }
         }
 
@@ -1810,7 +2062,6 @@ fun MainCloudScreen(storage: Storage) {
     }
     if (showOtherBucket) {
         OtherBucketViewer(
-            storage = storage,
             onBackPressed = {
                 showOtherBucket = false
             }
