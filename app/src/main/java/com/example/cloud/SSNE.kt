@@ -1,7 +1,6 @@
 package com.example.cloud
 
 import android.Manifest
-import android.R
 import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.PackageManager
@@ -19,7 +18,7 @@ fun showSimpleNotificationExtern(
     val notificationId = System.currentTimeMillis().toInt()
 
     val notification = NotificationCompat.Builder(context, "show_simple_not_channel")
-        .setSmallIcon(R.drawable.ic_dialog_info)
+        .setSmallIcon(android.R.drawable.ic_dialog_info)
         .setContentTitle(title)
         .setContentText(text)
         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
