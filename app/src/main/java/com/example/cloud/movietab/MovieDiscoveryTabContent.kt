@@ -304,7 +304,7 @@ fun MovieCard(
 }
 
 suspend fun fetchMoviesFromTMDB(genreId: Int?): List<Movie> = withContext(Dispatchers.IO) {
-    val apiKey = TMDBConfig.ApiKey
+    val apiKey = TMDBConfig.APIKEY
     val randomPage = (1..5).random()
     val genreParam = if (genreId != null) "&with_genres=$genreId" else ""
     val url = "https://api.themoviedb.org/3/discover/movie?api_key=$apiKey${genreParam}&page=$randomPage&language=de-DE&sort_by=popularity.desc"
