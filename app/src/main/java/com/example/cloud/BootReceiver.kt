@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import com.example.cloud.service.ChatService
 import com.example.cloud.service.QuietHoursNotificationService
-import com.example.cloud.service.WhatsAppNotificationListener
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
