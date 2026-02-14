@@ -1,0 +1,1142 @@
+﻿package com.example.cloud.quiethoursnotificationhelper
+
+import android.app.NotificationManager
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Context.CAMERA_SERVICE
+import android.content.Context.MODE_PRIVATE
+import android.hardware.camera2.CameraManager
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import androidx.core.app.NotificationCompat
+import androidx.core.content.edit
+import com.example.cloud.SupabaseConfig
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.StringReader
+import java.util.*
+import javax.xml.parsers.DocumentBuilderFactory
+import org.w3c.dom.Element
+import org.xml.sax.InputSource
+import com.example.cloud.privatecloudapp.showBatteryInfo
+import com.example.cloud.service.MusicPlayerService
+import com.example.cloud.service.PodcastPlayerService
+import com.example.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
+import com.example.cloud.service.QuietHoursNotificationService.Companion.commandHistory
+import com.example.cloud.service.WhatsAppNotificationListener
+import com.example.cloud.service.restartMusicPlayer
+import com.example.cloud.showSimpleNotificationExtern
+import com.example.cloud.weathertab.fetchWeatherForecast
+import com.example.cloud.weathertab.getLastKnownLocation
+import com.example.cloud.weathertab.weathernot
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlin.text.split
+import kotlin.time.Duration.Companion.seconds
+
+// Hilfsfunktion: Format DB Zeitstring (z.B. YYMMddHHmm zu HH:mm)
+private fun formatDbPlanTime(timeString: String): String {
+    if (timeString.length >= 10) {
+        val hours = timeString.substring(6, 8)
+        val minutes = timeString.substring(8, 10)
+        return "$hours:$minutes"
+    }
+    return timeString
+}
+
+// Hilfsfunktion: Berechne Verspätung in Minuten
+private fun calculateDbDelayMinutes(plannedTime: String, changedTime: String): Int {
+    if (plannedTime.length >= 10 && changedTime.length >= 10) {
+        val pHours = plannedTime.substring(6, 8).toIntOrNull() ?: 0
+        val pMinutes = plannedTime.substring(8, 10).toIntOrNull() ?: 0
+        val cHours = changedTime.substring(6, 8).toIntOrNull() ?: 0
+        val cMinutes = changedTime.substring(8, 10).toIntOrNull() ?: 0
+        val plannedTotal = pHours * 60 + pMinutes
+        val changedTotal = cHours * 60 + cMinutes
+        return (changedTotal - plannedTotal).coerceAtLeast(0)
+    }
+    return 0
+}
+
+data class Command(
+    val name: String,
+    val aliases: List<String> = emptyList(),
+    val description: String,
+    val action: () -> Unit
+)
+
+private fun getAvailableCommands(context: Context): List<Command> {
+    return listOf(
+        Command(
+            name = "whatsapp",
+            aliases = listOf("wh", "wa", "messages", "msg", "nachrichten"),
+            description = "Zeigt ungelesene Nachrichten"
+        ) {
+            showUnreadMessages(context)
+        },
+        Command(
+            name = "music",
+            aliases = listOf("m", "play", "player", "musik"),
+            description = "Startet Musik Player"
+        ) {
+            PodcastPlayerService.stopService(context)
+            restartMusicPlayer(null, context)
+        },
+        Command(
+            name = "podcast",
+            aliases = listOf("pd", "pc", "Podcast"),
+            description = "Startet PodcastPlayerService"
+        ) {
+            MusicPlayerService.stopService(context)
+            PodcastPlayerService.startService(context)
+            PodcastPlayerService.sendPlayAction(context)
+        },
+        Command(
+            name = "managepodcast",
+            aliases = listOf("mpd", "ManagePodcast"),
+            description = "Zeigt alle vollendeten Podcasts als Notification"
+        ) {
+            PodcastPlayerService.managePodcast(context)
+        },
+        Command(
+            name = "queue",
+            aliases = listOf("q", "warteschlange", "playlist"),
+            description = "Zeigt Podcast-Warteschlange"
+        ) {
+            showPodcastQueue(context)
+        },
+        Command(
+            name = "qadd",
+            aliases = listOf("qa", "queueadd", "addqueue"),
+            description = "Fügt Podcast zur Queue hinzu (Syntax: qadd [nummer])"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ Queue Add",
+                "Syntax: qadd [podcast-nummer]\nVerwende 'podcast' um Nummern zu sehen",
+                context = context
+            )
+        },
+        Command(
+            name = "qremove",
+            aliases = listOf("qr", "queueremove", "removequeue"),
+            description = "Entfernt Podcast aus Queue (Syntax: qremove [position])"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ Queue Remove",
+                "Syntax: qremove [position in queue 1-X]",
+                context = context
+            )
+        },
+        Command(
+            name = "qclear",
+            aliases = listOf("qc", "queueclear", "clearqueue"),
+            description = "Leert die komplette Queue"
+        ) {
+            clearPodcastQueue(context)
+        },
+        Command(
+            name = "voice",
+            aliases = listOf("v", "voicenote", "sprachnachricht", "audio"),
+            description = "Spielt Voice Notes ab"
+        ) {
+            playLatestVoiceNote("Manual Command", context)
+        },
+        Command(
+            name = "record",
+            aliases = listOf("rec", "aufnahme", "audiorec", "recording"),
+            description = "Startet/Stoppt Audioaufnahme (Syntax: record start|stop)"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ Aufnahme",
+                "Verwende: record start | record stop",
+                20.seconds,
+                context
+            )
+        },
+        Command(
+            name = "help",
+            aliases = listOf("h", "?", "commands", "befehle"),
+            description = "Zeigt alle verfügbaren Befehle"
+        ) {
+            showAvailableCommands(context)
+        },
+        Command(
+            name = "flashlevel",
+            aliases = listOf("flashl", "lightlevel", "torchlevel", "helligkeit", "flash", "f"),
+            description = "Setze Taschenlampen-Helligkeit (Syntax: flashlevel [1-max])"
+        ) {
+            val cameraManager = context.getSystemService(CAMERA_SERVICE) as CameraManager
+            val cameraId = cameraManager.cameraIdList.firstOrNull()
+            if (cameraId != null) {
+                val clampedLevel = 1
+                cameraManager.turnOnTorchWithStrengthLevel(cameraId, clampedLevel)
+            }
+        },
+        Command(
+            name = "save",
+            aliases = listOf("s", "speichern", "store"),
+            description = "Speichert Reply-Daten für Kontakt"
+        ) {
+            val contacts = WhatsAppNotificationListener.replyActions.keys.toList()
+            if (contacts.isEmpty()) {
+                showSimpleNotificationExtern(
+                    "❌ Keine Kontakte",
+                    "Keine Reply-Daten verfügbar. Warte auf WhatsApp-Nachricht.",
+                    20.seconds,
+                    context
+                )
+            } else {
+                showSimpleNotificationExtern(
+                    "📋 Verfügbare Kontakte",
+                    "Verwende 'save [kontakt]': ${contacts.joinToString(", ")}",
+                    context = context
+                )
+            }
+        },
+        Command(
+            name = "saved",
+            aliases = listOf("info", "gespeichert", "data"),
+            description = "Zeigt gespeicherte Reply-Daten"
+        ) {
+            showSavedReplyInfo(context)
+        },
+        Command(
+            name = "message",
+            aliases = listOf("send", "senden", "write", "schreiben"),
+            description = "Sendet Nachricht an gespeicherten Kontakt"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ Verwendung",
+                "Syntax: message [deine nachricht]",
+                context = context
+            )
+        },
+        Command(
+            name = "stopmusic",
+            aliases = listOf("stopm", "musicstop", "sm"),
+            description = "Stoppt NUR Musik Player Service"
+        ) {
+            try {
+                MusicPlayerService.stopService(context)
+            } catch (e: Exception) {
+                Log.e("QuietHoursService", "Error in stopmusic command", e)
+                showSimpleNotificationExtern(
+                    "❌ Fehler",
+                    "Music Player konnte nicht gestoppt werden: ${e.message}",
+                    context = context
+                )
+            }
+        },
+        Command(
+            name = "stoppodcast",
+            aliases = listOf("stopp", "podcaststop", "sp"),
+            description = "Stoppt NUR Podcast Player Service"
+        ) {
+            try {
+                PodcastPlayerService.stopService(context)
+            } catch (e: Exception) {
+                Log.e("QuietHoursService", "Error in stoppodcast command", e)
+                showSimpleNotificationExtern(
+                    "❌ Fehler",
+                    "Podcast Player konnte nicht gestoppt werden: ${e.message}",
+                    context = context
+                )
+            }
+        },
+        Command(
+            name = "weather",
+            aliases = listOf("w", "wetter", "forecast"),
+            description = "Zeigt Wetter (Syntax: weather [0-2] [0-23])"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ Wetter",
+                "Syntax: weather [0=Heute, 1=Morgen, 2=Übermorgen] [0-23]",
+                context = context
+            )
+        },
+        Command(
+            name = "extract",
+            aliases = listOf("e", "ex", "extrahieren"),
+            description = "Zeigt letzte Nachricht als separate Notification"
+        ) {
+            extractLastMessage(context)
+        },
+        Command(
+            name = "gallerie",
+            aliases = listOf("gal", "g", "gallery"),
+            description = "Zeigt Gallerie als nots"
+        ) {
+            loadGalleryImages(0, context)
+        },
+        Command(
+            name = "setdowntime",
+            aliases = listOf("set", "dt", "setdr"),
+            description = "Lege Downtime fest (setdowntime [Uhrzeit])"
+        ) {},
+        Command(
+            name = "friendmessages",
+            aliases = listOf("fm", "friendmsgs", "lastmsgs", "friend"),
+            description = "Zeigt letzte 3 Nachrichten von friend"
+        ) {
+            showLastFriendMessages(context)
+        },
+        Command(
+            name = "sound",
+            aliases = listOf("vibrate", "vib", "ton", "sound", "silent", "s"),
+            description = "Stellt Vibration/Ton ein (Syntax: sound [vibrate|silent|normal])"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ Sound Befehle",
+                "sound vibrate - Nur Vibration\nsound silent - Stumm\nsound normal - Normal mit Ton",
+                context = context
+            )
+        },
+        Command(
+            name = "clearpodcasts",
+            aliases = listOf("cp", "clearpod", "removepod"),
+            description = "Löscht alle Podcast-Auswahl Notifications"
+        ) {
+            clearPodcastSelectionNotifications(context)
+        },
+        Command(
+            name = "tb",
+            aliases = listOf("tagesbericht", "upload", "uploadimage"),
+            description = "Lädt aktuelles Galeriebild zu Supabase hoch (Syntax: tb [dd.mm.yy] [name])"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ Tagesbericht Upload",
+                "Syntax: tb [dd.mm.yy] [bildname]\nBeispiel: tb 08.01.26 sonnenuntergang",
+                context = context
+            )
+        },
+        Command(
+            name = "bitwarden",
+            aliases = listOf("bw", "btw", "b"),
+            description = "Bw MP!"
+        ) {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = ClipData.newPlainText("BWMP", SupabaseConfig.BWMP)
+            clipboard.setPrimaryClip(clip)
+        },
+        Command(
+            name = "battery",
+            aliases = listOf("bat", "btt"),
+            description = "showBatteryInfo"
+        ) {
+            showBatteryInfo(context)
+        },
+        Command(
+            name = "favorite",
+            aliases = listOf("fav", "f", "star", "⭐"),
+            description = "Markiert aktuellen Song als Favorit"
+        ) {
+            MusicPlayerService.toggleFavorite(context)
+        },
+        Command(
+            name = "favorites",
+            aliases = listOf("favs", "showfavs", "listfavs"),
+            description = "Zeigt alle favorisierten Songs"
+        ) {
+            MusicPlayerService.showFavorites(context)
+        },
+        Command(
+            name = "favmode",
+            aliases = listOf("onlyfavs", "favsonly", "favoritesmode"),
+            description = "Schaltet Favoriten-Modus um (nur Favoriten abspielen)"
+        ) {
+            MusicPlayerService.toggleFavoritesMode(context)
+        },
+        Command(
+            name = "speed",
+            aliases = listOf("spd", "tempo", "geschwindigkeit"),
+            description = "Setzt Podcast-Geschwindigkeit (Syntax: speed [0.5-3.0])"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ Geschwindigkeit",
+                "Syntax: speed [0.5-3.0]\nBeispiel: speed 1.5",
+                context = context
+            )
+        },
+        Command(
+            name = "*",
+            aliases = listOf("todo", "task", "aufgabe"),
+            description = "Fügt To-do hinzu (Syntax: * \"meine aufgabe\")"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ To-do",
+                "Syntax: * \"deine aufgabe\"\nBeispiel: * \"Milch kaufen\"",
+                context = context
+            )
+        },
+        Command(
+            name = "todos",
+            aliases = listOf("todoliste", "tasks", "aufgaben"),
+            description = "Zeigt alle To-dos"
+        ) {
+            showAllTodos(context)
+        },
+        Command(
+            name = "todone",
+            aliases = listOf("done", "erledigt", "check"),
+            description = "Markiert To-do als erledigt (Syntax: todone [nummer])"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ To-do erledigen",
+                "Syntax: todone [nummer]\nVerwende 'todos' um Nummern zu sehen",
+                context = context
+            )
+        },
+        Command(
+            name = "todorm",
+            aliases = listOf("removetodo", "deletetodo"),
+            description = "Löscht To-do (Syntax: todorm [nummer])"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ To-do löschen",
+                "Syntax: todorm [nummer]\nVerwende 'todos' um Nummern zu sehen",
+                context = context
+            )
+        },
+        Command(
+            name = "todosync",
+            aliases = listOf("sync", "syncwifi", "synctodos"),
+            description = "Synchronisiert To-dos mit Laptop via WiFi Direct"
+        ) {
+            syncTodosWithLaptop(context)
+        },
+        Command(
+            name = "bahn",
+            aliases = listOf("zug", "train", "db"),
+            description = "Prüft den DB-Plan für Geltendorf (planmäßige Ankunft 07:05 Uhr)"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ Bahn-Verbindung",
+                "Syntax: bahn\nPrüft morgen den Zug mit planmäßiger Ankunft 07:05 Uhr in Geltendorf.",
+                context = context
+            )
+        },
+    )
+}
+
+@OptIn(DelicateCoroutinesApi::class)
+fun executeCommand(commandText: String, context: Context) {
+    val actualCommand = when (commandText) {
+        "^" -> {
+            if (commandHistory.isEmpty()) {
+                showSimpleNotificationExtern(
+                    "❌ Keine History",
+                    "Kein vorheriger Befehl verfügbar",
+                    20.seconds,
+                    context
+                )
+                return
+            }
+            commandHistory.last()
+        }
+
+        "^^" -> {
+            if (commandHistory.size < 2) {
+                showSimpleNotificationExtern(
+                    "❌ Keine History",
+                    "Kein vorletzter Befehl verfügbar",
+                    20.seconds,
+                    context
+                )
+                return
+            }
+            commandHistory[commandHistory.size - 2]
+        }
+
+        else -> commandText
+    }
+
+    if (commandText != "^" && commandText != "^^") {
+        commandHistory.add(actualCommand)
+        if (commandHistory.size > 10) {
+            commandHistory.removeAt(0)
+        }
+    }
+
+    val parts = actualCommand.split(" ", limit = 3)
+    val commandInput = parts[0].lowercase()
+    val argument = if (parts.size > 1) parts[1] else null
+
+    when (commandInput) {
+        "save", "s", "speichern", "store" -> {
+            if (argument != null) {
+                saveReplyDataPermanently(argument, context)
+            } else {
+                val contacts = WhatsAppNotificationListener.replyActions.keys.toList()
+                if (contacts.isEmpty()) {
+                    showSimpleNotificationExtern(
+                        "❌ Keine Kontakte",
+                        "Keine Reply-Daten verfügbar",
+                        20.seconds,
+                        context
+                    )
+                } else {
+                    showSimpleNotificationExtern(
+                        "📋 Kontakte",
+                        contacts.joinToString(", "),
+                        context = context
+                    )
+                }
+            }
+            return
+        }
+
+        "message", "send", "senden", "write", "schreiben" -> {
+            if (argument != null) {
+                sendMessageViaSavedReplyData(argument, context)
+            } else {
+                showSimpleNotificationExtern(
+                    "❌ Fehler",
+                    "Syntax: message [deine nachricht]",
+                    20.seconds,
+                    context
+                )
+            }
+            return
+        }
+
+        "record", "rec", "aufnahme", "audiorec", "recording" -> {
+            if (argument != null) {
+                when (argument.lowercase()) {
+                    "start" -> startAudioRecording(context)
+                    "stop" -> stopAudioRecording(context)
+                    else -> showSimpleNotificationExtern(
+                        "❌ Fehler",
+                        "Syntax: record start | record stop",
+                        20.seconds,
+                        context
+                    )
+                }
+            } else {
+                showSimpleNotificationExtern(
+                    "ℹ️ Aufnahme",
+                    "Verwende: record start | record stop",
+                    20.seconds,
+                    context
+                )
+            }
+            return
+        }
+
+        "saved", "info", "gespeichert", "data" -> {
+            showSavedReplyInfo(context)
+            return
+        }
+
+        "weather", "w", "wetter", "forecast" -> {
+            if (argument != null) {
+                val parts = actualCommand.split(" ")
+                if (parts.size == 3) {
+                    val dayNum = parts[1].toIntOrNull()
+                    val hour = parts[2]
+
+                    val day = when (dayNum) {
+                        0 -> "heute"
+                        1 -> "morgen"
+                        2 -> "übermorgen"
+                        else -> null
+                    }
+
+                    if (day != null && dayNum in 0..2) {
+                        Handler(Looper.getMainLooper()).post {
+                            GlobalScope.launch {
+                                try {
+                                    val loc =
+                                        getLastKnownLocation(context)
+                                    if (loc == null) {
+                                        showSimpleNotificationExtern(
+                                            "❌ Standort-Fehler",
+                                            "Standort nicht verfügbar",
+                                            20.seconds,
+                                            context
+                                        )
+                                        return@launch
+                                    }
+
+                                    val weatherData =
+                                        fetchWeatherForecast(
+                                            loc.latitude,
+                                            loc.longitude,
+                                            days = 14
+                                        )
+
+                                    weathernot(
+                                        context,
+                                        day,
+                                        hour,
+                                        weatherData
+                                    )
+
+                                } catch (e: Exception) {
+                                    Log.e("QuietHoursService", "Weather fetch error", e)
+                                    showSimpleNotificationExtern(
+                                        "❌ Wetter-Fehler",
+                                        "Wetterdaten konnten nicht abgerufen werden: ${e.message}",
+                                        20.seconds,
+                                        context
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        showSimpleNotificationExtern(
+                            "❌ Ungültiger Tag",
+                            "Tag muss 0, 1 oder 2 sein",
+                            20.seconds,
+                            context
+                        )
+                    }
+                } else {
+                    showSimpleNotificationExtern(
+                        "❌ Fehler",
+                        "Syntax: weather [0=Heute, 1=Morgen, 2=Übermorgen] [0-23]",
+                        20.seconds,
+                        context
+                    )
+                }
+            } else {
+                showSimpleNotificationExtern(
+                    "ℹ️ Wetter",
+                    "Syntax: weather [0=Heute, 1=Morgen, 2=Übermorgen] [0-23]",
+                    20.seconds,
+                    context
+                )
+            }
+            return
+        }
+
+        "flashlevel", "flashl", "lightlevel", "torchlevel", "helligkeit", "flash", "f" -> {
+            if (argument != null) {
+                val level = argument.toIntOrNull()
+                if (level != null && level >= 1) {
+                    val cameraManager = context.getSystemService(CAMERA_SERVICE) as CameraManager
+                    try {
+                        val cameraId = cameraManager.cameraIdList.firstOrNull() ?: return
+
+                        val clampedLevel = level.coerceIn(1, 5)
+                        cameraManager.turnOnTorchWithStrengthLevel(cameraId, clampedLevel)
+                    } catch (e: Exception) {
+                        Log.e("QuietHoursService", "Error setting flashlight level", e)
+                        showSimpleNotificationExtern(
+                            "❌ Taschenlampe",
+                            "Helligkeit konnte nicht gesetzt werden: ${e.message}",
+                            20.seconds,
+                            context
+                        )
+                    }
+                } else if (level != null && level == 0) {
+                    val cameraManager =
+                        context.getSystemService(CAMERA_SERVICE) as CameraManager
+                    try {
+                        val cameraId = cameraManager.cameraIdList.firstOrNull() ?: return
+                        cameraManager.setTorchMode(cameraId, false)
+                    } catch (e: Exception) {
+                        Log.e("QuietHoursService", "Error setting flashlight", e)
+                        showSimpleNotificationExtern(
+                            "❌ Taschenlampe",
+                            "Taschenlampe konnte nicht geschaltet werden",
+                            context = context
+                        )
+                    }
+                } else {
+                    showSimpleNotificationExtern(
+                        "❌ Ungültiger Wert",
+                        "Bitte eine Zahl >= 1 eingeben",
+                        20.seconds,
+                        context
+                    )
+                }
+            } else {
+                val cameraManager = context.getSystemService(CAMERA_SERVICE) as CameraManager
+                val cameraId = cameraManager.cameraIdList.firstOrNull()
+                if (cameraId != null) {
+                    val clampedLevel = 1
+                    cameraManager.turnOnTorchWithStrengthLevel(cameraId, clampedLevel)
+                }
+            }
+            return
+        }
+
+        "setdowntime", "set", "dt", "setdt" -> {
+            if (argument !== null) {
+                context.getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
+                    .edit(commit = true) { putString("saved_number", argument) }
+            } else {
+                showSimpleNotificationExtern(
+                    "Setdowntime",
+                    "setdowntime [Uhrzeit]",
+                    context = context
+                )
+            }
+        }
+
+        "sound", "vibrate", "vib", "ton", "silent" -> {
+            if (argument != null) {
+                setSoundMode(argument, context)
+            } else {
+                setSoundMode("help", context)
+            }
+            return
+        }
+
+        "qadd", "qa", "queueadd", "addqueue" -> {
+            if (argument != null) {
+                val index = argument.toIntOrNull()
+                if (index != null && index > 0) {
+                    addPodcastToQueue(index - 1, context)
+                } else {
+                    showSimpleNotificationExtern(
+                        "❌ Ungültige Nummer",
+                        "Syntax: qadd [podcast-nummer]",
+                        20.seconds,
+                        context
+                    )
+                }
+            } else {
+                showSimpleNotificationExtern(
+                    "ℹ️ Verwendung",
+                    "Syntax: qadd [podcast-nummer]\nVerwende 'podcast' um Nummern zu sehen",
+                    20.seconds,
+                    context
+                )
+            }
+            return
+        }
+
+        "qremove", "qr", "queueremove", "removequeue" -> {
+            if (argument != null) {
+                val position = argument.toIntOrNull()
+                if (position != null && position > 0) {
+                    removePodcastFromQueue(position - 1, context)
+                } else {
+                    showSimpleNotificationExtern(
+                        "❌ Ungültige Position",
+                        "Syntax: qremove [position]",
+                        20.seconds,
+                        context
+                    )
+                }
+            } else {
+                showSimpleNotificationExtern(
+                    "ℹ️ Verwendung",
+                    "Syntax: qremove [position]\nVerwende 'queue' um Positionen zu sehen",
+                    20.seconds,
+                    context
+                )
+            }
+            return
+        }
+
+        "qclear", "qc", "queueclear", "clearqueue" -> {
+            clearPodcastQueue(context)
+            return
+        }
+
+        "tb", "tagesbericht", "upload", "uploadimage" -> {
+            if (argument != null) {
+                val parts = actualCommand.split(" ", limit = 2)
+                if (parts.size >= 2) {
+                    val restOfCommand = parts[1]
+
+                    // Parse Datum und optionalen Namen (auch mit Leerzeichen in Quotes)
+                    val dateAndName = parseCommandWithQuotes(restOfCommand)
+
+                    if (dateAndName.isNotEmpty()) {
+                        val date = dateAndName[0]
+                        val name = if (dateAndName.size > 1) dateAndName[1] else null
+                        uploadCurrentGalleryImageToSupabase(date, name, context)
+                    } else {
+                        showSimpleNotificationExtern(
+                            "❌ Fehler",
+                            "Syntax: tb [dd.mm.yy] [\"name mit leerzeichen\"]",
+                            20.seconds,
+                            context
+                        )
+                    }
+                } else {
+                    showSimpleNotificationExtern(
+                        "❌ Fehler",
+                        "Syntax: tb [dd.mm.yy] [\"name mit leerzeichen\"]",
+                        20.seconds,
+                        context
+                    )
+                }
+            } else {
+                showSimpleNotificationExtern(
+                    "ℹ️ Upload",
+                    "Syntax: tb [dd.mm.yy] [\"name\" (optional)]\nBeispiel: tb 08.01.26 \"schöner sonnenuntergang\"\noder: tb 08.01.26 sonnenuntergang\noder: tb 08.01.26",
+                    20.seconds,
+                    context
+                )
+            }
+            return
+        }
+
+        "gallerie", "gal", "g", "gallery" -> {
+            loadGalleryImages(argument?.toInt() ?: 0, context)
+            return
+        }
+
+        "music", "m", "play", "player", "musik" -> {
+            PodcastPlayerService.stopService(context)
+            val songNumber = argument?.toIntOrNull()
+            restartMusicPlayer(songNumber, context)
+            return
+        }
+
+        "pd", "pc", "Podcast", "podcast" -> {
+            if (argument != null) {
+                PodcastPlayerService.sendForwardAction(context, argument.toInt())
+                Log.d("PD", "pd command executed1")
+            } else {
+                MusicPlayerService.stopService(context)
+                PodcastPlayerService.startService(context)
+                PodcastPlayerService.sendPlayAction(context)
+                Log.d("PD", "pd command executed0")
+            }
+            Log.d("PD", "pd command executed")
+            return
+        }
+
+        "speed", "spd", "tempo", "geschwindigkeit" -> {
+            if (argument != null) {
+                val speed = argument.toFloatOrNull()
+                if (speed != null && speed in 0.5f..3.0f) {
+                    PodcastPlayerService.setPlaybackSpeed(context, speed)
+                } else {
+                    showSimpleNotificationExtern(
+                        "❌ Ungültige Geschwindigkeit",
+                        "Bitte einen Wert zwischen 0.5 und 3.0 eingeben",
+                        20.seconds,
+                        context
+                    )
+                }
+            } else {
+                showSimpleNotificationExtern(
+                    "ℹ️ Geschwindigkeit",
+                    "Syntax: speed [0.5-3.0]\nBeispiel: speed 1.5 für 1.5x Geschwindigkeit",
+                    20.seconds,
+                    context
+                )
+            }
+            return
+        }
+
+        "*", "todo", "task", "aufgabe" -> {
+            if (argument != null) {
+                val parts = actualCommand.split(" ", limit = 2)
+                if (parts.size >= 2) {
+                    val todoText = parseCommandWithQuotes(parts[1])
+                    if (todoText.isNotEmpty()) {
+                        addTodo(todoText[0], context)
+                    } else {
+                        showSimpleNotificationExtern(
+                            "❌ Fehler",
+                            "Syntax: * \"deine aufgabe\"",
+                            20.seconds,
+                            context
+                        )
+                    }
+                }
+            } else {
+                showSimpleNotificationExtern(
+                    "ℹ️ To-do",
+                    "Syntax: * \"deine aufgabe\"\nBeispiel: * \"Milch kaufen\"",
+                    context = context
+                )
+            }
+            return
+        }
+
+        "todone", "done", "erledigt", "check" -> {
+            if (argument != null) {
+                val index = argument.toIntOrNull()
+                if (index != null && index > 0) {
+                    completeTodo(index - 1, context)
+                } else {
+                    showSimpleNotificationExtern(
+                        "❌ Ungültige Nummer",
+                        "Syntax: todone [nummer]",
+                        20.seconds,
+                        context
+                    )
+                }
+            } else {
+                showAllTodos(context)
+            }
+            return
+        }
+
+        "todorm", "removetodo", "deletetodo" -> {
+            if (argument != null) {
+                val index = argument.toIntOrNull()
+                if (index != null && index > 0) {
+                    removeTodo(index - 1, context)
+                } else {
+                    showSimpleNotificationExtern(
+                        "❌ Ungültige Nummer",
+                        "Syntax: todorm [nummer]",
+                        20.seconds,
+                        context
+                    )
+                }
+            } else {
+                showSimpleNotificationExtern(
+                    "ℹ️ To-do löschen",
+                    "Syntax: todorm [nummer]",
+                    context = context
+                )
+            }
+            return
+        }
+
+        "bahn", "zug", "train", "db" -> {
+            val daysAhead = argument?.toIntOrNull() ?: 1
+            if (daysAhead < 1 || daysAhead > 7) {
+                showSimpleNotificationExtern(
+                    "❌ Ungültige Eingabe",
+                    "Syntax: bahn [1-7]\n1=Morgen, 2=Übermorgen, etc.",
+                    20.seconds,
+                    context
+                )
+            } else {
+                Handler(Looper.getMainLooper()).post {
+                    GlobalScope.launch {
+                        checkBahnZuege(context, daysAhead)
+                    }
+                }
+            }
+            return
+        }
+    }
+
+    val commands = getAvailableCommands(context)
+
+    val matchedCommand = commands.find { cmd ->
+        cmd.name.equals(commandInput, ignoreCase = true) ||
+                cmd.aliases.any { it.equals(commandInput, ignoreCase = true) }
+    }
+
+    if (matchedCommand != null) {
+        try {
+            matchedCommand.action()
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "Error executing command", e)
+            showSimpleNotificationExtern(
+                "❌ Fehler",
+                "Befehl '${matchedCommand.name}' konnte nicht ausgeführt werden",
+                20.seconds,
+                context
+            )
+        }
+    } else {
+        val suggestions = commands.filter { cmd ->
+            cmd.name.contains(commandInput, ignoreCase = true) ||
+                    commandInput.contains(cmd.name, ignoreCase = true) ||
+                    cmd.aliases.any { alias ->
+                        alias.contains(commandInput, ignoreCase = true) ||
+                                commandInput.contains(alias, ignoreCase = true)
+                    }
+        }
+
+        if (suggestions.isNotEmpty()) {
+            val suggestionText = suggestions.joinToString(", ") { cmd ->
+                if (cmd.aliases.isNotEmpty()) {
+                    "${cmd.name} (${cmd.aliases.take(2).joinToString(", ")})"
+                } else {
+                    cmd.name
+                }
+            }
+            showSimpleNotificationExtern(
+                "❓ Unbekannter Befehl",
+                "Meintest du: $suggestionText?",
+                20.seconds,
+                context
+            )
+        } else {
+            showSimpleNotificationExtern(
+                "❌ Unbekannter Befehl",
+                "'$commandInput' nicht gefunden. Verwende 'help' für alle Befehle.",
+                20.seconds,
+                context
+            )
+        }
+    }
+}
+
+private fun showAvailableCommands(context: Context) {
+    val commands = getAvailableCommands(context)
+
+    val chunked = commands.chunked(5)
+
+    chunked.forEachIndexed { index, chunk ->
+        val commandList = chunk
+            .filter { it.name != "help" }
+            .joinToString("\n") { cmd ->
+                if (cmd.aliases.isNotEmpty()) {
+                    "• ${cmd.name} (${
+                        cmd.aliases.take(3).joinToString(", ")
+                    }) - ${cmd.description}"
+                } else {
+                    "• ${cmd.name} - ${cmd.description}"
+                }
+            }
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_help)
+            .setContentTitle("📋 Verfügbare Befehle (Seite ${index + 1}/${chunked.size})")
+            .setContentText("${chunk.size} Befehle")
+            .setStyle(NotificationCompat.BigTextStyle().bigText(commandList))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager = context.getSystemService(NotificationManager::class.java)
+        notificationManager.notify(50000 + index, notification)
+    }
+}
+
+private fun parseCommandWithQuotes(input: String): List<String> {
+    val result = mutableListOf<String>()
+    var current = StringBuilder()
+    var inQuotes = false
+    var i = 0
+
+    while (i < input.length) {
+        when (val char = input[i]) {
+            '"' -> {
+                inQuotes = !inQuotes
+            }
+
+            ' ' if !inQuotes -> {
+                if (current.isNotEmpty()) {
+                    result.add(current.toString())
+                    current = StringBuilder()
+                }
+            }
+
+            else -> {
+                current.append(char)
+            }
+        }
+        i++
+    }
+
+    if (current.isNotEmpty()) {
+        result.add(current.toString())
+    }
+
+    return result
+}
+
+private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
+    try {
+        val stationName = "Geltendorf"
+        val evaNo = "8000120"
+        val targetPlannedArrival = "07:05"
+
+        // Datum/Zeit für X Tage im Voraus
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.DAY_OF_MONTH, daysAhead)
+        cal.set(Calendar.HOUR_OF_DAY, 7)
+        cal.set(Calendar.MINUTE, 5)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+
+        val year = (cal.get(Calendar.YEAR) % 100).toString().padStart(2, '0')
+        val month = (cal.get(Calendar.MONTH) + 1).toString().padStart(2, '0')
+        val day = cal.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')
+        val hour = cal.get(Calendar.HOUR_OF_DAY).toString().padStart(2, '0')
+        val date = "$year$month$day"
+
+        val dayLabel = when(daysAhead) {
+            1 -> "morgen"
+            2 -> "übermorgen"
+            else -> "in $daysAhead Tagen"
+        }
+
+        val url = "https://apis-test.deutschebahn.com/db-api-marketplace/apis-test/timetables/review/renovate-all-minor-patch/timetables/v1/plan/$evaNo/$date/$hour"
+
+        val client = OkHttpClient()
+        val request = Request.Builder()
+            .url(url)
+            .addHeader("DB-Client-Id", SupabaseConfig.DBKEY)
+            .addHeader("DB-Api-Key", SupabaseConfig.DBKEY1)
+            .addHeader("Accept", "application/xml")
+            .build()
+
+        val response = client.newCall(request).execute()
+
+        if (!response.isSuccessful) {
+            showSimpleNotificationExtern(
+                "❌ Bahn API Fehler",
+                "Status: ${response.code}\n$stationName $dayLabel um 07:05 Uhr (planmäßige Ankunft)",
+                20.seconds,
+                context
+            )
+            return
+        }
+
+        val xml = response.body.string()
+        val document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(InputSource(StringReader(xml)))
+        val stops = document.getElementsByTagName("s")
+        var found = false
+        for (i in 0 until stops.length) {
+            val stop = stops.item(i) as? Element ?: continue
+            val arrival = stop.getElementsByTagName("ar").item(0) as? Element ?: continue
+            val plannedTime = arrival.getAttribute("pt")
+            val changedTime = arrival.getAttribute("ct")
+            val shownTime = if (changedTime.isNotBlank()) formatDbPlanTime(changedTime) else formatDbPlanTime(plannedTime)
+            if (shownTime == targetPlannedArrival) {
+                val tripLabel = stop.getElementsByTagName("tl").item(0) as? Element
+                val trainType = tripLabel?.getAttribute("c").orEmpty().ifBlank { "Zug" }
+                val trainNumber = tripLabel?.getAttribute("n").orEmpty()
+                val trainDisplay = "$trainType $trainNumber".trim()
+                val plannedPlatform = arrival.getAttribute("pp").ifBlank { "?" }
+                val changedPlatform = arrival.getAttribute("cp")
+                val platform = changedPlatform.ifBlank { plannedPlatform }
+                val statusFlag = arrival.getAttribute("cs")
+                val delayMinutes = calculateDbDelayMinutes(plannedTime, changedTime)
+                val route = arrival.getAttribute("cpth").ifBlank { arrival.getAttribute("ppth") }
+                val routeStations = route.split("|").filter { it.isNotBlank() }
+                val fromStation = routeStations.firstOrNull() ?: "Unbekannt"
+                val toStation = routeStations.lastOrNull() ?: "Unbekannt"
+                val statusText = when {
+                    statusFlag == "c" -> "❌ Ausfall"
+                    delayMinutes > 0 -> "⏰ +${delayMinutes} Min"
+                    else -> "✅ Pünktlich"
+                }
+                showSimpleNotificationExtern(
+                    "🚆 $trainDisplay ($dayLabel)",
+                    "📍 $fromStation → $toStation\n⏰ Geltendorf: $shownTime Uhr (Plan $targetPlannedArrival)\n🚪 Gleis: $platform\n$statusText",
+                    context = context
+                )
+                found = true
+                break
+            }
+        }
+        if (!found) {
+            showSimpleNotificationExtern(
+                "ℹ️ Kein 07:05-Zug",
+                "In den Plan-Daten wurde kein Zug mit planmäßiger Ankunft 07:05 in $stationName $dayLabel gefunden.",
+                20.seconds,
+                context
+            )
+        }
+    } catch (e: Exception) {
+        Log.e("BahnAPI", "Fehler beim Abrufen der Bahn-Daten", e)
+        showSimpleNotificationExtern(
+            "❌ Bahn-Fehler",
+            "Verbindungsfehler: ${e.message}",
+            20.seconds,
+            context
+        )
+    }
+}
