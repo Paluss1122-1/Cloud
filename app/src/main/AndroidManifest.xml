@@ -112,16 +112,6 @@
             android:foregroundServiceType="mediaPlayback" />
 
         <service
-            android:name=".service.HoerbuchPlayerService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="mediaPlayback">
-            <intent-filter>
-                <action android:name="androidx.media3.session.MediaSessionService" />
-            </intent-filter>
-        </service>
-
-        <service
             android:name=".service.PodcastPlayerService"
             android:enabled="true"
             android:exported="false"
