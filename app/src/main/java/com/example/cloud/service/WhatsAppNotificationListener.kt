@@ -213,7 +213,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         val prefs = getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
         val quietEnd = prefs.getString("saved_number", null)?.toIntOrNull() ?: 21
         val quietStart = prefs.getString("saved_number_start", null)?.toIntOrNull() ?: 7
-        if ((hour >= quietStart && hour < quietEnd)) {
+        if ((hour in quietStart..<quietEnd)) {
             return
         }
 
