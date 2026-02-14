@@ -99,9 +99,6 @@ fun BrowserTabContent(
             QuickLinkButton("Gmail", Color(0xFFFFA500)) { 
                 loadAndOpenUrl("https://www.gmail.com") 
             }
-            QuickLinkButton("PH", Color.Black, textColor = Color(0xFFFFA500)) { 
-                loadAndOpenUrl("http://www.pornhub.com") 
-            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
