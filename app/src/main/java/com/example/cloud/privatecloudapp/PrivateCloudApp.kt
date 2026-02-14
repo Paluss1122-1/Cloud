@@ -411,8 +411,8 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
 
     val txtcolors = remember {
         when (currentHour) {
-            in 6..11 -> Color.Black // Morgen
-            in 12..16 -> Color.Black // Nachmittag
+            in 6..11 -> Color.Black
+            in 12..16 -> Color.Black
             else -> Color.White
         }
     }
