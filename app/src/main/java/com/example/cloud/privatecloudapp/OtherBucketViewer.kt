@@ -4,6 +4,8 @@ package com.example.cloud.privatecloudapp
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -11,7 +13,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +31,8 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -54,6 +58,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -89,7 +94,8 @@ data class LocalFileInfo(
     val fileName: String,
     val fileSize: Long,
     val lastModified: Long,
-    val isVideo: Boolean
+    val isVideo: Boolean,
+    var isFavorite: Boolean = false
 )
 
 @OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class)
@@ -106,14 +112,20 @@ fun OtherBucketViewer(
     val context = LocalContext.current
     var currentVideoIndex by rememberSaveable { mutableIntStateOf(0) }
     var currentImageIndex by rememberSaveable { mutableIntStateOf(0) }
+    var favorites by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val thumbnailCache = remember { mutableMapOf<String, Bitmap?>() }
     val imageLoader = remember {
         ImageLoader.Builder(context)
             .crossfade(true)
-            .memoryCache { Builder(context).maxSizePercent(0.25).build() }
+            .memoryCache {
+                Builder(context)
+                    .maxSizePercent(0.4) // Erhöht von 0.25
+                    .build()
+            }
             .diskCache {
                 DiskCache.Builder()
                     .directory(context.cacheDir.resolve("image_cache"))
-                    .maxSizePercent(0.02)
+                    .maxSizePercent(0.1) // Erhöht von 0.02
                     .build()
             }
             .build()
@@ -149,17 +161,56 @@ fun OtherBucketViewer(
                         fileName = file.name,
                         fileSize = file.length(),
                         lastModified = file.lastModified(),
-                        isVideo = isVideo
+                        isVideo = isVideo,
+                        isFavorite = favorites.contains(file.absolutePath)
                     )
-                }.sortedByDescending { it.lastModified } // Neueste zuerst
+                }.sortedByDescending { it.lastModified }
 
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT)
+                        .show()
                 }
             }
         }
+    }
+
+    suspend fun loadFavorites() {
+        withContext(Dispatchers.IO) {
+            try {
+                val favFile = File(context.filesDir, "video_favorites.txt")
+                if (favFile.exists()) {
+                    favorites = favFile.readLines().toSet()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    suspend fun saveFavorites() {
+        withContext(Dispatchers.IO) {
+            try {
+                val favFile = File(context.filesDir, "video_favorites.txt")
+                favFile.writeText(favorites.joinToString("\n"))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    suspend fun toggleFavorite(fileInfo: LocalFileInfo) {
+        if (!fileInfo.isVideo) return
+
+        favorites = if (favorites.contains(fileInfo.file.absolutePath)) {
+            favorites - fileInfo.file.absolutePath
+        } else {
+            favorites + fileInfo.file.absolutePath
+        }
+
+        saveFavorites()
+        loadFilesFromPrivateStorage()
     }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -221,7 +272,8 @@ fun OtherBucketViewer(
             loadFilesFromPrivateStorage()
         } catch (e: Exception) {
             withContext(Dispatchers.Main) {
-                Toast.makeText(context, "Fehler beim Löschen: ${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "Fehler beim Löschen: ${e.message}", Toast.LENGTH_LONG)
+                    .show()
             }
             e.printStackTrace()
             loadFilesFromPrivateStorage()
@@ -229,6 +281,7 @@ fun OtherBucketViewer(
     }
 
     LaunchedEffect(Unit) {
+        loadFavorites()
         loadFilesFromPrivateStorage()
     }
 
@@ -273,6 +326,12 @@ fun OtherBucketViewer(
                     onClick = { selectedFilter = "images" },
                     modifier = Modifier.weight(1f)
                 )
+                FilterButton(
+                    text = "⭐ (${fileList.count { it.isFavorite && it.isVideo }})",
+                    isSelected = selectedFilter == "favorites",
+                    onClick = { selectedFilter = "favorites" },
+                    modifier = Modifier.weight(1f)
+                )
             }
 
             if (fileList.isEmpty()) {
@@ -300,6 +359,7 @@ fun OtherBucketViewer(
                 val filteredList = when (selectedFilter) {
                     "videos" -> fileList.filter { it.isVideo }
                     "images" -> fileList.filter { !it.isVideo }
+                    "favorites" -> fileList.filter { it.isFavorite && it.isVideo }
                     else -> fileList
                 }
 
@@ -315,7 +375,8 @@ fun OtherBucketViewer(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             rowFiles.forEach { fileInfo ->
-                                val dateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+                                val dateFormat =
+                                    SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
                                 val fileDate = dateFormat.format(Date(fileInfo.lastModified))
 
                                 Card(
@@ -342,22 +403,78 @@ fun OtherBucketViewer(
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize()) {
                                         if (fileInfo.isVideo) {
-                                            // Video-Thumbnail
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .background(Color.Black),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.PlayArrow,
-                                                    contentDescription = "Video",
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(48.dp)
+                                            var thumbnail by remember(fileInfo.file.absolutePath) {
+                                                mutableStateOf<Bitmap?>(null)
+                                            }
+                                            var isLoading by remember { mutableStateOf(true) }
+
+                                            LaunchedEffect(fileInfo.file.absolutePath) {
+                                                // Zuerst im Memory-Cache prüfen
+                                                val cachedInMemory = thumbnailCache[fileInfo.file.absolutePath]
+                                                if (cachedInMemory != null) {
+                                                    thumbnail = cachedInMemory
+                                                    isLoading = false
+                                                    return@LaunchedEffect
+                                                }
+
+                                                // Dann im Disk-Cache prüfen
+                                                val cachedThumbnail = loadThumbnailFromCache(context, fileInfo.file.absolutePath)
+                                                if (cachedThumbnail != null) {
+                                                    thumbnail = cachedThumbnail
+                                                    thumbnailCache[fileInfo.file.absolutePath] = cachedThumbnail
+                                                    isLoading = false
+                                                    return@LaunchedEffect
+                                                }
+
+                                                // Wenn nicht gecached, neu generieren
+                                                withContext(Dispatchers.IO) {
+                                                    val loadedThumbnail = getVideoFirstFrame(fileInfo.file)
+                                                    if (loadedThumbnail != null) {
+                                                        // Im Disk-Cache speichern
+                                                        saveThumbnailToCache(context, fileInfo.file.absolutePath, loadedThumbnail)
+                                                        // Im Memory-Cache speichern
+                                                        thumbnailCache[fileInfo.file.absolutePath] = loadedThumbnail
+                                                    }
+                                                    thumbnail = loadedThumbnail
+                                                    isLoading = false
+                                                }
+                                            }
+
+                                            if (thumbnail != null) {
+                                                Image(
+                                                    bitmap = thumbnail!!.asImageBitmap(),
+                                                    contentDescription = "Video Thumbnail",
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.fillMaxSize()
                                                 )
+                                            } else {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .background(Color.DarkGray),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Column(
+                                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                                    ) {
+                                                        if (isLoading) {
+                                                            CircularProgressIndicator(
+                                                                modifier = Modifier.size(32.dp),
+                                                                color = Color.White
+                                                            )
+                                                        }
+                                                        Icon(
+                                                            imageVector = Icons.Default.PlayArrow,
+                                                            contentDescription = "Video",
+                                                            tint = Color.White.copy(alpha = 0.5f),
+                                                            modifier = Modifier.size(48.dp)
+                                                        )
+                                                    }
+                                                }
                                             }
                                         } else {
-                                            // Bild anzeigen
+                                            // Existing image code bleibt gleich
                                             Image(
                                                 painter = rememberAsyncImagePainter(
                                                     model = fileInfo.file,
@@ -382,14 +499,22 @@ fun OtherBucketViewer(
                                                 horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
                                                 val sizeText = when {
-                                                    fileInfo.fileSize >= 1_000_000_000 -> "%.2f GB".format(fileInfo.fileSize / 1_000_000_000.0)
-                                                    fileInfo.fileSize >= 1_000_000 -> "%.2f MB".format(fileInfo.fileSize / 1_000_000.0)
+                                                    fileInfo.fileSize >= 1_000_000_000 -> "%.2f GB".format(
+                                                        fileInfo.fileSize / 1_000_000_000.0
+                                                    )
+
+                                                    fileInfo.fileSize >= 1_000_000 -> "%.2f MB".format(
+                                                        fileInfo.fileSize / 1_000_000.0
+                                                    )
+
                                                     else -> "%.1f KB".format(fileInfo.fileSize / 1_000.0)
                                                 }
 
                                                 Text(
                                                     text = "${fileInfo.fileName}\n$fileDate\n$sizeText",
-                                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp),
+                                                    style = MaterialTheme.typography.bodySmall.copy(
+                                                        fontSize = 9.sp
+                                                    ),
                                                     color = Color.White,
                                                     maxLines = 3,
                                                     modifier = Modifier.weight(1f)
@@ -399,18 +524,25 @@ fun OtherBucketViewer(
                                                 if (!fileInfo.isVideo) {
                                                     IconButton(
                                                         onClick = {
-                                                            val fileUri = FileProvider.getUriForFile(
-                                                                context,
-                                                                "${context.packageName}.fileprovider",
-                                                                fileInfo.file
-                                                            )
-                                                            val intent = Intent(Intent.ACTION_VIEW).apply {
-                                                                setDataAndType(fileUri, "image/*")
-                                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                            }
+                                                            val fileUri =
+                                                                FileProvider.getUriForFile(
+                                                                    context,
+                                                                    "${context.packageName}.fileprovider",
+                                                                    fileInfo.file
+                                                                )
+                                                            val intent =
+                                                                Intent(Intent.ACTION_VIEW).apply {
+                                                                    setDataAndType(
+                                                                        fileUri,
+                                                                        "image/*"
+                                                                    )
+                                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                                }
                                                             context.startActivity(intent)
-                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            haptic.performHapticFeedback(
+                                                                HapticFeedbackType.LongPress
+                                                            )
                                                         },
                                                         modifier = Modifier.size(32.dp)
                                                     ) {
@@ -425,10 +557,14 @@ fun OtherBucketViewer(
                                                 // Löschen-Button
                                                 IconButton(
                                                     onClick = {
-                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        haptic.performHapticFeedback(
+                                                            HapticFeedbackType.LongPress
+                                                        )
                                                         scope.launch { deleteFile(fileInfo) }
                                                     },
-                                                    modifier = Modifier.size(40.dp).padding(4.dp),
+                                                    modifier = Modifier
+                                                        .size(40.dp)
+                                                        .padding(4.dp),
                                                     enabled = !isUploading
                                                 ) {
                                                     Icon(
@@ -437,6 +573,28 @@ fun OtherBucketViewer(
                                                         tint = Color.Red,
                                                         modifier = Modifier.size(24.dp)
                                                     )
+                                                }
+                                                if (fileInfo.isVideo) {
+                                                    IconButton(
+                                                        onClick = {
+                                                            haptic.performHapticFeedback(
+                                                                HapticFeedbackType.LongPress
+                                                            )
+                                                            scope.launch { toggleFavorite(fileInfo) }
+                                                        },
+                                                        modifier = Modifier
+                                                            .size(40.dp)
+                                                            .padding(4.dp),
+                                                        enabled = !isUploading
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = if (fileInfo.isFavorite)
+                                                                Icons.Default.Star else Icons.Default.StarBorder,
+                                                            contentDescription = "Favorit",
+                                                            tint = if (fileInfo.isFavorite) Color.Yellow else Color.White,
+                                                            modifier = Modifier.size(24.dp)
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -476,10 +634,14 @@ fun OtherBucketViewer(
         // Upload-Fortschritt
         uploadProgress?.let { (current, total) ->
             Box(
-                modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.7f)),
                 contentAlignment = Alignment.Center
             ) {
-                Card(modifier = Modifier.padding(32.dp).fillMaxWidth(0.8f)) {
+                Card(modifier = Modifier
+                    .padding(32.dp)
+                    .fillMaxWidth(0.8f)) {
                     Column(
                         modifier = Modifier.padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -489,7 +651,10 @@ fun OtherBucketViewer(
                             text = "Dateien werden gespeichert",
                             style = MaterialTheme.typography.titleMedium
                         )
-                        Text(text = "$current von $total", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = "$current von $total",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
                         LinearProgressIndicator(
                             progress = { current.toFloat() / total.toFloat() },
                             modifier = Modifier.fillMaxWidth(),
@@ -512,6 +677,7 @@ fun OtherBucketViewer(
         val imageFiles = when (selectedFilter) {
             "videos" -> emptyList()
             "images" -> fileList.filter { !it.isVideo }
+            "favorites" -> emptyList() // Favoriten zeigt nur Videos
             else -> fileList.filter { !it.isVideo }
         }
 
@@ -546,6 +712,7 @@ fun OtherBucketViewer(
         val videoFiles = when (selectedFilter) {
             "videos" -> fileList.filter { it.isVideo }
             "images" -> emptyList()
+            "favorites" -> fileList.filter { it.isFavorite && it.isVideo }
             else -> fileList.filter { it.isVideo }
         }
 
@@ -571,7 +738,8 @@ suspend fun saveFileToPrivateStorage(context: Context, uri: Uri) {
                 var fileName = "file_${System.currentTimeMillis()}"
                 context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                     if (cursor.moveToFirst()) {
-                        val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        val nameIndex =
+                            cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
                         if (nameIndex != -1) {
                             fileName = cursor.getString(nameIndex) ?: fileName
                         }
@@ -588,7 +756,8 @@ suspend fun saveFileToPrivateStorage(context: Context, uri: Uri) {
                 var counter = 1
                 while (targetFile.exists()) {
                     val nameWithoutExt = fileName.substringBeforeLast(".")
-                    val extension = if (fileName.contains(".")) ".${fileName.substringAfterLast(".")}" else ""
+                    val extension =
+                        if (fileName.contains(".")) ".${fileName.substringAfterLast(".")}" else ""
                     targetFile = File(privateDir, "${nameWithoutExt}_$counter$extension")
                     counter++
                 }
@@ -625,11 +794,42 @@ fun FullscreenImageDialogLocal(
             .fillMaxSize()
             .background(Color.Black)
             .pointerInput(currentIndex) { // Key geändert, damit bei jedem Index-Wechsel neu initialisiert wird
-                detectHorizontalDragGestures(
-                    onDragStart = { isSwiping = false },
+                var totalDx = 0f
+                var totalDy = 0f
+                val verticalThreshold = 150f
+                val horizontalThreshold = 50f
+
+                detectDragGestures(
+                    onDragStart = {
+                        totalDx = 0f
+                        totalDy = 0f
+                        isSwiping = false
+                    },
+                    onDrag = { _, dragAmount ->
+                        totalDx += dragAmount.x
+                        totalDy += dragAmount.y
+
+                        val absDx = kotlin.math.abs(totalDx)
+                        val absDy = kotlin.math.abs(totalDy)
+
+                        if (!isSwiping) {
+                            // Prioritize vertical when vertical movement dominates
+                            if (absDy > absDx && absDy > verticalThreshold) {
+                                isSwiping = true
+                                scope.launch { onDismiss() }
+                            } else if (absDx > absDy && absDx > horizontalThreshold) {
+                                isSwiping = true
+                                if (totalDx > 0f && currentIndex > 0) {
+                                    onIndexChanged(currentIndex - 1)
+                                } else if (totalDx < 0f && currentIndex < allImages.size - 1) {
+                                    onIndexChanged(currentIndex + 1)
+                                }
+                            }
+                        }
+                    },
                     onDragEnd = {
                         scope.launch {
-                            delay(100) // Kurze Verzögerung vor dem Reset
+                            delay(100)
                             isSwiping = false
                         }
                     },
@@ -639,17 +839,7 @@ fun FullscreenImageDialogLocal(
                             isSwiping = false
                         }
                     }
-                ) { _, dragAmount ->
-                    if (!isSwiping) {
-                        if (dragAmount > 20 && currentIndex > 0) {
-                            isSwiping = true
-                            onIndexChanged(currentIndex - 1)
-                        } else if (dragAmount < -20 && currentIndex < allImages.size - 1) {
-                            isSwiping = true
-                            onIndexChanged(currentIndex + 1)
-                        }
-                    }
-                }
+                )
             }
     ) {
         Image(
@@ -757,27 +947,47 @@ fun VideoPlayerDialogLocal(
             .fillMaxSize()
             .background(Color.Black)
             .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragStart = { isSwiping = false },
-                    onDragEnd = { isSwiping = false },
-                    onDragCancel = { isSwiping = false }
-                ) { _, dragAmount ->
-                    if (!isSwiping) {
-                        if (dragAmount > 20 && currentIndex > 0) {
-                            isSwiping = true
-                            scope.launch {
-                                loadVideoAtIndex(currentIndex - 1)
-                                playerView?.hideController()
-                            }
-                        } else if (dragAmount < -20 && currentIndex < videoFiles.size - 1) {
-                            isSwiping = true
-                            scope.launch {
-                                loadVideoAtIndex(currentIndex + 1)
-                                playerView?.hideController()
+                var totalDx = 0f
+                var totalDy = 0f
+                val verticalThreshold = 150f
+                val horizontalThreshold = 50f
+
+                detectDragGestures(
+                    onDragStart = {
+                        totalDx = 0f
+                        totalDy = 0f
+                        isSwiping = false
+                    },
+                    onDrag = { _, dragAmount ->
+                        totalDx += dragAmount.x
+                        totalDy += dragAmount.y
+
+                        val absDx = kotlin.math.abs(totalDx)
+                        val absDy = kotlin.math.abs(totalDy)
+
+                        if (!isSwiping) {
+                            if (absDy > absDx && absDy > verticalThreshold) {
+                                isSwiping = true
+                                scope.launch { onDismiss() }
+                            } else if (absDx > absDy && absDx > horizontalThreshold) {
+                                isSwiping = true
+                                if (totalDx > 0f && currentIndex > 0) {
+                                    scope.launch {
+                                        loadVideoAtIndex(currentIndex - 1)
+                                        playerView?.hideController()
+                                    }
+                                } else if (totalDx < 0f && currentIndex < videoFiles.size - 1) {
+                                    scope.launch {
+                                        loadVideoAtIndex(currentIndex + 1)
+                                        playerView?.hideController()
+                                    }
+                                }
                             }
                         }
-                    }
-                }
+                    },
+                    onDragEnd = { isSwiping = false },
+                    onDragCancel = { isSwiping = false }
+                )
             }
     ) {
         AndroidView(
@@ -793,7 +1003,8 @@ fun VideoPlayerDialogLocal(
             modifier = Modifier.fillMaxSize()
         )
 
-        if (videoFiles.size > 1) {
+        // In VideoPlayerDialogLocal - Box mit Video-Info erweitern
+        if (videoFiles.size > 1 || videoFiles.getOrNull(currentIndex)?.isFavorite == true) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -801,11 +1012,26 @@ fun VideoPlayerDialogLocal(
                     .background(Color.Black.copy(alpha = 0.6f), shape = MaterialTheme.shapes.small)
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                Text(
-                    text = "${currentIndex + 1} / ${videoFiles.size}",
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (videoFiles.getOrNull(currentIndex)?.isFavorite == true) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = null,
+                            tint = Color.Yellow,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    if (videoFiles.size > 1) {
+                        Text(
+                            text = "${currentIndex + 1} / ${videoFiles.size}",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
             }
         }
     }
@@ -836,6 +1062,45 @@ fun FilterButton(
                 color = if (isSelected) Color.White else Color.White.copy(alpha = 0.7f),
                 style = MaterialTheme.typography.bodyMedium
             )
+        }
+    }
+}
+
+suspend fun saveThumbnailToCache(context: Context, videoPath: String, bitmap: Bitmap) {
+    withContext(Dispatchers.IO) {
+        try {
+            val cacheDir = File(context.cacheDir, "video_thumbnails")
+            if (!cacheDir.exists()) {
+                cacheDir.mkdirs()
+            }
+
+            val fileName = videoPath.hashCode().toString() + ".jpg"
+            val cacheFile = File(cacheDir, fileName)
+
+            FileOutputStream(cacheFile).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+}
+
+suspend fun loadThumbnailFromCache(context: Context, videoPath: String): Bitmap? {
+    return withContext(Dispatchers.IO) {
+        try {
+            val cacheDir = File(context.cacheDir, "video_thumbnails")
+            val fileName = videoPath.hashCode().toString() + ".jpg"
+            val cacheFile = File(cacheDir, fileName)
+
+            if (cacheFile.exists()) {
+                BitmapFactory.decodeFile(cacheFile.absolutePath)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 }
