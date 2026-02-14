@@ -45,6 +45,7 @@ serialization = "2.3.0"
 toolsCore = "1.0.0-alpha14"
 media3Session = "1.9.0"
 firebaseCrashlyticsBuildtools = "3.0.6"
+uiGraphicsVersion = "1.10.2"
 
 [libraries]
 accompanist-swiperefresh = { module = "com.google.accompanist:accompanist-swiperefresh", version.ref = "accompanistSwiperefresh" }
@@ -99,6 +100,7 @@ zxing-android-embedded = { module = "com.journeyapps:zxing-android-embedded", ve
 androidx-tools-core = { group = "androidx.privacysandbox.tools", name = "tools-core", version.ref = "toolsCore" }
 androidx-media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3Session" }
 firebase-crashlytics-buildtools = { group = "com.google.firebase", name = "firebase-crashlytics-buildtools", version.ref = "firebaseCrashlyticsBuildtools" }
+androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics", version.ref = "uiGraphicsVersion" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
