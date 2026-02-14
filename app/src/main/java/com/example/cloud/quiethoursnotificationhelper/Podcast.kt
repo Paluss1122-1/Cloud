@@ -16,7 +16,6 @@ import androidx.core.content.edit
 import com.example.cloud.ERRORINSERT
 import com.example.cloud.ERRORINSERTDATA
 import com.example.cloud.service.PodcastPlayerService.Companion.startService
-import com.example.cloud.service.QuietHoursNotificationService.SimplePodcast
 import com.example.cloud.showSimpleNotificationExtern
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +25,8 @@ import kotlin.text.isNotEmpty
 import kotlin.text.split
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+
+data class SimplePodcast(val name: String, val path: String)
 
 fun clearPodcastSelectionNotifications(context: Context) {
     try {
