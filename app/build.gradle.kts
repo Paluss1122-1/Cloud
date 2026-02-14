@@ -120,6 +120,7 @@ dependencies {
     implementation(libs.androidx.tools.core)
     implementation(libs.androidx.media3.session)
     implementation(libs.firebase.crashlytics.buildtools)
+    implementation(libs.androidx.compose.ui.graphics)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
