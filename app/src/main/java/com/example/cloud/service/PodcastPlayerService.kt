@@ -18,6 +18,7 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import android.view.KeyEvent
+import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
@@ -36,8 +37,10 @@ import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.Size
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
+import com.example.cloud.showSimpleNotificationExtern
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
+import kotlin.time.Duration.Companion.seconds
 
 class PodcastPlayerService : Service() {
 
@@ -60,7 +63,7 @@ class PodcastPlayerService : Service() {
         private const val MEDIA_STATE_PREFS = "media_state_prefs"
         const val KEY_ACTIVE_SERVICE = "active_media_service"
         const val SERVICE_MUSIC = "music"
-        private const val SERVICE_PODCAST = "podcast"
+        const val SERVICE_PODCAST = "podcast"
 
         private const val KEY_PREFIX_COMPLETED = "podcast_completed_"
 
@@ -69,7 +72,9 @@ class PodcastPlayerService : Service() {
 
         const val EXTRA_FORWARD_MS = "extra_forward_ms"
 
-        private const val SERVICE_SWITCH_TIMEOUT = 20000L // 20 Sekunden
+        private const val SERVICE_SWITCH_TIMEOUT = 20000L
+
+        private const val KEY_PLAYBACK_SPEED = "podcast_playback_speed"
 
         fun startService(context: Context) {
             val intent = Intent(context, PodcastPlayerService::class.java)
@@ -102,6 +107,14 @@ class PodcastPlayerService : Service() {
             }
             context.startService(intent)
         }
+
+        fun setPlaybackSpeed(context: Context, speed: Float) {
+            val intent = Intent(context, PodcastPlayerService::class.java).apply {
+                action = "ACTION_SET_SPEED"
+                putExtra("SPEED", speed)
+            }
+            context.startService(intent)
+        }
     }
 
     data class Podcast(
@@ -114,7 +127,7 @@ class PodcastPlayerService : Service() {
 
     private var mediaPlayer: MediaPlayer? = null
     private var mediaSession: MediaSession? = null
-    private var isPlaying = false
+    private var isPlayingB = false
     private var podcasts: List<Podcast> = emptyList()
     private var podcastQueue: MutableList<String> = mutableListOf()
     private var currentPodcast: Podcast? = null
@@ -125,6 +138,7 @@ class PodcastPlayerService : Service() {
     private var bluetoothReceiver: BroadcastReceiver? = null
     private var lastPlayPauseTime = 0L
     private var playPauseCount = 0
+    private var isSwitching = false
 
     @OptIn(UnstableApi::class)
     override fun onCreate() {
@@ -138,20 +152,40 @@ class PodcastPlayerService : Service() {
 
         val lastPodcastPath = sharedPreferences.getString(KEY_CURRENT_PODCAST, null)
         if (lastPodcastPath != null) {
-            currentPodcast = podcasts.find { it.path == lastPodcastPath }
+            val podcast = podcasts.find { it.path == lastPodcastPath }
+            if (podcast != null) {
+                val savedPos = getSavedPosition(podcast.path)
+                currentPodcast = podcast.copy(savedPosition = savedPos)
+                Log.d("PodcastPlayerService", "✓ Loaded last podcast in onCreate: ${podcast.name}")
+            }
         }
 
+        // WICHTIG: ERST JETZT foreground starten, NACHDEM currentPodcast gesetzt ist
         startForeground(NOTIFICATION_ID, createNotification(), getServiceForegroundType())
-        var downTime = 0L
-        // MediaSession hinzufügen, damit Kopfhörer-Tasten funktionieren
+        Log.d(
+            "PodcastPlayerService",
+            "✓ Started foreground with notification (currentPodcast=${currentPodcast?.name})"
+        )
+
         try {
             mediaSession = MediaSession.Builder(this, object : Player {
                 override fun getApplicationLooper() = android.os.Looper.getMainLooper()
                 override fun addListener(listener: Player.Listener) {}
                 override fun removeListener(listener: Player.Listener) {}
                 override fun setMediaItems(mediaItems: MutableList<MediaItem>) {}
-                override fun setMediaItems(mediaItems: MutableList<MediaItem>, resetPosition: Boolean) {}
-                override fun setMediaItems(mediaItems: MutableList<MediaItem>, startIndex: Int, startPositionMs: Long) {}
+                override fun setMediaItems(
+                    mediaItems: MutableList<MediaItem>,
+                    resetPosition: Boolean
+                ) {
+                }
+
+                override fun setMediaItems(
+                    mediaItems: MutableList<MediaItem>,
+                    startIndex: Int,
+                    startPositionMs: Long
+                ) {
+                }
+
                 override fun setMediaItem(mediaItem: MediaItem) {}
                 override fun setMediaItem(mediaItem: MediaItem, startPositionMs: Long) {}
                 override fun setMediaItem(mediaItem: MediaItem, resetPosition: Boolean) {}
@@ -162,7 +196,13 @@ class PodcastPlayerService : Service() {
                 override fun moveMediaItem(currentIndex: Int, newIndex: Int) {}
                 override fun moveMediaItems(fromIndex: Int, toIndex: Int, newIndex: Int) {}
                 override fun replaceMediaItem(index: Int, mediaItem: MediaItem) {}
-                override fun replaceMediaItems(fromIndex: Int, toIndex: Int, mediaItems: MutableList<MediaItem>) {}
+                override fun replaceMediaItems(
+                    fromIndex: Int,
+                    toIndex: Int,
+                    mediaItems: MutableList<MediaItem>
+                ) {
+                }
+
                 override fun removeMediaItem(index: Int) {}
                 override fun removeMediaItems(fromIndex: Int, toIndex: Int) {}
                 override fun clearMediaItems() {}
@@ -171,7 +211,9 @@ class PodcastPlayerService : Service() {
                 override fun getAvailableCommands() = Player.Commands.EMPTY
                 override fun prepare() {}
                 override fun getPlaybackState() = Player.STATE_IDLE
-                override fun getPlaybackSuppressionReason() = Player.PLAYBACK_SUPPRESSION_REASON_NONE
+                override fun getPlaybackSuppressionReason() =
+                    Player.PLAYBACK_SUPPRESSION_REASON_NONE
+
                 override fun isPlaying() = false
                 override fun getPlayerError(): PlaybackException? = null
                 override fun play() {}
@@ -206,39 +248,50 @@ class PodcastPlayerService : Service() {
                 override fun getCurrentTracks() = Tracks.EMPTY
 
                 @OptIn(UnstableApi::class)
-                override fun getTrackSelectionParameters() = TrackSelectionParameters.DEFAULT_WITHOUT_CONTEXT
+                override fun getTrackSelectionParameters() =
+                    TrackSelectionParameters.DEFAULT_WITHOUT_CONTEXT
+
                 override fun setTrackSelectionParameters(parameters: TrackSelectionParameters) {}
                 override fun getMediaMetadata() = MediaMetadata.EMPTY
                 override fun getPlaylistMetadata() = MediaMetadata.EMPTY
                 override fun setPlaylistMetadata(mediaMetadata: MediaMetadata) {}
+
                 @OptIn(UnstableApi::class)
                 override fun getCurrentManifest(): Any? = null
                 override fun getCurrentTimeline() = Timeline.EMPTY
                 override fun getCurrentPeriodIndex() = 0
+
                 @OptIn(UnstableApi::class)
                 override fun getCurrentWindowIndex() = 0
                 override fun getCurrentMediaItemIndex() = 0
+
                 @OptIn(UnstableApi::class)
                 override fun getNextWindowIndex() = 0
                 override fun getNextMediaItemIndex() = 0
+
                 @OptIn(UnstableApi::class)
                 override fun getPreviousWindowIndex() = 0
                 override fun getPreviousMediaItemIndex() = 0
                 override fun getCurrentMediaItem(): MediaItem? = null
                 override fun getMediaItemCount() = 0
-                override fun getMediaItemAt(index: Int): MediaItem = throw IndexOutOfBoundsException()
+                override fun getMediaItemAt(index: Int): MediaItem =
+                    throw IndexOutOfBoundsException()
+
                 override fun getDuration() = 0L
                 override fun getCurrentPosition() = 0L
                 override fun getBufferedPosition() = 0L
                 override fun getBufferedPercentage() = 0
                 override fun getTotalBufferedDuration() = 0L
+
                 @OptIn(UnstableApi::class)
                 override fun isCurrentWindowDynamic() = false
                 override fun isCurrentMediaItemDynamic() = false
+
                 @OptIn(UnstableApi::class)
                 override fun isCurrentWindowLive() = false
                 override fun isCurrentMediaItemLive() = false
                 override fun getCurrentLiveOffset() = 0L
+
                 @OptIn(UnstableApi::class)
                 override fun isCurrentWindowSeekable() = false
                 override fun isCurrentMediaItemSeekable() = false
@@ -268,48 +321,81 @@ class PodcastPlayerService : Service() {
                 override fun getDeviceInfo() = DeviceInfo.UNKNOWN
                 override fun getDeviceVolume() = 0
                 override fun isDeviceMuted() = false
+
                 @Deprecated("Deprecated in Java")
-                override fun setDeviceVolume(volume: Int) {}
+                override fun setDeviceVolume(volume: Int) {
+                }
+
                 override fun setDeviceVolume(volume: Int, flags: Int) {}
+
                 @Deprecated("Deprecated in Java")
-                override fun increaseDeviceVolume() {}
+                override fun increaseDeviceVolume() {
+                }
+
                 override fun increaseDeviceVolume(flags: Int) {}
+
                 @Deprecated("Deprecated in Java")
-                override fun decreaseDeviceVolume() {}
+                override fun decreaseDeviceVolume() {
+                }
+
                 override fun decreaseDeviceVolume(flags: Int) {}
+
                 @Deprecated("Deprecated in Java")
-                override fun setDeviceMuted(muted: Boolean) {}
+                override fun setDeviceMuted(muted: Boolean) {
+                }
+
                 override fun setDeviceMuted(muted: Boolean, flags: Int) {}
-                override fun setAudioAttributes(audioAttributes: AudioAttributes, handleAudioFocus: Boolean) {}
+                override fun setAudioAttributes(
+                    audioAttributes: AudioAttributes,
+                    handleAudioFocus: Boolean
+                ) {
+                }
             })
                 .setId("PodcastPlayerSession")
                 .setCallback(object : MediaSession.Callback {
                     private var clickCount = 0
-                    private var lastClickTime = 0L
-                    private val MULTI_CLICK_TIMEOUT = 500L
+
                     override fun onMediaButtonEvent(
                         session: MediaSession,
                         controllerInfo: MediaSession.ControllerInfo,
                         intent: Intent
                     ): Boolean {
-                        if (!isThisServiceActive()) {
-                            Log.d("PodcastPlayerService", "⊘ Ignoring media button - not active service")
+                        if (isSwitching) {
+                            Log.d(
+                                "PodcastPlayerService",
+                                "⊘ Ignoring media button - service switching in progress"
+                            )
                             return true
                         }
 
+                        if (!isThisServiceActive()) {
+                            Log.d(
+                                "PodcastPlayerService",
+                                "⊘ Not active service - passing media button to other session"
+                            )
+                            return false
+                        }
+
+                        Log.d("PodcastPlayerService", "ℹ️ MediaButton event received")
+
                         try {
-                            val keyEvent = intent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
+                            val keyEvent =
+                                intent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
                             if (keyEvent != null && keyEvent.action == KeyEvent.ACTION_DOWN) {
                                 when (keyEvent.keyCode) {
-                                    KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                                    KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PAUSE -> {
                                         val currentTime = System.currentTimeMillis()
 
                                         if (currentTime - lastPlayPauseTime < SERVICE_SWITCH_TIMEOUT) {
                                             playPauseCount++
-                                            if (playPauseCount >= 3) {
-                                                Log.d("PodcastPlayerService", "🔄 Switching to Music Player")
-                                                switchToMusicPlayer()
+                                            if (playPauseCount >= 5) {
+                                                Log.d(
+                                                    "PodcastPlayerService",
+                                                    "🔄 Switching to Music Player (deferred)"
+                                                )
                                                 playPauseCount = 0
+                                                // NICHT synchron aus dem Callback: MediaSession release erst nach Rückkehr aus onMediaButtonEvent
+                                                handler.post { switchToMusicPlayer() }
                                                 return true
                                             }
                                         } else {
@@ -318,80 +404,44 @@ class PodcastPlayerService : Service() {
                                         lastPlayPauseTime = currentTime
 
                                         // Normale Multi-Click-Logik
-                                        if (currentTime - lastClickTime < MULTI_CLICK_TIMEOUT) {
-                                            clickCount++
-                                        } else {
-                                            clickCount = 1
-                                        }
-                                        lastClickTime = currentTime
+                                        clickCount++
 
                                         handler.removeCallbacksAndMessages(null)
-                                        handler.postDelayed({
-                                            when (clickCount) {
-                                                1 -> {
-                                                    Log.d("PodcastPlayerService", "🎙️ 1x Klick: Play/Pause")
-                                                    if (isPlaying) pausePodcast() else playPodcast()
-                                                }
-                                                2 -> {
-                                                    Log.d("PodcastPlayerService", "⏩ 2x Klick: +15s")
-                                                    forward()
-                                                }
-                                                3 -> {
-                                                    Log.d("PodcastPlayerService", "⏪ 3x Klick: -15s")
-                                                    rewind()
-                                                }
-                                                4 -> {
-                                                    Log.d("PodcastPlayerService", "⏭️ 4x Klick: Nächste Episode")
-                                                    playNextInQueue()
-                                                }
-                                            }
-                                            clickCount = 0
-                                        }, MULTI_CLICK_TIMEOUT)
+                                        Log.d("PodcastPlayerService", "🎙️ 1x Klick: Play/Pause")
 
-                                        return true
-                                    }
-                                    KeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                                        Log.d("PodcastPlayerService", "⏸ MediaButton: PodcastService active, handling pause")
-                                        pausePodcast()
-                                        val currentTime = System.currentTimeMillis()
-
-                                        if (currentTime - lastPlayPauseTime < SERVICE_SWITCH_TIMEOUT) {
-                                            playPauseCount++
-                                            if (playPauseCount >= 3) {
-                                                Log.d("PodcastPlayerService", "🔄 Switching to Music Player")
-                                                switchToMusicPlayer()
-                                                playPauseCount = 0
-                                                return true
-                                            }
+                                        if (isPlayingB) {
+                                            pausePodcast()
                                         } else {
-                                            playPauseCount = 1
+                                            // NEU: Stelle sicher dass Podcast geladen ist
+                                            if (currentPodcast != null) {
+                                                playPodcast()
+                                            } else {
+                                                Log.w(
+                                                    "PodcastPlayerService",
+                                                    "Cannot play - no podcast selected"
+                                                )
+                                                showPodcastSelection()
+                                            }
                                         }
-                                        lastPlayPauseTime = currentTime
                                         return true
                                     }
+
                                     KeyEvent.KEYCODE_MEDIA_NEXT -> {
-                                        Log.d("PodcastPlayerService", "⏩ MediaButton: PodcastService active, handling +15s")
+                                        Log.d(
+                                            "PodcastPlayerService",
+                                            "⏩ MediaButton: PodcastService active, handling +15s"
+                                        )
                                         forward()
                                         return true
                                     }
+
                                     KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
-                                        Log.d("PodcastPlayerService", "⏪ MediaButton: PodcastService active, handling -15s")
+                                        Log.d(
+                                            "PodcastPlayerService",
+                                            "⏪ MediaButton: PodcastService active, handling -15s"
+                                        )
                                         rewind()
                                         return true
-                                    }
-                                    KeyEvent.ACTION_DOWN -> {
-                                        downTime = System.currentTimeMillis()
-                                    }
-
-                                    KeyEvent.ACTION_UP -> {
-                                        val duration = System.currentTimeMillis() - downTime
-
-                                        if (duration > 600) {
-                                            playNextInQueue()
-                                        } else {
-                                            if (isPlaying) pausePodcast() else playPodcast()
-                                            return true
-                                        }
                                     }
                                 }
                             }
@@ -407,7 +457,8 @@ class PodcastPlayerService : Service() {
             Log.w("PodcastPlayerService", "Could not create MediaSession", e)
         }
 
-        // Starte automatisches Speichern der Position
+        Toast.makeText(this, "READY", Toast.LENGTH_SHORT).show()
+
         startPositionSaving()
         registerBluetoothReceiver()
     }
@@ -415,36 +466,61 @@ class PodcastPlayerService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action
 
+        Log.d(
+            "PodcastPlayerService",
+            "📨 onStartCommand - action=$action, currentPodcast=${currentPodcast?.name}, isSwitching=$isSwitching"
+        )
+
+        if (action == ACTION_PLAY) {
+            setActiveService()
+            Log.d("PodcastPlayerService", "✓ Set as active service immediately on ACTION_PLAY")
+        }
+
         when {
-            action == ACTION_PLAY -> playPodcast()
+            action == ACTION_PLAY -> {
+                Log.d("PodcastPlayerService", "▶ ACTION_PLAY received")
+                playPodcast()
+            }
+
             action == ACTION_PAUSE -> {
                 pausePodcast()
                 val position = mediaPlayer?.currentPosition?.toLong() ?: 0
-                savePosition(currentPodcast!!.path, position)
+                currentPodcast?.let { savePosition(it.path, position) }
             }
+
             action == "ACTION_NOTIFICATION_DELETED" -> {
+                Log.d("PodcastPlayerService", "📱 Notification deleted by user")
+
                 if (currentPodcast != null && mediaPlayer != null) {
                     try {
                         val position = mediaPlayer?.currentPosition?.toLong() ?: 0
                         savePosition(currentPodcast!!.path, position)
-                        Log.d("PodcastPlayerService", "Position saved on delete: ${formatTime(position)}")
+                        Log.d(
+                            "PodcastPlayerService",
+                            "Position saved on delete: ${formatTime(position)}"
+                        )
                     } catch (e: Exception) {
                         Log.e("PodcastPlayerService", "Error saving position on delete", e)
                     }
                 }
-                stopSelf() // Service beenden
+
+                stopSelf()
+                return START_NOT_STICKY
             }
+
             action == ACTION_REWIND -> {
                 rewind()
                 val position = mediaPlayer?.currentPosition?.toLong() ?: 0
-                savePosition(currentPodcast!!.path, position)
+                currentPodcast?.let { savePosition(it.path, position) }
             }
+
             action == ACTION_FORWARD -> {
                 val ms = intent.getIntExtra(EXTRA_FORWARD_MS, SKIP_TIME_MS)
                 forward(ms)
                 val position = mediaPlayer?.currentPosition?.toLong() ?: 0
-                savePosition(currentPodcast!!.path, position)
+                currentPodcast?.let { savePosition(it.path, position) }
             }
+
             action == ACTION_SELECT_PODCAST -> showPodcastSelection()
 
             action?.startsWith("SELECT_") == true -> {
@@ -455,7 +531,6 @@ class PodcastPlayerService : Service() {
                     val selected = podcasts.find { it.path.hashCode() == hash }
                     if (selected != null) {
                         currentPodcast = selected
-                        // Wichtig: neue Position aus SharedPreferences holen
                         val savedPos = getSavedPosition(selected.path)
                         currentPodcast = selected.copy(savedPosition = savedPos)
                         loadPodcast(currentPodcast!!)
@@ -485,6 +560,11 @@ class PodcastPlayerService : Service() {
                 } else {
                     Log.w("PodcastPlayerService", "Ungültiger Hash in DELETE_SINGLE: $action")
                 }
+            }
+
+            action == "ACTION_SET_SPEED" -> {
+                val speed = intent.getFloatExtra("SPEED", 1.0f)
+                setPlaybackSpeed(speed)
             }
         }
 
@@ -657,7 +737,7 @@ class PodcastPlayerService : Service() {
         var lastSavedPosition: Long = 0
         positionSaveRunnable = object : Runnable {
             override fun run() {
-                if (isPlaying && mediaPlayer != null && currentPodcast != null) {
+                if (isPlayingB && mediaPlayer != null && currentPodcast != null) {
                     try {
                         val position = mediaPlayer?.currentPosition?.toLong() ?: 0
                         if (abs(position - lastSavedPosition) > 5000) {
@@ -669,7 +749,7 @@ class PodcastPlayerService : Service() {
                         Log.e("PodcastPlayerService", "Error saving position", e)
                     }
                 }
-                handler.postDelayed(this, 60000) // Alle 5 Sekunden speichern
+                handler.postDelayed(this, 60000)
             }
         }
         handler.post(positionSaveRunnable!!)
@@ -677,22 +757,54 @@ class PodcastPlayerService : Service() {
 
     private fun playPodcast() {
         try {
+            Log.d(
+                "PodcastPlayerService",
+                "🎵 playPodcast() called - currentPodcast=${currentPodcast?.name}"
+            )
+
             if (currentPodcast == null) {
-                // Kein Podcast ausgewählt, zeige Auswahl
-                showPodcastSelection()
-                return
+                Log.d("PodcastPlayerService", "⚠ currentPodcast is null, trying to load from prefs")
+                val lastPodcastPath = sharedPreferences.getString(KEY_CURRENT_PODCAST, null)
+
+                if (lastPodcastPath != null) {
+                    val podcast = podcasts.find { it.path == lastPodcastPath }
+                    if (podcast != null) {
+                        val savedPos = getSavedPosition(podcast.path)
+                        currentPodcast = podcast.copy(savedPosition = savedPos)
+                        Log.d(
+                            "PodcastPlayerService",
+                            "✓ Restored last podcast: ${podcast.name} at ${formatTime(savedPos)}"
+                        )
+
+                        // WICHTIG: Notification SOFORT aktualisieren nach Wiederherstellung
+                        updateNotification()
+                    } else {
+                        Log.w(
+                            "PodcastPlayerService",
+                            "Last podcast not found in list: $lastPodcastPath"
+                        )
+                    }
+                }
+
+                if (currentPodcast == null) {
+                    Log.d("PodcastPlayerService", "No saved podcast found, showing selection")
+                    showPodcastSelection()
+                    return
+                }
             }
+
             setActiveService()
 
-            if (mediaPlayer != null && !isPlaying) {
+            if (mediaPlayer != null && !isPlayingB) {
                 val currentPos = getSavedPosition(currentPodcast!!.path).toInt()
                 if (currentPos > 1000) {
                     val newPos = currentPos - 1000
                     mediaPlayer?.seekTo(newPos)
                 }
                 mediaPlayer?.start()
-                isPlaying = true
-                updateNotification()
+                isPlayingB = true
+                Log.d("PodcastPlayerService", "▶ Resumed: ${currentPodcast!!.name}")
+                updateNotification() // Sofortiges Update
                 return
             }
 
@@ -705,6 +817,7 @@ class PodcastPlayerService : Service() {
         }
     }
 
+    // FIX 3: In loadPodcast() - Notification VOR dem Start aktualisieren
     private fun loadPodcast(podcast: Podcast) {
         try {
             mediaPlayer?.release()
@@ -719,7 +832,6 @@ class PodcastPlayerService : Service() {
                 Log.d("PodcastPlayerService", "Set currentPodcast to: ${podcast.name}")
             }
 
-            // Wenn der Podcast als fertig markiert war, setze zurück
             if (podcast.isCompleted) {
                 setCompletedStatus(podcast.path, false)
                 Log.d("PodcastPlayerService", "Reset completed status (podcast restarted)")
@@ -729,6 +841,14 @@ class PodcastPlayerService : Service() {
                 try {
                     setDataSource(applicationContext, podcast.uri)
                     prepare()
+
+                    // Gespeicherte Geschwindigkeit anwenden
+                    val savedSpeed = getPlaybackSpeed()
+                    if (savedSpeed != 1.0f) {
+                        playbackParams = playbackParams.setSpeed(savedSpeed)
+                        Log.d("PodcastPlayerService", "Applied playback speed: ${savedSpeed}x")
+                    }
+
                     Log.d("PodcastPlayerService", "✓ Loaded via Content URI")
                 } catch (e: Exception) {
                     Log.w("PodcastPlayerService", "Failed with Content URI, trying file path", e)
@@ -740,37 +860,49 @@ class PodcastPlayerService : Service() {
 
                 if (podcast.savedPosition > 0) {
                     seekTo(podcast.savedPosition.toInt())
-                    Log.d("PodcastPlayerService", "⏩ Jumped to ${formatTime(podcast.savedPosition)}")
+                    Log.d(
+                        "PodcastPlayerService",
+                        "⏩ Jumped to ${formatTime(podcast.savedPosition)}"
+                    )
                 }
 
                 setOnCompletionListener {
                     onPodcastComplete()
                 }
+
+                // WICHTIG: isPlayingB und currentPodcast VORHER setzen
+                isPlayingB = true
+                currentPodcast = podcast.copy(isCompleted = false)
+                saveCurrentPodcast(podcast.path)
+
+                // Notification SYNCHRON aktualisieren BEVOR start()
+                updateNotification()
+                Log.d(
+                    "PodcastPlayerService",
+                    "✓ Notification updated BEFORE start: ${podcast.name}"
+                )
+
                 start()
             }
-
-            isPlaying = true
-            currentPodcast = podcast.copy(isCompleted = false)
-            saveCurrentPodcast(podcast.path)
-            updateNotification()
 
             Log.d("PodcastPlayerService", "▶ Now playing: ${podcast.name}")
 
         } catch (e: Exception) {
             Log.e("PodcastPlayerService", "Error loading podcast: ${podcast.name}", e)
-            isPlaying = false
+            isPlayingB = false
             updateNotification()
         }
     }
 
     private fun pausePodcast() {
         try {
-            if (isPlaying && mediaPlayer?.isPlaying == true) {
+            Log.d("PodcastPlayerService", "⏸ pausePodcast() called")
+
+            if (isPlayingB && mediaPlayer?.isPlaying == true) {
                 val position = mediaPlayer?.currentPosition?.toLong() ?: 0
                 mediaPlayer?.pause()
-                isPlaying = false
+                isPlayingB = false
 
-                // Speichere Position sofort beim Pausieren
                 currentPodcast?.let { podcast ->
                     savePosition(podcast.path, position)
                 }
@@ -783,6 +915,7 @@ class PodcastPlayerService : Service() {
     }
 
     private fun rewind() {
+        if (currentPodcast == null) return
         try {
             mediaPlayer?.let { player ->
                 val currentPos = player.currentPosition
@@ -802,6 +935,7 @@ class PodcastPlayerService : Service() {
     }
 
     private fun forward(skipMs: Int = SKIP_TIME_MS) {
+        if (currentPodcast == null) return
         try {
             mediaPlayer?.let { player ->
                 val currentPos = player.currentPosition
@@ -850,7 +984,6 @@ class PodcastPlayerService : Service() {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
 
-                // Status-Icon basierend auf Zustand
                 val statusIcon = when {
                     podcast.isCompleted -> "✓"
                     podcast.savedPosition > 0 -> "▶"
@@ -865,7 +998,7 @@ class PodcastPlayerService : Service() {
 
                 val notification = NotificationCompat.Builder(this, CHANNEL_ID)
                     .setSmallIcon(android.R.drawable.ic_menu_info_details)
-                    .setContentTitle("${index - 1} $statusIcon ${podcast.name}")
+                    .setContentTitle("${index + 1} $statusIcon ${podcast.name}")
                     .setContentText("Antippen zum Abspielen$progressText")
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
                     .setAutoCancel(true)
@@ -903,7 +1036,10 @@ class PodcastPlayerService : Service() {
                 notificationManager.notify(60999, summaryNotification)
             }
 
-            Log.d("PodcastPlayerService", "Showing ${podcasts.size} podcasts ($completedCount completed)")
+            Log.d(
+                "PodcastPlayerService",
+                "Showing ${podcasts.size} podcasts ($completedCount completed)"
+            )
 
         } catch (e: Exception) {
             Log.e("PodcastPlayerService", "Error showing podcast selection", e)
@@ -912,13 +1048,9 @@ class PodcastPlayerService : Service() {
 
     private fun onPodcastComplete() {
         currentPodcast?.let { podcast ->
-            // Setze Position auf 0
             savePosition(podcast.path, 0)
-
-            // Markiere als fertig
             setCompletedStatus(podcast.path, true)
 
-            // Aktualisiere lokale Liste
             val updatedPodcast = podcast.copy(
                 savedPosition = 0,
                 isCompleted = true
@@ -928,7 +1060,6 @@ class PodcastPlayerService : Service() {
             }
         }
 
-        // MediaPlayer KOMPLETT freigeben
         try {
             mediaPlayer?.stop()
             mediaPlayer?.release()
@@ -937,11 +1068,10 @@ class PodcastPlayerService : Service() {
             Log.e("PodcastPlayerService", "Error releasing MediaPlayer", e)
         }
 
-        isPlaying = false
+        isPlayingB = false
 
         loadPodcastQueue()
 
-        // WICHTIG: currentPodcast erst NACH Queue-Check auf null setzen
         if (podcastQueue.isNotEmpty()) {
             val nextPath = podcastQueue.removeAt(0)
             savePodcastQueue()
@@ -949,22 +1079,20 @@ class PodcastPlayerService : Service() {
             val nextPodcast = podcasts.find { it.path == nextPath }
             if (nextPodcast != null) {
                 val savedPos = getSavedPosition(nextPodcast.path)
-                currentPodcast = nextPodcast.copy(savedPosition = savedPos) // Setze HIER
-                saveCurrentPodcast(nextPodcast.path) // Speichere HIER
+                currentPodcast = nextPodcast.copy(savedPosition = savedPos)
+                saveCurrentPodcast(nextPodcast.path)
                 loadPodcast(currentPodcast!!)
                 Log.d("PodcastPlayerService", "✓ Auto-playing next from queue: ${nextPodcast.name}")
             } else {
                 Log.w("PodcastPlayerService", "Next podcast not found: $nextPath")
-                // Wenn Podcast nicht gefunden, versuche den nächsten in der Queue
                 if (podcastQueue.isNotEmpty()) {
-                    onPodcastComplete() // Rekursiv
+                    onPodcastComplete()
                 } else {
-                    currentPodcast = null // Nur wenn Queue leer
+                    currentPodcast = null
                     updateNotification()
                 }
             }
         } else {
-            // Queue ist leer
             currentPodcast = null
             updateNotification()
             Log.d("PodcastPlayerService", "Queue empty - playback finished")
@@ -988,9 +1116,24 @@ class PodcastPlayerService : Service() {
     }
 
     private fun updateNotification() {
+        val activeService = mediaStatePrefs.getString(
+            KEY_ACTIVE_SERVICE,
+            SERVICE_PODCAST
+        )
+
+        Log.d("PodcastPlayerService", "updateNotification() called - activeService=$activeService")
+        // Wenn wir NICHT der aktive Service sind, keine Notification anzeigen
+        if (activeService != SERVICE_PODCAST) { // oder SERVICE_MUSIC
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.cancel(NOTIFICATION_ID)
+            Log.d("PodcastPlayerService", "⊘ Not active service - notification canceled")
+            return
+        }
+
         val notification = buildNotification()
         val notificationManager = getSystemService(NotificationManager::class.java)
         notificationManager.notify(NOTIFICATION_ID, notification)
+        Log.d("PodcastPlayerService", "🔔 Notification updated")
     }
 
     private fun buildNotification(): android.app.Notification {
@@ -1012,7 +1155,7 @@ class PodcastPlayerService : Service() {
         )
 
         val playPauseIntent = Intent(this, PodcastPlayerService::class.java).apply {
-            action = if (isPlaying) ACTION_PAUSE else ACTION_PLAY
+            action = if (isPlayingB) ACTION_PAUSE else ACTION_PLAY
         }
         val playPausePendingIntent = PendingIntent.getService(
             this, 1, playPauseIntent,
@@ -1047,7 +1190,7 @@ class PodcastPlayerService : Service() {
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("🎙️ $title")
+            .setContentTitle("🎙️ $title ${mediaPlayer?.playbackParams?.speed}")
             .setContentText(progressText)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
@@ -1063,8 +1206,8 @@ class PodcastPlayerService : Service() {
                 rewindPendingIntent
             )
             .addAction(
-                if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-                if (isPlaying) "Pause" else "Play",
+                if (isPlayingB) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
+                if (isPlayingB) "Pause" else "Play",
                 playPausePendingIntent
             )
             .addAction(
@@ -1118,26 +1261,73 @@ class PodcastPlayerService : Service() {
 
     private fun switchToMusicPlayer() {
         try {
-            // Podcast pausieren und Position speichern
-            if (isPlaying && mediaPlayer != null && currentPodcast != null) {
+            isSwitching = true
+
+            // Timeout-Schutz
+            handler.postDelayed({
+                if (isSwitching) {
+                    Log.w("PodcastPlayerService", "⚠ Switching timeout - resetting flag")
+                    isSwitching = false
+                }
+            }, 5000)
+
+            // 1. Playback pausieren und Position speichern
+            if (isPlayingB && mediaPlayer != null && currentPodcast != null) {
                 val position = mediaPlayer?.currentPosition?.toLong() ?: 0
                 savePosition(currentPodcast!!.path, position)
                 mediaPlayer?.pause()
-                isPlaying = false
+                isPlayingB = false
+                Log.d("PodcastPlayerService", "✓ Paused and saved position")
             }
 
-            // Service-Status wechseln
-            clearActiveService()
+            // 2. MediaSession komplett freigeben (release), damit nur noch Music Key-Events erhält
+            try {
+                mediaSession?.release()
+                mediaSession = null
+                Log.d("PodcastPlayerService", "✓ MediaSession released")
+            } catch (e: Exception) {
+                Log.e("PodcastPlayerService", "Error releasing MediaSession", e)
+            }
 
-            // Music Player starten
-            MusicPlayerService.sendPlayAction(this)
+            // 3. Service-Status wechseln
+            mediaStatePrefs.edit(commit = true) {
+                putString(KEY_ACTIVE_SERVICE, SERVICE_MUSIC)
+            }
+            Log.d("PodcastPlayerService", "✓ Service status switched to MUSIC")
 
-            Log.d("PodcastPlayerService", "✓ Switched to Music Player")
+            // 4. Notification SOFORT entfernen (wie in MusicPlayerService.switchToPodcastPlayer)
+            try {
+                stopForeground(Service.STOP_FOREGROUND_REMOVE)
+            } catch (e: Exception) {
+                Log.e("PodcastPlayerService", "Error stopForeground", e)
+            }
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.cancel(NOTIFICATION_ID)
+            Log.d("PodcastPlayerService", "✓ Notification removed")
 
-            // Podcast-Service stoppen
-            stopSelf()
+            // 5. Music Player starten, dann diesen Service stoppen (Spiegel zu switchToPodcastPlayer)
+            handler.postDelayed({
+                try {
+                    MusicPlayerService.startAndPlay(this, null)
+                    Log.d("PodcastPlayerService", "✓ Music Player started")
+                    handler.postDelayed({
+                        stopSelf()
+                        Log.d("PodcastPlayerService", "✓ Podcast service stopped")
+                    }, 150)
+                } catch (e: Exception) {
+                    Log.e("PodcastPlayerService", "Error starting Music Player", e)
+                    isSwitching = false
+                }
+            }, 150)
+
+            handler.postDelayed({
+                isSwitching = false
+                Log.d("PodcastPlayerService", "✓ Switch completed")
+            }, 500)
+
         } catch (e: Exception) {
             Log.e("PodcastPlayerService", "Error switching to Music Player", e)
+            isSwitching = false
         }
     }
 
@@ -1148,10 +1338,23 @@ class PodcastPlayerService : Service() {
                 bluetoothReceiver = null
             }
         } catch (e: Exception) {
-            Log.e("MusicPlayerService", "Error unregistering receiver", e)
+            Log.e("PodcastPlayerService", "Error unregistering receiver", e)
         }
+
         super.onDestroy()
-        clearActiveService()
+
+        // Notification entfernen beim Destroy
+        try {
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.cancel(NOTIFICATION_ID)
+            Log.d("PodcastPlayerService", "✓ Notification canceled in onDestroy")
+        } catch (e: Exception) {
+            Log.e("PodcastPlayerService", "Error canceling notification", e)
+        }
+
+        if (!isSwitching) {
+            clearActiveService()
+        }
 
         try {
             if (currentPodcast != null && mediaPlayer != null) {
@@ -1172,7 +1375,6 @@ class PodcastPlayerService : Service() {
             Log.e("PodcastPlayerService", "Error removing callbacks", e)
         }
 
-        // Release MediaPlayer SICHER
         try {
             mediaPlayer?.stop()
             mediaPlayer?.release()
@@ -1182,7 +1384,6 @@ class PodcastPlayerService : Service() {
             Log.e("PodcastPlayerService", "Error releasing MediaPlayer", e)
         }
 
-        // Release MediaSession
         try {
             mediaSession?.release()
             mediaSession = null
@@ -1191,15 +1392,18 @@ class PodcastPlayerService : Service() {
             Log.e("PodcastPlayerService", "Error releasing MediaSession", e)
         }
 
-        isPlaying = false
+        isPlayingB = false
+        isSwitching = false
         Log.d("PodcastPlayerService", "PodcastPlayerService destroyed")
     }
+
     private fun setActiveService() {
         mediaStatePrefs.edit(commit = true) {
             putString(KEY_ACTIVE_SERVICE, SERVICE_PODCAST)
         }
         Log.d("PodcastPlayerService", "✓ Set as active media service")
     }
+
     private fun clearActiveService() {
         val currentActive = mediaStatePrefs.getString(KEY_ACTIVE_SERVICE, null)
         if (currentActive == SERVICE_PODCAST) {
@@ -1209,14 +1413,14 @@ class PodcastPlayerService : Service() {
             Log.d("PodcastPlayerService", "✓ Cleared active service state")
         }
     }
+
     private fun isThisServiceActive(): Boolean {
         val activeService = mediaStatePrefs.getString(KEY_ACTIVE_SERVICE, null)
         return activeService == SERVICE_PODCAST
     }
 
-     fun showDeleteCompletedNotifications() {
+    fun showDeleteCompletedNotifications() {
         try {
-            // Aktualisiere die Podcast-Liste
             val updatedPodcasts = podcasts.map { podcast ->
                 val isCompleted = getCompletedStatus(podcast.path)
                 podcast.copy(isCompleted = isCompleted)
@@ -1231,7 +1435,6 @@ class PodcastPlayerService : Service() {
 
             val notificationManager = getSystemService(NotificationManager::class.java)
 
-            // Erstelle für jeden fertigen Podcast eine Lösch-Notification
             completedPodcasts.forEachIndexed { index, podcast ->
                 val deleteIntent = Intent(this, PodcastPlayerService::class.java).apply {
                     action = ACTION_DELETE_SINGLE + podcast.path.hashCode()
@@ -1261,7 +1464,6 @@ class PodcastPlayerService : Service() {
                 }
             }
 
-            // Summary Notification
             val summaryNotification = NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_menu_delete)
                 .setContentTitle("Fertige Podcasts löschen")
@@ -1278,14 +1480,16 @@ class PodcastPlayerService : Service() {
                 notificationManager.notify(70999, summaryNotification)
             }
 
-            Log.d("PodcastPlayerService", "Showing ${completedPodcasts.size} completed podcasts for deletion")
+            Log.d(
+                "PodcastPlayerService",
+                "Showing ${completedPodcasts.size} completed podcasts for deletion"
+            )
 
         } catch (e: Exception) {
             Log.e("PodcastPlayerService", "Error showing delete notifications", e)
         }
     }
 
-    // 10. Info-Notification wenn keine fertigen Podcasts vorhanden
     private fun showNoCompletedPodcastsNotification() {
         try {
             val notificationManager = getSystemService(NotificationManager::class.java)
@@ -1309,22 +1513,19 @@ class PodcastPlayerService : Service() {
         }
     }
 
-    // 11. Lösche Podcast-Datei und bereinige Notifications
     private fun deletePodcastFile(podcast: Podcast) {
         try {
             Log.d("PodcastPlayerService", "Attempting to delete: ${podcast.name}")
 
-            // Prüfe ob der zu löschende Podcast gerade abgespielt wird
             if (currentPodcast?.path == podcast.path) {
                 pausePodcast()
                 mediaPlayer?.release()
                 mediaPlayer = null
                 currentPodcast = null
-                isPlaying = false
+                isPlayingB = false
                 Log.d("PodcastPlayerService", "Stopped currently playing podcast")
             }
 
-            // Lösche die Datei
             val file = java.io.File(podcast.path)
             val deleted = if (file.exists()) {
                 file.delete()
@@ -1336,7 +1537,6 @@ class PodcastPlayerService : Service() {
             if (deleted) {
                 Log.d("PodcastPlayerService", "✓ File deleted: ${podcast.name}")
 
-                // Lösche SharedPreferences-Einträge
                 val posKey = KEY_PREFIX_POSITION + podcast.path.hashCode()
                 val completedKey = KEY_PREFIX_COMPLETED + podcast.path.hashCode()
                 sharedPreferences.edit(commit = true) {
@@ -1344,24 +1544,19 @@ class PodcastPlayerService : Service() {
                     remove(completedKey)
                 }
 
-                // Entferne aus der Liste
                 podcasts = podcasts.filter { it.path != podcast.path }
 
-                // Zeige Erfolgs-Notification
                 showDeleteSuccessNotification(podcast.name)
 
-                // Entferne die Lösch-Notification
                 val notificationManager = getSystemService(NotificationManager::class.java)
                 val notifId = 70000 + podcasts.indexOf(podcast)
                 notificationManager.cancel(notifId)
 
-                // Wenn keine fertigen Podcasts mehr übrig, entferne Summary
                 val remainingCompleted = podcasts.count { it.isCompleted }
                 if (remainingCompleted == 0) {
                     notificationManager.cancel(70999)
                 }
 
-                // Aktualisiere Haupt-Notification wenn Service läuft
                 if (currentPodcast == null) {
                     updateNotification()
                 }
@@ -1377,7 +1572,6 @@ class PodcastPlayerService : Service() {
         }
     }
 
-    // 12. Erfolgs-Notification nach dem Löschen
     private fun showDeleteSuccessNotification(podcastName: String) {
         try {
             val notificationManager = getSystemService(NotificationManager::class.java)
@@ -1401,7 +1595,6 @@ class PodcastPlayerService : Service() {
         }
     }
 
-    // 13. Fehler-Notification wenn Löschen fehlschlägt
     private fun showDeleteErrorNotification(podcastName: String) {
         try {
             val notificationManager = getSystemService(NotificationManager::class.java)
@@ -1430,11 +1623,15 @@ class PodcastPlayerService : Service() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
                     BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
-                        Log.d("MusicPlayerService", "🔌 Bluetooth disconnected - stopping playback")
+                        Log.d(
+                            "PodcastPlayerService",
+                            "🔌 Bluetooth disconnected - stopping playback"
+                        )
                         pausePodcast()
                     }
+
                     AudioManager.ACTION_AUDIO_BECOMING_NOISY -> {
-                        Log.d("MusicPlayerService", "🎧 Audio output disconnected - pausing")
+                        Log.d("PodcastPlayerService", "🎧 Audio output disconnected - pausing")
                         pausePodcast()
                     }
                 }
@@ -1447,6 +1644,39 @@ class PodcastPlayerService : Service() {
         }
 
         registerReceiver(bluetoothReceiver, filter)
-        Log.d("MusicPlayerService", "✓ Bluetooth receiver registered")
+        Log.d("PodcastPlayerService", "✓ Bluetooth receiver registered")
+    }
+
+    private fun getPlaybackSpeed(): Float {
+        return sharedPreferences.getFloat(KEY_PLAYBACK_SPEED, 1.0f)
+    }
+
+    private fun savePlaybackSpeed(speed: Float) {
+        sharedPreferences.edit(commit = true) {
+            putFloat(KEY_PLAYBACK_SPEED, speed)
+        }
+    }
+
+    private fun setPlaybackSpeed(speed: Float) {
+        try {
+            val clampedSpeed = speed.coerceIn(0.5f, 3.0f)
+            mediaPlayer?.let { player ->
+                player.playbackParams = player.playbackParams.setSpeed(clampedSpeed)
+                isPlayingB = player.isPlaying
+                savePlaybackSpeed(clampedSpeed)
+                updateNotification()
+                Log.d("PodcastPlayerService", "Playback speed set to ${clampedSpeed}x (isPlaying=${isPlayingB})")
+            } ?: run {
+                savePlaybackSpeed(clampedSpeed)
+                showSimpleNotificationExtern(
+                    "✓ Gespeichert",
+                    "Geschwindigkeit ${clampedSpeed}x wird beim nächsten Start verwendet",
+                    5.seconds,
+                    this
+                )
+            }
+        } catch (e: Exception) {
+            Log.e("PodcastPlayerService", "Error setting playback speed", e)
+        }
     }
 }
