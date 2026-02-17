@@ -4,28 +4,36 @@ import android.app.NotificationManager
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
-import android.os.Handler
-import android.os.Looper
+import android.net.wifi.WifiManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import com.example.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.example.cloud.showSimpleNotificationExtern
-import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.ServerSocket
-import java.util.Timer
-import java.util.TimerTask
 import kotlin.time.Duration.Companion.seconds
 
 private var updateServerSocket: ServerSocket? = null
-private var listenerTimer: Timer? = null
-private var listenerJob: kotlinx.coroutines.Job? = null
+private var listenerJob: Job? = null
+
+private const val LAPTOP_IP = "192.168.178.20"
+private const val SYNC_PORT = 8888
+private const val UPDATE_PORT = 8890
+private const val CLIPBOARD_PORT = 8891
+
+private var wifiLock: WifiManager.WifiLock? = null
+
+private val syncScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
 data class TodoItem(
     val id: Long,
@@ -35,29 +43,9 @@ data class TodoItem(
 )
 
 fun getTodos(context: Context): List<TodoItem> {
-    val prefs = context.getSharedPreferences("todos_prefs", MODE_PRIVATE)
-    val todosJson = prefs.getString("todos", "[]") ?: "[]"
-
-    try {
-        val todos = mutableListOf<TodoItem>()
-        val jsonArray = org.json.JSONArray(todosJson)
-
-        for (i in 0 until jsonArray.length()) {
-            val obj = jsonArray.getJSONObject(i)
-            todos.add(
-                TodoItem(
-                    id = obj.getLong("id"),
-                    text = obj.getString("text"),
-                    completed = obj.getBoolean("completed"),
-                    timestamp = obj.getLong("timestamp")
-                )
-            )
-        }
-        return todos
-    } catch (e: Exception) {
-        Log.e("TodoManager", "Error parsing todos", e)
-        return emptyList()
-    }
+    val json = context.getSharedPreferences("todos_prefs", MODE_PRIVATE)
+        .getString("todos", "[]") ?: "[]"
+    return parseTodosFromJson(json)
 }
 
 fun saveTodos(context: Context, todos: List<TodoItem>) {
@@ -75,8 +63,8 @@ fun saveTodos(context: Context, todos: List<TodoItem>) {
             jsonArray.put(obj)
         }
 
-        prefs.edit(commit = true) {
-            putString("todos", jsonArray.toString())
+        prefs.edit {
+            putString("todos", jsonArray.toString()).apply()
         }
     } catch (e: Exception) {
         Log.e("TodoManager", "Error saving todos", e)
@@ -162,12 +150,13 @@ fun showAllTodos(context: Context) {
 
     val activeTodos = todos.filter { !it.completed }
     val completedTodos = todos.filter { it.completed }
+    val todoIndexMap = todos.mapIndexed { index, todo -> todo.id to (index + 1) }.toMap()
 
     val todoText = buildString {
         if (activeTodos.isNotEmpty()) {
             append("📌 OFFEN (${activeTodos.size}):\n")
-            activeTodos.forEachIndexed { index, todo ->
-                append("${todos.indexOf(todo) + 1}. ${todo.text}\n")
+            activeTodos.forEachIndexed { _, todo ->
+                append("${todoIndexMap[todo.id]}. ${todo.text}\n")
             }
         }
 
@@ -175,7 +164,7 @@ fun showAllTodos(context: Context) {
             if (activeTodos.isNotEmpty()) append("\n")
             append("✓ ERLEDIGT (${completedTodos.size}):\n")
             completedTodos.forEachIndexed { _, todo ->
-                append("${todos.indexOf(todo) + 1}. ${todo.text}\n")
+                append("${todoIndexMap[todo.id]}. ${todo.text}\n")
             }
         }
     }
@@ -197,7 +186,6 @@ fun showAllTodos(context: Context) {
     }
 }
 
-@OptIn(DelicateCoroutinesApi::class)
 fun syncTodosWithLaptop(context: Context) {
     showSimpleNotificationExtern(
         "🔄 Sync gestartet",
@@ -206,7 +194,7 @@ fun syncTodosWithLaptop(context: Context) {
         context
     )
 
-    GlobalScope.launch {
+    syncScope.launch {
         try {
             val todos = getTodos(context)
             val todosJson = org.json.JSONArray()
@@ -223,7 +211,7 @@ fun syncTodosWithLaptop(context: Context) {
 
             // Socket-Verbindung zum Laptop (IP muss angepasst werden)
             val socket = java.net.Socket()
-            socket.connect(java.net.InetSocketAddress("192.168.178.20", 8888), 5000)
+            socket.connect(java.net.InetSocketAddress(LAPTOP_IP, SYNC_PORT), 5000)
 
             val writer = java.io.PrintWriter(socket.getOutputStream(), true)
             writer.println(todosJson.toString())
@@ -231,149 +219,124 @@ fun syncTodosWithLaptop(context: Context) {
 
             socket.close()
 
-            Handler(Looper.getMainLooper()).post {
+            withContext(Dispatchers.Main) {
                 startUpdateListener(context, 60)
-
                 showSimpleNotificationExtern(
                     "✅ Sync erfolgreich",
                     "${todos.size} To-dos übertragen\n🔄 Listener aktiv für 60min",
-                    20.seconds,
-                    context
+                    20.seconds, context
                 )
             }
         } catch (e: Exception) {
             Log.e("TodoSync", "Sync failed", e)
-            android.os.Handler(Looper.getMainLooper()).post {
+            withContext(Dispatchers.Main) {
                 showSimpleNotificationExtern(
                     "❌ Sync fehlgeschlagen",
                     "Laptop nicht erreichbar: ${e.message}\n\nStelle sicher, dass das Python-Script läuft",
-                    20.seconds,
-                    context
+                    20.seconds, context
                 )
             }
         }
     }
 }
 
-@OptIn(DelicateCoroutinesApi::class)
 fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
     stopUpdateListener()
+
+    val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "TodoSync:WifiLock")
+    wifiLock?.acquire()
 
     startClipboardSync(context)
 
     Log.d("TodoSync", "Starte Update Listener für $durationMinutes Minuten")
 
-    listenerJob = GlobalScope.launch(Dispatchers.IO) {
+    listenerJob = syncScope.launch(Dispatchers.IO) {
         try {
-            updateServerSocket = ServerSocket(8890)
-            Log.d("TodoSync", "✅ Update Listener läuft auf Port 8890")
+            updateServerSocket = ServerSocket(UPDATE_PORT)
+            updateServerSocket!!.soTimeout = 2000  // alle 2s aufwachen
 
-            while (!Thread.currentThread().isInterrupted) {
+            val timeoutJob = launch {
+                delay(durationMinutes * 60_000L)
+                Log.d("TodoSync", "⏰ $durationMinutes Minuten abgelaufen")
+                stopUpdateListener()
+                withContext(Dispatchers.Main) {
+                    stopClipboardSync(context)
+                    showSimpleNotificationExtern(
+                        "⏸️ Sync-Listener gestoppt",
+                        "Nach $durationMinutes min automatisch beendet.",
+                        15.seconds, context
+                    )
+                }
+            }
+
+            while (isActive) {
                 try {
-                    val client = updateServerSocket?.accept()
-                    if (client != null) {
-                        Log.d("TodoSync", "📥 Update empfangen von ${client.inetAddress}")
+                    val client = updateServerSocket?.accept() ?: break
+                    Log.d("TodoSync", "📥 Update empfangen von ${client.inetAddress}")
 
-                        val reader = BufferedReader(InputStreamReader(client.getInputStream()))
-                        val jsonData = reader.readLine()
-                        client.close()
+                    val reader = BufferedReader(InputStreamReader(client.getInputStream()))
+                    val jsonData = reader.readLine()
+                    client.close()
 
-                        if (jsonData != null) {
-                            val updatedTodos = parseTodosFromJson(jsonData)
-                            saveTodos(context, updatedTodos)
+                    if (jsonData != null) {
+                        val updatedTodos = parseTodosFromJson(jsonData)
+                        saveTodos(context, updatedTodos)
 
-                            withContext(Dispatchers.Main) {
-                                showSimpleNotificationExtern(
-                                    "🔄 To-dos aktualisiert",
-                                    "Änderungen vom Laptop empfangen",
-                                    10.seconds,
-                                    context
-                                )
-                            }
+                        withContext(Dispatchers.Main) {
+                            showSimpleNotificationExtern(
+                                "🔄 To-dos aktualisiert",
+                                "Änderungen vom Laptop empfangen",
+                                10.seconds,
+                                context
+                            )
                         }
                     }
                 } catch (e: Exception) {
-                    if (e !is java.net.SocketException && !Thread.currentThread().isInterrupted) {
+                    if (e !is java.net.SocketException) {
                         Log.e("TodoSync", "Fehler beim Empfangen", e)
                     }
                 }
             }
+
+            timeoutJob.cancel()
         } catch (e: Exception) {
             if (e !is java.net.SocketException) {
                 Log.e("TodoSync", "Update Listener Fehler", e)
             }
         }
     }
-
-    // Timer: Stoppe nach X Minuten
-    listenerTimer = Timer()
-    listenerTimer?.schedule(object : TimerTask() {
-        override fun run() {
-            Log.d("TodoSync", "⏰ $durationMinutes Minuten abgelaufen, stoppe Listener")
-            stopUpdateListener()
-
-            Handler(Looper.getMainLooper()).post {
-                stopClipboardSync(context)
-
-                showSimpleNotificationExtern(
-                    "⏸️ Sync-Listener gestoppt",
-                    "Nach $durationMinutes min automatisch beendet.\nSynce erneut für Reaktivierung.",
-                    15.seconds,
-                    context
-                )
-            }
-        }
-    }, durationMinutes * 60L * 1000L)
 }
 
 fun stopUpdateListener() {
     try {
-        // Stoppe Timer
-        listenerTimer?.cancel()
-        listenerTimer = null
-
-        // Stoppe Coroutine
-        listenerJob?.cancel()
-        listenerJob = null
-
-        // Schließe Socket
-        updateServerSocket?.close()
-        updateServerSocket = null
-
+        wifiLock?.release(); wifiLock = null
+        listenerJob?.cancel(); listenerJob = null
+        updateServerSocket?.close(); updateServerSocket = null
         Log.d("TodoSync", "🛑 Update Listener gestoppt")
     } catch (e: Exception) {
-        Log.e("TodoSync", "Fehler beim Schließen des Servers", e)
+        Log.e("TodoSync", "Fehler beim Schließen", e)
     }
 }
 
-private fun parseTodosFromJson(jsonData: String): List<TodoItem> {
+private fun parseTodosFromJson(jsonData: String): List<TodoItem> =
     try {
-        val todos = mutableListOf<TodoItem>()
         val jsonArray = org.json.JSONArray(jsonData)
-
-        for (i in 0 until jsonArray.length()) {
-            val obj = jsonArray.getJSONObject(i)
-            todos.add(
-                TodoItem(
-                    id = obj.getLong("id"),
-                    text = obj.getString("text"),
-                    completed = obj.getBoolean("completed"),
-                    timestamp = obj.getLong("timestamp")
-                )
-            )
+        (0 until jsonArray.length()).map { i ->
+            jsonArray.getJSONObject(i).run {
+                TodoItem(getLong("id"), getString("text"), getBoolean("completed"), getLong("timestamp"))
+            }
         }
-        return todos
     } catch (e: Exception) {
         Log.e("TodoSync", "Fehler beim Parsen", e)
-        return emptyList()
+        emptyList()
     }
-}
 
-private fun sendClipboardToLaptop(context: Context, text: String) {
-    GlobalScope.launch(Dispatchers.IO) {
+private fun sendClipboardToLaptop(text: String) {
+    syncScope.launch(Dispatchers.IO) {
         try {
             val socket = java.net.Socket()
-            socket.connect(java.net.InetSocketAddress("192.168.178.20", 8891), 3000)
+            socket.connect(java.net.InetSocketAddress(LAPTOP_IP, CLIPBOARD_PORT), 3000)
 
             val writer = java.io.PrintWriter(socket.getOutputStream(), true)
             writer.println("CLIPBOARD:$text")
@@ -387,10 +350,10 @@ private fun sendClipboardToLaptop(context: Context, text: String) {
     }
 }
 
-// Neue Funktion zum Überwachen der Zwischenablage
 private var clipboardListener: ClipboardManager.OnPrimaryClipChangedListener? = null
 
 fun startClipboardSync(context: Context) {
+    stopClipboardSync(context)
     val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 
     clipboardListener = ClipboardManager.OnPrimaryClipChangedListener {
@@ -398,7 +361,7 @@ fun startClipboardSync(context: Context) {
         if (clip != null && clip.itemCount > 0) {
             val text = clip.getItemAt(0).text?.toString()
             if (!text.isNullOrEmpty()) {
-                sendClipboardToLaptop(context, text)
+                sendClipboardToLaptop(text)
             }
         }
     }
