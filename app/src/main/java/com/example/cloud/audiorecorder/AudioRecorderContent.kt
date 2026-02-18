@@ -603,7 +603,9 @@ class AudioForegroundService : Service() {
 
         startRecording(filePath)
 
-        return START_STICKY
+        // Use START_NOT_STICKY so the system doesn't restart the recorder automatically
+        // when the app is killed — user explicitly started recordings via UI.
+        return START_NOT_STICKY
     }
 
     private fun startRecording(path: String) {
