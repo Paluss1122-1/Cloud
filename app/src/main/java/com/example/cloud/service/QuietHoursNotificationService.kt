@@ -74,6 +74,8 @@ class QuietHoursNotificationService : Service() {
         }
 
         const val ACTION_SHOW_MESSAGES = "com.example.cloud.ACTION_SHOW_MESSAGES"
+        const val ACTION_SCHEDULED_START = "com.example.cloud.ACTION_QUIET_SCHEDULED_START"
+        const val ACTION_SCHEDULED_STOP = "com.example.cloud.ACTION_QUIET_SCHEDULED_STOP"
         private const val ACTION_OPEN_SETTINGS = "com.example.cloud.ACTION_OPEN_SETTINGS"
 
         const val ACTION_MESSAGE_SENT = "com.example.cloud.ACTION_MESSAGE_SENT"
@@ -213,10 +215,17 @@ class QuietHoursNotificationService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        Log.d("QuietHoursService", "Service created")
         sharedPreferences = getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
         createNotificationChannel(this)
 
         isCurrentlyQuietHours = isQuietHoursNow(this)
+
+        // If service was started but we're NOT currently in the quiet window, stop immediately
+        if (!isCurrentlyQuietHours) {
+            stopSelf()
+            return
+        }
 
         startForeground(NOTIFICATION_ID, createNotification(isCurrentlyQuietHours, this))
 
@@ -255,7 +264,20 @@ class QuietHoursNotificationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d("QuietHoursService", "Service started with intent: ${intent?.action}")
         when (intent?.action) {
+            ACTION_SCHEDULED_STOP -> {
+                // Alarm requested that the quiet window ended -> stop the service
+                stopSelf()
+                return START_NOT_STICKY
+            }
+
+            ACTION_SCHEDULED_START -> {
+                // Alarm requested start: ensure we enter quiet mode
+                isCurrentlyQuietHours = isQuietHoursNow(this)
+                startForeground(NOTIFICATION_ID, createNotification(isCurrentlyQuietHours, this))
+            }
+
             ACTION_SHOW_MESSAGES -> {
                 showUnreadMessages(this)
             }
@@ -488,9 +510,9 @@ class QuietHoursNotificationService : Service() {
 
     private fun openMusicPlayer() {
         try {
-            MusicPlayerService.startService(this)
+            MusicPlayerServiceCompat.startService(this)
 
-            MusicPlayerService.sendPlayAction(this)
+            MusicPlayerServiceCompat.sendPlayAction(this)
         } catch (e: Exception) {
             Log.e("QuietHoursService", "Error opening music player", e)
             showSimpleNotification("Fehler", "Musik Player konnte nicht geöffnet werden")
