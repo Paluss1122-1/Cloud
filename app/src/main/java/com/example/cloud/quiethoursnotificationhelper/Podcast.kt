@@ -15,7 +15,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import com.example.cloud.ERRORINSERT
 import com.example.cloud.ERRORINSERTDATA
-import com.example.cloud.service.PodcastPlayerService.Companion.startService
+import com.example.cloud.service.PodcastPlayerServiceCompat.startService
 import com.example.cloud.showSimpleNotificationExtern
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
