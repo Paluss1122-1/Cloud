@@ -122,17 +122,15 @@ class MediaPlayerService : MediaSessionService() {
 
         private const val TAG = "MediaPlayerService"
 
-        // ── Factory helpers (Music) ────────────────────────────────────────
+        private const val KEY_PLAYLISTS = "playlists_json"
+        private const val KEY_ACTIVE_PLAYLIST = "active_playlist_id"
 
-        /** Start service in music mode (or switch to it if already running). */
         fun startMusicService(context: Context) = context.startForegroundService(
             Intent(context, MediaPlayerService::class.java).apply {
                 action = ACTION_SWITCH_TO_MUSIC
             }
         )
 
-        /** Start service, switch to music mode and immediately play.
-         *  @param number 1-based song index to jump to, or null to resume. */
         fun startAndPlayMusic(context: Context, number: Int? = null) =
             context.startForegroundService(
                 Intent(context, MediaPlayerService::class.java).apply {
@@ -161,9 +159,6 @@ class MediaPlayerService : MediaSessionService() {
             Intent(context, MediaPlayerService::class.java).apply { action = ACTION_SHOW_FAVORITES }
         )
 
-        // ── Factory helpers (Podcast) ──────────────────────────────────────
-
-        /** Start service in podcast mode (or switch to it if already running). */
         fun startPodcastService(context: Context) = context.startForegroundService(
             Intent(context, MediaPlayerService::class.java).apply {
                 action = ACTION_SWITCH_TO_PODCAST
@@ -197,11 +192,57 @@ class MediaPlayerService : MediaSessionService() {
         fun stopService(context: Context) = context.stopService(
             Intent(context, MediaPlayerService::class.java)
         )
+
+        fun createPlaylist(context: Context, name: String, type: PlaylistType): String {
+            val intent = Intent(context, MediaPlayerService::class.java).apply {
+                action = "CREATE_PLAYLIST"
+                putExtra("PLAYLIST_NAME", name)
+                putExtra("PLAYLIST_TYPE", type.name)
+            }
+            context.startService(intent)
+            return ""
+        }
+
+        fun showPlaylists(context: Context, type: PlaylistType? = null) {
+            val intent = Intent(context, MediaPlayerService::class.java).apply {
+                action = "SHOW_PLAYLISTS"
+                type?.let { putExtra("PLAYLIST_TYPE", it.name) }
+            }
+            context.startService(intent)
+        }
+
+        fun activatePlaylist(context: Context, playlistId: String) {
+            val intent = Intent(context, MediaPlayerService::class.java).apply {
+                action = "ACTIVATE_PLAYLIST"
+                putExtra("PLAYLIST_ID", playlistId)
+            }
+            context.startService(intent)
+        }
+
+        fun deactivatePlaylist(context: Context) {
+            val intent = Intent(context, MediaPlayerService::class.java).apply {
+                action = "DEACTIVATE_PLAYLIST"
+            }
+            context.startService(intent)
+        }
+
+        fun addCurrentToPlaylist(context: Context, playlistId: String) {
+            val intent = Intent(context, MediaPlayerService::class.java).apply {
+                action = "ADD_CURRENT_TO_PLAYLIST"
+                putExtra("PLAYLIST_ID", playlistId)
+            }
+            context.startService(intent)
+        }
+
+        fun deletePlaylist(context: Context, playlistId: String) {
+            val intent = Intent(context, MediaPlayerService::class.java).apply {
+                action = "DELETE_PLAYLIST"
+                putExtra("PLAYLIST_ID", playlistId)
+            }
+            context.startService(intent)
+        }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Data classes
-    // ─────────────────────────────────────────────────────────────────────────
     data class Song(val uri: Uri, val name: String, val path: String)
 
     data class Podcast(
@@ -216,19 +257,15 @@ class MediaPlayerService : MediaSessionService() {
         val id: String = UUID.randomUUID().toString(),
         val name: String,
         val type: PlaylistType,
-        val items: MutableList<String> = mutableListOf() // Paths der Songs/Podcasts
+        val items: MutableList<String> = mutableListOf()
     )
 
     enum class PlaylistType {
         MUSIC, PODCAST
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // State
-    // ─────────────────────────────────────────────────────────────────────────
     private var currentMode = MODE_MUSIC
 
-    // Music
     private var musicPlayer: MediaPlayer? = null
     private var playlist: List<Song> = emptyList()
     private var currentSongIndex = 0
@@ -237,7 +274,6 @@ class MediaPlayerService : MediaSessionService() {
     private var favoritesMode = false
     private val favoriteSongs = mutableSetOf<String>()
 
-    // Podcast
     private var podcastPlayer: MediaPlayer? = null
     private var podcasts: List<Podcast> = emptyList()
     private var podcastQueue: MutableList<String> = mutableListOf()
@@ -245,7 +281,6 @@ class MediaPlayerService : MediaSessionService() {
     private var isPlayingPodcast = false
     private var positionSaveRunnable: Runnable? = null
 
-    // Common
     private var mediaSession: MediaSession? = null
     private lateinit var musicPrefs: SharedPreferences
     private lateinit var podcastPrefs: SharedPreferences
@@ -254,9 +289,9 @@ class MediaPlayerService : MediaSessionService() {
     private var lastPlayPauseTime = 0L
     private var playPauseCount = 0
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Lifecycle
-    // ─────────────────────────────────────────────────────────────────────────
+    private val playlists = mutableListOf<Playlist>()
+    private var activePlaylistId: String? = null
+
     override fun onCreate() {
         super.onCreate()
         musicPrefs = getSharedPreferences(MUSIC_PREFS, MODE_PRIVATE)
@@ -271,6 +306,7 @@ class MediaPlayerService : MediaSessionService() {
         loadFavorites()
         loadPodcasts()
         loadPodcastQueue()
+        loadPlaylists()
         statsManager = MusicStatsManager(this)
 
         // Restore last podcast
@@ -379,6 +415,97 @@ class MediaPlayerService : MediaSessionService() {
                 return START_NOT_STICKY
             }
 
+            "CREATE_PLAYLIST" -> {
+                val name = intent.getStringExtra("PLAYLIST_NAME") ?: "Neue Playlist"
+                val typeName = intent.getStringExtra("PLAYLIST_TYPE") ?: PlaylistType.MUSIC.name
+                val type = PlaylistType.valueOf(typeName)
+                val id = createPlaylist(name, type)
+                showSimpleNotificationExtern(
+                    "✓ Playlist erstellt",
+                    "\"$name\" wurde erstellt",
+                    context = this
+                )
+            }
+
+            "SHOW_PLAYLISTS" -> {
+                val typeName = intent.getStringExtra("PLAYLIST_TYPE")
+                val type = typeName?.let { PlaylistType.valueOf(it) }
+                showPlaylistsNotification(type)
+            }
+
+            "ACTIVATE_PLAYLIST" -> {
+                val id = intent.getStringExtra("PLAYLIST_ID")
+                if (id != null && activatePlaylist(id)) {
+                    val pl = playlists.find { it.id == id }
+                    showSimpleNotificationExtern(
+                        "▶ Playlist aktiviert",
+                        "\"${pl?.name}\" wird abgespielt",
+                        context = this
+                    )
+                } else {
+                    showSimpleNotificationExtern(
+                        "❌ Fehler",
+                        "Playlist konnte nicht aktiviert werden",
+                        context = this
+                    )
+                }
+            }
+
+            "DEACTIVATE_PLAYLIST" -> {
+                val pl = playlists.find { it.id == activePlaylistId }
+                deactivatePlaylist()
+                showSimpleNotificationExtern(
+                    "⏸ Playlist deaktiviert",
+                    if (pl != null) "\"${pl.name}\" beendet" else "Zurück zur normalen Wiedergabe",
+                    context = this
+                )
+            }
+
+            "ADD_CURRENT_TO_PLAYLIST" -> {
+                val id = intent.getStringExtra("PLAYLIST_ID")
+                if (id != null) {
+                    val path = when (currentMode) {
+                        MODE_MUSIC -> playlist.getOrNull(currentSongIndex)?.path
+                        MODE_PODCAST -> currentPodcast?.path
+                        else -> null
+                    }
+
+                    if (path != null && addToPlaylist(id, path)) {
+                        val pl = playlists.find { it.id == id }
+                        val itemName = when (currentMode) {
+                            MODE_MUSIC -> playlist.find { it.path == path }?.name
+                            MODE_PODCAST -> podcasts.find { it.path == path }?.name
+                            else -> null
+                        }
+                        showSimpleNotificationExtern(
+                            "✓ Hinzugefügt",
+                            "\"$itemName\" → \"${pl?.name}\"",
+                            context = this
+                        )
+                    } else {
+                        showSimpleNotificationExtern(
+                            "❌ Fehler",
+                            "Item konnte nicht hinzugefügt werden",
+                            context = this
+                        )
+                    }
+                }
+            }
+
+            "DELETE_PLAYLIST" -> {
+                val id = intent.getStringExtra("PLAYLIST_ID")
+                if (id != null) {
+                    val pl = playlists.find { it.id == id }
+                    if (deletePlaylist(id)) {
+                        showSimpleNotificationExtern(
+                            "🗑 Playlist gelöscht",
+                            "\"${pl?.name}\" wurde gelöscht",
+                            context = this
+                        )
+                    }
+                }
+            }
+
             else -> when {
                 action?.startsWith("SELECT_") == true -> {
                     action.removePrefix("SELECT_").toIntOrNull()?.let { hash ->
@@ -393,6 +520,31 @@ class MediaPlayerService : MediaSessionService() {
                 action?.startsWith(ACTION_DELETE_SINGLE) == true -> {
                     action.removePrefix(ACTION_DELETE_SINGLE).toIntOrNull()?.let { hash ->
                         podcasts.find { it.path.hashCode() == hash }?.let { deletePodcastFile(it) }
+                    }
+                }
+
+                action?.startsWith("ACTIVATE_PL_") == true -> {
+                    val id = action.removePrefix("ACTIVATE_PL_")
+                    if (activatePlaylist(id)) {
+                        val pl = playlists.find { it.id == id }
+                        showSimpleNotificationExtern(
+                            "▶ Playlist aktiviert",
+                            "\"${pl?.name}\" (${pl?.items?.size ?: 0} Items)",
+                            context = this
+                        )
+                    }
+                }
+                action?.startsWith("DELETE_PL_") == true -> {
+                    val id = action.removePrefix("DELETE_PL_")
+                    val pl = playlists.find { it.id == id }
+                    if (deletePlaylist(id)) {
+                        showSimpleNotificationExtern(
+                            "🗑 Gelöscht",
+                            "\"${pl?.name}\"",
+                            context = this
+                        )
+                        // Notifications aktualisieren
+                        handler.postDelayed({ showPlaylistsNotification(pl?.type) }, 300)
                     }
                 }
             }
@@ -475,7 +627,6 @@ class MediaPlayerService : MediaSessionService() {
         updateNotification()
     }
 
-    /** Called from the media-button 5× quick-tap handler. */
     private fun switchModeViaButton() {
         if (currentMode == MODE_MUSIC) switchToPodcast() else switchToMusic()
         Log.d(TAG, "🔄 Mode switched via button to $currentMode")
@@ -1408,11 +1559,233 @@ class MediaPlayerService : MediaSessionService() {
         return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // DummyPlayer – required stub for MediaSession.Builder
-    // ─────────────────────────────────────────────────────────────────────────
+    private fun loadPlaylists() {
+        val json = musicPrefs.getString(KEY_PLAYLISTS, null)
+        if (!json.isNullOrEmpty()) {
+            try {
+                playlists.clear()
+                val lines = json.split("|||")
+                lines.forEach { line ->
+                    val parts = line.split(":::")
+                    if (parts.size >= 3) {
+                        val id = parts[0]
+                        val name = parts[1]
+                        val type = PlaylistType.valueOf(parts[2])
+                        val items = if (parts.size > 3) parts[3].split("|||").toMutableList() else mutableListOf()
+                        playlists.add(Playlist(id, name, type, items))
+                    }
+                }
+                Log.d(TAG, "Loaded ${playlists.size} playlists")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading playlists", e)
+            }
+        }
+        activePlaylistId = musicPrefs.getString(KEY_ACTIVE_PLAYLIST, null)
+    }
+
+    private fun savePlaylists() {
+        val json = playlists.joinToString("|||") { pl ->
+            "${pl.id}:::${pl.name}:::${pl.type}:::${pl.items.joinToString("|||")}"
+        }
+        musicPrefs.edit {
+            putString(KEY_PLAYLISTS, json)
+            putString(KEY_ACTIVE_PLAYLIST, activePlaylistId)
+        }
+        Log.d(TAG, "Saved ${playlists.size} playlists")
+    }
+
+    // Playlist erstellen
+    fun createPlaylist(name: String, type: PlaylistType): String {
+        val playlist = Playlist(name = name, type = type)
+        playlists.add(playlist)
+        savePlaylists()
+        Log.d(TAG, "Created playlist: $name ($type)")
+        return playlist.id
+    }
+
+    // Item zu Playlist hinzufügen
+    fun addToPlaylist(playlistId: String, itemPath: String): Boolean {
+        val playlist = playlists.find { it.id == playlistId } ?: return false
+        if (!playlist.items.contains(itemPath)) {
+            playlist.items.add(itemPath)
+            savePlaylists()
+            Log.d(TAG, "Added item to playlist: ${playlist.name}")
+            return true
+        }
+        return false
+    }
+
+    // Item aus Playlist entfernen
+    fun removeFromPlaylist(playlistId: String, index: Int): Boolean {
+        val playlist = playlists.find { it.id == playlistId } ?: return false
+        if (index in playlist.items.indices) {
+            playlist.items.removeAt(index)
+            savePlaylists()
+            Log.d(TAG, "Removed item from playlist: ${playlist.name}")
+            return true
+        }
+        return false
+    }
+
+    // Playlist löschen
+    fun deletePlaylist(playlistId: String): Boolean {
+        val removed = playlists.removeIf { it.id == playlistId }
+        if (removed) {
+            if (activePlaylistId == playlistId) activePlaylistId = null
+            savePlaylists()
+            Log.d(TAG, "Deleted playlist: $playlistId")
+        }
+        return removed
+    }
+
+    // Playlist aktivieren
+    fun activatePlaylist(playlistId: String): Boolean {
+        val playlist = playlists.find { it.id == playlistId } ?: return false
+
+        when (playlist.type) {
+            PlaylistType.MUSIC -> {
+                if (currentMode != MODE_MUSIC) switchToMusic()
+
+                // Filtere Songs nach Paths in der Playlist
+                val playlistSongs = playlist.items.mapNotNull { path ->
+                    this.playlist.find { it.path == path }
+                }
+
+                if (playlistSongs.isEmpty()) return false
+
+                // Temporär die Playlist überschreiben
+                this.playlist = playlistSongs
+                currentSongIndex = 0
+                activePlaylistId = playlistId
+                savePlaylists()
+
+                if (isPlayingMusic) {
+                    musicPlayer?.release()
+                    musicPlayer = null
+                    loadSong(0)
+                }
+                updateNotification()
+                return true
+            }
+
+            PlaylistType.PODCAST -> {
+                if (currentMode != MODE_PODCAST) switchToPodcast()
+
+                // Queue mit Playlist-Items füllen
+                podcastQueue.clear()
+                podcastQueue.addAll(playlist.items)
+                savePodcastQueue()
+                activePlaylistId = playlistId
+                savePlaylists()
+
+                // Ersten Podcast laden
+                if (podcastQueue.isNotEmpty()) {
+                    val firstPath = podcastQueue.removeAt(0)
+                    savePodcastQueue()
+                    podcasts.find { it.path == firstPath }?.let { p ->
+                        currentPodcast = p.copy(savedPosition = getPodcastSavedPosition(p.path))
+                        loadPodcast(currentPodcast!!)
+                    }
+                }
+                return true
+            }
+        }
+    }
+
+    // Aktuelle Playlist deaktivieren
+    fun deactivatePlaylist() {
+        activePlaylistId = null
+        savePlaylists()
+
+        if (currentMode == MODE_MUSIC) {
+            // Playlist zurücksetzen auf alle Songs
+            loadPlaylist()
+            currentSongIndex = 0
+            if (isPlayingMusic) {
+                musicPlayer?.release()
+                musicPlayer = null
+                loadSong(0)
+            }
+            updateNotification()
+        } else {
+            podcastQueue.clear()
+            savePodcastQueue()
+        }
+        Log.d(TAG, "Deactivated playlist")
+    }
+
+    // Alle Playlisten eines Typs abrufen
+    fun getPlaylists(type: PlaylistType? = null): List<Playlist> {
+        return if (type != null) playlists.filter { it.type == type } else playlists
+    }
+
+    private fun showPlaylistsNotification(type: PlaylistType? = null) {
+        val filtered = if (type != null) playlists.filter { it.type == type } else playlists
+
+        if (filtered.isEmpty()) {
+            showSimpleNotificationExtern(
+                "📂 Keine Playlisten",
+                if (type != null) "Keine ${type.name.lowercase()}-Playlisten vorhanden" else "Keine Playlisten vorhanden",
+                context = this
+            )
+            return
+        }
+
+        val nm = getSystemService(NotificationManager::class.java)
+
+        filtered.forEachIndexed { i, pl ->
+            val activateIntent = Intent(this, MediaPlayerService::class.java).apply {
+                action = "ACTIVATE_PL_${pl.id}"
+            }
+            val activatePi = PendingIntent.getService(
+                this, 80000 + i,
+                activateIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val deleteIntent = Intent(this, MediaPlayerService::class.java).apply {
+                action = "DELETE_PL_${pl.id}"
+            }
+            val deletePi = PendingIntent.getService(
+                this, 81000 + i,
+                deleteIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val typeIcon = if (pl.type == PlaylistType.MUSIC) "🎵" else "🎙️"
+            val activeMarker = if (pl.id == activePlaylistId) "▶ " else ""
+
+            val n = NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_menu_view)
+                .setContentTitle("$activeMarker$typeIcon ${pl.name}")
+                .setContentText("${pl.items.size} Items • Tippen zum Abspielen")
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .setContentIntent(activatePi)
+                .addAction(android.R.drawable.ic_menu_delete, "Löschen", deletePi)
+                .setGroup("playlists")
+                .build()
+
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
+                nm.notify(80000 + i, n)
+        }
+
+        val summary = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_view)
+            .setContentTitle("📂 Playlisten")
+            .setContentText("${filtered.size} ${if (type != null) type.name.lowercase() else ""} Playlisten")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setGroup("playlists")
+            .setGroupSummary(true)
+            .setAutoCancel(true)
+            .build()
+
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
+            nm.notify(80999, summary)
+    }
+
     @UnstableApi
-    private inner class DummyPlayer : Player {
+    private class DummyPlayer : Player {
         override fun getApplicationLooper() = Looper.getMainLooper()
         override fun addListener(listener: Player.Listener) {}
         override fun removeListener(listener: Player.Listener) {}
@@ -1574,16 +1947,6 @@ class MediaPlayerService : MediaSessionService() {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Backward-compat shims
-// Existing call sites that import MusicPlayerService.* or PodcastPlayerService.*
-// can be updated to use these objects without any other change.
-//
-// ⚠️  These are NOT registered in AndroidManifest.xml – they are just Kotlin
-//     objects that delegate every call to MediaPlayerService.
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Drop-in for the former MusicPlayerService companion object. */
 object MusicPlayerServiceCompat {
     fun startService(context: Context) = MediaPlayerService.startMusicService(context)
     fun stopService(context: Context) = MediaPlayerService.stopService(context)
@@ -1596,13 +1959,7 @@ object MusicPlayerServiceCompat {
     fun showFavorites(context: Context) = MediaPlayerService.showFavorites(context)
 }
 
-/** Drop-in for the former PodcastPlayerService companion object. */
 object PodcastPlayerServiceCompat {
-    const val KEY_ACTIVE_SERVICE = MediaPlayerService.KEY_ACTIVE_SERVICE
-    const val SERVICE_MUSIC = MediaPlayerService.SERVICE_MUSIC
-    const val SERVICE_PODCAST = MediaPlayerService.SERVICE_PODCAST
-    const val EXTRA_FORWARD_MS = MediaPlayerService.EXTRA_FORWARD_MS
-
     fun startService(context: Context) = MediaPlayerService.startPodcastService(context)
     fun stopService(context: Context) = MediaPlayerService.stopService(context)
     fun sendPlayAction(context: Context) = MediaPlayerService.sendPodcastPlayAction(context)
@@ -1614,7 +1971,6 @@ object PodcastPlayerServiceCompat {
         MediaPlayerService.setPlaybackSpeed(context, speed)
 }
 
-/** Top-level helper – keeps callers of restartMusicPlayer() working unchanged. */
 fun restartMusicPlayer(number: Int? = null, context: Context) {
     try {
         MediaPlayerService.startAndPlayMusic(context, number)
