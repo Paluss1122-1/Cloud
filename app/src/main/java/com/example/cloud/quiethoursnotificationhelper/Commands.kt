@@ -21,8 +21,9 @@ import javax.xml.parsers.DocumentBuilderFactory
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import com.example.cloud.privatecloudapp.showBatteryInfo
-import com.example.cloud.service.MusicPlayerService
-import com.example.cloud.service.PodcastPlayerService
+import com.example.cloud.service.MediaPlayerService
+import com.example.cloud.service.MusicPlayerServiceCompat
+import com.example.cloud.service.PodcastPlayerServiceCompat
 import com.example.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.example.cloud.service.QuietHoursNotificationService.Companion.commandHistory
 import com.example.cloud.service.WhatsAppNotificationListener
@@ -36,30 +37,6 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlin.text.split
 import kotlin.time.Duration.Companion.seconds
-
-// Hilfsfunktion: Format DB Zeitstring (z.B. YYMMddHHmm zu HH:mm)
-private fun formatDbPlanTime(timeString: String): String {
-    if (timeString.length >= 10) {
-        val hours = timeString.substring(6, 8)
-        val minutes = timeString.substring(8, 10)
-        return "$hours:$minutes"
-    }
-    return timeString
-}
-
-// Hilfsfunktion: Berechne Verspätung in Minuten
-private fun calculateDbDelayMinutes(plannedTime: String, changedTime: String): Int {
-    if (plannedTime.length >= 10 && changedTime.length >= 10) {
-        val pHours = plannedTime.substring(6, 8).toIntOrNull() ?: 0
-        val pMinutes = plannedTime.substring(8, 10).toIntOrNull() ?: 0
-        val cHours = changedTime.substring(6, 8).toIntOrNull() ?: 0
-        val cMinutes = changedTime.substring(8, 10).toIntOrNull() ?: 0
-        val plannedTotal = pHours * 60 + pMinutes
-        val changedTotal = cHours * 60 + cMinutes
-        return (changedTotal - plannedTotal).coerceAtLeast(0)
-    }
-    return 0
-}
 
 data class Command(
     val name: String,
@@ -82,24 +59,24 @@ private fun getAvailableCommands(context: Context): List<Command> {
             aliases = listOf("m", "play", "player", "musik"),
             description = "Startet Musik Player"
         ) {
-            PodcastPlayerService.stopService(context)
+            PodcastPlayerServiceCompat.stopService(context)
             restartMusicPlayer(null, context)
         },
         Command(
             name = "podcast",
             aliases = listOf("pd", "pc", "Podcast"),
-            description = "Startet PodcastPlayerService"
+            description = "Startet PodcastPlayerServiceCompat"
         ) {
-            MusicPlayerService.stopService(context)
-            PodcastPlayerService.startService(context)
-            PodcastPlayerService.sendPlayAction(context)
+            MusicPlayerServiceCompat.stopService(context)
+            PodcastPlayerServiceCompat.startService(context)
+            PodcastPlayerServiceCompat.sendPlayAction(context)
         },
         Command(
             name = "managepodcast",
             aliases = listOf("mpd", "ManagePodcast"),
             description = "Zeigt alle vollendeten Podcasts als Notification"
         ) {
-            PodcastPlayerService.managePodcast(context)
+            PodcastPlayerServiceCompat.managePodcast(context)
         },
         Command(
             name = "queue",
@@ -220,7 +197,7 @@ private fun getAvailableCommands(context: Context): List<Command> {
             description = "Stoppt NUR Musik Player Service"
         ) {
             try {
-                MusicPlayerService.stopService(context)
+                MusicPlayerServiceCompat.stopService(context)
             } catch (e: Exception) {
                 Log.e("QuietHoursService", "Error in stopmusic command", e)
                 showSimpleNotificationExtern(
@@ -236,7 +213,7 @@ private fun getAvailableCommands(context: Context): List<Command> {
             description = "Stoppt NUR Podcast Player Service"
         ) {
             try {
-                PodcastPlayerService.stopService(context)
+                PodcastPlayerServiceCompat.stopService(context)
             } catch (e: Exception) {
                 Log.e("QuietHoursService", "Error in stoppodcast command", e)
                 showSimpleNotificationExtern(
@@ -333,21 +310,21 @@ private fun getAvailableCommands(context: Context): List<Command> {
             aliases = listOf("fav", "f", "star", "⭐"),
             description = "Markiert aktuellen Song als Favorit"
         ) {
-            MusicPlayerService.toggleFavorite(context)
+            MusicPlayerServiceCompat.toggleFavorite(context)
         },
         Command(
             name = "favorites",
             aliases = listOf("favs", "showfavs", "listfavs"),
             description = "Zeigt alle favorisierten Songs"
         ) {
-            MusicPlayerService.showFavorites(context)
+            MusicPlayerServiceCompat.showFavorites(context)
         },
         Command(
             name = "favmode",
             aliases = listOf("onlyfavs", "favsonly", "favoritesmode"),
             description = "Schaltet Favoriten-Modus um (nur Favoriten abspielen)"
         ) {
-            MusicPlayerService.toggleFavoritesMode(context)
+            MusicPlayerServiceCompat.toggleFavoritesMode(context)
         },
         Command(
             name = "speed",
@@ -415,6 +392,85 @@ private fun getAvailableCommands(context: Context): List<Command> {
             showSimpleNotificationExtern(
                 "ℹ️ Bahn-Verbindung",
                 "Syntax: bahn\nPrüft morgen den Zug mit planmäßiger Ankunft 07:05 Uhr in Geltendorf.",
+                context = context
+            )
+        },
+        Command(
+            name = "plcreate",
+            aliases = listOf("plc", "createplaylist", "newplaylist"),
+            description = "Erstellt neue Playlist (Syntax: plcreate [music|podcast] \"Name\")"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ Playlist erstellen",
+                "Syntax: plcreate [music|podcast] \"Name\"\nBeispiel: plcreate music \"Workout Mix\"",
+                context = context
+            )
+        },
+
+        Command(
+            name = "playlists",
+            aliases = listOf("pl", "pls", "showplaylists"),
+            description = "Zeigt alle Playlisten"
+        ) {
+            MediaPlayerService.showPlaylists(context)
+        },
+
+        Command(
+            name = "plmusic",
+            aliases = listOf("plm", "musicplaylists"),
+            description = "Zeigt nur Musik-Playlisten"
+        ) {
+            MediaPlayerService.showPlaylists(context, MediaPlayerService.PlaylistType.MUSIC)
+        },
+
+        Command(
+            name = "plpodcast",
+            aliases = listOf("plp", "podcastplaylists"),
+            description = "Zeigt nur Podcast-Playlisten"
+        ) {
+            MediaPlayerService.showPlaylists(context, MediaPlayerService.PlaylistType.PODCAST)
+        },
+
+        Command(
+            name = "pladd",
+            aliases = listOf("pla", "addtoplaylist"),
+            description = "Fügt aktuellen Song/Podcast zu Playlist hinzu"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ Zur Playlist hinzufügen",
+                "Verwende zuerst 'playlists' um Playlist-IDs zu sehen",
+                context = context
+            )
+        },
+
+        Command(
+            name = "plplay",
+            aliases = listOf("plp", "playplaylist"),
+            description = "Spielt Playlist ab (Syntax: plplay [id])"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ Playlist abspielen",
+                "Syntax: plplay [playlist-id]\nVerwende 'playlists' um IDs zu sehen",
+                context = context
+            )
+        },
+
+        Command(
+            name = "plstop",
+            aliases = listOf("pls", "stopplaylist", "deactivateplaylist"),
+            description = "Beendet aktuelle Playlist"
+        ) {
+            MediaPlayerService.deactivatePlaylist(context)
+        },
+
+        Command(
+            name = "pldelete",
+            aliases = listOf("pld", "deleteplaylist", "removeplaylist"),
+            description = "Löscht Playlist (Syntax: pldelete [id])"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ Playlist löschen",
+                "Syntax: pldelete [playlist-id]\nVerwende 'playlists' um IDs zu sehen",
                 context = context
             )
         },
@@ -785,7 +841,7 @@ fun executeCommand(commandText: String, context: Context) {
         }
 
         "music", "m", "play", "player", "musik" -> {
-            PodcastPlayerService.stopService(context)
+            PodcastPlayerServiceCompat.stopService(context)
             val songNumber = argument?.toIntOrNull()
             restartMusicPlayer(songNumber, context)
             return
@@ -793,12 +849,12 @@ fun executeCommand(commandText: String, context: Context) {
 
         "pd", "pc", "Podcast", "podcast" -> {
             if (argument != null) {
-                PodcastPlayerService.sendForwardAction(context, argument.toInt())
+                PodcastPlayerServiceCompat.sendForwardAction(context, argument.toInt())
                 Log.d("PD", "pd command executed1")
             } else {
-                MusicPlayerService.stopService(context)
-                PodcastPlayerService.startService(context)
-                PodcastPlayerService.sendPlayAction(context)
+                MusicPlayerServiceCompat.stopService(context)
+                PodcastPlayerServiceCompat.startService(context)
+                PodcastPlayerServiceCompat.sendPlayAction(context)
                 Log.d("PD", "pd command executed0")
             }
             Log.d("PD", "pd command executed")
@@ -809,7 +865,7 @@ fun executeCommand(commandText: String, context: Context) {
             if (argument != null) {
                 val speed = argument.toFloatOrNull()
                 if (speed != null && speed in 0.5f..3.0f) {
-                    PodcastPlayerService.setPlaybackSpeed(context, speed)
+                    PodcastPlayerServiceCompat.setPlaybackSpeed(context, speed)
                 } else {
                     showSimpleNotificationExtern(
                         "❌ Ungültige Geschwindigkeit",
@@ -899,7 +955,7 @@ fun executeCommand(commandText: String, context: Context) {
 
         "bahn", "zug", "train", "db" -> {
             val daysAhead = argument?.toIntOrNull() ?: 1
-            if (daysAhead < 1 || daysAhead > 7) {
+            if (daysAhead !in 1..7) {
                 showSimpleNotificationExtern(
                     "❌ Ungültige Eingabe",
                     "Syntax: bahn [1-7]\n1=Morgen, 2=Übermorgen, etc.",
@@ -912,6 +968,114 @@ fun executeCommand(commandText: String, context: Context) {
                         checkBahnZuege(context, daysAhead)
                     }
                 }
+            }
+            return
+        }
+
+        "plcreate", "plc", "createplaylist", "newplaylist" -> {
+            if (argument != null) {
+                val parts = actualCommand.split(" ", limit = 2)
+                if (parts.size >= 2) {
+                    val typeAndName = parseCommandWithQuotes(parts[1])
+                    if (typeAndName.size >= 2) {
+                        val typeName = typeAndName[0].lowercase()
+                        val playlistName = typeAndName[1]
+
+                        val type = when (typeName) {
+                            "music", "musik", "m" -> MediaPlayerService.PlaylistType.MUSIC
+                            "podcast", "pd", "p" -> MediaPlayerService.PlaylistType.PODCAST
+                            else -> null
+                        }
+
+                        if (type != null) {
+                            MediaPlayerService.createPlaylist(context, playlistName, type)
+                        } else {
+                            showSimpleNotificationExtern(
+                                "❌ Ungültiger Typ",
+                                "Typ muss 'music' oder 'podcast' sein",
+                                20.seconds,
+                                context
+                            )
+                        }
+                    } else {
+                        showSimpleNotificationExtern(
+                            "❌ Fehler",
+                            "Syntax: plcreate [music|podcast] \"Name\"",
+                            20.seconds,
+                            context
+                        )
+                    }
+                }
+            } else {
+                showSimpleNotificationExtern(
+                    "ℹ️ Playlist erstellen",
+                    "Syntax: plcreate [music|podcast] \"Name\"\nBeispiel: plcreate music \"Workout\"",
+                    20.seconds,
+                    context
+                )
+            }
+            return
+        }
+
+        "playlists", "pl", "pls", "showplaylists" -> {
+            MediaPlayerService.showPlaylists(context)
+            return
+        }
+
+        "plmusic", "plm", "musicplaylists" -> {
+            MediaPlayerService.showPlaylists(context, MediaPlayerService.PlaylistType.MUSIC)
+            return
+        }
+
+        "plpodcast", "plp", "podcastplaylists" -> {
+            MediaPlayerService.showPlaylists(context, MediaPlayerService.PlaylistType.PODCAST)
+            return
+        }
+
+        "pladd", "pla", "addtoplaylist" -> {
+            if (argument != null) {
+                MediaPlayerService.addCurrentToPlaylist(context, argument)
+            } else {
+                MediaPlayerService.showPlaylists(context)
+                showSimpleNotificationExtern(
+                    "ℹ️ Zur Playlist hinzufügen",
+                    "Syntax: pladd [playlist-id]",
+                    20.seconds,
+                    context
+                )
+            }
+            return
+        }
+
+        "plplay", "playplaylist" -> {
+            if (argument != null) {
+                MediaPlayerService.activatePlaylist(context, argument)
+            } else {
+                showSimpleNotificationExtern(
+                    "ℹ️ Playlist abspielen",
+                    "Syntax: plplay [playlist-id]\nVerwende 'playlists' um IDs zu sehen",
+                    20.seconds,
+                    context
+                )
+            }
+            return
+        }
+
+        "plstop", "stopplaylist", "deactivateplaylist" -> {
+            MediaPlayerService.deactivatePlaylist(context)
+            return
+        }
+
+        "pldelete", "pld", "deleteplaylist", "removeplaylist" -> {
+            if (argument != null) {
+                MediaPlayerService.deletePlaylist(context, argument)
+            } else {
+                showSimpleNotificationExtern(
+                    "ℹ️ Playlist löschen",
+                    "Syntax: pldelete [playlist-id]\nVerwende 'playlists' um IDs zu sehen",
+                    20.seconds,
+                    context
+                )
             }
             return
         }
@@ -1056,13 +1220,14 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
         val hour = cal.get(Calendar.HOUR_OF_DAY).toString().padStart(2, '0')
         val date = "$year$month$day"
 
-        val dayLabel = when(daysAhead) {
+        val dayLabel = when (daysAhead) {
             1 -> "morgen"
             2 -> "übermorgen"
             else -> "in $daysAhead Tagen"
         }
 
-        val url = "https://apis-test.deutschebahn.com/db-api-marketplace/apis-test/timetables/review/renovate-all-minor-patch/timetables/v1/plan/$evaNo/$date/$hour"
+        val url =
+            "https://apis-test.deutschebahn.com/db-api-marketplace/apis-test/timetables/review/renovate-all-minor-patch/timetables/v1/plan/$evaNo/$date/$hour"
 
         val client = OkHttpClient()
         val request = Request.Builder()
@@ -1085,7 +1250,8 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
         }
 
         val xml = response.body.string()
-        val document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(InputSource(StringReader(xml)))
+        val document = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+            .parse(InputSource(StringReader(xml)))
         val stops = document.getElementsByTagName("s")
         var found = false
         for (i in 0 until stops.length) {
@@ -1093,7 +1259,10 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
             val arrival = stop.getElementsByTagName("ar").item(0) as? Element ?: continue
             val plannedTime = arrival.getAttribute("pt")
             val changedTime = arrival.getAttribute("ct")
-            val shownTime = if (changedTime.isNotBlank()) formatDbPlanTime(changedTime) else formatDbPlanTime(plannedTime)
+            val shownTime =
+                if (changedTime.isNotBlank()) formatDbPlanTime(changedTime) else formatDbPlanTime(
+                    plannedTime
+                )
             if (shownTime == targetPlannedArrival) {
                 val tripLabel = stop.getElementsByTagName("tl").item(0) as? Element
                 val trainType = tripLabel?.getAttribute("c").orEmpty().ifBlank { "Zug" }
@@ -1139,4 +1308,27 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
             context
         )
     }
+}
+
+private fun formatDbPlanTime(timeString: String): String {
+    if (timeString.length >= 10) {
+        val hours = timeString.substring(6, 8)
+        val minutes = timeString.substring(8, 10)
+        return "$hours:$minutes"
+    }
+    return timeString
+}
+
+// Hilfsfunktion: Berechne Verspätung in Minuten
+private fun calculateDbDelayMinutes(plannedTime: String, changedTime: String): Int {
+    if (plannedTime.length >= 10 && changedTime.length >= 10) {
+        val pHours = plannedTime.substring(6, 8).toIntOrNull() ?: 0
+        val pMinutes = plannedTime.substring(8, 10).toIntOrNull() ?: 0
+        val cHours = changedTime.substring(6, 8).toIntOrNull() ?: 0
+        val cMinutes = changedTime.substring(8, 10).toIntOrNull() ?: 0
+        val plannedTotal = pHours * 60 + pMinutes
+        val changedTotal = cHours * 60 + cMinutes
+        return (changedTotal - plannedTotal).coerceAtLeast(0)
+    }
+    return 0
 }
