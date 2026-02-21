@@ -14,7 +14,7 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.example.cloud.SupabaseConfig
+import com.example.cloud.SupabaseConfigALT
 import com.example.cloud.service.QuietHoursNotificationService
 import com.example.cloud.service.QuietHoursNotificationService.Companion.ACTION_CANCEL_DELETE
 import com.example.cloud.service.QuietHoursNotificationService.Companion.ACTION_CONFIRM_DELETE_IMAGE
@@ -122,8 +122,8 @@ fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?, contex
                 else -> "jpg"
             }
 
-            val supabaseUrl = SupabaseConfig.SUPABASE_URL
-            val supabaseKey = SupabaseConfig.SUPABASE_PUBLISHABLE_KEY
+            val supabaseUrl = SupabaseConfigALT.SUPABASE_URL
+            val supabaseKey = SupabaseConfigALT.SUPABASE_PUBLISHABLE_KEY
             val bucketName = "Tagesberichte"
             val imagename = imageName.replace(" ", "_")
             val storagePath = "$date/${imagename}.${extension}"
