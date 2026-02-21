@@ -1,9 +1,24 @@
 package com.example.cloud.authenticator
 
-import androidx.compose.foundation.layout.*
+import android.util.Log
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -11,18 +26,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.cloud.Config
 import com.example.cloud.ERRORINSERT
 import com.example.cloud.ERRORINSERTDATA
-import com.example.cloud.SupabaseConfig
+import com.example.cloud.SupabaseConfigALT
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import java.time.Instant
-import kotlin.collections.filter
-import kotlin.collections.forEach
-import kotlin.collections.map
-import kotlin.collections.toSet
 
 @Serializable
 data class TwoFaEntrySupabase(
@@ -36,23 +48,21 @@ fun TwoFaEntrySupabase.toLocal(): TwoFAEntry {
     return TwoFAEntry(
         supabaseId = this.id,
         name = this.account_name,
-        secret = EncryptionUtils.decrypt(this.secret),
-        folder = this.issuer
+        secret = Config.decrypt(this.secret)
     )
 }
 
 fun TwoFAEntry.toSupabase(): TwoFaEntrySupabase {
     return TwoFaEntrySupabase(
         account_name = this.name,
-        issuer = this.folder,
-        secret = EncryptionUtils.encrypt(this.secret)
+        secret = Config.encrypt(this.secret)
     )
 }
 
 suspend fun loadTwoFaEntriesFromSupabase(): List<TwoFAEntry> {
     return withContext(Dispatchers.IO) {
         try {
-            val supabaseEntries = SupabaseConfig.client.postgrest
+            val supabaseEntries = SupabaseConfigALT.client.postgrest
                 .from("two_fa_entries")
                 .select()
                 .decodeList<TwoFaEntrySupabase>()
@@ -76,7 +86,7 @@ suspend fun saveTwoFaEntryToSupabase(entry: TwoFAEntry, db: TwoFADatabase? = nul
         try {
             val supabaseEntry = entry.toSupabase()
 
-            val response = SupabaseConfig.client.postgrest
+            val response = SupabaseConfigALT.client.postgrest
                 .from("two_fa_entries")
                 .insert(supabaseEntry) {
                     select()
@@ -120,7 +130,7 @@ suspend fun updateTwoFaEntryInSupabase(entry: TwoFAEntry): Boolean {
 
             val supabaseEntry = entry.toSupabase()
 
-            SupabaseConfig.client.postgrest
+            SupabaseConfigALT.client.postgrest
                 .from("two_fa_entries")
                 .update({
                     set("account_name", supabaseEntry.account_name)
@@ -238,6 +248,7 @@ suspend fun processSyncDecision(
                 }
 
                 SyncDecision.DELETE -> {
+                    deleteTwoFaEntryFromSupabase(entry)
                     db.twoFADao().delete(entry)
                     true
                 }
@@ -326,20 +337,6 @@ fun SyncConfirmationDialog(
                             fontWeight = FontWeight.Medium,
                             color = Color.White
                         )
-
-                        if (currentEntry.folder != null) {
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "Ordner:",
-                                fontSize = 14.sp,
-                                color = Color.Gray
-                            )
-                            Text(
-                                currentEntry.folder,
-                                fontSize = 16.sp,
-                                color = Color(0xFFB388FF)
-                            )
-                        }
                     }
                 }
 
@@ -399,6 +396,33 @@ fun SyncConfirmationDialog(
                     )
                 }
             }
+        }
+    }
+}
+
+suspend fun deleteTwoFaEntryFromSupabase(entry: TwoFAEntry): Boolean {
+    return withContext(Dispatchers.IO) {
+        try {
+            if (entry.supabaseId == null) {
+                Log.d("TwoFARepository", "entry.supabaseId == null"); return@withContext true
+            } // nichts zu löschen
+            Log.d("TwoFARepository", "$entry")
+            SupabaseConfigALT.client.postgrest
+                .from("two_fa_entries")
+                .delete {
+                    filter { eq("id", entry.supabaseId) }
+                }
+            true
+        } catch (e: Exception) {
+            ERRORINSERT(
+                ERRORINSERTDATA(
+                    "TwoFARepository",
+                    "❌ Supabase Delete-Fehler: ${e.message}",
+                    Instant.now().toString(),
+                    "Error"
+                )
+            )
+            false
         }
     }
 }
