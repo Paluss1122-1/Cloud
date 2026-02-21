@@ -50,8 +50,6 @@ fun checkQuietHours(context: Context) {
         isCurrentlyQuietHours = nowQuietHours
         updateNotification(context)
 
-        Log.d("QuietHoursService", "🔄 Status changed: $wasQuietHours → $nowQuietHours")
-
         showSimpleNotificationExtern(
             if (nowQuietHours) "🌙 Ruhezeit aktiviert" else "☀️ Ruhezeit beendet",
             if (nowQuietHours) {
@@ -62,8 +60,6 @@ fun checkQuietHours(context: Context) {
             3.seconds,
             context
         )
-    } else {
-        Log.d("QuietHoursService", "✓ Status unchanged: $nowQuietHours")
     }
 }
 
@@ -83,7 +79,6 @@ fun scheduleNextCheck(context: Context) {
     val now = Calendar.getInstance()
     val quietStart = getQuietStartHour(context)
     val quietEnd = getQuietEndHour(context)
-
     val nextChange = calculateNextStatusChange(now, quietStart, quietEnd)
     val delayMillis = nextChange.timeInMillis - now.timeInMillis
     val delayMinutes = delayMillis / 1000 / 60
@@ -91,9 +86,10 @@ fun scheduleNextCheck(context: Context) {
     val checkRunnable = QuietHoursNotificationService.getCheckRunnable(context)
 
     if (delayMinutes < THRESHOLD_MINUTES) {
-        workerHandler.removeCallbacks(checkRunnable)
+        workerHandler.removeCallbacksAndMessages(null)
         workerHandler.postDelayed(checkRunnable, maxOf(delayMillis, 30_000L))
     } else {
+        workerHandler.removeCallbacksAndMessages(null)
         scheduleWithAlarmManager(nextChange.timeInMillis, context, checkRunnable)
     }
 }
@@ -297,59 +293,10 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
             "Settings",
             settingsPendingIntent
         )
-
-        val messagesIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-            action = ACTION_SHOW_MESSAGES
-        }
-        val messagesPendingIntent = PendingIntent.getService(
-            context, 0, messagesIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        builder.addAction(
-            android.R.drawable.ic_dialog_email,
-            "Messages",
-            messagesPendingIntent
-        )
-
-        val musicIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-            action = ACTION_RESTART_MUSIC_PLAYER
-        }
-        val musicPendingIntent = PendingIntent.getService(
-            context, 2, musicIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        builder.addAction(
-            android.R.drawable.ic_media_play,
-            "Music",
-            musicPendingIntent
-        )
-
     } else {
         val prefs = context.getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
         val currentStart = prefs.getString("saved_number_start", "21") ?: "21"
         val currentEnd = prefs.getString("saved_number", "7") ?: "7"
-
-        val startRemoteInput = RemoteInput.Builder("key_time_input")
-            .setLabel("Startzeit (0-23)")
-            .build()
-
-        val startIntent = Intent(ACTION_CHANGE_START).apply {
-            `package` =  context.packageName
-        }
-
-        val startPending = PendingIntent.getBroadcast(
-            context, 100, startIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-        )
-
-        val startAction = NotificationCompat.Action.Builder(
-            android.R.drawable.ic_menu_recent_history,
-            "Start: ${currentStart}h",
-            startPending
-        )
-            .addRemoteInput(startRemoteInput)
-            .setShowsUserInterface(false)
-            .build()
 
         val endRemoteInput = RemoteInput.Builder("key_time_input")
             .setLabel("Endzeit (0-23)")
@@ -376,9 +323,21 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
         builder
             .setContentTitle("Ruhezeit-Überwachung")
             .setContentText("Aktiv von $currentStart:00 bis $currentEnd:00 Uhr")
-            .addAction(startAction)
             .addAction(endAction)
     }
+
+    val syncIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
+        action = "ACTION_SYNC_LAPTOP"
+    }
+    val syncPendingIntent = PendingIntent.getService(
+        context, 0, syncIntent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+    builder.addAction(
+        android.R.drawable.ic_dialog_email,
+        "Laptop",
+        syncPendingIntent
+    )
 
     return builder.build()
 }
@@ -393,7 +352,11 @@ fun updateNotification(context: Context) {
 fun isQuietHoursNow(context: Context): Boolean {
     val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
     val prefs = context.getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
-    val quietEnd = prefs.getString("saved_number", null)?.toIntOrNull() ?: 21
-    val quietStart = prefs.getString("saved_number_start", null)?.toIntOrNull() ?: 7
-    return hour !in quietStart..<quietEnd
+    val quietEnd = prefs.getString("saved_number", null)?.toIntOrNull() ?: 7
+    val quietStart = prefs.getString("saved_number_start", null)?.toIntOrNull() ?: 21
+    return if (quietStart < quietEnd) {
+        hour !in quietStart..<quietEnd
+    } else {
+        hour in quietEnd..<quietStart
+    }
 }
