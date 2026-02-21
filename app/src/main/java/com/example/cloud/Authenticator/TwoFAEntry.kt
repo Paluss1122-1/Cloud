@@ -8,6 +8,5 @@ data class TwoFAEntry(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val supabaseId: String? = null,
     val name: String,
-    val secret: String,
-    val folder: String? = null
+    val secret: String
 )

@@ -128,10 +128,8 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
     var showAddDialog by rememberSaveable { mutableStateOf(false) }
     var isEditingEntry by remember { mutableStateOf(false) }
     var editedName by remember { mutableStateOf("") }
-    var editedFolder by remember { mutableStateOf("") }
     var generatedCode by rememberSaveable { mutableStateOf("------") }
     var secondsLeft by rememberSaveable { mutableIntStateOf(30) }
-    var folder by rememberSaveable { mutableStateOf("") }
     var pendingEntries by remember { mutableStateOf<List<TwoFAEntry>>(emptyList()) }
     var showSyncDialog by remember { mutableStateOf(false) }
     var isSyncing by remember { mutableStateOf(false) }
@@ -267,25 +265,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                 Text("Aktualisieren", color = Color.White)
             }
 
-            val groupedEntries = try {
-                entries.groupBy { it.folder ?: "Unsortiert" }
-                    .toSortedMap(compareBy { if (it == "Unsortiert") "ZZZ" else it })
-            } catch (e: Exception) {
-                LaunchedEffect(Unit) {
-                    scope.launch {
-                        ERRORINSERT(
-                            ERRORINSERTDATA(
-                                "TwoFAListScreen",
-                                "Fehler beim Gruppieren: ${e.message}",
-                                Instant.now().toString(),
-                                "Error"
-                            )
-                        )
-                    }
-                }
-                emptyMap<String, List<TwoFAEntry>>()
-            }
-
+            val groupedEntries = entries
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
@@ -301,8 +281,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                     }
                 }
 
-                val allEntries = groupedEntries.values.flatten()
-                val duplicateNames = allEntries
+                val duplicateNames = groupedEntries
                     .groupBy { it.name }
                     .filter { it.value.size > 1 }
                     .keys
@@ -316,25 +295,18 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                     return@Composable
                 }
 
-                groupedEntries.forEach { (folderName, folderEntries) ->
-                    item(key = folderName) {
-                        Text(
-                            text = "$folderName:",
-                            fontSize = 30.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color(0xFF6E48AA), RoundedCornerShape(8.dp))
-                                .padding(8.dp)
-                        )
-                    }
-
-                    // Innerhalb des LazyColumn Items für jeden Eintrag
-                    items(folderEntries, key = { it.name }) { entry ->
-                        val iconPrefs = context.getSharedPreferences("entry_icons", Context.MODE_PRIVATE)
-                        var iconUrl by remember { mutableStateOf(iconPrefs.getString(entry.secret, null) ?: "") }
+                groupedEntries.forEach { _ ->
+                    items(groupedEntries, key = { it.name }) { entry ->
+                        val iconPrefs =
+                            context.getSharedPreferences("entry_icons", Context.MODE_PRIVATE)
+                        var iconUrl by remember {
+                            mutableStateOf(
+                                iconPrefs.getString(
+                                    entry.secret,
+                                    null
+                                ) ?: ""
+                            )
+                        }
                         var showIconDialog by remember { mutableStateOf(false) }
                         var inputUrl by remember { mutableStateOf(iconUrl) }
 
@@ -352,8 +324,17 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                             val code = TotpGenerator.generateTOTP(entry.secret, now)
                                             val clipboard =
                                                 context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                            clipboard.setPrimaryClip(ClipData.newPlainText("Generated Code", code))
-                                            Toast.makeText(context, "Code für ${entry.name} kopiert!", Toast.LENGTH_SHORT).show()
+                                            clipboard.setPrimaryClip(
+                                                ClipData.newPlainText(
+                                                    "Generated Code",
+                                                    code
+                                                )
+                                            )
+                                            Toast.makeText(
+                                                context,
+                                                "Code für ${entry.name} kopiert!",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                         }
                                     )
                                 }
@@ -367,7 +348,11 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                         // Base64 Image
                                         val base64String = iconUrl.substringAfter("base64,")
                                         val imageBytes = Base64.decode(base64String, Base64.DEFAULT)
-                                        val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                                        val bitmap = BitmapFactory.decodeByteArray(
+                                            imageBytes,
+                                            0,
+                                            imageBytes.size
+                                        )
 
                                         IconButton(onClick = {
                                             inputUrl = iconUrl
@@ -376,7 +361,9 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                             Image(
                                                 bitmap = bitmap.asImageBitmap(),
                                                 contentDescription = "Icon für ${entry.name}",
-                                                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(16.dp))
+                                                modifier = Modifier
+                                                    .size(40.dp)
+                                                    .clip(RoundedCornerShape(16.dp))
                                             )
                                         }
                                     } else {
@@ -396,7 +383,12 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                         inputUrl = iconUrl
                                         showIconDialog = true
                                     }) {
-                                        Icon(Icons.Default.Info, contentDescription = "Icon ändern", tint = Color.White,modifier = Modifier.size(40.dp))
+                                        Icon(
+                                            Icons.Default.Info,
+                                            contentDescription = "Icon ändern",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(40.dp)
+                                        )
                                     }
                                 }
 
@@ -436,7 +428,9 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                     }) { Text("Speichern") }
                                 },
                                 dismissButton = {
-                                    TextButton(onClick = { showIconDialog = false }) { Text("Abbrechen") }
+                                    TextButton(onClick = {
+                                        showIconDialog = false
+                                    }) { Text("Abbrechen") }
                                 }
                             )
                         }
@@ -563,73 +557,6 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                 ),
                                 modifier = Modifier.fillMaxWidth()
                             )
-                            Spacer(Modifier.height(8.dp))
-
-                            val existingFolders = entries.mapNotNull { it.folder }.distinct()
-                            var folderExpanded by remember { mutableStateOf(false) }
-                            var isFolderEditMode by remember { mutableStateOf(false) }
-
-                            Box(Modifier.fillMaxWidth()) {
-                                OutlinedTextField(
-                                    value = editedFolder,
-                                    onValueChange = { editedFolder = it },
-                                    label = { Text("Ordner (optional)", color = Color.Gray) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    readOnly = !isFolderEditMode,
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedTextColor = Color.White,
-                                        unfocusedTextColor = Color.White,
-                                        focusedBorderColor = Color(0xFFB388FF),
-                                        unfocusedBorderColor = Color.Gray
-                                    ),
-                                    trailingIcon = {
-                                        IconButton(onClick = {
-                                            if (!isFolderEditMode) folderExpanded = true
-                                        }) {
-                                            Icon(
-                                                imageVector = if (folderExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
-                                                contentDescription = "Dropdown-Pfeil",
-                                                tint = Color.White
-                                            )
-                                        }
-                                    },
-                                    interactionSource = remember { MutableInteractionSource() }
-                                        .also { interactionSource ->
-                                            LaunchedEffect(interactionSource) {
-                                                interactionSource.interactions.collect { interaction ->
-                                                    if (interaction is PressInteraction.Release && !isFolderEditMode) {
-                                                        folderExpanded = true
-                                                    }
-                                                }
-                                            }
-                                        }
-                                )
-
-                                DropdownMenu(
-                                    expanded = folderExpanded,
-                                    onDismissRequest = { folderExpanded = false },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    existingFolders.forEach { f ->
-                                        DropdownMenuItem(
-                                            text = { Text(f) },
-                                            onClick = {
-                                                editedFolder = f
-                                                isFolderEditMode = false
-                                                folderExpanded = false
-                                            }
-                                        )
-                                    }
-                                    DropdownMenuItem(
-                                        text = { Text("Neuen Ordner eingeben...") },
-                                        onClick = {
-                                            editedFolder = ""
-                                            isFolderEditMode = true
-                                            folderExpanded = false
-                                        }
-                                    )
-                                }
-                            }
 
                             Spacer(Modifier.height(8.dp))
 
@@ -642,8 +569,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                         scope.launch {
                                             if (editedName.isNotBlank()) {
                                                 val updatedEntry = entry.copy(
-                                                    name = editedName,
-                                                    folder = editedFolder.ifBlank { null }
+                                                    name = editedName
                                                 )
                                                 db.twoFADao().update(updatedEntry)
 
@@ -687,7 +613,6 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                     onClick = {
                                         isEditingEntry = false
                                         editedName = entry.name
-                                        editedFolder = entry.folder ?: ""
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
                                 ) {
@@ -704,7 +629,6 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                     .clickable {
                                         isEditingEntry = true
                                         editedName = entry.name
-                                        editedFolder = entry.folder ?: ""
                                     }
                                     .fillMaxWidth()
                             )
@@ -880,6 +804,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                                     apply()
                                                 }
                                                 db.twoFADao().delete(entry)
+                                                deleteTwoFaEntryFromSupabase(entry)
                                                 entries = db.twoFADao().getAll()
                                                 selectedEntry = null
                                                 showDeleteDialog = false
@@ -933,65 +858,6 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
                         )
 
-                        var expanded by remember { mutableStateOf(false) }
-                        val existingFolders = entries.mapNotNull { it.folder }.distinct()
-                        var isEditMode by remember { mutableStateOf(false) }
-
-                        Box(Modifier.fillMaxWidth()) {
-                            OutlinedTextField(
-                                value = folder,
-                                onValueChange = { folder = it },
-                                label = { Text("Ordner (optional)") },
-                                modifier = Modifier.fillMaxWidth(),
-                                readOnly = !isEditMode,
-                                trailingIcon = {
-                                    IconButton(onClick = {
-                                        if (!isEditMode) expanded = true
-                                    }) {
-                                        Icon(
-                                            imageVector = if (expanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
-                                            contentDescription = "Dropdown-Pfeil"
-                                        )
-                                    }
-                                },
-                                interactionSource = remember { MutableInteractionSource() }
-                                    .also { interactionSource ->
-                                        LaunchedEffect(interactionSource) {
-                                            interactionSource.interactions.collect { interaction ->
-                                                if (interaction is PressInteraction.Release && !isEditMode) {
-                                                    expanded = true
-                                                }
-                                            }
-                                        }
-                                    }
-                            )
-
-                            DropdownMenu(
-                                expanded = expanded,
-                                onDismissRequest = { expanded = false },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                existingFolders.forEach { f ->
-                                    DropdownMenuItem(
-                                        text = { Text(f) },
-                                        onClick = {
-                                            folder = f
-                                            isEditMode = false
-                                            expanded = false
-                                        }
-                                    )
-                                }
-                                DropdownMenuItem(
-                                    text = { Text("Neuen Ordner eingeben...") },
-                                    onClick = {
-                                        folder = ""
-                                        isEditMode = true
-                                        expanded = false
-                                    }
-                                )
-                            }
-                        }
-
                         Spacer(Modifier.height(16.dp))
                         Button(
                             onClick = {
@@ -1010,8 +876,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                         } else {
                                             val newEntry = TwoFAEntry(
                                                 name = name,
-                                                secret = secret,
-                                                folder = folder.ifBlank { null }
+                                                secret = secret
                                             )
 
                                             try {
@@ -1058,7 +923,6 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                             entries = db.twoFADao().getAll()
                                             name = ""
                                             secret = ""
-                                            folder = ""
                                             showAddDialog = false
                                         }
                                     }
