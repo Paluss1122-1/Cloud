@@ -1,29 +1,33 @@
 package com.example.cloud.errorreportsclaude
 
-import android.content.Context
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.Intent
-import androidx.core.app.NotificationManagerCompat
 import android.app.Service
+import android.content.Context
+import android.content.Intent
 import android.os.IBinder
-import androidx.core.app.NotificationCompat
-import io.github.jan.supabase.realtime.channel
-import io.github.jan.supabase.realtime.postgresChangeFlow
-import io.github.jan.supabase.realtime.PostgresAction
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
-import android.Manifest
-import android.net.Uri
 import android.util.Log
 import androidx.annotation.RequiresPermission
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.net.toUri
 import com.example.cloud.ERRORINSERT
 import com.example.cloud.ERRORINSERTDATA
-import com.example.cloud.SupabaseConfig
+import com.example.cloud.SupabaseConfigALT
+import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.channel
+import io.github.jan.supabase.realtime.postgresChangeFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
-import androidx.core.net.toUri
 
 data class ErrorReport(
     val service_name: String,
@@ -61,16 +65,20 @@ class ErrorNotificationManager(private val context: Context) {
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     fun showErrorNotification(errorReport: ErrorReport) {
         try {
-            android.util.Log.d("ErrorMonitor", "Severity value: ${errorReport.severity}")
+            Log.d("ErrorMonitor", "Severity value: ${errorReport.severity}")
             /*val severityEmoji = when (errorReport.severity.trim()) {
                 "Error" -> "🔴"
                 "Warning" -> "⚠️"
                 else -> "ℹ️"
             }*/
 
-            val severityEmoji = if (errorReport.severity == "Error") {"🔴"} else {"ℹ️"}
-            Log.d("ErrorMonitor",errorReport.severity)
-            android.util.Log.d("ErrorMonitor", "$severityEmoji")
+            val severityEmoji = if (errorReport.severity == "Error") {
+                "🔴"
+            } else {
+                "ℹ️"
+            }
+            Log.d("ErrorMonitor", errorReport.severity)
+            Log.d("ErrorMonitor", "$severityEmoji")
 
             val intent = Intent(
                 Intent.ACTION_VIEW,
@@ -94,7 +102,8 @@ class ErrorNotificationManager(private val context: Context) {
                 .setColorized(true)
                 .build()
 
-            NotificationManagerCompat.from(context).notify(System.currentTimeMillis().toInt(), notification)
+            NotificationManagerCompat.from(context)
+                .notify(System.currentTimeMillis().toInt(), notification)
         } catch (e: Exception) {
             CoroutineScope(Dispatchers.IO).launch {
                 ERRORINSERT(
@@ -190,7 +199,7 @@ class ErrorMonitorService : Service() {
             try {
                 val tableName = "error_reports"
 
-                val channel = SupabaseConfig.client.channel("realtime:$tableName")
+                val channel = SupabaseConfigALT.client.channel("realtime:$tableName")
 
                 val changeFlow = channel
                     .postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
@@ -200,7 +209,7 @@ class ErrorMonitorService : Service() {
                 changeFlow
                     .onEach { change ->
                         handleNewError(change.record)
-                        Log.d("ErrorMonitor","${change.record}")
+                        Log.d("ErrorMonitor", "${change.record}")
                     }
                     .launchIn(this)
 
@@ -224,9 +233,12 @@ class ErrorMonitorService : Service() {
     private suspend fun handleNewError(errorData: Map<String, Any>) {
         try {
             val errorReport = ErrorReport(
-                service_name = errorData["service_name"]?.toString() ?: "Unknown",  // ✅ toString() statt as String
-                error_message = errorData["error_message"]?.toString() ?: "Unknown",  // ✅ toString() statt as String
-                created_at = errorData["created_at"]?.toString() ?: "Unknown",  // ✅ toString() statt as String
+                service_name = errorData["service_name"]?.toString()
+                    ?: "Unknown",  // ✅ toString() statt as String
+                error_message = errorData["error_message"]?.toString()
+                    ?: "Unknown",  // ✅ toString() statt as String
+                created_at = errorData["created_at"]?.toString()
+                    ?: "Unknown",  // ✅ toString() statt as String
                 severity = errorData["severity"]?.toString()?.removeSurrounding("\"") ?: "Unknown"
             )
 
