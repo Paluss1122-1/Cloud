@@ -16,7 +16,7 @@ data class ERRORINSERTDATA(
 
 suspend fun ERRORINSERT(data: ERRORINSERTDATA): Int {
     try {
-        SupabaseConfig.client.from("error_reports")
+        Config.client.from("error_reports")
             .insert(data)
             .decodeSingle<ErrorReportResponse>()
 
