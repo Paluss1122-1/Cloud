@@ -3,7 +3,6 @@ package com.example.cloud.authenticator
 import android.app.Activity
 import android.content.Context
 import android.os.Bundle
-import android.util.Log
 import android.view.View
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -105,7 +104,9 @@ fun SilentCaptureScreen() {
 
 suspend fun handleQrCode(qrText: String, context: Context) {
     try {
-        val decodedText = URLDecoder.decode(qrText, "UTF-8")
+        val decodedText = withContext(Dispatchers.IO) {
+            URLDecoder.decode(qrText, "UTF-8")
+        }
         val uri = decodedText.toUri()
 
         if (uri.scheme != "otpauth") {
@@ -147,7 +148,6 @@ suspend fun handleQrCode(qrText: String, context: Context) {
 
         val db = TwoFADatabase.getDatabase(context)
 
-        // Prüfen ob bereits vorhanden
         val existingEntries = db.twoFADao().getAll()
         val alreadyExists = existingEntries.any {
             it.secret == secretParam || it.name.equals(displayName, ignoreCase = true)
@@ -171,8 +171,7 @@ suspend fun handleQrCode(qrText: String, context: Context) {
 
         val newEntry = TwoFAEntry(
             name = displayName,
-            secret = secretParam,
-            folder = null
+            secret = secretParam
         )
 
         db.twoFADao().insert(newEntry)
