@@ -2,6 +2,7 @@ package com.example.cloud.notes
 
 import android.annotation.SuppressLint
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -69,6 +70,10 @@ fun NotizenApp() {
     var showCreateDialog by remember { mutableStateOf(false) }
     var selectedNote by remember { mutableStateOf<Note?>(null) }
 
+    BackHandler(selectedNote !== null) {
+        selectedNote = null
+    }
+
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(
@@ -78,7 +83,7 @@ fun NotizenApp() {
                 Icon(Icons.Default.Add, contentDescription = "Notiz erstellen")
             }
         }
-    ) { padding ->
+    ) { _ ->
         if (notes.isEmpty()) {
             Box(
                 modifier = Modifier
@@ -139,7 +144,7 @@ fun NotizenApp() {
             onNoteSaved = { updatedNote ->
                 notes = notes.map { if (it.id == updatedNote.id) updatedNote else it }
                 selectedNote = null
-                saveNotes(context,notes)
+                saveNotes(context, notes)
             },
             onDelete = {
                 notes = notes.filter { it.id != note.id }
@@ -258,7 +263,10 @@ fun CreateNoteDialog(
                 containerColor = Gray
             )
         ) {
-            Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
                     text = "Notiztyp auswählen",
                     style = MaterialTheme.typography.titleLarge,
@@ -316,7 +324,11 @@ fun CreateNoteDialog(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.White)
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color.White
+                        )
                         Spacer(modifier = Modifier.width(16.dp))
                         Column {
                             Text("Checkliste", fontWeight = FontWeight.Bold, color = Color.White)
@@ -384,227 +396,222 @@ fun EditNoteDialog(
     var selectedColor by remember { mutableStateOf(note.color) }
     var showColorPicker by remember { mutableStateOf(false) }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.9f)
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        val titleColor = if (selectedColor == NoteColor.ORANGE ||
+            selectedColor == NoteColor.YELLOW ||
+            selectedColor == NoteColor.GREEN ||
+            selectedColor == NoteColor.PURPLE
         ) {
-            val titleColor = if (selectedColor == NoteColor.ORANGE ||
-                selectedColor == NoteColor.YELLOW ||
-                selectedColor == NoteColor.GREEN ||
-                selectedColor == NoteColor.PURPLE
-            ) {
-                Color.Black
-            } else {
-                Color.White
-            }
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        if (selectedColor == NoteColor.DEFAULT) {
-                            Gray
-                        } else {
-                            selectedColor.color
-                        }
-                    )
-            ) {
-                TopAppBar(
-
-                    title = { Text("Notiz bearbeiten", color = titleColor) },
-                    colors = if (selectedColor == NoteColor.DEFAULT) {
-                        TopAppBarDefaults.topAppBarColors(
-                            containerColor = Gray
-                        )
+            Color.Black
+        } else {
+            Color.White
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    if (selectedColor == NoteColor.DEFAULT) {
+                        Gray
                     } else {
-                        TopAppBarDefaults.topAppBarColors(
-                            containerColor = selectedColor.color
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onDismiss) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Zurück",
-                                tint = titleColor
-                            )
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { showColorPicker = !showColorPicker }) {
-                            Icon(
-                                Icons.Default.Info,
-                                contentDescription = "Farbe",
-                                tint = titleColor
-                            )
-                        }
-                        IconButton(onClick = onDelete) {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = "Löschen",
-                                tint = Color.Red
-                            )
-                        }
+                        selectedColor.color
                     }
                 )
-
-                AnimatedVisibility(visible = showColorPicker) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        NoteColor.entries.forEach { color ->
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clickable { selectedColor = color },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Surface(
-                                    modifier = Modifier.size(32.dp),
-                                    shape = RoundedCornerShape(16.dp),
-                                    color = color.color,
-                                    border = BorderStroke(
-                                        2.dp,
-                                        if (selectedColor == color) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.outline
-                                    )
-                                ) {}
-                            }
-                        }
-                    }
-                }
-
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(16.dp)
-                ) {
-                    OutlinedTextField(
-                        value = title,
-                        onValueChange = { title = it },
-                        label = { Text("Titel", color = titleColor) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = titleColor,
-                            unfocusedTextColor = titleColor,
-                            focusedLabelColor = titleColor,
-                            unfocusedLabelColor = titleColor.copy(alpha = 0.6f) // leicht transparent im unfocused-Zustand, optional
-                        )
+        ) {
+            TopAppBar(
+                title = { Text("Notiz bearbeiten", color = titleColor) },
+                colors = if (selectedColor == NoteColor.DEFAULT) {
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = Gray
                     )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    when (note.type) {
-                        is NoteType.Text -> {
-                            OutlinedTextField(
-                                value = textContent,
-                                onValueChange = { textContent = it },
-                                label = { Text("Notiz") },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = titleColor,
-                                    unfocusedTextColor = titleColor,
-                                    focusedLabelColor = titleColor,
-                                    unfocusedLabelColor = titleColor.copy(alpha = 0.6f) // leicht transparent im unfocused-Zustand, optional
-                                )
-                            )
-                        }
-
-                        is NoteType.Checklist -> {
-                            LazyColumn(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                itemsIndexed(checklistItems) { index, item ->
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Checkbox(
-                                            checked = item.isChecked,
-                                            onCheckedChange = { checked ->
-                                                checklistItems =
-                                                    checklistItems.toMutableList().apply {
-                                                        this[index] = item.copy(isChecked = checked)
-                                                    }
-                                            }
-                                        )
-                                        Text(
-                                            text = item.text,
-                                            modifier = Modifier.weight(1f),
-                                            textDecoration = if (item.isChecked) TextDecoration.LineThrough else null
-                                        )
-                                        IconButton(
-                                            onClick = {
-                                                checklistItems =
-                                                    checklistItems.filterIndexed { i, _ -> i != index }
-                                            }
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Close,
-                                                contentDescription = "Entfernen"
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                OutlinedTextField(
-                                    value = newItemText,
-                                    onValueChange = { newItemText = it },
-                                    label = { Text("Neuer Punkt") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
-                                )
-                                IconButton(
-                                    onClick = {
-                                        if (newItemText.isNotBlank()) {
-                                            checklistItems =
-                                                checklistItems + ChecklistItem(text = newItemText)
-                                            newItemText = ""
-                                        }
-                                    }
-                                ) {
-                                    Icon(Icons.Default.Add, contentDescription = "Hinzufügen")
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Button(
-                    onClick = {
-                        val updatedNote = note.copy(
-                            title = title,
-                            type = when (note.type) {
-                                is NoteType.Text -> NoteType.Text(textContent)
-                                is NoteType.Checklist -> NoteType.Checklist(checklistItems)
-                            },
-                            color = selectedColor
+                } else {
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = selectedColor.color
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Zurück",
+                            tint = titleColor
                         )
-                        onNoteSaved(updatedNote)
-                    },
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showColorPicker = !showColorPicker }) {
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = "Farbe",
+                            tint = titleColor
+                        )
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Löschen",
+                            tint = Color.Red
+                        )
+                    }
+                },
+                windowInsets = WindowInsets(0, 0, 0, 0)
+            )
+
+            AnimatedVisibility(visible = showColorPicker) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    enabled = title.isNotBlank()
+                    horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    Text("Speichern")
+                    NoteColor.entries.forEach { color ->
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clickable { selectedColor = color },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(32.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                color = color.color,
+                                border = BorderStroke(
+                                    2.dp,
+                                    if (selectedColor == color) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.outline
+                                )
+                            ) {}
+                        }
+                    }
                 }
+            }
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(16.dp)
+            ) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Titel", color = titleColor) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = titleColor,
+                        unfocusedTextColor = titleColor,
+                        focusedLabelColor = titleColor,
+                        unfocusedLabelColor = titleColor.copy(alpha = 0.6f) // leicht transparent im unfocused-Zustand, optional
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                when (note.type) {
+                    is NoteType.Text -> {
+                        OutlinedTextField(
+                            value = textContent,
+                            onValueChange = { textContent = it },
+                            label = { Text("Notiz") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = titleColor,
+                                unfocusedTextColor = titleColor,
+                                focusedLabelColor = titleColor,
+                                unfocusedLabelColor = titleColor.copy(alpha = 0.6f) // leicht transparent im unfocused-Zustand, optional
+                            )
+                        )
+                    }
+
+                    is NoteType.Checklist -> {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            itemsIndexed(checklistItems) { index, item ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Checkbox(
+                                        checked = item.isChecked,
+                                        onCheckedChange = { checked ->
+                                            checklistItems =
+                                                checklistItems.toMutableList().apply {
+                                                    this[index] = item.copy(isChecked = checked)
+                                                }
+                                        }
+                                    )
+                                    Text(
+                                        text = item.text,
+                                        modifier = Modifier.weight(1f),
+                                        textDecoration = if (item.isChecked) TextDecoration.LineThrough else null
+                                    )
+                                    IconButton(
+                                        onClick = {
+                                            checklistItems =
+                                                checklistItems.filterIndexed { i, _ -> i != index }
+                                        }
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = "Entfernen"
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = newItemText,
+                                onValueChange = { newItemText = it },
+                                label = { Text("Neuer Punkt") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            IconButton(
+                                onClick = {
+                                    if (newItemText.isNotBlank()) {
+                                        checklistItems =
+                                            checklistItems + ChecklistItem(text = newItemText)
+                                        newItemText = ""
+                                    }
+                                }
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "Hinzufügen")
+                            }
+                        }
+                    }
+                }
+            }
+
+            Button(
+                onClick = {
+                    val updatedNote = note.copy(
+                        title = title,
+                        type = when (note.type) {
+                            is NoteType.Text -> NoteType.Text(textContent)
+                            is NoteType.Checklist -> NoteType.Checklist(checklistItems)
+                        },
+                        color = selectedColor
+                    )
+                    onNoteSaved(updatedNote)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                enabled = title.isNotBlank()
+            ) {
+                Text("Speichern")
             }
         }
     }
