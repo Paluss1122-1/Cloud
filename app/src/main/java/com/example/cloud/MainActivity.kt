@@ -30,7 +30,7 @@ import java.io.FileOutputStream
 
 class MainActivity : FragmentActivity() {
     private lateinit var policyManager: PolicyManager
-    val supabase: SupabaseClient = SupabaseConfig.client
+    val supabase: SupabaseClient = SupabaseConfigALT.client
 
     // JSON Editor State
     private var jsonFilePath by mutableStateOf<String?>(null)
