@@ -5,8 +5,6 @@ import android.R
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
-import android.content.Intent
-import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
@@ -21,7 +19,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.Instant
-import kotlin.text.isNotEmpty
 import kotlin.text.split
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -139,16 +136,7 @@ fun loadPodcastsFromMediaStore(context: Context): List<SimplePodcast> {
     return podcasts.sortedBy { it.name }
 }
 
-fun getAllPodcastsFromPrefs(prefs: SharedPreferences, context: Context): List<SimplePodcast> {
-    val allKeys = prefs.all.keys
-    val podcastPaths = allKeys
-        .filter { it.startsWith("podcast_position_") }
-        .map { key ->
-            val hash = key.removePrefix("podcast_position_").toIntOrNull() ?: return@map null
-            null
-        }
-        .filterNotNull()
-
+fun getAllPodcastsFromPrefs(context: Context): List<SimplePodcast> {
     return loadPodcastsFromMediaStore(context)
 }
 
@@ -205,8 +193,7 @@ fun showPodcastQueue(context: Context) {
 
 fun addPodcastToQueue(index: Int, context: Context) {
     try {
-        val prefs = context.getSharedPreferences("podcast_player_prefs", MODE_PRIVATE)
-        val allPodcasts = getAllPodcastsFromPrefs(prefs, context)
+        val allPodcasts = getAllPodcastsFromPrefs(context)
 
         if (index < 0 || index >= allPodcasts.size) {
             showSimpleNotificationExtern(
@@ -287,12 +274,7 @@ fun clearPodcastQueue(context: Context) {
 
 fun getPodcastQueueFromService(context: Context): List<String> {
     val prefs = context.getSharedPreferences("podcast_player_prefs", MODE_PRIVATE)
-    val queueJson = prefs.getString("podcast_queue", null)
-    return if (queueJson != null && queueJson.isNotEmpty()) {
-        queueJson.split("|||")
-    } else {
-        emptyList()
-    }
+    return prefs.getString("podcast_queue", "")?.split("|||") ?: emptyList()
 }
 
 fun addToQueueViaService(path: String, context: Context) {
