@@ -1,62 +1,59 @@
 package com.example.cloud.service
 
-import com.example.cloud.quiethoursnotificationhelper.*
-
 import android.Manifest
 import android.R
-import android.app.Activity
 import android.app.AlarmManager
-import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
-import androidx.core.app.RemoteInput
 import android.app.Service
-import android.content.BroadcastReceiver
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.ImageDecoder
 import android.hardware.camera2.CameraManager
-import android.media.AudioManager
 import android.media.MediaPlayer
-import android.net.Uri
-import android.os.Bundle
-import android.os.Environment
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
-import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
-import androidx.core.app.Person
-import androidx.core.content.ContextCompat
-import androidx.core.content.edit
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.launch
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
 import com.example.cloud.mediarecorder.AudioRecorder
-import com.example.cloud.SupabaseConfig
-import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.query.Order
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import java.net.HttpURLConnection
-import java.net.URL
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import com.example.cloud.quiethoursnotificationhelper.GalleryImage
+import com.example.cloud.quiethoursnotificationhelper.checkQuietHours
+import com.example.cloud.quiethoursnotificationhelper.cleanupOldMessages
+import com.example.cloud.quiethoursnotificationhelper.commandReceiver
+import com.example.cloud.quiethoursnotificationhelper.createNotification
+import com.example.cloud.quiethoursnotificationhelper.createNotificationChannel
+import com.example.cloud.quiethoursnotificationhelper.deleteGalleryImage
+import com.example.cloud.quiethoursnotificationhelper.isQuietHoursNow
+import com.example.cloud.quiethoursnotificationhelper.loadGalleryImages
+import com.example.cloud.quiethoursnotificationhelper.markReadReceiver
+import com.example.cloud.quiethoursnotificationhelper.messageSentReceiver
+import com.example.cloud.quiethoursnotificationhelper.notificationDismissReceiver
+import com.example.cloud.quiethoursnotificationhelper.playLatestVoiceNote
+import com.example.cloud.quiethoursnotificationhelper.playNextVoiceNote
+import com.example.cloud.quiethoursnotificationhelper.playPreviousVoiceNote
+import com.example.cloud.quiethoursnotificationhelper.restoreSyncIfNeeded
+import com.example.cloud.quiethoursnotificationhelper.scheduleNextCheck
+import com.example.cloud.quiethoursnotificationhelper.showDeleteConfirmation
+import com.example.cloud.quiethoursnotificationhelper.showNextGalleryImage
+import com.example.cloud.quiethoursnotificationhelper.showPreviousGalleryImage
+import com.example.cloud.quiethoursnotificationhelper.showUnreadMessages
+import com.example.cloud.quiethoursnotificationhelper.startTriggerListenerIfHomeWifi
+import com.example.cloud.quiethoursnotificationhelper.stopTriggerListener
+import com.example.cloud.quiethoursnotificationhelper.stopVoiceNote
+import com.example.cloud.quiethoursnotificationhelper.syncTodosWithLaptop
+import com.example.cloud.quiethoursnotificationhelper.timeChangeReceiver
+import com.example.cloud.quiethoursnotificationhelper.updateNotification
+import com.example.cloud.quiethoursnotificationhelper.updateSingleSenderNotification
+import com.example.cloud.showSimpleNotificationExtern
+import java.io.File
+import java.util.Calendar
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -220,19 +217,15 @@ class QuietHoursNotificationService : Service() {
         createNotificationChannel(this)
 
         isCurrentlyQuietHours = isQuietHoursNow(this)
-
-        // If service was started but we're NOT currently in the quiet window, stop immediately
-        if (!isCurrentlyQuietHours) {
-            stopSelf()
-            return
-        }
-
         startForeground(NOTIFICATION_ID, createNotification(isCurrentlyQuietHours, this))
 
         sharedPreferences.registerOnSharedPreferenceChangeListener(prefChangeListener)
 
         handler.post(checkRunnable)
         schedulePeriodicCleanup()
+        restoreSyncIfNeeded(this)
+        startTriggerListenerIfHomeWifi(this)
+        registerWifiCallback()
 
         val filter = IntentFilter(ACTION_MESSAGE_SENT)
         registerReceiver(messageSentReceiver, filter, RECEIVER_NOT_EXPORTED)
@@ -375,7 +368,10 @@ class QuietHoursNotificationService : Service() {
             ACTION_CANCEL_DELETE -> {
                 val notificationManager = getSystemService(NotificationManager::class.java)
                 notificationManager.cancel(80000)
-                showSimpleNotification("❌ Abgebrochen", "Bild wurde nicht gelöscht")
+            }
+
+            "ACTION_SYNC_LAPTOP" -> {
+                syncTodosWithLaptop(this)
             }
         }
         return START_STICKY
@@ -387,8 +383,13 @@ class QuietHoursNotificationService : Service() {
     override fun onDestroy() {
         super.onDestroy()
 
-        // Handler komplett stoppen
         handler.removeCallbacksAndMessages(null)
+
+        networkCallback?.let {
+            val cm = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            cm.unregisterNetworkCallback(it)
+            networkCallback = null
+        }
 
         // MediaPlayer
         voiceNotePlayer?.apply {
@@ -511,11 +512,39 @@ class QuietHoursNotificationService : Service() {
     private fun openMusicPlayer() {
         try {
             MusicPlayerServiceCompat.startService(this)
-
-            MusicPlayerServiceCompat.sendPlayAction(this)
+            MusicPlayerServiceCompat.startAndPlay(this)
         } catch (e: Exception) {
-            Log.e("QuietHoursService", "Error opening music player", e)
             showSimpleNotification("Fehler", "Musik Player konnte nicht geöffnet werden")
         }
+    }
+
+    private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
+
+    private fun registerWifiCallback() {
+        val connectivityManager =
+            getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val request = android.net.NetworkRequest.Builder()
+            .addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+            .build()
+
+        networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                Log.d("TodoSync", "📶 WLAN verbunden, prüfe Heim-WLAN...")
+                showSimpleNotificationExtern(
+                    "📶 WLAN verbunden",
+                    "Prüfe Heim-WLAN...",
+                    10.seconds,
+                    this@QuietHoursNotificationService
+                )
+                startTriggerListenerIfHomeWifi(this@QuietHoursNotificationService)
+            }
+
+            override fun onLost(network: android.net.Network) {
+                Log.d("TodoSync", "📵 WLAN getrennt, stoppe Trigger Listener")
+                stopTriggerListener()
+            }
+        }
+
+        connectivityManager.registerNetworkCallback(request, networkCallback!!)
     }
 }
