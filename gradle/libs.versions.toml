@@ -46,6 +46,7 @@ media3Session = "1.9.2"
 firebaseCrashlyticsBuildtools = "3.0.6"
 uiGraphicsVersion = "1.10.3"
 identityJvm = "202411.1"
+uiUnit = "1.10.3"
 
 [libraries]
 accompanist-swiperefresh = { module = "com.google.accompanist:accompanist-swiperefresh", version.ref = "accompanistSwiperefresh" }
@@ -101,6 +102,7 @@ androidx-media3-session = { group = "androidx.media3", name = "media3-session", 
 firebase-crashlytics-buildtools = { group = "com.google.firebase", name = "firebase-crashlytics-buildtools", version.ref = "firebaseCrashlyticsBuildtools" }
 androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics", version.ref = "uiGraphicsVersion" }
 identity-jvm = { group = "com.android.identity", name = "identity-jvm", version.ref = "identityJvm" }
+androidx-compose-ui-unit = { group = "androidx.compose.ui", name = "ui-unit", version.ref = "uiUnit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
