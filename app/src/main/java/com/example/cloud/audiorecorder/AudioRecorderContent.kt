@@ -46,6 +46,26 @@ import java.text.SimpleDateFormat
 import java.time.Instant
 import java.util.*
 
+private fun reportAudioRecorderError(
+    serviceName: String,
+    message: String,
+    throwable: Throwable,
+    severity: String = "Error",
+    scope: CoroutineScope? = null
+) {
+    val targetScope = scope ?: CoroutineScope(Dispatchers.IO)
+    targetScope.launch {
+        ERRORINSERT(
+            ERRORINSERTDATA(
+                service_name = serviceName,
+                error_message = "$message: ${throwable::class.simpleName} - ${throwable.message ?: "ohne Nachricht"}",
+                created_at = Instant.now().toString(),
+                severity = severity
+            )
+        )
+    }
+}
+
 @Composable
 fun AudioRecorderContent(
     modifier: Modifier = Modifier
@@ -72,7 +92,7 @@ fun AudioRecorderContent(
             scope.launch {
                 ERRORINSERT(
                     data = ERRORINSERTDATA(
-                        "Audio Recorder",
+                        "AudioRecorderContent.permissionCheck",
                         "Keine Mikrofon Berechtigung",
                         Instant.now().toString(),
                         "Error"
@@ -190,41 +210,77 @@ fun AudioRecorderContent(
                 currentPosition = currentPosition,
                 duration = duration,
                 onPlayPause = {
-                    if (isPlaying) {
-                        mediaPlayer?.pause()
-                        isPlaying = false
-                    } else {
-                        if (mediaPlayer == null) {
-                            mediaPlayer = MediaPlayer().apply {
-                                setDataSource(file.absolutePath)
-                                prepare()
-                                setOnCompletionListener {
-                                    isPlaying = false
-                                    currentPosition = 0f
+                    try {
+                        if (isPlaying) {
+                            mediaPlayer?.pause()
+                            isPlaying = false
+                        } else {
+                            if (mediaPlayer == null) {
+                                mediaPlayer = MediaPlayer().apply {
+                                    setDataSource(file.absolutePath)
+                                    prepare()
+                                    setOnCompletionListener {
+                                        isPlaying = false
+                                        currentPosition = 0f
+                                    }
                                 }
+                                duration = mediaPlayer?.duration?.toFloat() ?: 0f
                             }
-                            duration = mediaPlayer?.duration?.toFloat() ?: 0f
+                            mediaPlayer?.start()
+                            isPlaying = true
                         }
-                        mediaPlayer?.start()
-                        isPlaying = true
+                    } catch (e: Exception) {
+                        reportAudioRecorderError(
+                            "AudioRecorderContent.onPlayPause",
+                            "Fehler bei Player Play/Pause",
+                            e,
+                            scope = scope
+                        )
                     }
                 },
                 onStop = {
-                    mediaPlayer?.stop()
-                    mediaPlayer?.release()
-                    mediaPlayer = null
-                    isPlaying = false
-                    currentPosition = 0f
+                    try {
+                        mediaPlayer?.stop()
+                        mediaPlayer?.release()
+                        mediaPlayer = null
+                        isPlaying = false
+                        currentPosition = 0f
+                    } catch (e: Exception) {
+                        reportAudioRecorderError(
+                            "AudioRecorderContent.onStop",
+                            "Fehler bei Player Stop",
+                            e,
+                            scope = scope
+                        )
+                    }
                 },
                 onSeek = { pos ->
-                    mediaPlayer?.seekTo(pos.toInt())
-                    currentPosition = pos
+                    try {
+                        mediaPlayer?.seekTo(pos.toInt())
+                        currentPosition = pos
+                    } catch (e: Exception) {
+                        reportAudioRecorderError(
+                            "AudioRecorderContent.onSeek",
+                            "Fehler bei Player Seek",
+                            e,
+                            scope = scope
+                        )
+                    }
                 },
                 onClose = {
-                    mediaPlayer?.release()
-                    mediaPlayer = null
-                    isPlaying = false
-                    selectedFile = null
+                    try {
+                        mediaPlayer?.release()
+                        mediaPlayer = null
+                        isPlaying = false
+                        selectedFile = null
+                    } catch (e: Exception) {
+                        reportAudioRecorderError(
+                            "AudioRecorderContent.onClose",
+                            "Fehler bei Player Close",
+                            e,
+                            scope = scope
+                        )
+                    }
                 },
                 onShare = {
                     shareFile = file
@@ -251,24 +307,42 @@ fun AudioRecorderContent(
                     file = file,
                     isSelected = selectedFile == file,
                     onClick = {
-                        // Reset Player
-                        mediaPlayer?.release()
-                        mediaPlayer = null
-                        isPlaying = false
-                        currentPosition = 0f
-                        selectedFile = file
+                        try {
+                            // Reset Player
+                            mediaPlayer?.release()
+                            mediaPlayer = null
+                            isPlaying = false
+                            currentPosition = 0f
+                            selectedFile = file
+                        } catch (e: Exception) {
+                            reportAudioRecorderError(
+                                "AudioRecorderContent.fileItemOnClick",
+                                "Fehler beim Dateiwechsel",
+                                e,
+                                scope = scope
+                            )
+                        }
                     },
                     onShareDirect = {
-                        // Quick Share Setup
-                        val mp = MediaPlayer()
-                        mp.setDataSource(file.absolutePath)
-                        mp.prepare()
-                        val dur = mp.duration.toFloat()
-                        mp.release()
+                        try {
+                            // Quick Share Setup
+                            val mp = MediaPlayer()
+                            mp.setDataSource(file.absolutePath)
+                            mp.prepare()
+                            val dur = mp.duration.toFloat()
+                            mp.release()
 
-                        shareFile = file
-                        shareRange = 0f..dur
-                        showShareDialog = true
+                            shareFile = file
+                            shareRange = 0f..dur
+                            showShareDialog = true
+                        } catch (e: Exception) {
+                            reportAudioRecorderError(
+                                "AudioRecorderContent.onShareDirect",
+                                "Fehler bei Share-Vorbereitung",
+                                e,
+                                scope = scope
+                            )
+                        }
                     }
                 )
             }
@@ -298,7 +372,7 @@ fun AudioRecorderContent(
                         scope.launch {
                             ERRORINSERT(
                                 data = ERRORINSERTDATA(
-                                    "Audio Recorder",
+                                    "AudioRecorderContent.shareDialog.onError",
                                     it,
                                     Instant.now().toString(),
                                     "Error"
@@ -479,14 +553,30 @@ fun createAudioFile(context: Context): File {
 }
 
 fun startAudioService(context: Context, path: String) {
-    val intent = Intent(context, AudioForegroundService::class.java).apply {
-        putExtra("filePath", path)
+    try {
+        val intent = Intent(context, AudioForegroundService::class.java).apply {
+            putExtra("filePath", path)
+        }
+        ContextCompat.startForegroundService(context, intent)
+    } catch (e: Exception) {
+        reportAudioRecorderError(
+            "AudioRecorderContent.startAudioService",
+            "Fehler beim Starten des Audio Services",
+            e
+        )
     }
-    ContextCompat.startForegroundService(context, intent)
 }
 
 fun stopAudioService(context: Context) {
-    context.stopService(Intent(context, AudioForegroundService::class.java))
+    try {
+        context.stopService(Intent(context, AudioForegroundService::class.java))
+    } catch (e: Exception) {
+        reportAudioRecorderError(
+            "AudioRecorderContent.stopAudioService",
+            "Fehler beim Stoppen des Audio Services",
+            e
+        )
+    }
 }
 
 fun formatTime(millis: Int): String {
@@ -531,6 +621,11 @@ fun shareAudioToWhatsApp(
             context.startActivity(shareIntent)
             onComplete()
         } catch (e: Exception) {
+            reportAudioRecorderError(
+                "AudioRecorderContent.shareAudioToWhatsApp.startActivity",
+                "WhatsApp Share fehlgeschlagen, versuche Fallback",
+                e
+            )
             android.util.Log.e("AudioShare", "WhatsApp not found", e)
             // Fallback
             val chooser = Intent.createChooser(shareIntent.apply { setPackage(null) }, "Teilen")
@@ -538,55 +633,100 @@ fun shareAudioToWhatsApp(
             onComplete()
         }
     } catch (e: Exception) {
+        reportAudioRecorderError(
+            "AudioRecorderContent.shareAudioToWhatsApp",
+            "Share fehlgeschlagen",
+            e
+        )
         android.util.Log.e("AudioShare", "Share failed", e)
         onError(e.message ?: "Unbekannter Fehler")
     }
 }
 
 fun trimAudioFile(sourceFile: File, outputFile: File, startMs: Long, endMs: Long) {
-    val extractor = MediaExtractor()
-    extractor.setDataSource(sourceFile.absolutePath)
+    var extractor: MediaExtractor? = null
+    var muxer: MediaMuxer? = null
+    var muxerStarted = false
 
-    val trackIndex = (0 until extractor.trackCount).find {
-        extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
-    } ?: throw IllegalArgumentException("Kein Audio-Track")
+    try {
+        extractor = MediaExtractor()
+        extractor.setDataSource(sourceFile.absolutePath)
 
-    extractor.selectTrack(trackIndex)
-    val format = extractor.getTrackFormat(trackIndex)
+        val trackIndex = (0 until extractor.trackCount).find {
+            extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)
+                ?.startsWith("audio/") == true
+        } ?: throw IllegalArgumentException("Kein Audio-Track")
 
-    // Write directly to outputFile instead of creating a temp file
-    val muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-    val muxerTrackIndex = muxer.addTrack(format)
-    muxer.start()
+        extractor.selectTrack(trackIndex)
+        val format = extractor.getTrackFormat(trackIndex)
 
-    extractor.seekTo(startMs * 1000, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
-    val buffer = ByteBuffer.allocate(1024 * 1024)
-    val bufferInfo = MediaCodec.BufferInfo()
+        muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        val muxerTrackIndex = muxer.addTrack(format)
+        muxer.start()
+        muxerStarted = true
 
-    while (true) {
-        val sampleSize = extractor.readSampleData(buffer, 0)
-        if (sampleSize < 0) break
+        extractor.seekTo(startMs * 1000, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+        val buffer = ByteBuffer.allocate(1024 * 1024)
+        val bufferInfo = MediaCodec.BufferInfo()
 
-        val timeUs = extractor.sampleTime
-        if (timeUs > endMs * 1000) break
+        while (true) {
+            val sampleSize = extractor.readSampleData(buffer, 0)
+            if (sampleSize < 0) break
 
-        if (timeUs >= startMs * 1000) {
-            bufferInfo.offset = 0
-            bufferInfo.size = sampleSize
-            bufferInfo.presentationTimeUs = timeUs - (startMs * 1000)
-            bufferInfo.flags =
-                if ((extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0)
-                    MediaCodec.BUFFER_FLAG_KEY_FRAME
-                else 0
-            muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
+            val timeUs = extractor.sampleTime
+            if (timeUs > endMs * 1000) break
+
+            if (timeUs >= startMs * 1000) {
+                bufferInfo.offset = 0
+                bufferInfo.size = sampleSize
+                bufferInfo.presentationTimeUs = timeUs - (startMs * 1000)
+                bufferInfo.flags =
+                    if ((extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0)
+                        MediaCodec.BUFFER_FLAG_KEY_FRAME
+                    else 0
+                muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
+            }
+
+            extractor.advance()
         }
-
-        extractor.advance()
+    } catch (e: Exception) {
+        reportAudioRecorderError(
+            "AudioRecorderContent.trimAudioFile",
+            "Fehler beim Trimmen",
+            e
+        )
+        throw e
+    } finally {
+        try {
+            if (muxerStarted) {
+                muxer?.stop()
+            }
+        } catch (e: Exception) {
+            reportAudioRecorderError(
+                "AudioRecorderContent.trimAudioFile.stopMuxer",
+                "Fehler beim Stoppen des Muxers",
+                e
+            )
+        }
+        try {
+            muxer?.release()
+        } catch (e: Exception) {
+            reportAudioRecorderError(
+                "AudioRecorderContent.trimAudioFile.releaseMuxer",
+                "Fehler beim Freigeben des Muxers",
+                e
+            )
+        }
+        try {
+            extractor?.release()
+        } catch (e: Exception) {
+            reportAudioRecorderError(
+                "AudioRecorderContent.trimAudioFile.releaseExtractor",
+                "Fehler beim Freigeben des Extractors",
+                e
+            )
+        }
     }
-
-    muxer.stop()
-    muxer.release()
-    extractor.release()
 }
 
 class AudioForegroundService : Service() {
@@ -597,31 +737,59 @@ class AudioForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val filePath = intent?.getStringExtra("filePath") ?: return START_NOT_STICKY
+        try {
+            createNotificationChannel()
+            startForeground(1, createNotification())
+            startRecording(filePath)
+        } catch (e: Exception) {
+            reportAudioRecorderError(
+                "AudioForegroundService.onStartCommand",
+                "Fehler beim Start des Foreground Services",
+                e,
+                scope = serviceScope
+            )
+            stopSelf()
+        }
 
-        createNotificationChannel()
-        startForeground(1, createNotification())
-
-        startRecording(filePath)
-
-        // Use START_NOT_STICKY so the system doesn't restart the recorder automatically
-        // when the app is killed — user explicitly started recordings via UI.
         return START_NOT_STICKY
     }
 
     private fun startRecording(path: String) {
-        recorder = (MediaRecorder(this)).apply {
-            setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION) // Bessere Voice-Optimierung
-            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+        try {
+            recorder = (MediaRecorder(this)).apply {
+                setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION) // Bessere Voice-Optimierung
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
 
-            // ✅ Qualitäts-Einstellungen wie WhatsApp
-            setAudioEncodingBitRate(128000) // 128 kbps
-            setAudioSamplingRate(48000)      // 48 kHz
-            setAudioChannels(2)              // Mono (für Voice ausreichend)
+                // ✅ Qualitäts-Einstellungen wie WhatsApp
+                setAudioEncodingBitRate(128000) // 128 kbps
+                setAudioSamplingRate(48000)      // 48 kHz
+                setAudioChannels(2)              // Mono (für Voice ausreichend)
 
-            setOutputFile(path)
-            prepare()
-            start()
+                setOutputFile(path)
+                prepare()
+                start()
+            }
+        } catch (e: Exception) {
+            reportAudioRecorderError(
+                "AudioForegroundService.startRecording",
+                "Fehler beim Starten der Aufnahme",
+                e,
+                scope = serviceScope
+            )
+            try {
+                recorder?.release()
+            } catch (releaseException: Exception) {
+                reportAudioRecorderError(
+                    "AudioForegroundService.startRecording.release",
+                    "Fehler beim Freigeben nach Startfehler",
+                    releaseException,
+                    scope = serviceScope
+                )
+            } finally {
+                recorder = null
+            }
+            throw e
         }
     }
 
@@ -648,13 +816,23 @@ class AudioForegroundService : Service() {
     }
 
     private fun createNotificationChannel() {
-        val channel = NotificationChannel(
-            "audio_channel",
-            "Audio Aufnahme",
-            NotificationManager.IMPORTANCE_LOW
-        )
-        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(channel)
+        try {
+            val channel = NotificationChannel(
+                "audio_channel",
+                "Audio Aufnahme",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            manager.createNotificationChannel(channel)
+        } catch (e: Exception) {
+            reportAudioRecorderError(
+                "AudioForegroundService.createNotificationChannel",
+                "Fehler beim Erstellen vom Notification Channel",
+                e,
+                scope = serviceScope
+            )
+            throw e
+        }
     }
 
     override fun onDestroy() {
@@ -662,20 +840,26 @@ class AudioForegroundService : Service() {
         try {
             recorder?.stop()
         } catch (e: Exception) {
-            serviceScope.launch {
-                ERRORINSERT(
-                    ERRORINSERTDATA(
-                        "Audio Recorder",
-                        "Fehler bei Service beenden: ${e.message}",
-                        Instant.now().toString(),
-                        "Info"
-                    )
-                )
-            }
-
+            reportAudioRecorderError(
+                "AudioForegroundService.onDestroy.stop",
+                "Fehler bei Service beenden",
+                e,
+                "Info",
+                scope = serviceScope
+            )
+        }
+        try {
+            recorder?.release()
+        } catch (e: Exception) {
+            reportAudioRecorderError(
+                "AudioForegroundService.onDestroy.release",
+                "Fehler beim Freigeben vom Recorder",
+                e,
+                scope = serviceScope
+            )
+        } finally {
             serviceScope.cancel()
         }
-        recorder?.release()
         super.onDestroy()
     }
 
