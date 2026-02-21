@@ -12,14 +12,9 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
-import com.example.cloud.SupabaseConfig
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.io.StringReader
-import java.util.*
-import javax.xml.parsers.DocumentBuilderFactory
-import org.w3c.dom.Element
-import org.xml.sax.InputSource
+import com.example.cloud.Config
+import com.example.cloud.mediaplayer.MediaAnalyticsManager
+import com.example.cloud.mediaplayer.PodcastShowManager
 import com.example.cloud.privatecloudapp.showBatteryInfo
 import com.example.cloud.service.MediaPlayerService
 import com.example.cloud.service.MusicPlayerServiceCompat
@@ -35,7 +30,15 @@ import com.example.cloud.weathertab.weathernot
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import kotlin.text.split
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.w3c.dom.Element
+import org.xml.sax.InputSource
+import java.io.StringReader
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.time.Duration.Companion.seconds
 
 data class Command(
@@ -64,7 +67,7 @@ private fun getAvailableCommands(context: Context): List<Command> {
         },
         Command(
             name = "podcast",
-            aliases = listOf("pd", "pc", "Podcast"),
+            aliases = listOf("pd", "pc", "Podcast", "py"),
             description = "Startet PodcastPlayerServiceCompat"
         ) {
             MusicPlayerServiceCompat.stopService(context)
@@ -295,7 +298,7 @@ private fun getAvailableCommands(context: Context): List<Command> {
             description = "Bw MP!"
         ) {
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clip = ClipData.newPlainText("BWMP", SupabaseConfig.BWMP)
+            val clip = ClipData.newPlainText("BWMP", Config.BWMP)
             clipboard.setPrimaryClip(clip)
         },
         Command(
@@ -424,14 +427,6 @@ private fun getAvailableCommands(context: Context): List<Command> {
         },
 
         Command(
-            name = "plpodcast",
-            aliases = listOf("plp", "podcastplaylists"),
-            description = "Zeigt nur Podcast-Playlisten"
-        ) {
-            MediaPlayerService.showPlaylists(context, MediaPlayerService.PlaylistType.PODCAST)
-        },
-
-        Command(
             name = "pladd",
             aliases = listOf("pla", "addtoplaylist"),
             description = "Fügt aktuellen Song/Podcast zu Playlist hinzu"
@@ -474,56 +469,110 @@ private fun getAvailableCommands(context: Context): List<Command> {
                 context = context
             )
         },
+        Command(
+            name = "showassign",
+            aliases = listOf("sa"),
+            description = "Weist Podcast-Folgen einer Show zu (showassign [pattern] [show-name])"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ showassign",
+                "showassign [pattern] [show-name]",
+                context = context
+            )
+        },
+        Command(
+            name = "showcreate",
+            aliases = listOf("sc"),
+            description = "Erstellt neue Podcast-Show (showcreate [name])"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ showcreate",
+                "showcreate [show-name]",
+                context = context
+            )
+        },
+        Command(
+            name = "showlist",
+            aliases = listOf("sl", "shows"),
+            description = "Listet alle Podcast-Shows"
+        ) {
+            val shows = PodcastShowManager.getShows()
+            val text =
+                if (shows.isEmpty()) "Keine Shows" else shows.joinToString("\n") { "• ${it.name} (${it.id})" }
+            showSimpleNotificationExtern("🎙️ Podcast-Shows", text, context = context)
+        },
+        Command(
+            name = "showrename",
+            aliases = listOf("sr"),
+            description = "Benennt Podcast-Show um (showrename [alt] [neu])"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ showrename",
+                "showrename [alter-name] [neuer-name]",
+                context = context
+            )
+        },
+        Command(
+            name = "stats",
+            aliases = listOf("stat", "statistik"),
+            description = "Zeigt Analytics für Song/Podcast (stats [song|podcast] [suche])"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ stats",
+                "stats [song|podcast] [dateiname-teilstring]",
+                context = context
+            )
+        },
+        Command(
+            name = "statsreset",
+            aliases = listOf("resetstats"),
+            description = "Setzt Analytics zurück (statsreset [song|podcast] [suche])"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ statsreset",
+                "statsreset [song|podcast] [dateiname-teilstring]",
+                context = context
+            )
+        },
+        Command(
+            name = "plshow",
+            aliases = listOf("pldetails"),
+            description = "Zeigt Playlist-Details mit Song-Liste"
+        ) {
+            MediaPlayerService.showPlaylists(context)
+        },
     )
 }
 
 @OptIn(DelicateCoroutinesApi::class)
 fun executeCommand(commandText: String, context: Context) {
-    val actualCommand = when (commandText) {
-        "^" -> {
-            if (commandHistory.isEmpty()) {
-                showSimpleNotificationExtern(
-                    "❌ Keine History",
-                    "Kein vorheriger Befehl verfügbar",
-                    20.seconds,
-                    context
-                )
-                return
-            }
-            commandHistory.last()
-        }
-
-        "^^" -> {
-            if (commandHistory.size < 2) {
-                showSimpleNotificationExtern(
-                    "❌ Keine History",
-                    "Kein vorletzter Befehl verfügbar",
-                    20.seconds,
-                    context
-                )
-                return
-            }
-            commandHistory[commandHistory.size - 2]
-        }
-
-        else -> commandText
-    }
-
     if (commandText != "^" && commandText != "^^") {
-        commandHistory.add(actualCommand)
+        commandHistory.add(commandText)
         if (commandHistory.size > 10) {
             commandHistory.removeAt(0)
         }
     }
 
-    val parts = actualCommand.split(" ", limit = 3)
+    val parts = commandText.split(" ", limit = 3)
     val commandInput = parts[0].lowercase()
     val argument = if (parts.size > 1) parts[1] else null
 
     when (commandInput) {
         "save", "s", "speichern", "store" -> {
             if (argument != null) {
-                saveReplyDataPermanently(argument, context)
+                val parts = commandText.split(" ", limit = 2)
+                val parsed = if (parts.size >= 2) parseCommandWithQuotes(parts[1]) else emptyList()
+                val contactName = parsed.firstOrNull()
+                if (contactName != null) {
+                    saveReplyDataPermanently(contactName, context)
+                } else {
+                    showSimpleNotificationExtern(
+                        "❌ Fehler",
+                        "Syntax: save [kontakt] oder save \"kontakt mit leerzeichen\"",
+                        20.seconds,
+                        context
+                    )
+                }
             } else {
                 val contacts = WhatsAppNotificationListener.replyActions.keys.toList()
                 if (contacts.isEmpty()) {
@@ -588,7 +637,7 @@ fun executeCommand(commandText: String, context: Context) {
 
         "weather", "w", "wetter", "forecast" -> {
             if (argument != null) {
-                val parts = actualCommand.split(" ")
+                val parts = commandText.split(" ")
                 if (parts.size == 3) {
                     val dayNum = parts[1].toIntOrNull()
                     val hour = parts[2]
@@ -797,7 +846,7 @@ fun executeCommand(commandText: String, context: Context) {
 
         "tb", "tagesbericht", "upload", "uploadimage" -> {
             if (argument != null) {
-                val parts = actualCommand.split(" ", limit = 2)
+                val parts = commandText.split(" ", limit = 2)
                 if (parts.size >= 2) {
                     val restOfCommand = parts[1]
 
@@ -847,17 +896,14 @@ fun executeCommand(commandText: String, context: Context) {
             return
         }
 
-        "pd", "pc", "Podcast", "podcast" -> {
+        "pd", "pc", "Podcast", "podcast", "py" -> {
             if (argument != null) {
-                PodcastPlayerServiceCompat.sendForwardAction(context, argument.toInt())
-                Log.d("PD", "pd command executed1")
+                PodcastPlayerServiceCompat.sendForwardAction(context, argument.toInt() * 1000)
             } else {
                 MusicPlayerServiceCompat.stopService(context)
                 PodcastPlayerServiceCompat.startService(context)
                 PodcastPlayerServiceCompat.sendPlayAction(context)
-                Log.d("PD", "pd command executed0")
             }
-            Log.d("PD", "pd command executed")
             return
         }
 
@@ -887,7 +933,7 @@ fun executeCommand(commandText: String, context: Context) {
 
         "*", "todo", "task", "aufgabe" -> {
             if (argument != null) {
-                val parts = actualCommand.split(" ", limit = 2)
+                val parts = commandText.split(" ", limit = 2)
                 if (parts.size >= 2) {
                     val todoText = parseCommandWithQuotes(parts[1])
                     if (todoText.isNotEmpty()) {
@@ -974,7 +1020,7 @@ fun executeCommand(commandText: String, context: Context) {
 
         "plcreate", "plc", "createplaylist", "newplaylist" -> {
             if (argument != null) {
-                val parts = actualCommand.split(" ", limit = 2)
+                val parts = commandText.split(" ", limit = 2)
                 if (parts.size >= 2) {
                     val typeAndName = parseCommandWithQuotes(parts[1])
                     if (typeAndName.size >= 2) {
@@ -983,7 +1029,6 @@ fun executeCommand(commandText: String, context: Context) {
 
                         val type = when (typeName) {
                             "music", "musik", "m" -> MediaPlayerService.PlaylistType.MUSIC
-                            "podcast", "pd", "p" -> MediaPlayerService.PlaylistType.PODCAST
                             else -> null
                         }
 
@@ -1027,11 +1072,6 @@ fun executeCommand(commandText: String, context: Context) {
             return
         }
 
-        "plpodcast", "plp", "podcastplaylists" -> {
-            MediaPlayerService.showPlaylists(context, MediaPlayerService.PlaylistType.PODCAST)
-            return
-        }
-
         "pladd", "pla", "addtoplaylist" -> {
             if (argument != null) {
                 MediaPlayerService.addCurrentToPlaylist(context, argument)
@@ -1040,20 +1080,6 @@ fun executeCommand(commandText: String, context: Context) {
                 showSimpleNotificationExtern(
                     "ℹ️ Zur Playlist hinzufügen",
                     "Syntax: pladd [playlist-id]",
-                    20.seconds,
-                    context
-                )
-            }
-            return
-        }
-
-        "plplay", "playplaylist" -> {
-            if (argument != null) {
-                MediaPlayerService.activatePlaylist(context, argument)
-            } else {
-                showSimpleNotificationExtern(
-                    "ℹ️ Playlist abspielen",
-                    "Syntax: plplay [playlist-id]\nVerwende 'playlists' um IDs zu sehen",
                     20.seconds,
                     context
                 )
@@ -1073,6 +1099,322 @@ fun executeCommand(commandText: String, context: Context) {
                 showSimpleNotificationExtern(
                     "ℹ️ Playlist löschen",
                     "Syntax: pldelete [playlist-id]\nVerwende 'playlists' um IDs zu sehen",
+                    20.seconds,
+                    context
+                )
+            }
+            return
+        }
+
+        "^" -> {
+            if (commandHistory.isEmpty()) {
+                showSimpleNotificationExtern(
+                    "❌ Keine History",
+                    "Kein vorheriger Befehl verfügbar",
+                    20.seconds,
+                    context
+                )
+                return
+            }
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = ClipData.newPlainText("BWMP", commandHistory.last())
+            clipboard.setPrimaryClip(clip)
+            return
+        }
+
+        "^^" -> {
+            if (commandHistory.size < 2) {
+                showSimpleNotificationExtern(
+                    "❌ Keine History",
+                    "Kein vorletzter Befehl verfügbar",
+                    20.seconds,
+                    context
+                )
+                return
+            }
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = ClipData.newPlainText("BWMP", commandHistory[commandHistory.size - 2])
+            clipboard.setPrimaryClip(clip)
+            return
+        }
+
+        "showassign", "sa" -> {
+            // showassign [pattern] [show-name]
+            // Example: showassign "heise" "Heise Show"
+            val parts = commandText.split(" ", limit = 2)
+            if (parts.size >= 2) {
+                val args = parseCommandWithQuotes(parts[1])
+                if (args.size >= 2) {
+                    val pattern = args[0]
+                    val showName = args[1]
+                    val success = PodcastShowManager.assignPattern(pattern, showName)
+                    showSimpleNotificationExtern(
+                        if (success) "✓ Pattern zugewiesen" else "❌ Fehler",
+                        if (success) "\"$pattern\" → \"$showName\"\nAlle Folgen mit diesem Pattern werden dieser Show zugeordnet."
+                        else "Zuweisung fehlgeschlagen",
+                        context = context
+                    )
+                } else {
+                    showSimpleNotificationExtern(
+                        "ℹ️ showassign",
+                        "Syntax: showassign [dateiname-teilstring] [show-name]\nBeispiel: showassign heise \"Heise Show\"",
+                        20.seconds, context
+                    )
+                }
+            }
+            return
+        }
+
+        "showcreate", "sc" -> {
+            // showcreate [show-name]
+            val parts = commandText.split(" ", limit = 2)
+            if (parts.size >= 2) {
+                val args = parseCommandWithQuotes(parts[1])
+                val showName = args.firstOrNull()
+                if (showName != null) {
+                    val show = PodcastShowManager.createShow(showName)
+                    showSimpleNotificationExtern(
+                        "✓ Show erstellt",
+                        "\"${show.name}\" (ID: ${show.id})",
+                        10.seconds, context
+                    )
+                } else {
+                    showSimpleNotificationExtern(
+                        "❌ Fehler",
+                        "Syntax: showcreate [show-name]",
+                        20.seconds,
+                        context
+                    )
+                }
+            } else {
+                showSimpleNotificationExtern(
+                    "ℹ️ showcreate",
+                    "Syntax: showcreate [show-name]\nBeispiel: showcreate \"Lex Fridman\"",
+                    20.seconds,
+                    context
+                )
+            }
+            return
+        }
+
+        "showlist", "sl" -> {
+            val shows = PodcastShowManager.getShows()
+            if (shows.isEmpty()) {
+                showSimpleNotificationExtern(
+                    "📂 Shows",
+                    "Keine Shows vorhanden. Verwende 'showcreate'.",
+                    context = context
+                )
+            } else {
+                val text = shows.joinToString("\n") { show ->
+                    val patterns =
+                        if (show.matchPatterns.isNotEmpty()) " [${show.matchPatterns.joinToString(", ")}]" else ""
+                    "• ${show.name} (${show.id})$patterns"
+                }
+                showSimpleNotificationExtern(
+                    "🎙️ Podcast-Shows (${shows.size})",
+                    text,
+                    context = context
+                )
+            }
+            return
+        }
+
+        "showrename", "sr" -> {
+            // showrename [alter-name] [neuer-name]
+            val parts = commandText.split(" ", limit = 2)
+            if (parts.size >= 2) {
+                val args = parseCommandWithQuotes(parts[1])
+                if (args.size >= 2) {
+                    val oldName = args[0]
+                    val newName = args[1]
+                    val success = PodcastShowManager.renameShow(oldName, newName)
+                    showSimpleNotificationExtern(
+                        if (success) "✓ Umbenannt" else "❌ Show nicht gefunden",
+                        if (success) "\"$oldName\" → \"$newName\"" else "Keine Show mit Namen \"$oldName\"",
+                        context = context
+                    )
+                } else {
+                    showSimpleNotificationExtern(
+                        "ℹ️ showrename",
+                        "Syntax: showrename [alter-name] [neuer-name]",
+                        20.seconds,
+                        context
+                    )
+                }
+            }
+            return
+        }
+
+        // ── Analytics Commands ────────────────────────────────────────────────────
+
+        "stats" -> {
+            // stats [song|podcast] [dateiname-teilstring]
+            val parts = commandText.split(" ", limit = 3)
+            val type = parts.getOrNull(1)?.lowercase()
+            val query = parts.getOrNull(2)?.lowercase()
+
+            if (type == null || query == null) {
+                showSimpleNotificationExtern(
+                    "ℹ️ Stats",
+                    "Syntax: stats [song|podcast] [dateiname-teilstring]\nBeispiel: stats song beatles",
+                    20.seconds, context
+                )
+                return
+            }
+
+            when (type) {
+                "song", "music", "m" -> {
+                    val allAnalytics = MediaAnalyticsManager.getAllSongAnalytics()
+                    val matched = allAnalytics.values.filter { it.path.lowercase().contains(query) }
+                    if (matched.isEmpty()) {
+                        showSimpleNotificationExtern(
+                            "❌ Nicht gefunden",
+                            "Kein Song mit \"$query\" in der Statistik",
+                            context = context
+                        )
+                    } else {
+                        matched.take(3).forEach { a ->
+                            val name = a.path.substringAfterLast("/").substringBeforeLast(".")
+                            val lastPlayed = a.lastPlayedAt?.let {
+                                java.text.SimpleDateFormat("dd.MM.yyyy", Locale.GERMANY)
+                                    .format(Date(it))
+                            } ?: "Noch nie"
+                            showSimpleNotificationExtern(
+                                "📊 $name",
+                                "▶ ${a.playCount} Plays · ✅ ${(a.completionRate * 100).toInt()}% · ⏭ ${a.skipCount} Skips\n" +
+                                        "⏱ ${formatMs(a.totalListenedMs)} gehört\n🕐 Zuletzt: $lastPlayed",
+                                context = context
+                            )
+                        }
+                    }
+                }
+
+                "podcast", "pod", "pd" -> {
+                    val allAnalytics = MediaAnalyticsManager.getAllPodcastAnalytics()
+                    val matched = allAnalytics.values.filter { it.path.lowercase().contains(query) }
+                    if (matched.isEmpty()) {
+                        showSimpleNotificationExtern(
+                            "❌ Nicht gefunden",
+                            "Kein Podcast mit \"$query\" in der Statistik",
+                            context = context
+                        )
+                    } else {
+                        matched.take(3).forEach { a ->
+                            val name = a.path.substringAfterLast("/").substringBeforeLast(".")
+                            val completed = if (a.isCompleted) "✓ Fertig" else "In Bearbeitung"
+                            showSimpleNotificationExtern(
+                                "📊 $name",
+                                "▶ ${a.playCount} Sessions · ${formatMs(a.totalListenedMs)} gehört\n" +
+                                        "🚀 Ø ${
+                                            String.format(
+                                                "%.1f",
+                                                a.averageSpeed
+                                            )
+                                        }x · ⏪ ${a.rewindCount} Zurückspulen\n$completed",
+                                context = context
+                            )
+                        }
+                    }
+                }
+
+                else -> showSimpleNotificationExtern(
+                    "❌ Ungültiger Typ",
+                    "Verwende 'song' oder 'podcast'",
+                    context = context
+                )
+            }
+            return
+        }
+
+        "statsreset", "resetstats" -> {
+            // statsreset [song|podcast] [dateiname-teilstring]
+            val parts = commandText.split(" ", limit = 3)
+            val type = parts.getOrNull(1)?.lowercase()
+            val query = parts.getOrNull(2)?.lowercase()
+
+            if (type == null || query == null) {
+                showSimpleNotificationExtern(
+                    "ℹ️ statsreset",
+                    "Syntax: statsreset [song|podcast] [dateiname-teilstring]",
+                    20.seconds,
+                    context
+                )
+                return
+            }
+
+            when (type) {
+                "song" -> {
+                    val allAnalytics = MediaAnalyticsManager.getAllSongAnalytics()
+                    var count = 0
+                    allAnalytics.values.filter { it.path.lowercase().contains(query) }.forEach {
+                        MediaAnalyticsManager.resetSongAnalytics(it.path)
+                        count++
+                    }
+                    showSimpleNotificationExtern(
+                        "✓ Reset",
+                        "$count Song-Statistiken zurückgesetzt",
+                        context = context
+                    )
+                }
+
+                "podcast" -> {
+                    val allAnalytics = MediaAnalyticsManager.getAllPodcastAnalytics()
+                    var count = 0
+                    allAnalytics.values.filter { it.path.lowercase().contains(query) }.forEach {
+                        MediaAnalyticsManager.resetPodcastAnalytics(it.path)
+                        count++
+                    }
+                    showSimpleNotificationExtern(
+                        "✓ Reset",
+                        "$count Podcast-Statistiken zurückgesetzt",
+                        context = context
+                    )
+                }
+
+                else -> showSimpleNotificationExtern(
+                    "❌ Typ",
+                    "Verwende 'song' oder 'podcast'",
+                    context = context
+                )
+            }
+            return
+        }
+
+        "plshow", "pldetails" -> {
+            // plshow [playlist-id] — Shows playlist details with song list
+            if (argument != null) {
+                // Delegate to service to show notification
+                MediaPlayerService.showPlaylists(context, MediaPlayerService.PlaylistType.MUSIC)
+            } else {
+                MediaPlayerService.showPlaylists(context)
+            }
+            return
+        }
+
+        "plplay", "plp", "playplaylist" -> {
+            if (argument != null) {
+                MediaPlayerService.activatePlaylist(context, argument)
+            } else {
+                showSimpleNotificationExtern(
+                    "ℹ️ plp",
+                    "Syntax: plp [playlist-id]\nVerwende 'playlists' um IDs zu sehen",
+                    20.seconds,
+                    context
+                )
+            }
+            return
+        }
+
+        "pla", "addtoplaylist" -> {
+            // pla [playlist-id] — Add current song to playlist
+            if (argument != null) {
+                MediaPlayerService.addCurrentToPlaylist(context, argument)
+            } else {
+                MediaPlayerService.showPlaylists(context)
+                showSimpleNotificationExtern(
+                    "ℹ️ pla",
+                    "Syntax: pla [playlist-id]",
                     20.seconds,
                     context
                 )
@@ -1232,8 +1574,8 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
         val client = OkHttpClient()
         val request = Request.Builder()
             .url(url)
-            .addHeader("DB-Client-Id", SupabaseConfig.DBKEY)
-            .addHeader("DB-Api-Key", SupabaseConfig.DBKEY1)
+            .addHeader("DB-Client-Id", Config.DBKEY)
+            .addHeader("DB-Api-Key", Config.DBKEY1)
             .addHeader("Accept", "application/xml")
             .build()
 
@@ -1331,4 +1673,10 @@ private fun calculateDbDelayMinutes(plannedTime: String, changedTime: String): I
         return (changedTotal - plannedTotal).coerceAtLeast(0)
     }
     return 0
+}
+
+fun formatMs(ms: Long): String {
+    val h = ms / 3_600_000
+    val m = (ms % 3_600_000) / 60_000
+    return if (h > 0) "${h}h ${m}min" else "${m}min"
 }
