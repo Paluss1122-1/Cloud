@@ -26,7 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
-import com.example.cloud.SupabaseConfig
+import com.example.cloud.Config
 import io.github.jan.supabase.annotations.SupabaseExperimental
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
@@ -53,7 +53,7 @@ fun FileIcon(
             try {
                 val signedUrl = withContext(Dispatchers.IO) {
                     storage
-                        .from(SupabaseConfig.SUPABASE_BUCKET)
+                        .from(Config.SUPABASE_BUCKET)
                         .createSignedUrl(fileName, 600.seconds)
                 }
                 publicUrl = signedUrl
