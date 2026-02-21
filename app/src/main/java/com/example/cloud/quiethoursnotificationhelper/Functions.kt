@@ -14,9 +14,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import com.example.cloud.ERRORINSERT
-import com.example.cloud.ERRORINSERTDATA
-import com.example.cloud.SupabaseConfig
+import com.example.cloud.SupabaseConfigALT
 import com.example.cloud.mediarecorder.AudioRecorder
 import com.example.cloud.service.ChatService
 import com.example.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
@@ -25,7 +23,6 @@ import com.example.cloud.service.QuietHoursNotificationService.Companion.current
 import com.example.cloud.showSimpleNotificationExtern
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -42,7 +39,11 @@ import kotlin.time.Duration.Companion.seconds
 fun startAudioRecording(context: Context) {
     try {
         if (audioRecorder != null) {
-            showSimpleNotificationExtern("⚠️ Aufnahme läuft", "Es läuft bereits eine Aufnahme", context = context)
+            showSimpleNotificationExtern(
+                "⚠️ Aufnahme läuft",
+                "Es läuft bereits eine Aufnahme",
+                context = context
+            )
             return
         }
 
@@ -65,10 +66,18 @@ fun startAudioRecording(context: Context) {
         audioRecorder?.startRecording(outFile)
         currentRecordingFile = outFile
 
-        showSimpleNotificationExtern("✅ Aufnahme gestartet", "Datei: ${outFile.name}", context = context)
+        showSimpleNotificationExtern(
+            "✅ Aufnahme gestartet",
+            "Datei: ${outFile.name}",
+            context = context
+        )
     } catch (e: Exception) {
         Log.e("QuietHoursService", "Error starting audio recording", e)
-        showSimpleNotificationExtern("❌ Fehler", "Aufnahme konnte nicht gestartet werden", context = context)
+        showSimpleNotificationExtern(
+            "❌ Fehler",
+            "Aufnahme konnte nicht gestartet werden",
+            context = context
+        )
         audioRecorder = null
         currentRecordingFile = null
     }
@@ -77,7 +86,11 @@ fun startAudioRecording(context: Context) {
 fun stopAudioRecording(context: Context) {
     try {
         if (audioRecorder == null) {
-            showSimpleNotificationExtern("ℹ️ Keine Aufnahme", "Es läuft keine Aufnahme", context = context)
+            showSimpleNotificationExtern(
+                "ℹ️ Keine Aufnahme",
+                "Es läuft keine Aufnahme",
+                context = context
+            )
             return
         }
 
@@ -85,11 +98,19 @@ fun stopAudioRecording(context: Context) {
         audioRecorder = null
 
         val filename = currentRecordingFile?.name ?: "unbekannt"
-        showSimpleNotificationExtern("✅ Aufnahme beendet", "Datei gespeichert: $filename", context = context)
+        showSimpleNotificationExtern(
+            "✅ Aufnahme beendet",
+            "Datei gespeichert: $filename",
+            context = context
+        )
         currentRecordingFile = null
     } catch (e: Exception) {
         Log.e("QuietHoursService", "Error stopping audio recording", e)
-        showSimpleNotificationExtern("❌ Fehler", "Aufnahme konnte nicht gestoppt werden", context = context)
+        showSimpleNotificationExtern(
+            "❌ Fehler",
+            "Aufnahme konnte nicht gestoppt werden",
+            context = context
+        )
     }
 }
 
@@ -106,7 +127,7 @@ fun showLastFriendMessages(context: Context) {
                 )
             }
 
-            val supabase = SupabaseConfig.client
+            val supabase = SupabaseConfigALT.client
 
             val response = supabase.from("messages")
                 .select {
