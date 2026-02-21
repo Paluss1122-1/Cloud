@@ -17,19 +17,25 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
-import com.example.cloud.SupabaseConfig
-import io.github.jan.supabase.postgrest.from
-import kotlinx.coroutines.*
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import java.text.SimpleDateFormat
-import java.util.*
 import androidx.core.content.edit
+import com.example.cloud.SupabaseConfigALT
+import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class ChatService : Service() {
 
@@ -61,7 +67,7 @@ class ChatService : Service() {
     )
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val supabase = SupabaseConfig.client
+    private val supabase = SupabaseConfigALT.client
     private val myUserId = "you"
     private val friendUserId = "friend"
 
@@ -82,15 +88,20 @@ class ChatService : Service() {
                             sendMessage(replyText)
                             withContext(Dispatchers.Main) {
                                 if (notificationId != SERVICE_NOTIFICATION_ID && notificationId != -1) {
-                                    val notificationManager = getSystemService(NotificationManager::class.java)
+                                    val notificationManager =
+                                        getSystemService(NotificationManager::class.java)
                                     notificationManager.cancel(notificationId)
-                                    Log.d("ChatService", "🗑️ Notification $notificationId removed after reply")
+                                    Log.d(
+                                        "ChatService",
+                                        "🗑️ Notification $notificationId removed after reply"
+                                    )
                                 }
                                 updateServiceNotification()
                             }
                         }
                     }
                 }
+
                 ACTION_SHOW_HISTORY -> {
                     Log.d("ChatService", "History angefordert: ${messageHistory.size} Nachrichten")
                     serviceScope.launch {
@@ -374,7 +385,8 @@ class ChatService : Service() {
                 // Nur Nachrichten vom Friend verarbeiten
                 if (message.sender_id == friendUserId &&
                     message.id != null &&
-                    !seenMessageIds.contains(message.id)) {
+                    !seenMessageIds.contains(message.id)
+                ) {
 
                     Log.d("ChatService", "📩 Realtime message: ${message.content}")
 
