@@ -104,29 +104,36 @@ class MusicStatsManager(context: Context) {
         isCompleted: Boolean = false
     ) {
         val sessionStart = prefs.getLong(KEY_SESSION_START, System.currentTimeMillis())
-        val playTimeMs = (System.currentTimeMillis() - sessionStart).coerceAtLeast(0L)
 
+        if (sessionStart <= 0L) return
+
+        // Calculate the total play time by subtracting pauses and interruptions
+        val playTimeMs = (System.currentTimeMillis() - sessionStart).coerceAtLeast(0L)
+        val totalPauseTimeMs = prefs.getLong(KEY_SESSION_PAUSE_TIME, 0L)
+
+        val actualPlayTimeMs = maxOf(0L, duration - totalPauseTimeMs)
+
+        // Update the stats
         val stats = getAllStats().toMutableList()
         val existingIndex = stats.indexOfFirst { it.path == songPath }
-
-        val completionPercent = if (duration > 0) {
-            ((currentPosition.toFloat() / duration) * 100).coerceIn(0f, 100f)
-        } else {
-            0f
-        }
 
         if (existingIndex >= 0) {
             val existing = stats[existingIndex]
             stats[existingIndex] = existing.copy(
                 playCount = existing.playCount + (if (isCompleted) 1 else 0),
-                totalPlayTimeMs = existing.totalPlayTimeMs + playTimeMs,
-                totalTimePlayedMs = existing.totalTimePlayedMs + playTimeMs,
+                totalPlayTimeMs = existing.totalPlayTimeMs + actualPlayTimeMs,
+                totalTimePlayedMs = existing.totalTimePlayedMs + maxOf(
+                    0L,
+                    duration - totalPauseTimeMs
+                ),
                 lastPlayedTime = System.currentTimeMillis(),
                 duration = duration,
                 averagePlaybackPosition = (existing.averagePlaybackPosition + currentPosition) / 2,
                 longestSessionMs = maxOf(existing.longestSessionMs, playTimeMs),
-                completionRate = completionPercent,
-                abruptStopsCount = existing.abruptStopsCount + (if (!isCompleted && currentPosition > 0) 1 else 0)
+                completionRate = if (duration > 0) ((currentPosition.toFloat() / duration) * 100).coerceIn(
+                    0f,
+                    100f
+                ) else 0f
             )
         } else {
             stats.add(
@@ -134,18 +141,17 @@ class MusicStatsManager(context: Context) {
                     name = songName,
                     path = songPath,
                     playCount = if (isCompleted) 1 else 0,
-                    totalPlayTimeMs = playTimeMs,
-                    totalTimePlayedMs = playTimeMs,
+                    totalPlayTimeMs = actualPlayTimeMs,
+                    totalTimePlayedMs = maxOf(0L, duration - totalPauseTimeMs),
                     lastPlayedTime = System.currentTimeMillis(),
                     duration = duration,
                     pauseCount = 0,
                     skipCount = 0,
                     interruptCount = 0,
-                    completionRate = completionPercent,
-                    averagePlaybackPosition = currentPosition,
-                    firstPlayedTime = System.currentTimeMillis(),
-                    longestSessionMs = playTimeMs,
-                    abruptStopsCount = if (!isCompleted && currentPosition > 0) 1 else 0
+                    completionRate = if (duration > 0) ((currentPosition.toFloat() / duration) * 100).coerceIn(
+                        0f,
+                        100f
+                    ) else 0f
                 )
             )
         }
@@ -178,7 +184,7 @@ class MusicStatsManager(context: Context) {
         val sessionStart = prefs.getLong(KEY_SESSION_START, System.currentTimeMillis())
         val sessionPlayTime = prefs.getLong(KEY_SESSION_PLAY_TIME, 0L)
         val currentSessionTime = System.currentTimeMillis() - sessionStart
-        val playTimeMs = currentSessionTime + sessionPlayTime
+        currentSessionTime + sessionPlayTime
 
         val stats = getAllStats().toMutableList()
         val existingIndex = stats.indexOfFirst { it.path == songPath }
