@@ -2,126 +2,28 @@
 
 package com.example.cloud.privatecloudapp
 
-import com.example.cloud.quicksettingsfunctions.BatteryDataRepository
-import com.example.cloud.quicksettingsfunctions.showNetworkInfo
-import com.example.cloud.quicksettingsfunctions.showSensorsInfo
-import com.example.cloud.quicksettingsfunctions.BatteryChartScreen
-import com.example.cloud.whatsapptab.WhatsAppTabScreen
-import com.example.cloud.browsertab.BrowserTabContent
-import com.example.cloud.notes.NotizenApp
-
 import android.Manifest
-import androidx.activity.compose.LocalActivity
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Activity.RESULT_OK
 import android.app.ActivityManager
+import android.app.NotificationChannel
 import android.app.NotificationManager
-import androidx.activity.compose.BackHandler
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.net.Uri
-import android.net.wifi.WifiManager
-import android.os.BatteryManager
-import android.webkit.WebView
-import android.os.Build
-import android.os.Environment
-import android.provider.Settings
-import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.NavigationDrawerItemDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.MenuDefaults
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.rememberDrawerState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.core.app.NotificationCompat
-import androidx.core.content.FileProvider
-import androidx.core.net.toUri
-import coil.compose.rememberAsyncImagePainter
-import com.example.cloud.AesEncryption
-import com.example.cloud.objects.FavoriteManager
-import com.example.cloud.SupabaseConfig
-import com.example.cloud.ui.theme.gruen
-import com.example.cloud.ui.theme.hellgruen
-import io.github.jan.supabase.storage.Storage
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileOutputStream
-import kotlin.collections.chunked
-import kotlin.time.Duration.Companion.seconds
-import kotlin.time.ExperimentalTime
-import android.app.NotificationChannel
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.media.MediaScannerConnection
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.Uri
 import android.net.wifi.WifiInfo
-import android.os.StatFs
+import android.net.wifi.WifiManager
+import android.os.BatteryManager
+import android.os.Build
+import android.os.Environment
+import android.provider.Settings
 import android.util.Log
 import android.view.Display
 import android.view.Surface
@@ -133,59 +35,150 @@ import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
+import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Laptop
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import com.example.cloud.objects.NotificationRepository
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import kotlin.math.sqrt
+import androidx.core.content.FileProvider
 import androidx.core.content.edit
-import com.example.cloud.authenticator.AuthenticatorTab
+import androidx.core.net.toUri
+import coil.compose.rememberAsyncImagePainter
+import com.example.cloud.AesEncryption
+import com.example.cloud.Config
 import com.example.cloud.audiorecorder.AudioRecorderContent
+import com.example.cloud.authenticator.AuthenticatorTab
 import com.example.cloud.autoclickertab.AutoClickerTabContent
+import com.example.cloud.browsertab.BrowserTabContent
 import com.example.cloud.contactstab.ContactsRepository
 import com.example.cloud.contactstab.ContactsTabContent
 import com.example.cloud.contactstab.ContactsViewModel
 import com.example.cloud.datecalculator.DateCalculatorContent
 import com.example.cloud.gallery.GalleryTab
+import com.example.cloud.mediaplayer.MediaTab
 import com.example.cloud.mediarecorder.MediaRecorderContent
 import com.example.cloud.movietab.MovieDiscoveryTabContent
 import com.example.cloud.musicstatstab.MusicStatsTabContent
-import com.example.cloud.service.QuietHoursNotificationService
+import com.example.cloud.notes.NotizenApp
+import com.example.cloud.objects.FavoriteManager
+import com.example.cloud.quicksettingsfunctions.BatteryChartScreen
+import com.example.cloud.quicksettingsfunctions.BatteryDataRepository
+import com.example.cloud.quicksettingsfunctions.showNetworkInfo
+import com.example.cloud.quicksettingsfunctions.showSensorsInfo
 import com.example.cloud.service.ChatService
+import com.example.cloud.service.QuietHoursNotificationService
 import com.example.cloud.ui.theme.Cloud
+import com.example.cloud.ui.theme.gruen
+import com.example.cloud.ui.theme.hellgruen
 import com.example.cloud.weathertab.WeatherTabContent
+import io.github.jan.supabase.storage.Storage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
 import java.net.Inet4Address
 import java.time.Instant
 import java.time.ZoneId
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import kotlin.math.sqrt
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.ExperimentalTime
 
 var isFullScreen by mutableStateOf(false)
 var webViewUrl by mutableStateOf("https://www.google.com")
@@ -201,11 +194,6 @@ enum class MenuItem(
         "Private Cloud",
         "☁️",
         {}
-    ),
-    WHATSAPP(
-        "WhatsApp",
-        "💬",
-        { WhatsAppTabScreen() }
     ),
     BROWSER(
         "Browser",
@@ -223,11 +211,6 @@ enum class MenuItem(
         "Schnellzugriff",
         "⚡",
         { QuickSettingsTabContent() }
-    ),
-    NOTIFICATIONS(
-        "Benachrichtigungsverlauf",
-        "⌚",
-        { Notifications() }
     ),
     GALLERY(
         "Gallerie",
@@ -310,6 +293,11 @@ enum class MenuItem(
         "Autoklicker",
         "⌨️ ",
         { AutoClickerTabContent() }
+    ),
+    MEDIAPLAYERTAB(
+        "Media Player",
+        "️️🎶 ",
+        { MediaTab() }
     )
 }
 
@@ -392,10 +380,12 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
                 Color(0xFFFFE29F).copy(alpha = 0.6f),
                 Color(0xFFFFC3A0).copy(alpha = 0.6f)
             )
+
             in 12..16 -> listOf(
                 Color(0xFF00F2FE).copy(alpha = 0.5f),
                 Color(0xFFDEFE4F).copy(alpha = 0.5f)
             )
+
             else -> listOf(
                 Cloud.copy(alpha = 0.7f),
                 Color(0xFF001A93).copy(alpha = 0.7f)
@@ -902,7 +892,7 @@ fun MainCloudScreen(storage: Storage) {
     suspend fun loadFiles() {
         try {
             val files = withContext(Dispatchers.IO) {
-                storage.from(SupabaseConfig.SUPABASE_BUCKET).list()
+                storage.from(Config.SUPABASE_BUCKET).list()
             }
 
             // Gruppiere Chunks und normale Dateien
@@ -952,7 +942,7 @@ fun MainCloudScreen(storage: Storage) {
         try {
             val fileName = fileWithMetadata.substringBefore("|")
             withContext(Dispatchers.IO) {
-                storage.from(SupabaseConfig.SUPABASE_BUCKET).delete(fileName)
+                storage.from(Config.SUPABASE_BUCKET).delete(fileName)
             }
             withContext(Dispatchers.Main) {
                 Toast.makeText(context, "🗑️ '$fileName' gelöscht!", Toast.LENGTH_SHORT).show()
@@ -1007,7 +997,7 @@ fun MainCloudScreen(storage: Storage) {
                             val bytes = file.readBytes()
                             val dataToUpload =
                                 if (shouldEncrypt) AesEncryption.encrypt(bytes) else bytes
-                            storage.from(SupabaseConfig.SUPABASE_BUCKET)
+                            storage.from(Config.SUPABASE_BUCKET)
                                 .upload(fileName, dataToUpload)
                         } else {
                             // Große Datei: split in 20MB-Teile
@@ -1021,7 +1011,7 @@ fun MainCloudScreen(storage: Storage) {
                                 val dataToUpload =
                                     if (shouldEncrypt) AesEncryption.encrypt(chunkData) else chunkData
                                 val chunkFileName = "${fileName}.part${chunkIndex + 1}"
-                                storage.from(SupabaseConfig.SUPABASE_BUCKET)
+                                storage.from(Config.SUPABASE_BUCKET)
                                     .upload(chunkFileName, dataToUpload)
                                 chunkIndex++
                             }
@@ -1277,7 +1267,7 @@ fun MainCloudScreen(storage: Storage) {
                                             LaunchedEffect(fileName) {
                                                 try {
                                                     val signed = withContext(Dispatchers.IO) {
-                                                        storage.from(SupabaseConfig.SUPABASE_BUCKET)
+                                                        storage.from(Config.SUPABASE_BUCKET)
                                                             .createSignedUrl(fileName, 600.seconds)
                                                     }
                                                     publicUrl = signed
@@ -1383,7 +1373,7 @@ fun MainCloudScreen(storage: Storage) {
                                                                         val data =
                                                                             withContext(Dispatchers.IO) {
                                                                                 storage.from(
-                                                                                    SupabaseConfig.SUPABASE_BUCKET
+                                                                                    Config.SUPABASE_BUCKET
                                                                                 )
                                                                                     .downloadAuthenticated(
                                                                                         fileName
@@ -1679,10 +1669,9 @@ fun MainCloudScreen(storage: Storage) {
                                                     scope.launch {
                                                         showDownloadProgress = true
                                                         try {
-                                                            // Prüfen ob es Chunks gibt
                                                             val allFiles =
                                                                 withContext(Dispatchers.IO) {
-                                                                    storage.from(SupabaseConfig.SUPABASE_BUCKET)
+                                                                    storage.from(Config.SUPABASE_BUCKET)
                                                                         .list()
                                                                 }
 
@@ -1731,13 +1720,12 @@ fun MainCloudScreen(storage: Storage) {
                                                                         for (chunk in chunks) {
                                                                             val chunkData =
                                                                                 storage.from(
-                                                                                    SupabaseConfig.SUPABASE_BUCKET
+                                                                                    Config.SUPABASE_BUCKET
                                                                                 )
                                                                                     .downloadAuthenticated(
                                                                                         chunk.name
                                                                                     )
 
-                                                                            // Entschlüsseln falls nötig
                                                                             val decryptedChunk =
                                                                                 if (isImageFile(
                                                                                         fileName
@@ -1764,13 +1752,12 @@ fun MainCloudScreen(storage: Storage) {
                                                                         // Normale Datei downloaden
                                                                         val downloadedData =
                                                                             storage.from(
-                                                                                SupabaseConfig.SUPABASE_BUCKET
+                                                                                Config.SUPABASE_BUCKET
                                                                             )
                                                                                 .downloadAuthenticated(
                                                                                     fileName
                                                                                 )
 
-                                                                        // Entschlüsseln falls nötig
                                                                         val finalData =
                                                                             if (isImageFile(fileName) || fileName.endsWith(
                                                                                     ".apk",
@@ -2013,7 +2000,7 @@ fun MainCloudScreen(storage: Storage) {
                     showDownloadProgress = true
                     try {
                         val data = withContext(Dispatchers.IO) {
-                            storage.from(SupabaseConfig.SUPABASE_BUCKET)
+                            storage.from(Config.SUPABASE_BUCKET)
                                 .downloadAuthenticated(name)
                         }
                         val dcimDir =
@@ -2069,92 +2056,6 @@ fun MainCloudScreen(storage: Storage) {
     }
 }
 
-
-@Composable
-fun Notifications() {
-    val context = LocalContext.current
-    val notifications = NotificationRepository.notifications
-
-    // Prüfen, ob der Listener aktiviert ist
-    val isListenerEnabled = remember {
-        Settings.Secure.getString(
-            context.contentResolver,
-            "enabled_notification_listeners"
-        )?.contains(context.packageName) == true
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF2A2A2A))
-            .padding(12.dp)
-    ) {
-        if (!isListenerEnabled) {
-            Text(
-                text = "⚠️ Benachrichtigungszugriff nicht aktiviert",
-                color = Color.Red,
-                modifier = Modifier.padding(16.dp)
-            )
-            Button(
-                onClick = {
-                    context.startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
-                }
-            ) {
-                Text("Einstellungen öffnen")
-            }
-            return
-        }
-
-        if (notifications.isEmpty()) {
-            Text(
-                text = "Keine Benachrichtigungen vorhanden",
-                color = Color.Gray,
-                modifier = Modifier.fillMaxSize(),
-                textAlign = TextAlign.Center
-            )
-            return
-        }
-
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(notifications.reversed()) { sbn ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF333333))
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        // Paketname (App)
-                        Text(
-                            text = sbn.packageName,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            fontSize = 13.sp
-                        )
-
-                        // Titel und Text (wenn vorhanden)
-                        val extras = sbn.notification.extras
-                        extras.getString("android.title")?.let { title ->
-                            Text(text = title, color = Color.LightGray, fontSize = 13.sp)
-                        }
-                        extras.getString("android.text")?.let { text ->
-                            Text(text = text, color = Color.White, fontSize = 12.sp)
-                        }
-
-                        // Zeitstempel
-                        Text(
-                            text = SimpleDateFormat("HH:mm", Locale.getDefault())
-                                .format(Date(sbn.postTime)),
-                            color = Color.Gray,
-                            fontSize = 11.sp,
-                            modifier = Modifier.align(Alignment.End)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-
 @Composable
 fun QuickSettingsTabContent() {
     val context = LocalContext.current
@@ -2174,29 +2075,6 @@ fun QuickSettingsTabContent() {
     var showNumberDialog by remember { mutableStateOf(false) }
     var showNumberDialogSave by remember { mutableStateOf(false) }
 
-    // In deiner Activity mit File Picker
-    val pickMusicLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        uri?.let {
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    it,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-
-                context.getSharedPreferences("quiet_hours_prefs", Context.MODE_PRIVATE)
-                    .edit {
-                        putString("music_file_path", it.toString())
-                    }
-
-                Toast.makeText(context, "Musik gespeichert", Toast.LENGTH_SHORT).show()
-            } catch (_: Exception) {
-                Toast.makeText(context, "Fehler beim Speichern", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -2206,7 +2084,6 @@ fun QuickSettingsTabContent() {
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Zeile 2: Medien & Display
             item {
                 QuickSettingRow(
                     listOf(
@@ -2217,29 +2094,16 @@ fun QuickSettingsTabContent() {
                 )
             }
 
-            // Zeile 3: Apps
             item {
                 QuickSettingRow(
                     listOf(
-                        "⚙️\nEinstellungen" to { openSettings(context) },
                         "📊\nDaten\nnutzung" to { openDataUsage(context) },
-                        "💾\nSpeicher\nInfo" to { showDetailedStorageInfo(context) }
-                    )
-                )
-            }
-
-            // Zeile 4: Batterie (OHNE ROOT)
-            item {
-                QuickSettingRow(
-                    listOf(
                         "🔋\nBatterie\nInfo" to { showBatteryInfo(context) },
-                        "💾\nSpeicher" to { openStorageSettings(context) },
-                        "bg Notification" to { QuietHoursNotificationService.startService(context) }
+                        "💾\nSpeicher" to { openStorageSettings(context) }
                     )
                 )
             }
 
-            // Zeile 6: Erweitert
             item {
                 QuickSettingRow(
                     listOf(
@@ -2250,13 +2114,11 @@ fun QuickSettingsTabContent() {
                 )
             }
 
-            // Zeile 6: Erweitert
             item {
                 QuickSettingRow(
                     listOf(
                         "Downtime" to { showNumberDialog = true },
-                        "Uptime" to { showNumberDialogSave = true },
-                        "Musik Titel" to { pickMusicLauncher.launch(arrayOf("audio/*")) }
+                        "Uptime" to { showNumberDialogSave = true }
                     )
                 )
             }
@@ -2451,133 +2313,6 @@ fun showNetworkNotificationNow(context: Context, content: String, final: Boolean
             val preview = content.lines().take(2).joinToString("\n")
             Toast.makeText(context, "Netzwerk:\n$preview", Toast.LENGTH_LONG).show()
         }
-    }
-}
-
-fun showDetailedStorageInfo(context: Context) {
-    // === 1. Interner Speicher ===
-    try {
-        val internalStat = StatFs("/")
-        val blockSize = internalStat.blockSizeLong
-        val total = internalStat.blockCountLong * blockSize
-        val available = internalStat.availableBlocksLong * blockSize
-        val used = total - available
-
-        val content = """
-            Gesamt: ${formatBytes(total)}
-            Genutzt: ${formatBytes(used)}
-            Verfügbar: ${formatBytes(available)}
-        """.trimIndent()
-
-        showStorageNotification(
-            context,
-            "storage_internal",
-            "Interner Speicher",
-            1010,
-            "📁 Interner Speicher (Gerät)",
-            content
-        )
-    } catch (_: Exception) {
-        showStorageNotification(
-            context,
-            "storage_internal",
-            "Interner Speicher",
-            1010,
-            "📁 Interner Speicher",
-            "N/A"
-        )
-    }
-
-    // === 2. Externer Speicher ===
-    try {
-        val externalDir = Environment.getExternalStorageDirectory()
-        val externalStat = StatFs(externalDir.path)
-        val blockSize = externalStat.blockSizeLong
-        val total = externalStat.blockCountLong * blockSize
-        val available = externalStat.availableBlocksLong * blockSize
-        val used = total - available
-
-        val content = """
-            Pfad: ${externalDir.absolutePath}
-            Gesamt: ${formatBytes(total)}
-            Genutzt: ${formatBytes(used)}
-            Verfügbar: ${formatBytes(available)}
-        """.trimIndent()
-
-        showStorageNotification(
-            context,
-            "storage_external",
-            "Externer Speicher",
-            1011,
-            "📱 Externer Speicher (geteilt)",
-            content
-        )
-    } catch (_: Exception) {
-        showStorageNotification(
-            context,
-            "storage_external",
-            "Externer Speicher",
-            1011,
-            "📱 Externer Speicher",
-            "N/A"
-        )
-    }
-}
-
-// === Hilfsfunktion: Einheitliche Benachrichtigung ===
-private fun showStorageNotification(
-    context: Context,
-    channelId: String,
-    channelName: String,
-    id: Int,
-    title: String,
-    content: String
-) {
-    val channel =
-        NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_LOW)
-    channel.description = "Speicherinformation"
-    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    nm.createNotificationChannel(channel)
-
-    val builder = NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(android.R.drawable.ic_menu_info_details)
-        .setContentTitle(title)
-        .setContentText(content.lines().firstOrNull() ?: content)
-        .setStyle(NotificationCompat.BigTextStyle().bigText(content))
-        .setPriority(NotificationCompat.PRIORITY_LOW)
-        .setAutoCancel(true)
-
-    if (ActivityCompat.checkSelfPermission(
-            context,
-            Manifest.permission.POST_NOTIFICATIONS
-        ) == PackageManager.PERMISSION_GRANTED
-    ) {
-        NotificationManagerCompat.from(context).notify(id, builder.build())
-    } else {
-        // Fallback: Toast mit Titel + erster Zeile
-        Toast.makeText(
-            context,
-            "$title\n${content.lines().firstOrNull() ?: content}",
-            Toast.LENGTH_LONG
-        ).show()
-    }
-}
-
-// === Hilfsfunktionen (wie in deinem Original) ===
-private fun formatBytes(bytes: Long): String {
-    return when {
-        bytes >= 1_000_000_000_000L -> "${
-            String.format(
-                Locale.US,
-                "%.2f",
-                bytes / 1_000_000_000_000.0
-            )
-        } TB"
-
-        bytes >= 1_000_000_000L -> "${String.format(Locale.US, "%.2f", bytes / 1_000_000_000.0)} GB"
-        bytes >= 1_000_000L -> "${String.format(Locale.US, "%.2f", bytes / 1_000_000.0)} MB"
-        bytes >= 1_000L -> "${String.format(Locale.US, "%.2f", bytes / 1_000.0)} KB"
-        else -> "$bytes B"
     }
 }
 
@@ -2823,16 +2558,6 @@ fun openStorageSettings(context: Context) {
         })
     } catch (_: Exception) {
         Toast.makeText(context, "Speicher-Einstellungen nicht verfügbar", Toast.LENGTH_SHORT).show()
-    }
-}
-
-fun openSettings(context: Context) {
-    try {
-        context.startActivity(Intent(Settings.ACTION_SETTINGS).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        })
-    } catch (e: Exception) {
-        Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
     }
 }
 
