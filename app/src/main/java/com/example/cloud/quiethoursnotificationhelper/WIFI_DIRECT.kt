@@ -8,6 +8,10 @@ import android.net.wifi.WifiManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
+import com.example.cloud.Config.CLIPBOARD_PORT
+import com.example.cloud.Config.LAPTOP_IPS
+import com.example.cloud.Config.SYNC_PORT
+import com.example.cloud.Config.UPDATE_PORT
 import com.example.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.example.cloud.showSimpleNotificationExtern
 import kotlinx.coroutines.CoroutineScope
@@ -26,10 +30,10 @@ import kotlin.time.Duration.Companion.seconds
 private var updateServerSocket: ServerSocket? = null
 private var listenerJob: Job? = null
 
-private const val LAPTOP_IP = "192.168.178.20"
-private const val SYNC_PORT = 8888
-private const val UPDATE_PORT = 8890
-private const val CLIPBOARD_PORT = 8891
+var isLaptopConnected = false
+
+private var triggerServerSocket: ServerSocket? = null
+private var triggerJob: Job? = null
 
 private var wifiLock: WifiManager.WifiLock? = null
 
@@ -41,6 +45,90 @@ data class TodoItem(
     val completed: Boolean,
     val timestamp: Long
 )
+
+private var appContext: Context? = null
+
+private const val PREFS_SYNC = "sync_prefs"
+private const val KEY_SYNC_ACTIVE = "sync_active"
+private const val KEY_SYNC_UNTIL = "sync_until"
+
+private fun saveSyncState(context: Context, durationMinutes: Int = 0) {
+    context.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE).edit {
+        putBoolean(KEY_SYNC_ACTIVE, true)
+        putLong(KEY_SYNC_UNTIL, System.currentTimeMillis() + durationMinutes * 60_000L)
+    }
+}
+
+fun startTriggerListenerIfHomeWifi(context: Context) {
+    val wifiManager =
+        context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    val ssid = wifiManager.connectionInfo.ssid.trim('"')
+    val homeSSIDs = listOf("FRITZ!Box 5590 XO") // anpassen
+
+    if (ssid in homeSSIDs) {
+        startTriggerListener(context)
+        showSimpleNotificationExtern(
+            "📶 WLAN verbunden",
+            "✅ Im Heim-WLAN ($ssid), Trigger Listener gestartet",
+            10.seconds,
+            context
+        )
+    } else {
+        Log.d("TodoSync", "⚠️ Nicht im Heim-WLAN ($ssid), kein Trigger Listener")
+    }
+}
+
+fun startTriggerListener(context: Context) {
+    triggerJob?.cancel()
+    triggerJob = syncScope.launch(Dispatchers.IO) {
+        try {
+            triggerServerSocket = ServerSocket(8893)
+            Log.d("TodoSync", "🎯 Trigger Listener aktiv auf Port 8893")
+            while (isActive) {
+                try {
+                    val client = triggerServerSocket?.accept() ?: break
+                    val reader = BufferedReader(InputStreamReader(client.getInputStream()))
+                    val command = reader.readLine()
+                    client.close()
+
+                    if (command == "CONNECT") {
+                        Log.d("TodoSync", "📡 CONNECT-Befehl empfangen, starte Sync...")
+                        syncScope.launch(Dispatchers.Main) {
+                            syncTodosWithLaptop(context)
+                        }
+                    }
+                } catch (e: Exception) {
+                    if (e !is java.net.SocketException) Log.e("TodoSync", "Trigger Fehler", e)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("TodoSync", "Trigger Listener Fehler", e)
+        }
+    }
+}
+
+fun stopTriggerListener() {
+    triggerJob?.cancel(); triggerJob = null
+    triggerServerSocket?.close(); triggerServerSocket = null
+}
+
+fun restoreSyncIfNeeded(context: Context) {
+    val prefs = context.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)
+    val syncActive = prefs.getBoolean(KEY_SYNC_ACTIVE, false)
+    val syncUntil = prefs.getLong(KEY_SYNC_UNTIL, 0L)
+    val remainingMs = syncUntil - System.currentTimeMillis()
+
+    if (syncActive && remainingMs > 0) {
+        val remainingMinutes = (remainingMs / 60_000L).toInt().coerceAtLeast(1)
+        Log.d("TodoSync", "🔁 Auto-Restore: Listener für noch ${remainingMinutes}min")
+        startUpdateListener(context, remainingMinutes)
+        showSimpleNotificationExtern(
+            "🔁 Sync wiederhergestellt",
+            "Listener läuft noch $remainingMinutes min",
+            10.seconds, context
+        )
+    }
+}
 
 fun getTodos(context: Context): List<TodoItem> {
     val json = context.getSharedPreferences("todos_prefs", MODE_PRIVATE)
@@ -85,7 +173,7 @@ fun addTodo(text: String, context: Context) {
     showSimpleNotificationExtern(
         "✅ To-do hinzugefügt",
         "\"$text\"\n\nGesamt: ${todos.size} To-dos",
-        20.seconds,
+        10.seconds,
         context
     )
 }
@@ -100,14 +188,14 @@ fun completeTodo(index: Int, context: Context) {
         showSimpleNotificationExtern(
             "✓ Erledigt",
             "\"${todos[index].text}\"",
-            20.seconds,
+            10.seconds,
             context
         )
     } else {
         showSimpleNotificationExtern(
             "❌ Fehler",
             "To-do #${index + 1} existiert nicht",
-            20.seconds,
+            10.seconds,
             context
         )
     }
@@ -123,14 +211,14 @@ fun removeTodo(index: Int, context: Context) {
         showSimpleNotificationExtern(
             "🗑️ Gelöscht",
             "\"${removed.text}\"",
-            20.seconds,
+            10.seconds,
             context
         )
     } else {
         showSimpleNotificationExtern(
             "❌ Fehler",
             "To-do #${index + 1} existiert nicht",
-            20.seconds,
+            10.seconds,
             context
         )
     }
@@ -143,6 +231,7 @@ fun showAllTodos(context: Context) {
         showSimpleNotificationExtern(
             "📝 To-dos",
             "Keine To-dos vorhanden\n\nErstelle eins mit: * \"deine aufgabe\"",
+            10.seconds,
             context = context
         )
         return
@@ -209,23 +298,41 @@ fun syncTodosWithLaptop(context: Context) {
                 todosJson.put(obj)
             }
 
-            // Socket-Verbindung zum Laptop (IP muss angepasst werden)
-            val socket = java.net.Socket()
-            socket.connect(java.net.InetSocketAddress(LAPTOP_IP, SYNC_PORT), 5000)
+            var lastException: Exception? = null
+            var connected = false
 
-            val writer = java.io.PrintWriter(socket.getOutputStream(), true)
-            writer.println(todosJson.toString())
-            writer.flush()
+            for (ip in LAPTOP_IPS) {
+                try {
+                    Log.d("TodoSync", "Versuche Verbindung zu $ip...")
+                    val socket = java.net.Socket()
+                    socket.connect(java.net.InetSocketAddress(ip, SYNC_PORT), 3000)
 
-            socket.close()
+                    val writer = java.io.PrintWriter(socket.getOutputStream(), true)
+                    writer.println(todosJson.toString())
+                    writer.flush()
+                    socket.close()
 
-            withContext(Dispatchers.Main) {
-                startUpdateListener(context, 60)
-                showSimpleNotificationExtern(
-                    "✅ Sync erfolgreich",
-                    "${todos.size} To-dos übertragen\n🔄 Listener aktiv für 60min",
-                    20.seconds, context
-                )
+                    connected = true
+                    isLaptopConnected = true
+                    Log.d("TodoSync", "✅ Verbunden über $ip")
+                    break
+                } catch (e: Exception) {
+                    Log.w("TodoSync", "❌ $ip fehlgeschlagen: ${e.message}")
+                    lastException = e
+                }
+            }
+
+            if (connected) {
+                withContext(Dispatchers.Main) {
+                    startUpdateListener(context, 60)
+                    showSimpleNotificationExtern(
+                        "✅ Sync erfolgreich",
+                        "${todos.size} To-dos übertragen\n🔄 Listener aktiv für 60min",
+                        10.seconds, context
+                    )
+                }
+            } else {
+                throw lastException ?: Exception("Alle IPs fehlgeschlagen")
             }
         } catch (e: Exception) {
             Log.e("TodoSync", "Sync failed", e)
@@ -233,7 +340,7 @@ fun syncTodosWithLaptop(context: Context) {
                 showSimpleNotificationExtern(
                     "❌ Sync fehlgeschlagen",
                     "Laptop nicht erreichbar: ${e.message}\n\nStelle sicher, dass das Python-Script läuft",
-                    20.seconds, context
+                    10.seconds, context
                 )
             }
         }
@@ -242,9 +349,13 @@ fun syncTodosWithLaptop(context: Context) {
 
 fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
     stopUpdateListener()
+    appContext = context.applicationContext
+    saveSyncState(context, durationMinutes)
 
-    val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-    wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "TodoSync:WifiLock")
+    val wifiManager =
+        context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    wifiLock =
+        wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "TodoSync:WifiLock")
     wifiLock?.acquire()
 
     startClipboardSync(context)
@@ -254,7 +365,7 @@ fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
     listenerJob = syncScope.launch(Dispatchers.IO) {
         try {
             updateServerSocket = ServerSocket(UPDATE_PORT)
-            updateServerSocket!!.soTimeout = 2000  // alle 2s aufwachen
+            //updateServerSocket!!.soTimeout = 2000  // alle 2s aufwachen
 
             val timeoutJob = launch {
                 delay(durationMinutes * 60_000L)
@@ -310,6 +421,10 @@ fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
 
 fun stopUpdateListener() {
     try {
+        appContext?.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)?.edit {
+            putBoolean(KEY_SYNC_ACTIVE, false)
+        }
+        isLaptopConnected = false
         wifiLock?.release(); wifiLock = null
         listenerJob?.cancel(); listenerJob = null
         updateServerSocket?.close(); updateServerSocket = null
@@ -324,7 +439,12 @@ private fun parseTodosFromJson(jsonData: String): List<TodoItem> =
         val jsonArray = org.json.JSONArray(jsonData)
         (0 until jsonArray.length()).map { i ->
             jsonArray.getJSONObject(i).run {
-                TodoItem(getLong("id"), getString("text"), getBoolean("completed"), getLong("timestamp"))
+                TodoItem(
+                    getLong("id"),
+                    getString("text"),
+                    getBoolean("completed"),
+                    getLong("timestamp")
+                )
             }
         }
     } catch (e: Exception) {
@@ -334,18 +454,20 @@ private fun parseTodosFromJson(jsonData: String): List<TodoItem> =
 
 private fun sendClipboardToLaptop(text: String) {
     syncScope.launch(Dispatchers.IO) {
-        try {
-            val socket = java.net.Socket()
-            socket.connect(java.net.InetSocketAddress(LAPTOP_IP, CLIPBOARD_PORT), 3000)
+        LAPTOP_IPS.forEach { ip ->
+            try {
+                val socket = java.net.Socket()
+                socket.connect(java.net.InetSocketAddress(ip, CLIPBOARD_PORT), 3000)
 
-            val writer = java.io.PrintWriter(socket.getOutputStream(), true)
-            writer.println("CLIPBOARD:$text")
-            writer.flush()
-            socket.close()
+                val writer = java.io.PrintWriter(socket.getOutputStream(), true)
+                writer.println("CLIPBOARD:$text")
+                writer.flush()
+                socket.close()
 
-            Log.d("ClipboardSync", "📋 Zwischenablage an Laptop gesendet")
-        } catch (e: Exception) {
-            Log.e("ClipboardSync", "Fehler beim Senden", e)
+                Log.d("ClipboardSync", "📋 Zwischenablage an Laptop $ip gesendet")
+            } catch (e: Exception) {
+                Log.e("ClipboardSync", "Fehler beim Senden an $ip", e)
+            }
         }
     }
 }
@@ -372,7 +494,8 @@ fun startClipboardSync(context: Context) {
 
 fun stopClipboardSync(context: Context) {
     if (clipboardListener != null) {
-        val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clipboardManager =
+            context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboardManager.removePrimaryClipChangedListener(clipboardListener)
         clipboardListener = null
         Log.d("ClipboardSync", "📋 Clipboard Sync deaktiviert")
