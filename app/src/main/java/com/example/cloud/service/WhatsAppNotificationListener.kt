@@ -3,23 +3,27 @@ package com.example.cloud.service
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Handler
-import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import androidx.core.app.RemoteInput
+import com.example.cloud.Config.LAPTOP_IPS
+import com.example.cloud.Config.NOTIFICATION_PORT
 import com.example.cloud.database.WhatsAppMessage
 import com.example.cloud.database.WhatsAppMessageRepository
 import com.example.cloud.objects.NotificationRepository
-import kotlinx.coroutines.*
-import androidx.core.app.RemoteInput
-import androidx.core.content.ContextCompat
+import com.example.cloud.quiethoursnotificationhelper.isLaptopConnected
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class WhatsAppNotificationListener : NotificationListenerService() {
 
@@ -30,7 +34,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
         // Unterstützte Apps
         private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
-        private val TELEGRAM_PACKAGES = setOf("org.telegram.messenger", "org.telegram.messenger.web")
+        private val TELEGRAM_PACKAGES =
+            setOf("org.telegram.messenger", "org.telegram.messenger.web")
 
         data class ChatMessage(
             val text: String,
@@ -50,89 +55,91 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             return repository.getAllFiltered()
         }
 
-        fun getMessagesBySender(sender: String): List<WhatsAppMessage> {
-            return repository.getMessagesBySender(sender)
-        }
+        private val forwardScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        private var lastForwardTime = 0L
+        private const val FORWARD_DEBOUNCE_MS = 500L
+        private var pendingForwardJob: Job? = null
 
-        fun sendReply(sender: String, replyText: String, context: Context): Boolean {
-            return synchronized(replyActions) {
-                val replyData = replyActions[sender]
-                if (replyData == null) {
-                    Log.w("MessageListener", "No reply action found for $sender")
-                    Handler(Looper.getMainLooper()).post {
-                        Toast.makeText(context, "Antwort nicht mehr verfügbar", Toast.LENGTH_LONG)
-                            .show()
-                    }
-                    return false
+        fun forwardNotificationsToLaptop(
+            notifications: Array<StatusBarNotification>,
+            packageManager: PackageManager
+        ) {
+            if (!isLaptopConnected) return
+            pendingForwardJob?.cancel()
+            pendingForwardJob = forwardScope.launch {
+                val now = System.currentTimeMillis()
+                val timeSinceLast = now - lastForwardTime
+                if (timeSinceLast < FORWARD_DEBOUNCE_MS) {
+                    delay(FORWARD_DEBOUNCE_MS - timeSinceLast)
                 }
+                lastForwardTime = System.currentTimeMillis()
+                val jsonArray = org.json.JSONArray()
 
-                try {
-                    val intent = Intent().apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                notifications
+                    .filter { !it.isOngoing && it.packageName !== "com.example.cloud" && it.packageName != "com.android.systemui" }
+                    .sortedByDescending { it.postTime }
+                    .forEach { sbn ->
+                        val extras = sbn.notification.extras
+                        val title = extras.getCharSequence("android.title")?.toString() ?: ""
+                        val text = extras.getCharSequence("android.text")?.toString() ?: ""
+                        if (title.isBlank() && text.isBlank()) return@forEach
+
+                        val appName = try {
+                            packageManager.getApplicationLabel(
+                                packageManager.getApplicationInfo(
+                                    sbn.packageName,
+                                    PackageManager.GET_META_DATA
+                                )
+                            ).toString()
+                        } catch (_: Exception) {
+                            sbn.packageName
+                        }
+
+                        jsonArray.put(org.json.JSONObject().apply {
+                            put("app", appName)
+                            put("title", title)
+                            put("text", text)
+                            put("time", sbn.postTime)
+                        })
                     }
 
-                    val bundle = android.os.Bundle().apply {
-                        putCharSequence(replyData.remoteInput.resultKey, replyText)
+                forwardScope.launch {
+                    for (ip in LAPTOP_IPS) {
+                        try {
+                            val socket = java.net.Socket()
+                            socket.connect(java.net.InetSocketAddress(ip, NOTIFICATION_PORT), 3000)
+                            java.io.PrintWriter(socket.getOutputStream(), true).apply {
+                                println(jsonArray.toString())
+                                flush()
+                            }
+                            socket.close()
+                            Log.d(
+                                "NotifForwarder",
+                                "✅ ${jsonArray.length()} Notifs gesendet an $ip"
+                            )
+                            break
+                        } catch (e: Exception) {
+                            Log.w("NotifForwarder", "❌ $ip: ${e.message}")
+                        }
                     }
-
-                    RemoteInput.addResultsToIntent(
-                        arrayOf(replyData.remoteInput),
-                        intent,
-                        bundle
-                    )
-
-                    replyData.pendingIntent.send(context, 0, intent)
-
-                    // Eigene Nachricht zur Liste hinzufügen
-                    messagesByContact.getOrPut(sender) { mutableListOf() }.add(
-                        ChatMessage(replyText, isOwnMessage = true)
-                    )
-
-                    Log.d("MessageListener", "Reply sent successfully to $sender: $replyText")
-                    Handler(Looper.getMainLooper()).post {
-                        Toast.makeText(context, "Nachricht gesendet ✓", Toast.LENGTH_SHORT).show()
-                    }
-
-                    // Benachrichtigung über erfolgreiches Senden
-                    val notificationManager = context.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-
-                    val successNotification = NotificationCompat.Builder(context, "quiet_hours_channel")
-                        .setSmallIcon(android.R.drawable.stat_notify_chat)
-                        .setContentTitle("✓ Nachricht gesendet")
-                        .setContentText("An $sender: $replyText")
-                        .setPriority(NotificationCompat.PRIORITY_LOW)
-                        .setAutoCancel(true)
-                        .setTimeoutAfter(3000)
-                        .build()
-
-                    if (ContextCompat.checkSelfPermission(
-                            context,
-                            Manifest.permission.POST_NOTIFICATIONS
-                        ) == PackageManager.PERMISSION_GRANTED
-                    ) {
-                        notificationManager.notify(30000 + sender.hashCode(), successNotification)
-                    }
-
-                    true
-                } catch (e: Exception) {
-                    Log.e("MessageListener", "Error sending reply", e)
-                    Handler(Looper.getMainLooper()).post {
-                        Toast.makeText(context, "Fehler beim Senden: ${e.message}", Toast.LENGTH_LONG).show()
-                    }
-                    false
                 }
             }
         }
 
         private fun isSupportedApp(packageName: String): Boolean {
-            return WHATSAPP_PACKAGES.contains(packageName) || TELEGRAM_PACKAGES.contains(packageName)
+            return WHATSAPP_PACKAGES.contains(packageName) || TELEGRAM_PACKAGES.contains(
+                packageName
+            )
         }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         super.onNotificationPosted(sbn)
 
-        // Prüfen ob es WhatsApp oder Telegram ist
+        if (sbn.packageName != "com.example.cloud") {
+            activeNotifications?.let { forwardNotificationsToLaptop(it, packageManager) }
+        }
+
         if (!isSupportedApp(sbn.packageName)) {
             return
         }
@@ -146,7 +153,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         if (title.contains("Backup", ignoreCase = true) ||
             title.contains("Du", ignoreCase = true) ||
             title.contains("WhatsApp", ignoreCase = true) ||
-            title.contains("Telegram", ignoreCase = true)) {
+            title.contains("Telegram", ignoreCase = true)
+        ) {
             return
         }
 
@@ -157,7 +165,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         if (lastMessage != null &&
             !lastMessage.isOwnMessage &&
             lastMessage.text == text &&
-            (System.currentTimeMillis() - lastMessage.timestamp) < 5000) {
+            (System.currentTimeMillis() - lastMessage.timestamp) < 5000
+        ) {
             Log.d("MessageListener", "Duplicate message detected from $title, ignoring")
             return
         }
@@ -179,7 +188,10 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                     originalResultKey = systemRemoteInput.resultKey,
                     timestamp = System.currentTimeMillis()
                 )
-                Log.d("MessageListener", "Saved reply action for $title with originalResultKey: ${systemRemoteInput.resultKey}")
+                Log.d(
+                    "MessageListener",
+                    "Saved reply action for $title with originalResultKey: ${systemRemoteInput.resultKey}"
+                )
             }
         }
 
@@ -208,7 +220,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             }
         }
 
-        // Uhrzeit prüfen (Quiet Hours)
         val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
         val prefs = getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
         val quietEnd = prefs.getString("saved_number", null)?.toIntOrNull() ?: 21
@@ -243,14 +254,11 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 .setShowsUserInterface(false)
                 .build()
 
-            // Nachrichten für diesen Kontakt holen
             val messages = messagesByContact[title] ?: mutableListOf()
 
-            // MessagingStyle für Chat-Darstellung
             val messagingStyle = NotificationCompat.MessagingStyle("Du")
                 .setConversationTitle(title)
 
-            // Nur die letzten 5 Nachrichten anzeigen
             val recentMessages = messages.takeLast(5)
 
             recentMessages.forEach { msg ->
@@ -280,6 +288,15 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        super.onNotificationRemoved(sbn)
+
+        if (
+            sbn.packageName != "com.example.cloud" &&
+            sbn.packageName != "com.android.systemui"
+        ) {
+            activeNotifications?.let { forwardNotificationsToLaptop(it, packageManager) }
+        }
+
         if (isSupportedApp(sbn.packageName)) {
             val title = sbn.notification.extras.getString(android.app.Notification.EXTRA_TITLE)
             title?.let {
@@ -288,7 +305,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 Log.d("MessageListener", "Removed reply action for $title")
             }
         }
-        super.onNotificationRemoved(sbn)
+
         NotificationRepository.removeNotification(sbn)
     }
 
