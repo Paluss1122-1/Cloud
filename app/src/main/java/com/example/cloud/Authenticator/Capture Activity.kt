@@ -174,7 +174,14 @@ suspend fun handleQrCode(qrText: String, context: Context) {
             secret = secretParam
         )
 
-        db.twoFADao().insert(newEntry)
+        val inserted = db.twoFADao().insertOrIgnore(newEntry)
+        if (inserted == -1L) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "⚠️ Eintrag existiert bereits!", Toast.LENGTH_LONG).show()
+                (context as? Activity)?.finish()
+            }
+            return
+        }
 
         val supabaseSuccess = saveTwoFaEntryToSupabase(newEntry, db)
 
