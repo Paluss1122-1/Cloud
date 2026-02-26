@@ -6,7 +6,7 @@ import androidx.room.RoomDatabase
 import android.content.Context
 import kotlin.jvm.java
 
-@Database(entities = [TwoFAEntry::class], version = 3, exportSchema = false)
+@Database(entities = [TwoFAEntry::class], version = 4, exportSchema = false)
 abstract class TwoFADatabase : RoomDatabase() {
     abstract fun twoFADao(): TwoFADao
 
