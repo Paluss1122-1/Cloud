@@ -10,6 +10,9 @@ interface TwoFADao {
     @Insert
     suspend fun insert(entry: TwoFAEntry)
 
+    @Insert(onConflict = androidx.room.OnConflictStrategy.IGNORE)
+    suspend fun insertOrIgnore(entry: TwoFAEntry): Long
+
     @Delete
     suspend fun delete(entry: TwoFAEntry)
 
