@@ -36,6 +36,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import java.time.Instant
 
+private fun normalizeSecret(secret: String): String =
+    secret.trim().replace(" ", "").uppercase(java.util.Locale.US).trimEnd('=')
+
 @Serializable
 data class TwoFaEntrySupabase(
     val id: String? = null,
@@ -163,14 +166,9 @@ suspend fun syncTwoFaEntriesWithConfirmation(db: TwoFADatabase): SyncResult {
             val supabaseEntries = loadTwoFaEntriesFromSupabase()
 
             if (supabaseEntries.isEmpty()) {
-                ERRORINSERT(
-                    ERRORINSERTDATA(
-                        "TwoFARepository",
-                        "Keine Cloud-Daten, alle lokalen Einträge zur Bestätigung",
-                        Instant.now().toString(),
-                        "Warning"
-                    )
-                )
+                if (localEntries.isEmpty()) {
+                    return@withContext SyncResult(uploaded = 0, downloaded = 0, total = 0)
+                }
                 return@withContext SyncResult(
                     uploaded = 0,
                     downloaded = 0,
@@ -179,18 +177,19 @@ suspend fun syncTwoFaEntriesWithConfirmation(db: TwoFADatabase): SyncResult {
                 )
             }
 
-            val supabaseSecrets = supabaseEntries.map { it.secret }.toSet()
-            val localSecrets = localEntries.map { it.secret }.toSet()
+            val supabaseSecrets = supabaseEntries.map { normalizeSecret(it.secret) }.toSet()
+            val localSecrets = localEntries.map { normalizeSecret(it.secret) }.toSet()
 
-            val missingInSupabase = localEntries.filter { it.secret !in supabaseSecrets }
-
-            val missingLocally = supabaseEntries.filter { it.secret !in localSecrets }
+            val missingInSupabase = localEntries.filter { normalizeSecret(it.secret) !in supabaseSecrets }
+            val missingLocally = supabaseEntries.filter { normalizeSecret(it.secret) !in localSecrets }
 
             var downloadedCount = 0
             missingLocally.forEach { entry ->
                 try {
-                    db.twoFADao().insert(entry)
-                    downloadedCount++
+                    val inserted = db.twoFADao().insertOrIgnore(entry)
+                    if (inserted != -1L) {
+                        downloadedCount++
+                    }
                 } catch (e: Exception) {
                     ERRORINSERT(
                         ERRORINSERTDATA(
