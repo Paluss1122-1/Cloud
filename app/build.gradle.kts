@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
     id("kotlin-parcelize")
+    alias(libs.plugins.hilt.android)
 }
 
 android {
@@ -23,7 +24,12 @@ android {
 
     packaging {
         resources {
-            excludes += "/META-INF/DEPENDENCIES"
+            excludes += listOf(
+                "/META-INF/DEPENDENCIES",
+                "META-INF/LICENSE.md",
+                "META-INF/LICENSE-notice.md",
+                "META-INF/NOTICE.md"
+            )
         }
     }
 
@@ -153,4 +159,14 @@ dependencies {
     implementation(libs.ktor.utils)
     implementation(libs.accompanist.swiperefresh)
     implementation(libs.gson)
+    implementation(libs.android.mail)
+    implementation(libs.android.activation)
+    implementation(libs.text.recognition)
+    implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.hilt.android)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.androidx.hilt.navigation.compose)
+
+    ksp(libs.hilt.compiler)
 }
