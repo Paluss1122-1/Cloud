@@ -137,10 +137,6 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
     val context = LocalContext.current
     val activity = LocalActivity.current
 
-    LaunchedEffect(Unit) {
-        entries = db.twoFADao().getAll()
-    }
-
     LaunchedEffect(true) {
         if (isSyncing) return@LaunchedEffect
 
@@ -287,155 +283,155 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                     .keys
 
                 if (duplicateNames.isNotEmpty()) {
-                    Toast.makeText(
-                        context,
-                        "Doppelte Namen gefunden: $duplicateNames",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    return@Composable
+                    item {
+                        Text(
+                            "⚠️ Doppelte Einträge gefunden: ${duplicateNames.joinToString()}",
+                            color = Color(0xFFFFCC00),
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
                 }
 
-                groupedEntries.forEach { _ ->
-                    items(groupedEntries, key = { it.name }) { entry ->
-                        val iconPrefs =
-                            context.getSharedPreferences("entry_icons", Context.MODE_PRIVATE)
-                        var iconUrl by remember {
-                            mutableStateOf(
-                                iconPrefs.getString(
-                                    entry.secret,
-                                    null
-                                ) ?: ""
-                            )
-                        }
-                        var showIconDialog by remember { mutableStateOf(false) }
-                        var inputUrl by remember { mutableStateOf(iconUrl) }
+                items(groupedEntries, key = { it.id }) { entry ->
+                    val iconPrefs =
+                        context.getSharedPreferences("entry_icons", Context.MODE_PRIVATE)
+                    var iconUrl by remember {
+                        mutableStateOf(
+                            iconPrefs.getString(
+                                entry.secret,
+                                null
+                            ) ?: ""
+                        )
+                    }
+                    var showIconDialog by remember { mutableStateOf(false) }
+                    var inputUrl by remember { mutableStateOf(iconUrl) }
 
-                        Card(
-                            shape = RoundedCornerShape(8.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF2D2D2D)),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(8.dp)
-                                .pointerInput(entry) {
-                                    detectTapGestures(
-                                        onTap = { selectedEntry = entry },
-                                        onLongPress = {
-                                            val now = System.currentTimeMillis()
-                                            val code = TotpGenerator.generateTOTP(entry.secret, now)
-                                            val clipboard =
-                                                context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                            clipboard.setPrimaryClip(
-                                                ClipData.newPlainText(
-                                                    "Generated Code",
-                                                    code
-                                                )
+                    Card(
+                        shape = RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF2D2D2D)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                            .pointerInput(entry) {
+                                detectTapGestures(
+                                    onTap = { selectedEntry = entry },
+                                    onLongPress = {
+                                        val now = System.currentTimeMillis()
+                                        val code = TotpGenerator.generateTOTP(entry.secret, now)
+                                        val clipboard =
+                                            context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(
+                                            ClipData.newPlainText(
+                                                "Generated Code",
+                                                code
                                             )
-                                            Toast.makeText(
-                                                context,
-                                                "Code für ${entry.name} kopiert!",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                    )
-                                }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(16.dp)
-                            ) {
-                                if (iconUrl.isNotBlank()) {
-                                    if (iconUrl.startsWith("data:image")) {
-                                        // Base64 Image
-                                        val base64String = iconUrl.substringAfter("base64,")
-                                        val imageBytes = Base64.decode(base64String, Base64.DEFAULT)
-                                        val bitmap = BitmapFactory.decodeByteArray(
-                                            imageBytes,
-                                            0,
-                                            imageBytes.size
                                         )
+                                        Toast.makeText(
+                                            context,
+                                            "Code für ${entry.name} kopiert!",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                )
+                            }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            if (iconUrl.isNotBlank()) {
+                                if (iconUrl.startsWith("data:image")) {
+                                    // Base64 Image
+                                    val base64String = iconUrl.substringAfter("base64,")
+                                    val imageBytes = Base64.decode(base64String, Base64.DEFAULT)
+                                    val bitmap = BitmapFactory.decodeByteArray(
+                                        imageBytes,
+                                        0,
+                                        imageBytes.size
+                                    )
 
-                                        IconButton(onClick = {
-                                            inputUrl = iconUrl
-                                            showIconDialog = true
-                                        }) {
-                                            Image(
-                                                bitmap = bitmap.asImageBitmap(),
-                                                contentDescription = "Icon für ${entry.name}",
-                                                modifier = Modifier
-                                                    .size(40.dp)
-                                                    .clip(RoundedCornerShape(16.dp))
-                                            )
-                                        }
-                                    } else {
-                                        IconButton(onClick = {
-                                            inputUrl = iconUrl
-                                            showIconDialog = true
-                                        }) {
-                                            AsyncImage(
-                                                model = iconUrl,
-                                                contentDescription = "Icon für ${entry.name}",
-                                                modifier = Modifier.size(40.dp)
-                                            )
-                                        }
+                                    IconButton(onClick = {
+                                        inputUrl = iconUrl
+                                        showIconDialog = true
+                                    }) {
+                                        Image(
+                                            bitmap = bitmap.asImageBitmap(),
+                                            contentDescription = "Icon für ${entry.name}",
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(RoundedCornerShape(16.dp))
+                                        )
                                     }
                                 } else {
                                     IconButton(onClick = {
                                         inputUrl = iconUrl
                                         showIconDialog = true
                                     }) {
-                                        Icon(
-                                            Icons.Default.Info,
-                                            contentDescription = "Icon ändern",
-                                            tint = Color.White,
+                                        AsyncImage(
+                                            model = iconUrl,
+                                            contentDescription = "Icon für ${entry.name}",
                                             modifier = Modifier.size(40.dp)
                                         )
                                     }
                                 }
-
-                                Spacer(Modifier.width(12.dp))
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        entry.name,
-                                        color = Color.White,
-                                        fontSize = 20.sp,
-                                        fontWeight = FontWeight.Medium
+                            } else {
+                                IconButton(onClick = {
+                                    inputUrl = iconUrl
+                                    showIconDialog = true
+                                }) {
+                                    Icon(
+                                        Icons.Default.Info,
+                                        contentDescription = "Icon ändern",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(40.dp)
                                     )
                                 }
                             }
-                        }
 
-                        if (showIconDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showIconDialog = false },
-                                title = { Text("Icon-URL ändern") },
-                                text = {
-                                    OutlinedTextField(
-                                        value = inputUrl,
-                                        onValueChange = { inputUrl = it },
-                                        label = { Text("URL eingeben") },
-                                        singleLine = true
-                                    )
-                                },
-                                confirmButton = {
-                                    TextButton(onClick = {
-                                        iconPrefs.edit(commit = true) {
-                                            putString(entry.secret, inputUrl)
-                                            apply()
-                                        }
-                                        iconUrl = inputUrl
-                                        showIconDialog = false
-                                    }) { Text("Speichern") }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = {
-                                        showIconDialog = false
-                                    }) { Text("Abbrechen") }
-                                }
-                            )
+                            Spacer(Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    entry.name,
+                                    color = Color.White,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
                         }
                     }
+
+                    if (showIconDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showIconDialog = false },
+                            title = { Text("Icon-URL ändern") },
+                            text = {
+                                OutlinedTextField(
+                                    value = inputUrl,
+                                    onValueChange = { inputUrl = it },
+                                    label = { Text("URL eingeben") },
+                                    singleLine = true
+                                )
+                            },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    iconPrefs.edit(commit = true) {
+                                        putString(entry.secret, inputUrl)
+                                        apply()
+                                    }
+                                    iconUrl = inputUrl
+                                    showIconDialog = false
+                                }) { Text("Speichern") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = {
+                                    showIconDialog = false
+                                }) { Text("Abbrechen") }
+                            }
+                        )
+                    }
                 }
+
             }
 
             Row(
@@ -874,10 +870,15 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                                 Toast.LENGTH_SHORT
                                             ).show()
                                         } else {
-                                            val newEntry = TwoFAEntry(
-                                                name = name,
-                                                secret = secret
-                                            )
+                                            val normalizedSecret = secret.trim().replace(" ", "").uppercase(java.util.Locale.US)
+                                            val isValidBase32 = normalizedSecret.all { it in "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567=" }
+
+                                            if (!isValidBase32 || normalizedSecret.isEmpty()) {
+                                                Toast.makeText(context, "❌ Ungültiger Schlüssel (kein gültiges Base32)", Toast.LENGTH_LONG).show()
+                                                return@launch
+                                            }
+
+                                            val newEntry = TwoFAEntry(name = name.trim(), secret = normalizedSecret)
 
                                             try {
                                                 db.twoFADao().insert(newEntry)
