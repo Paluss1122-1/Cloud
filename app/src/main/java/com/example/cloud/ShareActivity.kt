@@ -1,4 +1,4 @@
-package com.example.cloud.privatecloudapp
+package com.example.cloud
 
 import android.content.Intent
 import android.net.Uri
@@ -20,17 +20,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
+import com.example.cloud.quiethoursnotificationhelper.isLaptopConnected
+import com.example.cloud.quiethoursnotificationhelper.isLaptopConnectedFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.*
 
 class ShareActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val prefs = getSharedPreferences("sync_prefs", MODE_PRIVATE)
+        val syncActive = prefs.getBoolean("sync_active", false)
+        val syncUntil = prefs.getLong("sync_until", 0L)
+        if (syncActive && syncUntil > System.currentTimeMillis()) {
+            isLaptopConnected = true
+        }
 
         when (intent?.action) {
             Intent.ACTION_SEND -> handleSingleShare(intent)
@@ -54,7 +61,7 @@ class ShareActivity : ComponentActivity() {
 
     private fun handleMultipleShare(intent: Intent) {
         val uris = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
-        if (uris != null && uris.isNotEmpty()) {
+        if (!uris.isNullOrEmpty()) {
             showConfirmationDialog(uris)
         } else {
             Toast.makeText(this, "Keine Dateien gefunden", Toast.LENGTH_SHORT).show()
@@ -65,17 +72,81 @@ class ShareActivity : ComponentActivity() {
     private fun showConfirmationDialog(uris: List<Uri>) {
         setContent {
             MaterialTheme {
+                val laptopConnected by isLaptopConnectedFlow.collectAsState()
                 SaveToPrivateStorageScreen(
                     fileCount = uris.size,
-                    onConfirm = {
-                        saveFilesToPrivateStorage(uris)
-                    },
-                    onCancel = {
-                        finish()
-                    }
+                    isLaptopConnected = laptopConnected,
+                    onSaveLocally = { saveFilesToPrivateStorage(uris) },
+                    onSendToLaptop = { sendImagesToLaptop(uris) },
+                    onCancel = { finish() }
                 )
             }
         }
+    }
+
+    private fun sendImagesToLaptop(uris: List<Uri>) {
+        setContent {
+            MaterialTheme {
+                ProcessingScreen(fileCount = uris.size)
+            }
+        }
+
+        lifecycleScope.launch {
+            var successCount = 0
+
+            for (uri in uris) {
+                try {
+                    val bytes = withContext(Dispatchers.IO) {
+                        contentResolver.openInputStream(uri)?.readBytes()
+                    } ?: continue
+
+                    val fileName = getFileNameFromUri(uri)
+                    val mimeType = contentResolver.getType(uri) ?: "image/jpeg"
+
+                    val sent = withContext(Dispatchers.IO) {
+                        trySendImageToLaptop(bytes, fileName, mimeType)
+                    }
+
+                    if (sent) successCount++
+                } catch (e: Exception) {
+                    Log.e("ShareActivity", "Fehler beim Senden: ${e.message}", e)
+                }
+            }
+
+            withContext(Dispatchers.Main) {
+                val message = if (successCount > 0)
+                    "📲 ${if (successCount == 1) "Bild" else "$successCount Bilder"} an Laptop gesendet!"
+                else
+                    "❌ Senden fehlgeschlagen"
+                Toast.makeText(this@ShareActivity, message, Toast.LENGTH_LONG).show()
+                finish()
+            }
+        }
+    }
+
+    private fun trySendImageToLaptop(
+        bytes: ByteArray,
+        fileName: String,
+        mimeType: String
+    ): Boolean {
+        val laptopIps = Config.LAPTOP_IPS
+        for (ip in laptopIps) {
+            try {
+                val socket = java.net.Socket()
+                socket.connect(java.net.InetSocketAddress(ip, Config.IMAGE_SHARE_PORT), 3000)
+                val out = socket.getOutputStream()
+
+                // Header: "fileName|mimeType\n" dann raw bytes
+                val header = "$fileName|$mimeType\n".toByteArray(Charsets.UTF_8)
+                out.write(header)
+                out.write(bytes)
+                out.flush()
+                socket.close()
+                return true
+            } catch (_: Exception) {
+            }
+        }
+        return false
     }
 
     private fun getFileNameFromUri(uri: Uri): String {
@@ -151,7 +222,8 @@ class ShareActivity : ComponentActivity() {
 
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@ShareActivity, "Fehler: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@ShareActivity, "Fehler: ${e.message}", Toast.LENGTH_LONG)
+                        .show()
                     finish()
                 }
             }
@@ -165,7 +237,8 @@ class ShareActivity : ComponentActivity() {
         // Wenn Datei bereits existiert, füge Nummer hinzu
         while (file.exists()) {
             val nameWithoutExt = fileName.substringBeforeLast(".")
-            val extension = if (fileName.contains(".")) ".${fileName.substringAfterLast(".")}" else ""
+            val extension =
+                if (fileName.contains(".")) ".${fileName.substringAfterLast(".")}" else ""
             file = File(directory, "${nameWithoutExt}_$counter$extension")
             counter++
         }
@@ -191,7 +264,9 @@ class ShareActivity : ComponentActivity() {
 @Composable
 fun SaveToPrivateStorageScreen(
     fileCount: Int,
-    onConfirm: () -> Unit,
+    isLaptopConnected: Boolean,
+    onSaveLocally: () -> Unit,
+    onSendToLaptop: () -> Unit,
     onCancel: () -> Unit
 ) {
     Box(
@@ -205,9 +280,7 @@ fun SaveToPrivateStorageScreen(
                 .fillMaxWidth(0.9f)
                 .wrapContentHeight(),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color(0xFF2A2A2A)
-            )
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A2A))
         ) {
             Column(
                 modifier = Modifier
@@ -217,7 +290,7 @@ fun SaveToPrivateStorageScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "🔒 Privat speichern",
+                    text = "🔒 Datei speichern",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -231,62 +304,46 @@ fun SaveToPrivateStorageScreen(
 
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 8.dp),
-                    thickness = DividerDefaults.Thickness,
                     color = Color.Gray
                 )
 
-                Text(
-                    text = "Die Dateien werden in einem privaten Speicherbereich gespeichert:",
-                    fontSize = 14.sp,
-                    color = Color.White,
-                    fontWeight = FontWeight.Medium
-                )
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFF333333)
-                    ),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                if (isLaptopConnected) {
+                    Button(
+                        onClick = onSendToLaptop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        InfoRow("🔒 Sichtbarkeit:", "Nur diese App")
-                        InfoRow("📁 Speicherort:", "App-interner Speicher")
-                        InfoRow("🚫 Gallery-Zugriff:", "Nein")
+                        Text("💻 An Laptop senden", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Button(
+                        onClick = {},
+                        enabled = false,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("💻 Laptop nicht verbunden", fontSize = 16.sp, color = Color.White)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
                 Button(
-                    onClick = onConfirm,
+                    onClick = onSaveLocally,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF4CAF50)
-                    ),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text(
-                        text = "Speichern",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text("📁 Lokal speichern", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
 
-                TextButton(
-                    onClick = onCancel,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "Abbrechen",
-                        color = Color.Red,
-                        fontSize = 16.sp
-                    )
+                TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+                    Text("Abbrechen", color = Color.Red, fontSize = 16.sp)
                 }
             }
         }
