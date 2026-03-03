@@ -1,4 +1,4 @@
-import com.android.build.api.dsl.Packaging
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -9,14 +9,18 @@ plugins {
     alias(libs.plugins.hilt.android)
 }
 
+val localProps = Properties().apply {
+    load(rootProject.file("local.properties").inputStream())
+}
+
 android {
     signingConfigs {
         create("release") {
             storeFile =
                 file("C:\\Users\\pauls\\AndroidStudioProjects\\Cloud\\keystore\\my-release-key.jks")
-            storePassword = "CdRYqvzH75jcOnvIMx75Ewl5sOrzHtCe"
-            keyAlias = "my-key-alias"
-            keyPassword = "CdRYqvzH75jcOnvIMx75Ewl5sOrzHtCe"
+            storePassword = localProps["KEY_STORE_PASSWORD"] as String
+            keyAlias = localProps["KEY_ALIAS"] as String
+            keyPassword = localProps["KEY_PASSWORD"] as String
         }
     }
     namespace = "com.example.cloud"
@@ -58,6 +62,7 @@ android {
     buildFeatures {
         buildConfig = true
         compose = true
+        aidl = true
     }
 
     buildTypes {
@@ -128,6 +133,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.identity.jvm)
     implementation(libs.androidx.compose.ui.unit)
+    implementation(libs.androidx.foundation)
+    implementation(libs.ui)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -169,4 +176,11 @@ dependencies {
     implementation(libs.androidx.hilt.navigation.compose)
 
     ksp(libs.hilt.compiler)
+
+    implementation(libs.mp3agic)
+
+    implementation(libs.api)
+    implementation(libs.shizuku.provider)
+
+    implementation("dev.rikka.shizuku:api:13.1.5") { isTransitive = true }
 }
