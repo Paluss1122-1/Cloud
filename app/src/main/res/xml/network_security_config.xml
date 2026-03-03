@@ -6,5 +6,6 @@
         <domain includeSubdomains="true">phncdn2.com</domain>
         <domain includeSubdomains="true">phncdn3.com</domain>
         <domain includeSubdomains="true">phncdn4.com</domain>
+        <domain includeSubdomains="true">192.168.178.69</domain>
     </domain-config>
 </network-security-config>
