@@ -9,39 +9,37 @@ This project is a powerful multi-functional Android application that combines a 
 - **Device admin and policy management** (for enhanced control)
 - **Encrypted storage functionality** (AesEncryption and secure file handling)
 
-### ☁️ Private Cloud & File Management
-- Private cloud file viewer and manager
+### Private Cloud & File Management
+- Private cloud file viewer and manager (via **Supabase**)
 - File import/export to/from local storage and DCIM
 - File icons and MIME type detection
-- Fullscreen image preview
 
-### 🎵 Media & Recording
-- Audio recorder (with UI for recording and playback)
-- Media player integration
-- Video frame extraction from media files
+### Media & Recording
+- **Audio recorder** (with UI for recording and playback)
+- **Media player integration** (play local songs / podcasts)
 
-### 🧠 Productivity & Utility Tools
+### Productivity & Utility Tools
 - Notes tab for quick note-taking
 - JSON editor
 - Date calculator
 - Quick settings tile helpers (battery chart, network info, sensor info)
 
-### 🌐 Communication & Social
+### Communication & Social
 - Browser tab for quick in-app browsing
 - Gmail tab integration
 - Contacts tab and management
 
-### 🛠️ Background Services & Utilities
+### Background Services & Utilities
 - Auto-clicker service with accessibility support
 - WhatsApp notification listener
-- Quiet hours notification manager
+- Quiethours notification manager
 - Shizuku manager support
 
 ---
 
-## 🛠️ How to Build & Run
+## How to Build & Run
 1. Open the project in **Android Studio**.
-2. ```
+2. **Create file "Cloud\app\src\main\java\com\example\cloud\Config.kt":**```
     package com.example.cloud
 
     import android.annotation.SuppressLint
@@ -129,11 +127,8 @@ This project is a powerful multi-functional Android application that combines a 
     const val APIKEY = "" // for MovieDiscover Tab
 
     }
-3. Run the app on an emulator or physical device.
 
-## 📦 Project Structure
-This repository follows a modular structure with feature folders under `app/src/main/java/com/example/cloud/`.
-
+## Project Structure
 Some of the main modules include:
 - `authenticator/` – 2FA and authenticator UI
 - `privatecloudapp/` – file browsing and cloud helpers
@@ -143,16 +138,12 @@ Some of the main modules include:
 
 ---
 
-> ⚠️ This app likely requires permissions for storage, audio recording, device admin, and accessibility to enable all features.
-
----
-
-## 🧩 Notes for Contributors
+## Notes for Contributors
 - This is an experimental multi-tool app with many features under active development.
 - Feel free to explore the existing packages and add new tabs or services.
 - Keep feature modules organized under their corresponding packages.
 
 ---
 
-## 📬 Contact / Support
-If you want to discuss features or contribute, open an issue or send a PR.
+## Contact / Support
+If you want to discuss features or contribute, feel free toopen an issue.
