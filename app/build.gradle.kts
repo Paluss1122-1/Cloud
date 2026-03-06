@@ -9,7 +9,20 @@ plugins {
     alias(libs.plugins.hilt.android)
 }
 
+val localProps = Properties().apply {
+    load(rootProject.file("local.properties").inputStream())
+}
+
 android {
+    signingConfigs {
+        create("release") {
+            storeFile =
+                file("C:\\Users\\pauls\\AndroidStudioProjects\\Cloud\\keystore\\my-release-key.jks")
+            storePassword = localProps["KEY_STORE_PASSWORD"] as String
+            keyAlias = localProps["KEY_ALIAS"] as String
+            keyPassword = localProps["KEY_PASSWORD"] as String
+        }
+    }
     namespace = "com.example.cloud"
     compileSdk = 36
 
@@ -59,6 +72,19 @@ android {
                 "SUPABASE_PUBLISHABLE_KEY",
                 "\"${project.properties["SUPABASE_PUBLISHABLE_KEY"]}\""
             )
+        }
+        release {
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            buildConfigField(
+                "String",
+                "SUPABASE_PUBLISHABLE_KEY",
+                "\"${project.properties["SUPABASE_PUBLISHABLE_KEY"]}\""
+            )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
