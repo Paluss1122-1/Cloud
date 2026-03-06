@@ -43,6 +43,7 @@ This project is a powerful multi-functional Android application that combines a 
 1. Open the project in **Android Studio**.
 2. ```
     package com.example.cloud
+
     import android.annotation.SuppressLint
     import android.util.Base64
     import io.github.jan.supabase.annotations.  SupabaseInternal
@@ -56,17 +57,17 @@ This project is a powerful multi-functional Android application that combines a 
     import javax.crypto.spec.SecretKeySpec
 
     object Config {
-    const val SUPABASE_URL = "https://oulgglfvobyjmfongnil.supabase.co"
-    const val SUPABASE_PUBLISHABLE_KEY = BuildConfig.SUPABASE_PUBLISHABLE_KEY
-    const val SUPABASE_BUCKET = "Files"
+    const val SUPABASE_URL = "" // Your supabase URL (https://xxxxxxx.supabase.co)
+    const val SUPABASE_PUBLISHABLE_KEY = "" // Your supabase anon / publisable key (ey... / sb)
+    const val SUPABASE_BUCKET = "Files" // create a bucket on supabase for Private Cloud
 
-    const val BWMP = "Sec.P1122.!!\"\""
+    const val BWMP = "Sec.P1122.!!\"\"" // Bitwarden Master Password (for Command 'bitwarden')
 
-    const val DBKEY = "8af038ea9e12dbc6806c1c06b4a3efc3"
+    const val DBKEY = "" // deutsche bahn clientkey (create a application on https://developers.deutschebahn.com/db-api-marketplace/apis/frontpage)
 
-    const val DBKEY1 = "1083a6548de37eca71de8c1030790c25"
+    const val DBKEY1 = "" // deutsche bahn apikey
 
-    const val NVIDIA = "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"
+    const val NVIDIA = "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" // nvidia api key for ai models
 
     val LAPTOP_IPS = listOf(
         "192.168.178.20",
@@ -74,7 +75,7 @@ This project is a powerful multi-functional Android application that combines a 
         "10.135.30.120",
         "192.168.49.1",
         "10.164.93.120"
-    )
+    ) // ips for laptops to ping
 
     const val SYNC_PORT = 8888
     const val UPDATE_PORT = 8890
@@ -85,7 +86,7 @@ This project is a powerful multi-functional Android application that combines a 
 
     const val IMAGE_SHARE_PORT = 8898
 
-    const val GMAILPASSWORD = "mejf bonk zjlo xein "
+    const val GMAILPASSWORD = "" // leave blank
 
     @OptIn(SupabaseInternal::class)
     val client = createSupabaseClient(
@@ -102,7 +103,7 @@ This project is a powerful multi-functional Android application that combines a 
         httpEngine = OkHttp.create()
     }
 
-    private const val FIXED_KEY = "n9n4Nl4tDEa7oOOBAl9bbgFzaiRaWpr6"
+    private const val FIXED_KEY = "" // enryption key
 
     private val secretKey = SecretKeySpec(FIXED_KEY.toByteArray(), "AES")
 
@@ -124,28 +125,10 @@ This project is a powerful multi-functional Android application that combines a 
     }
     }
 
-    object SupabaseConfigALT {
-    const val SUPABASE_URL = "https://vfctgombfsgirctobpca.supabase.co"
-    const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_kfsZrgk44Gos9XLrdQXQOA_ONGSZq8i"
-
-    @OptIn(SupabaseInternal::class)
-    val client = createSupabaseClient(
-        supabaseUrl = SUPABASE_URL,
-        supabaseKey = SUPABASE_PUBLISHABLE_KEY
-    ) {
-        install(Storage)
-        install(Postgrest)
-        install(Realtime)
-
-        httpConfig {
-            install(WebSockets)
-        }
-        httpEngine = OkHttp.create()
-    }
-    }
-
     object TMDBConfig {
-    const val APIKEY = "c9b585a04735e5a130f9c6ee642088c0"}
+    const val APIKEY = "" // for MovieDiscover Tab
+
+    }
 3. Run the app on an emulator or physical device.
 
 ## 📦 Project Structure
