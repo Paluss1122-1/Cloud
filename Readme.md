@@ -39,22 +39,23 @@ This project is a powerful multi-functional Android application that combines a 
 
 ## How to Build & Run
 1. Open the project in **Android Studio**.
-2. **Create file "Cloud\app\src\main\java\com\example\cloud\Config.kt":**```
-    package com.example.cloud
+2. **Create file "Cloud\app\src\main\java\com\example\cloud\Config.kt":**
+```
+package com.example.cloud
 
-    import android.annotation.SuppressLint
-    import android.util.Base64
-    import io.github.jan.supabase.annotations.  SupabaseInternal
-    import io.github.jan.supabase.createSupabaseClient
-    import io.github.jan.supabase.postgrest.Postgrest
-    import io.github.jan.supabase.realtime.Realtime
-    import io.github.jan.supabase.storage.Storage
-    import io.ktor.client.engine.okhttp.OkHttp
-    import io.ktor.client.plugins.websocket.WebSockets
-    import javax.crypto.Cipher
-    import javax.crypto.spec.SecretKeySpec
+import android.annotation.SuppressLint
+import android.util.Base64
+import io.github.jan.supabase.annotations.SupabaseInternal
+import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.realtime.Realtime
+import io.github.jan.supabase.storage.Storage
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.websocket.WebSockets
+import javax.crypto.Cipher
+import javax.crypto.spec.SecretKeySpec
 
-    object Config {
+object Config {
     const val SUPABASE_URL = "" // Your supabase URL (https://xxxxxxx.supabase.co)
     const val SUPABASE_PUBLISHABLE_KEY = "" // Your supabase anon / publisable key (ey... / sb)
     const val SUPABASE_BUCKET = "Files" // create a bucket on supabase for Private Cloud
@@ -121,12 +122,13 @@ This project is a powerful multi-functional Android application that combines a 
         val decryptedBytes = cipher.doFinal(encryptedBytes)
         return decryptedBytes.toString(Charsets.UTF_8)
     }
-    }
+}
 
-    object TMDBConfig {
+object TMDBConfig {
     const val APIKEY = "" // for MovieDiscover Tab
 
-    }
+}
+```
 
 ## Project Structure
 Some of the main modules include:
