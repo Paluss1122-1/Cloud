@@ -16,4 +16,4 @@ local.properties
 app/src/main/java/com/example/cloud/Config.kt
 gradle.properties
 local.properties
-keystore
+keystore/
