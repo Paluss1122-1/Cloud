@@ -1,10 +1,10 @@
-package com.example.cloud.contactstab
+package com.cloud.contactstab
 
 import android.content.ContentProviderOperation
 import android.content.Context
 import android.provider.ContactsContract
-import com.example.cloud.ERRORINSERT
-import com.example.cloud.ERRORINSERTDATA
+import com.cloud.ERRORINSERT
+import com.cloud.ERRORINSERTDATA
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Instant
