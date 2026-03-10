@@ -1,21 +1,27 @@
-package com.example.cloud
+package com.cloud
 
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.app.AlarmManager
-import android.app.PendingIntent
-import java.util.Calendar
 import android.content.SharedPreferences
-import android.widget.Toast
-import com.example.cloud.service.ChatService
-import com.example.cloud.service.QuietHoursNotificationService
-import android.util.Log
+import com.cloud.service.QuietHoursNotificationService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.util.Calendar
+import kotlin.time.Clock
 
 class BootReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        Log.d("BootReceiver", "BootReceiver triggered with intent: ${intent.action}")
+    companion object {
+        private const val EXPECTED_ACTION = "android.intent.action.BOOT_COMPLETED"
+    }
 
+    override fun onReceive(context: Context, intent: Intent) {
+        if (EXPECTED_ACTION != intent.action) {
+            return
+        }
         val prefs: SharedPreferences =
             context.getSharedPreferences("quick_settings_prefs", Context.MODE_PRIVATE)
         val quietStart = prefs.getString("saved_number_start", null)?.toIntOrNull() ?: 22
@@ -34,14 +40,9 @@ class BootReceiver : BroadcastReceiver() {
 
         if (isQuietNow()) {
             val serviceIntent = Intent(context, QuietHoursNotificationService::class.java)
-            Log.d(
-                "BootReceiver",
-                "Starting QuietHoursNotificationService as it is currently quiet hours."
-            )
             context.startForegroundService(serviceIntent)
         }
 
-        // Schedule next start and stop alarms so the QuietHours service only runs during the window
         try {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
@@ -70,8 +71,22 @@ class BootReceiver : BroadcastReceiver() {
             )
 
             val startAt = nextOccurrence(quietStart)
-            Log.d("BootReceiver", "Scheduling QuietHoursNotificationService start at: $startAt")
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, startAt, startPending)
+            if (alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    startAt,
+                    startPending
+                )
+            } else {
+                CoroutineScope(Dispatchers.IO).launch {
+                    ERRORINSERT(
+                        ERRORINSERTDATA(
+                            "Boot Receiver", "Fehler bei alarmanager: canScheduleExactAlarms",
+                            Clock.System.now().toString(), "ERROR"
+                        )
+                    )
+                }
+            }
 
             val stopIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
                 action = QuietHoursNotificationService.ACTION_SCHEDULED_STOP
@@ -84,10 +99,18 @@ class BootReceiver : BroadcastReceiver() {
             )
 
             val stopAt = nextOccurrence(quietEnd)
-            Log.d("BootReceiver", "Scheduling QuietHoursNotificationService stop at: $stopAt")
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, stopAt, stopPending)
         } catch (e: Exception) {
-            Log.e("BootReceiver", "Failed to schedule alarms for QuietHoursNotificationService", e)
+            CoroutineScope(Dispatchers.IO).launch {
+                ERRORINSERT(
+                    ERRORINSERTDATA(
+                        "Boot Receiver",
+                        "Failed to schedule alarms for QuietHoursNotificationService: ${e.message}",
+                        Clock.System.now().toString(),
+                        "ERROR"
+                    )
+                )
+            }
         }
     }
 }
