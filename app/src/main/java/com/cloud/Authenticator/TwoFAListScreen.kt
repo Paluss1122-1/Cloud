@@ -1,4 +1,4 @@
-package com.example.cloud.authenticator
+package com.cloud.authenticator
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -90,8 +90,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
-import com.example.cloud.ERRORINSERT
-import com.example.cloud.ERRORINSERTDATA
+import com.cloud.ERRORINSERT
+import com.cloud.ERRORINSERTDATA
 import io.ktor.http.ContentType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
