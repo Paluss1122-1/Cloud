@@ -1,4 +1,4 @@
-package com.example.cloud.authenticator
+package com.cloud.authenticator
 
 import android.content.ClipData
 import android.content.ClipboardManager
