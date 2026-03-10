@@ -1,4 +1,4 @@
-package com.example.cloud
+package com.cloud
 
 import android.content.pm.PackageManager
 import rikka.shizuku.Shizuku
