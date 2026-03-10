@@ -1,4 +1,4 @@
-package com.example.cloud
+package com.cloud
 
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
