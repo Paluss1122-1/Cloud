@@ -1,4 +1,4 @@
-package com.example.cloud.browsertab
+package com.cloud.browsertab
 
 import android.content.Context
 import androidx.compose.foundation.background
@@ -16,7 +16,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.cloud.privatecloudapp.loadLastUrl
+import com.cloud.privatecloudapp.loadLastUrl
 
 @Composable
 fun BrowserTabContent(
