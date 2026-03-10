@@ -1,4 +1,4 @@
-package com.example.cloud
+package com.cloud
 
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
