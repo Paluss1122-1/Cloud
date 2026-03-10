@@ -1,4 +1,4 @@
-package com.example.cloud
+package com.cloud
 
 import android.util.Log
 import io.github.jan.supabase.postgrest.from
@@ -16,7 +16,7 @@ data class ERRORINSERTDATA(
 
 suspend fun ERRORINSERT(data: ERRORINSERTDATA): Int {
     try {
-        Config.client.from("error_reports")
+        SupabaseConfigALT.client.from("error_reports")
             .insert(data)
             .decodeSingle<ErrorReportResponse>()
 
