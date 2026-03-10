@@ -1,4 +1,4 @@
-package com.example.cloud
+package com.cloud
 
 import android.Manifest
 import android.content.Intent
@@ -18,15 +18,18 @@ import androidx.compose.ui.Modifier
 import androidx.core.app.ActivityCompat
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
-import com.example.cloud.errorreportsclaude.ErrorMonitorService
-import com.example.cloud.jsoneditor.JsonEditorContent
-import com.example.cloud.privatecloudapp.LandingPageOrApp
-import com.example.cloud.privatecloudapp.PrivateCloudApp
-import com.example.cloud.quicksettingsfunctions.BatteryDataRepository
+import com.cloud.errorreportsclaude.ErrorMonitorService
+import com.cloud.jsoneditor.JsonEditorContent
+import com.cloud.privatecloudapp.LandingPageOrApp
+import com.cloud.privatecloudapp.PrivateCloudApp
+import com.cloud.quicksettingsfunctions.BatteryDataRepository
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.storage.storage
 import java.io.File
 import java.io.FileOutputStream
+
+var storage: Storage? = null
 
 class MainActivity : FragmentActivity() {
     private lateinit var policyManager: PolicyManager
@@ -105,6 +108,7 @@ class MainActivity : FragmentActivity() {
                         )
                     } else {
                         LandingPageOrApp(supabase.storage, startTarget)
+                        storage = supabase.storage
                     }
                 }
             }
