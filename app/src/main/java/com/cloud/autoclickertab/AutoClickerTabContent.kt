@@ -1,4 +1,4 @@
-package com.example.cloud.autoclickertab
+package com.cloud.autoclickertab
 
 import android.content.Intent
 import android.os.Parcelable
@@ -20,10 +20,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.cloud.service.AutoClickAccessibilityService
+import com.cloud.service.AutoClickAccessibilityService
 import kotlinx.parcelize.Parcelize
 import androidx.core.net.toUri
-import com.example.cloud.service.AutoClickerService
+import com.cloud.service.AutoClickerService
 
 @Parcelize
 data class ClickPoint(
