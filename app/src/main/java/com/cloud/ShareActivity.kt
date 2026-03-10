@@ -1,4 +1,4 @@
-package com.example.cloud
+package com.cloud
 
 import android.content.Intent
 import android.net.Uri
@@ -20,8 +20,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
-import com.example.cloud.quiethoursnotificationhelper.isLaptopConnected
-import com.example.cloud.quiethoursnotificationhelper.isLaptopConnectedFlow
+import com.cloud.quiethoursnotificationhelper.isLaptopConnected
+import com.cloud.quiethoursnotificationhelper.isLaptopConnectedFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
