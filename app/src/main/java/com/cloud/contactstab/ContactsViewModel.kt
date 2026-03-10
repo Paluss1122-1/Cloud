@@ -1,12 +1,12 @@
-package com.example.cloud.contactstab
+package com.cloud.contactstab
 
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
-import com.example.cloud.ERRORINSERT
-import com.example.cloud.ERRORINSERTDATA
+import com.cloud.ERRORINSERT
+import com.cloud.ERRORINSERTDATA
 import java.time.Instant
 
 data class ContactsTabState(
