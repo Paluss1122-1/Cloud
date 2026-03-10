@@ -1,4 +1,4 @@
-package com.example.cloud.audiorecorder
+package com.cloud.audiorecorder
 
 import android.Manifest
 import android.app.Notification
@@ -32,8 +32,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.content.PermissionChecker
-import com.example.cloud.ERRORINSERT
-import com.example.cloud.ERRORINSERTDATA
+import com.cloud.ERRORINSERT
+import com.cloud.ERRORINSERTDATA
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -795,7 +795,7 @@ class AudioForegroundService : Service() {
 
     private fun createNotification(): Notification {
         val launchCloudIntent =
-            packageManager.getLaunchIntentForPackage("com.example.cloud")?.apply {
+            packageManager.getLaunchIntentForPackage("com.cloud")?.apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
         val launchCloudPendingIntent = PendingIntent.getActivity(
