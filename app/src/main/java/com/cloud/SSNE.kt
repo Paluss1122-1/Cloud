@@ -1,4 +1,4 @@
-package com.example.cloud
+package com.cloud
 
 import android.Manifest
 import android.app.NotificationManager
