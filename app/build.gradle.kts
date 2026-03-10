@@ -13,6 +13,10 @@ val localProps = Properties().apply {
     load(rootProject.file("local.properties").inputStream())
 }
 
+kotlin {
+    jvmToolchain(11)
+}
+
 android {
     signingConfigs {
         create("release") {
@@ -23,19 +27,8 @@ android {
             keyPassword = localProps["KEY_PASSWORD"] as String
         }
     }
-    namespace = "com.example.cloud"
+    namespace = "com.cloud"
     compileSdk = 36
-
-    packaging {
-        resources {
-            excludes += listOf(
-                "/META-INF/DEPENDENCIES",
-                "META-INF/LICENSE.md",
-                "META-INF/LICENSE-notice.md",
-                "META-INF/NOTICE.md"
-            )
-        }
-    }
 
     defaultConfig {
         applicationId = "com.example.cloud"
@@ -91,16 +84,20 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    kotlin {
-        jvmToolchain(11)
-    }
     buildFeatures {
         compose = true
     }
     packaging {
         resources {
-            excludes += "dump_syms/**"
-            excludes += "lib/**/dump_syms.bin"
+            excludes += listOf(
+                "/META-INF/DEPENDENCIES",
+                "META-INF/LICENSE.md",
+                "META-INF/LICENSE-notice.md",
+                "META-INF/NOTICE.md",
+                "dump_syms/**",
+                "lib/**/dump_syms.bin"
+            )
+
         }
         jniLibs {
             useLegacyPackaging = false
