@@ -1,4 +1,4 @@
-package com.example.cloud.authenticator
+package com.cloud.authenticator
 
 import android.util.Log
 import androidx.compose.foundation.layout.Column
@@ -26,10 +26,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.example.cloud.Config
-import com.example.cloud.ERRORINSERT
-import com.example.cloud.ERRORINSERTDATA
-import com.example.cloud.SupabaseConfigALT
+import com.cloud.Config
+import com.cloud.ERRORINSERT
+import com.cloud.ERRORINSERTDATA
+import com.cloud.SupabaseConfigALT
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
