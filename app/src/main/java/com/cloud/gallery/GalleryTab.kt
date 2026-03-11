@@ -1,4 +1,4 @@
-package com.example.cloud.gallery
+package com.cloud.gallery
 
 import android.app.Activity
 import android.content.ContentUris
@@ -37,8 +37,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
-import com.example.cloud.ERRORINSERT
-import com.example.cloud.ERRORINSERTDATA
+import com.cloud.ERRORINSERT
+import com.cloud.ERRORINSERTDATA
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
