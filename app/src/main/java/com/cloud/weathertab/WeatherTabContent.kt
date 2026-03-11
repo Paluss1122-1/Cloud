@@ -1,5 +1,5 @@
 // File: WeatherScreenFull.kt
-package com.example.cloud.weathertab
+package com.cloud.weathertab
 
 import android.Manifest
 import android.app.NotificationChannel
@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat.getSystemService
-import com.example.cloud.BuildConfig
+import com.cloud.BuildConfig
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
