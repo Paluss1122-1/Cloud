@@ -1,4 +1,4 @@
-package com.example.cloud.privatecloudapp
+package com.cloud.privatecloudapp
 
 import android.content.Context
 import android.net.Uri
