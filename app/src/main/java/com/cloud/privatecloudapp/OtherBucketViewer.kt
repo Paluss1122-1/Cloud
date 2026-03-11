@@ -1,18 +1,23 @@
 @file:Suppress("AssignedValueIsNeverRead")
 
-package com.example.cloud.privatecloudapp
+package com.cloud.privatecloudapp
 
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Environment
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,6 +52,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +65,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -77,8 +84,8 @@ import coil.ImageLoader
 import coil.compose.rememberAsyncImagePainter
 import coil.disk.DiskCache
 import coil.memory.MemoryCache.Builder
-import com.example.cloud.ui.theme.gruen
-import com.example.cloud.ui.theme.hellgruen
+import com.cloud.ui.theme.gruen
+import com.cloud.ui.theme.hellgruen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -610,24 +617,50 @@ fun OtherBucketViewer(
             }
         }
 
-        // FAB für Datei-Upload
-        FloatingActionButton(
-            onClick = {
-                imagePickerLauncher.launch("*/*") // Alle Dateitypen
-            },
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(16.dp),
-            containerColor = gruen
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.End
         ) {
-            if (isUploading) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
-            } else {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Datei hinzufügen",
-                    tint = Color.White
-                )
+            // Export-Button
+            if (fileList.isNotEmpty()) {
+                FloatingActionButton(
+                    onClick = {
+                        scope.launch {
+                            val (success, fail) = exportAllFiles(fileList)
+                            val msg = when {
+                                fail == 0 -> "✅ $success Dateien nach Downloads/Other exportiert"
+                                success == 0 -> "❌ Export fehlgeschlagen"
+                                else -> "⚠️ $success exportiert, $fail fehlgeschlagen"
+                            }
+                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    containerColor = gruen
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                        contentDescription = "Alle exportieren",
+                        tint = Color.White
+                    )
+                }
+            }
+
+            FloatingActionButton(
+                onClick = { imagePickerLauncher.launch("*/*") },
+                containerColor = gruen
+            ) {
+                if (isUploading) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Datei hinzufügen",
+                        tint = Color.White
+                    )
+                }
             }
         }
 
@@ -751,7 +784,6 @@ suspend fun saveFileToPrivateStorage(context: Context, uri: Uri) {
                     privateDir.mkdirs()
                 }
 
-                // Eindeutigen Dateinamen sicherstellen
                 var targetFile = File(privateDir, fileName)
                 var counter = 1
                 while (targetFile.exists()) {
@@ -773,6 +805,39 @@ suspend fun saveFileToPrivateStorage(context: Context, uri: Uri) {
     }
 }
 
+suspend fun exportAllFiles(fileList: List<LocalFileInfo>): Pair<Int, Int> {
+    return withContext(Dispatchers.IO) {
+        val targetDir = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            "Other"
+        )
+        if (!targetDir.exists()) targetDir.mkdirs()
+
+        var success = 0
+        var fail = 0
+
+        fileList.forEach { fileInfo ->
+            try {
+                var targetFile = File(targetDir, fileInfo.fileName)
+                var counter = 1
+                while (targetFile.exists()) {
+                    val nameWithoutExt = fileInfo.fileName.substringBeforeLast(".")
+                    val ext = if (fileInfo.fileName.contains(".")) ".${fileInfo.fileName.substringAfterLast(".")}" else ""
+                    targetFile = File(targetDir, "${nameWithoutExt}_$counter$ext")
+                    counter++
+                }
+                fileInfo.file.copyTo(targetFile)
+                success++
+            } catch (e: Exception) {
+                e.printStackTrace()
+                fail++
+            }
+        }
+
+        Pair(success, fail)
+    }
+}
+
 @Composable
 fun FullscreenImageDialogLocal(
     fileInfo: LocalFileInfo,
@@ -783,70 +848,83 @@ fun FullscreenImageDialogLocal(
     onIndexChanged: (Int) -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    var isSwiping by remember { mutableStateOf(false) }
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+
+    LaunchedEffect(currentIndex) {
+        scale = 1f
+        offset = Offset.Zero
+    }
 
     BackHandler {
-        onDismiss()
+        if (scale > 1f) {
+            scale = 1f
+            offset = Offset.Zero
+        } else {
+            onDismiss()
+        }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(currentIndex) { // Key geändert, damit bei jedem Index-Wechsel neu initialisiert wird
-                var totalDx = 0f
-                var totalDy = 0f
-                val verticalThreshold = 150f
-                val horizontalThreshold = 50f
+            .pointerInput(currentIndex) {
+                awaitEachGesture {
+                    var swipeTotalDx = 0f
+                    var swipeTotalDy = 0f
+                    var swipeConsumed = false
 
-                detectDragGestures(
-                    onDragStart = {
-                        totalDx = 0f
-                        totalDy = 0f
-                        isSwiping = false
-                    },
-                    onDrag = { _, dragAmount ->
-                        totalDx += dragAmount.x
-                        totalDy += dragAmount.y
+                    awaitFirstDown(requireUnconsumed = false)
 
-                        val absDx = kotlin.math.abs(totalDx)
-                        val absDy = kotlin.math.abs(totalDy)
+                    do {
+                        val event = awaitPointerEvent()
+                        val zoomChange = event.calculateZoom()
+                        val panChange = event.calculatePan()
 
-                        if (!isSwiping) {
-                            // Prioritize vertical when vertical movement dominates
-                            if (absDy > absDx && absDy > verticalThreshold) {
-                                isSwiping = true
-                                scope.launch { onDismiss() }
-                            } else if (absDx > absDy && absDx > horizontalThreshold) {
-                                isSwiping = true
-                                if (totalDx > 0f && currentIndex > 0) {
-                                    onIndexChanged(currentIndex - 1)
-                                } else if (totalDx < 0f && currentIndex < allImages.size - 1) {
-                                    onIndexChanged(currentIndex + 1)
+                        val newScale = (scale * zoomChange).coerceIn(1f, 5f)
+                        scale = newScale
+
+                        if (scale > 1f) {
+                            offset += panChange
+                            swipeConsumed = true
+                        } else {
+                            offset = Offset.Zero
+                            if (!swipeConsumed) {
+                                swipeTotalDx += panChange.x
+                                swipeTotalDy += panChange.y
+                                val absDx = kotlin.math.abs(swipeTotalDx)
+                                val absDy = kotlin.math.abs(swipeTotalDy)
+
+                                if (absDy > absDx && absDy > 150f) {
+                                    swipeConsumed = true
+                                    scope.launch { onDismiss() }
+                                } else if (absDx > absDy && absDx > 50f) {
+                                    swipeConsumed = true
+                                    if (swipeTotalDx > 0f && currentIndex > 0) {
+                                        onIndexChanged(currentIndex - 1)
+                                    } else if (swipeTotalDx < 0f && currentIndex < allImages.size - 1) {
+                                        onIndexChanged(currentIndex + 1)
+                                    }
                                 }
                             }
                         }
-                    },
-                    onDragEnd = {
-                        scope.launch {
-                            delay(100)
-                            isSwiping = false
-                        }
-                    },
-                    onDragCancel = {
-                        scope.launch {
-                            delay(100)
-                            isSwiping = false
-                        }
-                    }
-                )
+                    } while (event.changes.any { it.pressed })
+                }
             }
     ) {
         Image(
             painter = rememberAsyncImagePainter(model = fileInfo.file),
             contentDescription = fileInfo.fileName,
             contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer(
+                    scaleX = scale,
+                    scaleY = scale,
+                    translationX = offset.x,
+                    translationY = offset.y
+                )
         )
 
         // Dateiname und Counter oben
