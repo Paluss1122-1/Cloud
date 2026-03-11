@@ -1,4 +1,4 @@
-package com.example.cloud.quiethoursnotificationhelper
+package com.cloud.quiethoursnotificationhelper
 
 import android.app.Activity
 import android.content.BroadcastReceiver
@@ -11,18 +11,18 @@ import android.util.Log
 import android.widget.Toast
 import androidx.core.app.RemoteInput
 import androidx.core.content.edit
-import com.example.cloud.service.QuietHoursNotificationService
-import com.example.cloud.service.QuietHoursNotificationService.Companion.ACTION_CHANGE_END
-import com.example.cloud.service.QuietHoursNotificationService.Companion.ACTION_CHANGE_START
-import com.example.cloud.service.QuietHoursNotificationService.Companion.ACTION_EXECUTE_COMMAND
-import com.example.cloud.service.QuietHoursNotificationService.Companion.ACTION_MARK_PARTS_READ
-import com.example.cloud.service.QuietHoursNotificationService.Companion.ACTION_MESSAGE_SENT
-import com.example.cloud.service.QuietHoursNotificationService.Companion.ACTION_NOTIFICATION_DISMISSED
-import com.example.cloud.service.QuietHoursNotificationService.Companion.EXTRA_MESSAGE_ID
-import com.example.cloud.service.QuietHoursNotificationService.Companion.EXTRA_SENDER
-import com.example.cloud.service.QuietHoursNotificationService.Companion.NOTIFICATION_ID
-import com.example.cloud.service.QuietHoursNotificationService.Companion.readMessageIds
-import com.example.cloud.showSimpleNotificationExtern
+import com.cloud.service.QuietHoursNotificationService
+import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_CHANGE_END
+import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_CHANGE_START
+import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_EXECUTE_COMMAND
+import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_MARK_PARTS_READ
+import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_MESSAGE_SENT
+import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_NOTIFICATION_DISMISSED
+import com.cloud.service.QuietHoursNotificationService.Companion.EXTRA_MESSAGE_ID
+import com.cloud.service.QuietHoursNotificationService.Companion.EXTRA_SENDER
+import com.cloud.service.QuietHoursNotificationService.Companion.NOTIFICATION_ID
+import com.cloud.service.QuietHoursNotificationService.Companion.readMessageIds
+import com.cloud.showSimpleNotificationExtern
 
 class QuietActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -45,7 +45,7 @@ class QuietHoursAlarmReceiver : BroadcastReceiver() {
         Log.d("QuietHoursAlarmReceiver", "⏰ Alarm triggered!")
 
         val serviceIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-            action = "com.example.cloud.ACTION_CHECK_QUIET_HOURS"
+            action = "com.cloud.ACTION_CHECK_QUIET_HOURS"
         }
 
         context.startForegroundService(serviceIntent)
@@ -58,8 +58,6 @@ val markReadReceiver = object : BroadcastReceiver() {
             val messageId = intent.getStringExtra(EXTRA_MESSAGE_ID)
             if (messageId != null && context != null) {
                 Handler(Looper.getMainLooper()).post {
-                    Toast.makeText(context, messageId, Toast.LENGTH_LONG).show()
-                    Toast.makeText(context, "$readMessageIds", Toast.LENGTH_LONG).show() // 1447, 47514
                     markMessageAsRead(
                         messageId,
                         readMessageIds,
