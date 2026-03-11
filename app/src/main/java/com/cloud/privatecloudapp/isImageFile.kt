@@ -1,4 +1,4 @@
-package com.example.cloud.privatecloudapp
+package com.cloud.privatecloudapp
 
 fun isImageFile(fileName: String): Boolean {
     val extension = fileName.substringAfterLast(".", "").lowercase()
