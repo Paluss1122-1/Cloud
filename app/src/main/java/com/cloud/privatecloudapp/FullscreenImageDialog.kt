@@ -1,4 +1,4 @@
-package com.example.cloud.privatecloudapp
+package com.cloud.privatecloudapp
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
