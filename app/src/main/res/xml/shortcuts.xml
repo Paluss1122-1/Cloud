@@ -10,8 +10,8 @@
 
         <intent
             android:action="android.intent.action.VIEW"
-            android:targetPackage="com.example.cloud"
-            android:targetClass="com.example.cloud.MainActivity">
+            android:targetPackage="com.cloud"
+            android:targetClass="com.cloud.MainActivity">
 
             <extra
                 android:name="target"
