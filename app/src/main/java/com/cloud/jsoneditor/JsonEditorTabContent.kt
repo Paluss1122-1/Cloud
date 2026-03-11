@@ -1,4 +1,4 @@
-package com.example.cloud.jsoneditor
+package com.cloud.jsoneditor
 
 import android.content.Context
 import android.net.Uri
