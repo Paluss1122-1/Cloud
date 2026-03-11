@@ -1,4 +1,4 @@
-package com.example.cloud.privatecloudapp
+package com.cloud.privatecloudapp
 
 import android.Manifest
 import android.content.Context
