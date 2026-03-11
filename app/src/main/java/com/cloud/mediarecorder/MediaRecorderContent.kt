@@ -1,4 +1,4 @@
-package com.example.cloud.mediarecorder
+package com.cloud.mediarecorder
 
 import android.Manifest
 import android.media.AudioFormat
@@ -25,8 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
-import com.example.cloud.ERRORINSERT
-import com.example.cloud.ERRORINSERTDATA
+import com.cloud.ERRORINSERT
+import com.cloud.ERRORINSERTDATA
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
