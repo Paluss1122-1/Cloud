@@ -1,4 +1,4 @@
-package com.example.cloud.quicksettingsfunctions
+package com.cloud.quicksettingsfunctions
 
 import android.annotation.SuppressLint
 import android.content.Context
