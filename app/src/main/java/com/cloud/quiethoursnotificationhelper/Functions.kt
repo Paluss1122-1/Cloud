@@ -1,4 +1,4 @@
-package com.example.cloud.quiethoursnotificationhelper
+package com.cloud.quiethoursnotificationhelper
 
 import android.Manifest
 import android.R
@@ -14,13 +14,13 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import com.example.cloud.SupabaseConfigALT
-import com.example.cloud.mediarecorder.AudioRecorder
-import com.example.cloud.service.ChatService
-import com.example.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
-import com.example.cloud.service.QuietHoursNotificationService.Companion.audioRecorder
-import com.example.cloud.service.QuietHoursNotificationService.Companion.currentRecordingFile
-import com.example.cloud.showSimpleNotificationExtern
+import com.cloud.SupabaseConfigALT
+import com.cloud.mediarecorder.AudioRecorder
+import com.cloud.service.ChatService
+import com.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
+import com.cloud.service.QuietHoursNotificationService.Companion.audioRecorder
+import com.cloud.service.QuietHoursNotificationService.Companion.currentRecordingFile
+import com.cloud.showSimpleNotificationExtern
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.coroutines.DelicateCoroutinesApi
