@@ -1,4 +1,4 @@
-package com.example.cloud.notes
+package com.cloud.notes
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import java.text.SimpleDateFormat
 import java.util.*
-import com.example.cloud.ui.theme.Gray
+import com.cloud.ui.theme.Gray
 import androidx.core.content.edit
 
 sealed class NoteType {
