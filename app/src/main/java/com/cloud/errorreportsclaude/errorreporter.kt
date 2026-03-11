@@ -1,4 +1,4 @@
-package com.example.cloud.errorreportsclaude
+package com.cloud.errorreportsclaude
 
 import android.Manifest
 import android.app.NotificationChannel
@@ -13,9 +13,9 @@ import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
-import com.example.cloud.ERRORINSERT
-import com.example.cloud.ERRORINSERTDATA
-import com.example.cloud.SupabaseConfigALT
+import com.cloud.ERRORINSERT
+import com.cloud.ERRORINSERTDATA
+import com.cloud.SupabaseConfigALT
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
