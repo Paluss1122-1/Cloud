@@ -1,4 +1,4 @@
-package com.example.cloud.movietab
+package com.cloud.movietab
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.example.cloud.TMDBConfig
+import com.cloud.TMDBConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
