@@ -1,4 +1,4 @@
-package com.example.cloud.contactstab
+package com.cloud.contactstab
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,8 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.cloud.ERRORINSERT
-import com.example.cloud.ERRORINSERTDATA
+import com.cloud.ERRORINSERT
+import com.cloud.ERRORINSERTDATA
 import kotlinx.coroutines.launch
 import java.time.Instant
 
