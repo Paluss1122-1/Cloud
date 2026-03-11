@@ -1,4 +1,4 @@
-package com.example.cloud.objects
+package com.cloud.objects
 
 import android.content.Context
 import androidx.core.content.edit
