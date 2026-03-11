@@ -1,4 +1,4 @@
-package com.example.cloud.quicksettingsfunctions
+package com.cloud.quicksettingsfunctions
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -10,7 +10,7 @@ import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.telephony.TelephonyManager
 import androidx.core.app.ActivityCompat
-import com.example.cloud.privatecloudapp.showNetworkNotificationNow
+import com.cloud.privatecloudapp.showNetworkNotificationNow
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
