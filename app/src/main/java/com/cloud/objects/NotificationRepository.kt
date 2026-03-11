@@ -1,4 +1,4 @@
-package com.example.cloud.objects
+package com.cloud.objects
 
 import android.service.notification.StatusBarNotification
 import androidx.compose.runtime.mutableStateListOf
