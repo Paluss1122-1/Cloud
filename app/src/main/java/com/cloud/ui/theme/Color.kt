@@ -1,4 +1,4 @@
-package com.example.cloud.ui.theme
+package com.cloud.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
