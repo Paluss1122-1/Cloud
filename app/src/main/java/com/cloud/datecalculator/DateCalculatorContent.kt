@@ -1,4 +1,4 @@
-package com.example.cloud.datecalculator
+package com.cloud.datecalculator
 
 import android.annotation.SuppressLint
 import android.app.DatePickerDialog
