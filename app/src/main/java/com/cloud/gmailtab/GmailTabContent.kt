@@ -1,4 +1,4 @@
-package com.example.cloud.gmailtab
+package com.cloud.gmailtab
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -19,8 +19,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.cloud.quiethoursnotificationhelper.checkNewMail
-import com.example.cloud.ui.theme.Cloud
+import com.cloud.quiethoursnotificationhelper.checkNewMail
+import com.cloud.ui.theme.Cloud
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
