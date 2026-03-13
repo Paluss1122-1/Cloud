@@ -2,6 +2,7 @@ package com.cloud.authenticator
 
 import android.content.Context
 import android.content.ContextWrapper
+import android.util.Log
 import androidx.biometric.BiometricPrompt
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators
@@ -153,9 +154,13 @@ fun AuthenticatorTab() {
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+        color = Color.Transparent
     ) {
         when {
+            !lockEnabled ->{
+                val db = TwoFADatabase.getDatabase(context)
+                MainApp(db)
+            }
             !isAuthenticated && showError -> {
                 ErrorScreen(
                     message = errorMessage,
@@ -191,7 +196,7 @@ private fun LockScreen(onRetry: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color.Transparent),
         contentAlignment = Alignment.Center
     ) {
         Column(
