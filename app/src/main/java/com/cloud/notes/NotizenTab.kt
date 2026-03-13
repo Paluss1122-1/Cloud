@@ -88,7 +88,7 @@ fun NotizenApp() {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Gray),
+                    .background(Color.Transparent),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {

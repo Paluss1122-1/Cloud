@@ -87,7 +87,7 @@ fun MovieDiscoveryTabContent(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF1A1A1A))
+            .background(Color.Transparent)
             .padding(16.dp)
     ) {
         // Genre Auswahl

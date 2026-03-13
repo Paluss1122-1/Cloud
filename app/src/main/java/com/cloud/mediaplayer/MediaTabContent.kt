@@ -155,10 +155,10 @@ fun MediaTab(viewModel: MediaViewModel = viewModel()) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BgDeep)
+            .background(Color.Transparent)
     ) {
         Scaffold(
-            containerColor = BgDeep,
+            containerColor = Color.Transparent,
             bottomBar = {
                 Column {
                     NowPlayingBar(
@@ -1056,7 +1056,10 @@ private fun MusicTab(
                                             selectedSongs + song.path
                                     } else {
                                         val index = state.songs.indexOf(song) + 1
-                                        MediaPlayerService.playFromAllSongs(context, index.coerceAtLeast(1))
+                                        MediaPlayerService.playFromAllSongs(
+                                            context,
+                                            index.coerceAtLeast(1)
+                                        )
                                     }
                                 },
                                 onLongClick = {
@@ -2683,7 +2686,11 @@ private fun PlaylistDetailSheet(
                     .background(Brush.horizontalGradient(listOf(AccentViolet, AccentVioletDim)))
                     .clickable {
                         if (algorithmicSourceId != null) {
-                            MediaPlayerService.activateAlgorithmicPlaylist(context, algorithmicSourceId, 0)
+                            MediaPlayerService.activateAlgorithmicPlaylist(
+                                context,
+                                algorithmicSourceId,
+                                0
+                            )
                         } else {
                             songs.firstOrNull()?.let { onStart(it) }
                         }
@@ -2729,7 +2736,11 @@ private fun PlaylistDetailSheet(
                             .clickable {
                                 if (algorithmicSourceId != null) {
                                     val idx = songs.indexOf(song)
-                                    MediaPlayerService.activateAlgorithmicPlaylist(context, algorithmicSourceId, idx)
+                                    MediaPlayerService.activateAlgorithmicPlaylist(
+                                        context,
+                                        algorithmicSourceId,
+                                        idx
+                                    )
                                 } else {
                                     onStart(song)
                                 }
@@ -3632,7 +3643,12 @@ fun AiResponseCard(
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clip(RoundedCornerShape(20.dp))
             .background(
-                Brush.linearGradient(listOf(NeonGreen.copy(alpha = 0.08f), NeonBlue.copy(alpha = 0.08f)))
+                Brush.linearGradient(
+                    listOf(
+                        NeonGreen.copy(alpha = 0.08f),
+                        NeonBlue.copy(alpha = 0.08f)
+                    )
+                )
             )
             .clickable { onShowHistory() }
             .border(
