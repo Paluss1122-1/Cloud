@@ -43,7 +43,7 @@ fun BrowserTabContent(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF2A2A2A))
+            .background(Color.Transparent)
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
