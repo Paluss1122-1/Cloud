@@ -59,7 +59,7 @@ fun GmailListScreen() {
                         text = "Inbox",
                         fontWeight = FontWeight.Bold,
                         fontSize = 22.sp,
-                        modifier = Modifier.background(Cloud),
+                        modifier = Modifier.background(Color.Transparent),
                         color = Color.White
                     )
                 },
@@ -71,22 +71,22 @@ fun GmailListScreen() {
                         )
                     }
                 },
-                modifier = Modifier.background(Cloud),
+                modifier = Modifier.background(Color.Transparent).padding(0.dp),
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Cloud,
+                    containerColor = Color.Transparent,
                     titleContentColor = Color.White,
                     actionIconContentColor = Color.White
                 )
             )
         },
-        containerColor = Cloud,
+        containerColor = Color.Transparent,
         contentColor = Color.White
     ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(Cloud)
+                .background(Color.Transparent)
         ) {
             when {
                 isLoading -> {

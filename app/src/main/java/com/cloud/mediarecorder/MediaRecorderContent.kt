@@ -323,7 +323,7 @@ fun MediaRecorderContent(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF121212))
+            .background(Color.Transparent)
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Top
