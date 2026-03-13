@@ -56,6 +56,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -70,13 +71,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role.Companion.Image
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -92,12 +96,16 @@ import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
+import com.cloud.R
+import com.cloud.ui.theme.Cloud
+import com.cloud.ui.theme.c
 import io.ktor.http.ContentType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
+import java.util.Calendar
 
 /*@Composable
 @Preview
@@ -120,839 +128,882 @@ fun Start() {
 @SuppressLint("UseKtx")
 @Composable
 fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
-    val scope = rememberCoroutineScope()
-    var entries by remember { mutableStateOf<List<TwoFAEntry>>(emptyList()) }
-    var name by rememberSaveable { mutableStateOf("") }
-    var secret by rememberSaveable { mutableStateOf("") }
-    var selectedEntry by remember { mutableStateOf<TwoFAEntry?>(null) }
-    var showAddDialog by rememberSaveable { mutableStateOf(false) }
-    var isEditingEntry by remember { mutableStateOf(false) }
-    var editedName by remember { mutableStateOf("") }
-    var generatedCode by rememberSaveable { mutableStateOf("------") }
-    var secondsLeft by rememberSaveable { mutableIntStateOf(30) }
-    var pendingEntries by remember { mutableStateOf<List<TwoFAEntry>>(emptyList()) }
-    var showSyncDialog by remember { mutableStateOf(false) }
-    var isSyncing by remember { mutableStateOf(false) }
+    MaterialTheme(
+        colorScheme = MaterialTheme.colorScheme.copy(primary = c())
+    ) {
+        val scope = rememberCoroutineScope()
+        var entries by remember { mutableStateOf<List<TwoFAEntry>>(emptyList()) }
+        var name by rememberSaveable { mutableStateOf("") }
+        var secret by rememberSaveable { mutableStateOf("") }
+        var selectedEntry by remember { mutableStateOf<TwoFAEntry?>(null) }
+        var showAddDialog by rememberSaveable { mutableStateOf(false) }
+        var isEditingEntry by remember { mutableStateOf(false) }
+        var editedName by remember { mutableStateOf("") }
+        var generatedCode by rememberSaveable { mutableStateOf("------") }
+        var secondsLeft by rememberSaveable { mutableIntStateOf(30) }
+        var pendingEntries by remember { mutableStateOf<List<TwoFAEntry>>(emptyList()) }
+        var showSyncDialog by remember { mutableStateOf(false) }
+        var isSyncing by remember { mutableStateOf(false) }
 
-    val context = LocalContext.current
-    val activity = LocalActivity.current
+        val context = LocalContext.current
+        val activity = LocalActivity.current
 
-    LaunchedEffect(true) {
-        if (isSyncing) return@LaunchedEffect
+        LaunchedEffect(true) {
+            if (isSyncing) return@LaunchedEffect
 
-        entries = db.twoFADao().getAll()
+            entries = db.twoFADao().getAll()
 
-        val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
-        val lastSyncTime = prefs.getLong("last_sync_timestamp", 0L)
-        val currentTime = System.currentTimeMillis()
-        val fiveMinutesInMillis = 1 * 20 * 1000L
+            val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+            val lastSyncTime = prefs.getLong("last_sync_timestamp", 0L)
+            val currentTime = System.currentTimeMillis()
+            val fiveMinutesInMillis = 1 * 20 * 1000L
 
-        if (currentTime - lastSyncTime > fiveMinutesInMillis) {
-            isSyncing = true
-            scope.launch {
-                try {
-                    val result = syncTwoFaEntriesWithConfirmation(db)
+            if (currentTime - lastSyncTime > fiveMinutesInMillis) {
+                isSyncing = true
+                scope.launch {
+                    try {
+                        val result = syncTwoFaEntriesWithConfirmation(db)
 
-                    entries = db.twoFADao().getAll()
+                        entries = db.twoFADao().getAll()
 
-                    if (result.pendingDecisions.isNotEmpty()) {
-                        pendingEntries = result.pendingDecisions
-                        showSyncDialog = true
-                    }
+                        if (result.pendingDecisions.isNotEmpty()) {
+                            pendingEntries = result.pendingDecisions
+                            showSyncDialog = true
+                        }
 
-                    if (result.error != null) {
+                        if (result.error != null) {
+                            Toast.makeText(
+                                context,
+                                "Offline: ${result.error}",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            ERRORINSERT(
+                                ERRORINSERTDATA(
+                                    "TwoFAListScreen",
+                                    "❌ Sync-Fehler: ${result.error}",
+                                    Instant.now().toString(),
+                                    "Error"
+                                )
+                            )
+                        } else {
+                            prefs.edit(commit = true) {
+                                putLong(
+                                    "last_sync_timestamp",
+                                    System.currentTimeMillis()
+                                )
+                            }
+
+                            if (result.uploaded > 0 || result.downloaded > 0) {
+                                Toast.makeText(
+                                    context,
+                                    "Synchronisiert: ${result.uploaded} hochgeladen, ${result.downloaded} heruntergeladen",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    } catch (e: Exception) {
                         Toast.makeText(
                             context,
-                            "Offline: ${result.error}",
+                            "Synchronisation fehlgeschlagen: Keine Internetverbindung",
                             Toast.LENGTH_LONG
                         ).show()
                         ERRORINSERT(
                             ERRORINSERTDATA(
                                 "TwoFAListScreen",
-                                "❌ Sync-Fehler: ${result.error}",
+                                "❌ Sync-Exception: ${e.message}",
                                 Instant.now().toString(),
                                 "Error"
                             )
                         )
-                    } else {
-                        prefs.edit(commit = true) {
-                            putLong(
-                                "last_sync_timestamp",
-                                System.currentTimeMillis()
+                    } finally {
+                        isSyncing = false
+                    }
+                }
+            }
+        }
+
+        LaunchedEffect(selectedEntry, isEditingEntry) {
+            val step = 30L
+            val displayPeriod = 30L
+            while (selectedEntry != null && !isEditingEntry) {
+                val now = System.currentTimeMillis()
+                generatedCode =
+                    TotpGenerator.generateTOTP(selectedEntry!!.secret, now, periodSeconds = step)
+                val elapsed = (now / 1000) % displayPeriod
+                secondsLeft = (displayPeriod - elapsed).toInt()
+                delay(1000)
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Transparent)
+        ) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    "Deine 2FA-Token",
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        color = Color.White, fontWeight = FontWeight.Bold
+                    )
+                )
+
+                Button(
+                    onClick = {
+                        scope.launch {
+                            entries = db.twoFADao().getAll()
+                            Toast.makeText(context, "Liste aktualisiert!", Toast.LENGTH_SHORT)
+                                .show()
+                        }
+                    },
+                    modifier = Modifier.padding(vertical = 8.dp)
+                ) {
+                    Text("Aktualisieren", color = Color.White)
+                }
+
+                val groupedEntries = entries
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) Composable@{
+                    if (groupedEntries.isEmpty()) {
+                        item {
+                            Text(
+                                "Keine Einträge vorhanden",
+                                color = Color.White,
+                                modifier = Modifier.padding(16.dp)
                             )
                         }
+                    }
 
-                        if (result.uploaded > 0 || result.downloaded > 0) {
-                            Toast.makeText(
-                                context,
-                                "Synchronisiert: ${result.uploaded} hochgeladen, ${result.downloaded} heruntergeladen",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                    val duplicateNames = groupedEntries
+                        .groupBy { it.name }
+                        .filter { it.value.size > 1 }
+                        .keys
+
+                    if (duplicateNames.isNotEmpty()) {
+                        item {
+                            Text(
+                                "⚠️ Doppelte Einträge gefunden: ${duplicateNames.joinToString()}",
+                                color = Color(0xFFFFCC00),
+                                modifier = Modifier.padding(16.dp)
+                            )
                         }
                     }
-                } catch (e: Exception) {
-                    Toast.makeText(
-                        context,
-                        "Synchronisation fehlgeschlagen: Keine Internetverbindung",
-                        Toast.LENGTH_LONG
-                    ).show()
-                    ERRORINSERT(
-                        ERRORINSERTDATA(
-                            "TwoFAListScreen",
-                            "❌ Sync-Exception: ${e.message}",
-                            Instant.now().toString(),
-                            "Error"
-                        )
-                    )
-                } finally {
-                    isSyncing = false
-                }
-            }
-        }
-    }
 
-    LaunchedEffect(selectedEntry, isEditingEntry) {
-        val step = 30L
-        val displayPeriod = 30L
-        while (selectedEntry != null && !isEditingEntry) {
-            val now = System.currentTimeMillis()
-            generatedCode =
-                TotpGenerator.generateTOTP(selectedEntry!!.secret, now, periodSeconds = step)
-            val elapsed = (now / 1000) % displayPeriod
-            secondsLeft = (displayPeriod - elapsed).toInt()
-            delay(1000)
-        }
-    }
+                    items(groupedEntries, key = { it.id }) { entry ->
+                        val iconPrefs =
+                            context.getSharedPreferences("entry_icons", Context.MODE_PRIVATE)
+                        var iconUrl by remember {
+                            mutableStateOf(
+                                iconPrefs.getString(
+                                    entry.secret,
+                                    null
+                                ) ?: ""
+                            )
+                        }
+                        var showIconDialog by remember { mutableStateOf(false) }
+                        var inputUrl by remember { mutableStateOf(iconUrl) }
 
-    val gradient = Brush.linearGradient(
-        colors = listOf(Color(0xFF3E1E68), Color(0xFF9B4DCA), Color(0xFF6E48AA)),
-        start = Offset.Zero,
-        end = Offset.Infinite
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(gradient)
-    ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                "Deine 2FA-Token",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    color = Color.White, fontWeight = FontWeight.Bold
-                )
-            )
-
-            Button(
-                onClick = {
-                    scope.launch {
-                        entries = db.twoFADao().getAll()
-                        Toast.makeText(context, "Liste aktualisiert!", Toast.LENGTH_SHORT).show()
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B4DCA)),
-                modifier = Modifier.padding(vertical = 8.dp)
-            ) {
-                Text("Aktualisieren", color = Color.White)
-            }
-
-            val groupedEntries = entries
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            ) Composable@{
-                if (groupedEntries.isEmpty()) {
-                    item {
-                        Text(
-                            "Keine Einträge vorhanden",
-                            color = Color.White,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-                }
-
-                val duplicateNames = groupedEntries
-                    .groupBy { it.name }
-                    .filter { it.value.size > 1 }
-                    .keys
-
-                if (duplicateNames.isNotEmpty()) {
-                    item {
-                        Text(
-                            "⚠️ Doppelte Einträge gefunden: ${duplicateNames.joinToString()}",
-                            color = Color(0xFFFFCC00),
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-                }
-
-                items(groupedEntries, key = { it.id }) { entry ->
-                    val iconPrefs =
-                        context.getSharedPreferences("entry_icons", Context.MODE_PRIVATE)
-                    var iconUrl by remember {
-                        mutableStateOf(
-                            iconPrefs.getString(
-                                entry.secret,
-                                null
-                            ) ?: ""
-                        )
-                    }
-                    var showIconDialog by remember { mutableStateOf(false) }
-                    var inputUrl by remember { mutableStateOf(iconUrl) }
-
-                    Card(
-                        shape = RoundedCornerShape(8.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF2D2D2D)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
-                            .pointerInput(entry) {
-                                detectTapGestures(
-                                    onTap = { selectedEntry = entry },
-                                    onLongPress = {
-                                        val now = System.currentTimeMillis()
-                                        val code = TotpGenerator.generateTOTP(entry.secret, now)
-                                        val clipboard =
-                                            context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(
-                                            ClipData.newPlainText(
-                                                "Generated Code",
-                                                code
+                        Card(
+                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.cardColors(containerColor = c()),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp)
+                                .pointerInput(entry) {
+                                    detectTapGestures(
+                                        onTap = { selectedEntry = entry },
+                                        onLongPress = {
+                                            val now = System.currentTimeMillis()
+                                            val code = TotpGenerator.generateTOTP(entry.secret, now)
+                                            val clipboard =
+                                                context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            clipboard.setPrimaryClip(
+                                                ClipData.newPlainText(
+                                                    "Generated Code",
+                                                    code
+                                                )
                                             )
-                                        )
-                                        Toast.makeText(
-                                            context,
-                                            "Code für ${entry.name} kopiert!",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
-                                )
-                            }
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(16.dp)
-                        ) {
-                            if (iconUrl.isNotBlank()) {
-                                if (iconUrl.startsWith("data:image")) {
-                                    // Base64 Image
-                                    val base64String = iconUrl.substringAfter("base64,")
-                                    val imageBytes = Base64.decode(base64String, Base64.DEFAULT)
-                                    val bitmap = BitmapFactory.decodeByteArray(
-                                        imageBytes,
-                                        0,
-                                        imageBytes.size
+                                            Toast.makeText(
+                                                context,
+                                                "Code für ${entry.name} kopiert!",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
                                     )
-
-                                    IconButton(onClick = {
-                                        inputUrl = iconUrl
-                                        showIconDialog = true
-                                    }) {
-                                        Image(
-                                            bitmap = bitmap.asImageBitmap(),
-                                            contentDescription = "Icon für ${entry.name}",
-                                            modifier = Modifier
-                                                .size(40.dp)
-                                                .clip(RoundedCornerShape(16.dp))
+                                }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+                                if (iconUrl.isNotBlank()) {
+                                    if (iconUrl.startsWith("data:image")) {
+                                        // Base64 Image
+                                        val base64String = iconUrl.substringAfter("base64,")
+                                        val imageBytes = Base64.decode(base64String, Base64.DEFAULT)
+                                        val bitmap = BitmapFactory.decodeByteArray(
+                                            imageBytes,
+                                            0,
+                                            imageBytes.size
                                         )
+
+                                        IconButton(onClick = {
+                                            inputUrl = iconUrl
+                                            showIconDialog = true
+                                        }) {
+                                            Image(
+                                                bitmap = bitmap.asImageBitmap(),
+                                                contentDescription = "Icon für ${entry.name}",
+                                                modifier = Modifier
+                                                    .size(60.dp)
+                                                    .clip(RoundedCornerShape(16.dp))
+                                            )
+                                        }
+                                    } else {
+                                        IconButton(onClick = {
+                                            inputUrl = iconUrl
+                                            showIconDialog = true
+                                        }) {
+                                            AsyncImage(
+                                                model = iconUrl,
+                                                contentDescription = "Icon für ${entry.name}",
+                                                modifier = Modifier.size(60.dp)
+                                            )
+                                        }
                                     }
                                 } else {
                                     IconButton(onClick = {
                                         inputUrl = iconUrl
                                         showIconDialog = true
                                     }) {
-                                        AsyncImage(
-                                            model = iconUrl,
-                                            contentDescription = "Icon für ${entry.name}",
-                                            modifier = Modifier.size(40.dp)
+                                        Icon(
+                                            Icons.Default.Info,
+                                            contentDescription = "Icon ändern",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(60.dp)
                                         )
                                     }
                                 }
-                            } else {
-                                IconButton(onClick = {
-                                    inputUrl = iconUrl
-                                    showIconDialog = true
-                                }) {
-                                    Icon(
-                                        Icons.Default.Info,
-                                        contentDescription = "Icon ändern",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(40.dp)
+
+                                Spacer(Modifier.width(12.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        entry.name,
+                                        color = Color.White,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        textAlign = TextAlign.Center
                                     )
                                 }
                             }
+                        }
 
-                            Spacer(Modifier.width(12.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    entry.name,
-                                    color = Color.White,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
+                        if (showIconDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showIconDialog = false },
+                                title = { Text("Icon-URL ändern") },
+                                text = {
+                                    OutlinedTextField(
+                                        value = inputUrl,
+                                        onValueChange = { inputUrl = it },
+                                        label = { Text("URL eingeben") },
+                                        singleLine = true
+                                    )
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        iconPrefs.edit(commit = true) {
+                                            putString(entry.secret, inputUrl)
+                                            apply()
+                                        }
+                                        iconUrl = inputUrl
+                                        showIconDialog = false
+                                    }) { Text("Speichern") }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = {
+                                        showIconDialog = false
+                                    }) { Text("Abbrechen") }
+                                }
+                            )
                         }
                     }
 
-                    if (showIconDialog) {
-                        AlertDialog(
-                            onDismissRequest = { showIconDialog = false },
-                            title = { Text("Icon-URL ändern") },
-                            text = {
-                                OutlinedTextField(
-                                    value = inputUrl,
-                                    onValueChange = { inputUrl = it },
-                                    label = { Text("URL eingeben") },
-                                    singleLine = true
-                                )
-                            },
-                            confirmButton = {
-                                TextButton(onClick = {
-                                    iconPrefs.edit(commit = true) {
-                                        putString(entry.secret, inputUrl)
-                                        apply()
-                                    }
-                                    iconUrl = inputUrl
-                                    showIconDialog = false
-                                }) { Text("Speichern") }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = {
-                                    showIconDialog = false
-                                }) { Text("Abbrechen") }
-                            }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = "Open settings",
+                            tint = Color.White
                         )
                     }
-                }
 
-            }
+                    Button(
+                        onClick = { showAddDialog = true }
+                    ) {
+                        Text("Hinzufügen", fontSize = 15.sp, color = Color.White)
+                    }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                IconButton(onClick = onOpenSettings) {
-                    Icon(
-                        imageVector = Icons.Filled.Settings,
-                        contentDescription = "Open settings",
-                        tint = Color.White
-                    )
-                }
-
-                Button(
-                    onClick = { showAddDialog = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B4DCA))
-                ) {
-                    Text("Hinzufügen", fontSize = 15.sp, color = Color.White)
-                }
-
-                Button(
-                    onClick = {
-                        val permissionCheck =
-                            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
-                        if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
-                            val intent = Intent(activity, SilentCaptureActivity::class.java)
-                            intent.putExtra("SCAN_MODE", "QR_CODE_MODE")
-                            activity?.startActivity(intent)
-                        } else {
-                            try {
-                                val intent =
-                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                        data = Uri.fromParts("package", context.packageName, null)
-                                        if (context !is Activity) {
-                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                        }
-                                    }
-                                context.startActivity(intent)
-                            } catch (_: Exception) {
+                    Button(
+                        onClick = {
+                            val permissionCheck =
+                                ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.CAMERA
+                                )
+                            if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
+                                val intent = Intent(activity, SilentCaptureActivity::class.java)
+                                intent.putExtra("SCAN_MODE", "QR_CODE_MODE")
+                                activity?.startActivity(intent)
+                            } else {
                                 try {
-                                    val fallbackIntent = Intent(Settings.ACTION_SETTINGS).apply {
-                                        if (context !is Activity) {
-                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    val intent =
+                                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                            data =
+                                                Uri.fromParts("package", context.packageName, null)
+                                            if (context !is Activity) {
+                                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                            }
                                         }
-                                    }
-                                    context.startActivity(fallbackIntent)
-                                } catch (e: Exception) {
-                                    Toast.makeText(
-                                        context,
-                                        "Bitte Einstellungen manuell öffnen",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                    scope.launch {
-                                        ERRORINSERT(
-                                            ERRORINSERTDATA(
-                                                "TwoFAListScreen",
-                                                "Konnte Einstellungen nicht öffnen: ${e.message}",
-                                                Instant.now().toString(),
-                                                "Error"
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {
+                                    try {
+                                        val fallbackIntent =
+                                            Intent(Settings.ACTION_SETTINGS).apply {
+                                                if (context !is Activity) {
+                                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                                }
+                                            }
+                                        context.startActivity(fallbackIntent)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(
+                                            context,
+                                            "Bitte Einstellungen manuell öffnen",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                        scope.launch {
+                                            ERRORINSERT(
+                                                ERRORINSERTDATA(
+                                                    "TwoFAListScreen",
+                                                    "Konnte Einstellungen nicht öffnen: ${e.message}",
+                                                    Instant.now().toString(),
+                                                    "Error"
+                                                )
                                             )
-                                        )
+                                        }
                                     }
                                 }
+                                Toast.makeText(
+                                    context,
+                                    "Erlaube Kamera Zugriff in den Einstellungen",
+                                    Toast.LENGTH_LONG
+                                ).show()
                             }
-                            Toast.makeText(
-                                context,
-                                "Erlaube Kamera Zugriff in den Einstellungen",
-                                Toast.LENGTH_LONG
-                            ).show()
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B4DCA))
-                ) {
-                    Text("QR-Code scannen", fontSize = 15.sp, color = Color.White)
+                    ) {
+                        Text("QR-Code scannen", fontSize = 15.sp, color = Color.White)
+                    }
                 }
             }
-        }
 
-        selectedEntry?.let { entry ->
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .clickable {
-                        isEditingEntry = false
-                    }
-                    .pointerInput(Unit) {
-                        detectTapGestures {
-                            selectedEntry = null
+            selectedEntry?.let { entry ->
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .clickable {
                             isEditingEntry = false
                         }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
-                    Modifier
-                        .padding(32.dp)
-                        .fillMaxWidth()
-                        .clickable(enabled = false) {},
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF4F4F4F))
+                        .pointerInput(Unit) {
+                            detectTapGestures {
+                                selectedEntry = null
+                                isEditingEntry = false
+                            }
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(
+                    Card(
                         Modifier
-                            .padding(24.dp)
-                            .fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .padding(32.dp)
+                            .fillMaxWidth()
+                            .clickable(enabled = false) {},
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF4F4F4F))
                     ) {
-                        if (isEditingEntry) {
-                            OutlinedTextField(
-                                value = editedName,
-                                onValueChange = { editedName = it },
-                                label = { Text("Name bearbeiten", color = Color.Gray) },
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedBorderColor = Color(0xFFB388FF),
-                                    unfocusedBorderColor = Color.Gray
-                                ),
-                                modifier = Modifier.fillMaxWidth()
+                        Column(
+                            Modifier
+                                .padding(24.dp)
+                                .fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            if (isEditingEntry) {
+                                OutlinedTextField(
+                                    value = editedName,
+                                    onValueChange = { editedName = it },
+                                    label = { Text("Name bearbeiten", color = Color.Gray) },
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White,
+                                        focusedBorderColor = Color(0xFFB388FF),
+                                        unfocusedBorderColor = Color.Gray
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                var editedUrl by remember { mutableStateOf(entry.url) }
+
+                                OutlinedTextField(
+                                    value = editedUrl,
+                                    onValueChange = { editedUrl = it },
+                                    label = {
+                                        Text(
+                                            "Website-URL (z.B. github.com)",
+                                            color = Color.Gray
+                                        )
+                                    },
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White,
+                                        focusedBorderColor = Color(0xFFB388FF),
+                                        unfocusedBorderColor = Color.Gray
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Spacer(Modifier.height(8.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            scope.launch {
+                                                if (editedName.isNotBlank()) {
+                                                    val updatedEntry = entry.copy(
+                                                        name = editedName,
+                                                        url = editedUrl
+                                                    )
+                                                    db.twoFADao().update(updatedEntry)
+
+                                                    val supabaseSuccess =
+                                                        updateTwoFaEntryInSupabase(updatedEntry)
+
+                                                    if (!supabaseSuccess) {
+                                                        scope.launch {
+                                                            ERRORINSERT(
+                                                                ERRORINSERTDATA(
+                                                                    "TwoFAListScreen",
+                                                                    "Supabase-Update fehlgeschlagen, aber lokal gespeichert",
+                                                                    Instant.now().toString(),
+                                                                    "Warning"
+                                                                )
+                                                            )
+                                                        }
+                                                    }
+
+                                                    entries = db.twoFADao().getAll()
+                                                    selectedEntry = updatedEntry
+                                                    isEditingEntry = false
+                                                    Toast.makeText(
+                                                        context,
+                                                        "Eintrag aktualisiert!",
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                }
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(
+                                                0xFF4CAF50
+                                            )
+                                        )
+                                    ) {
+                                        Text("Speichern", color = Color.White)
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            isEditingEntry = false
+                                            editedName = entry.name
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
+                                    ) {
+                                        Text("Abbrechen", color = Color.White)
+                                    }
+                                }
+                            } else {
+                                Text(
+                                    entry.name,
+                                    fontSize = 18.sp,
+                                    color = Color.White,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .clickable {
+                                            isEditingEntry = true
+                                            editedName = entry.name
+                                        }
+                                        .fillMaxWidth()
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Code: $generatedCode",
+                                fontSize = 30.sp,
+                                textAlign = TextAlign.Center,
+                                color = Color(0xFFB388FF),
+                                modifier = Modifier.clickable {
+                                    val clipboard =
+                                        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(
+                                        ClipData.newPlainText(
+                                            "Generated Code",
+                                            generatedCode
+                                        )
+                                    )
+                                    Toast.makeText(context, "Code kopiert!", Toast.LENGTH_SHORT)
+                                        .show()
+                                }
                             )
 
                             Spacer(Modifier.height(8.dp))
+                            Text("Gültig noch: ${secondsLeft}s", color = Color.White)
+                            Spacer(Modifier.height(4.dp))
+                            Row {
+                                Icon(
+                                    imageVector = Icons.Filled.Info,
+                                    contentDescription = "Information",
+                                    tint = Color.Gray
+                                )
+                                Text(
+                                    "Codes die hier abgelaufen sind, sind generell noch bis zu 10sek gültig",
+                                    color = Color.Gray,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                            Spacer(Modifier.height(4.dp))
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly
+                            Button(
+                                onClick = {
+                                    val clipboard =
+                                        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(
+                                        ClipData.newPlainText(
+                                            "Generated Code",
+                                            generatedCode
+                                        )
+                                    )
+                                    Toast.makeText(context, "Code kopiert!", Toast.LENGTH_SHORT)
+                                        .show()
+                                    selectedEntry = null
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(
+                                        0xFF9B4DCA
+                                    )
+                                ),
+                                modifier = Modifier.padding(10.dp)
                             ) {
+                                Text("Code kopieren", color = Color.White)
+                            }
+
+                            var showDeleteDialog by remember { mutableStateOf(false) }
+
+                            Button(
+                                onClick = { showDeleteDialog = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                            ) {
+                                Text("Eintrag löschen", color = Color.White)
+                            }
+
+                            val favPrefs =
+                                context.getSharedPreferences("favorites", Context.MODE_PRIVATE)
+                            val favIndex = when (entry.secret) {
+                                favPrefs.getString("fav1_secret", null) -> 1
+                                favPrefs.getString("fav2_secret", null) -> 2
+                                favPrefs.getString("fav3_secret", null) -> 3
+                                else -> null
+                            }
+
+                            if (favIndex != null) {
                                 Button(
                                     onClick = {
+                                        favPrefs.edit(commit = true) {
+                                            remove("fav${favIndex}_name")
+                                            remove("fav${favIndex}_secret")
+                                            apply()
+                                        }
+                                        Toast.makeText(
+                                            context,
+                                            "Favorit $favIndex entfernt!",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
+                                    modifier = Modifier.padding(8.dp)
+                                ) {
+                                    Text("Favorit $favIndex entfernen")
+                                }
+                            } else {
+                                val favCount = listOf(
+                                    favPrefs.getString("fav1_secret", null),
+                                    favPrefs.getString("fav2_secret", null),
+                                    favPrefs.getString("fav3_secret", null)
+                                ).count { it != null }
+
+                                if (favCount < 3) {
+                                    Button(
+                                        onClick = {
+                                            val slot = when {
+                                                favPrefs.getString("fav1_secret", null) == null -> 1
+                                                favPrefs.getString("fav2_secret", null) == null -> 2
+                                                favPrefs.getString("fav3_secret", null) == null -> 3
+                                                else -> null
+                                            }
+                                            slot?.let {
+                                                favPrefs.edit(commit = true) {
+                                                    putString("fav${it}_name", entry.name)
+                                                    putString("fav${it}_secret", entry.secret)
+                                                    apply()
+                                                }
+                                                Toast.makeText(
+                                                    context,
+                                                    "Als Favorit $it gespeichert!",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        },
+                                        modifier = Modifier.padding(8.dp)
+                                    ) {
+                                        Text("Als Favorit speichern")
+                                    }
+                                } else {
+                                    Text("Max. 3 Favoriten erreicht", color = Color.Gray)
+                                }
+                            }
+
+                            if (showDeleteDialog) {
+                                AlertDialog(
+                                    onDismissRequest = { showDeleteDialog = false },
+                                    title = { Text("Eintrag löschen?") },
+                                    text = { Text("Bist du sicher, dass du diesen 2FA-Eintrag löschen willst?") },
+                                    confirmButton = {
+                                        TextButton(
+                                            onClick = {
+                                                scope.launch {
+                                                    val favPrefs = context.getSharedPreferences(
+                                                        "favorites",
+                                                        Context.MODE_PRIVATE
+                                                    )
+                                                    favPrefs.edit(commit = true) {
+                                                        if (favPrefs.getString(
+                                                                "fav1_secret",
+                                                                null
+                                                            ) == entry.secret
+                                                        ) {
+                                                            remove("fav1_name")
+                                                            remove("fav1_secret")
+                                                        }
+                                                        if (favPrefs.getString(
+                                                                "fav2_secret",
+                                                                null
+                                                            ) == entry.secret
+                                                        ) {
+                                                            remove("fav2_name")
+                                                            remove("fav2_secret")
+                                                        }
+                                                        if (favPrefs.getString(
+                                                                "fav3_secret",
+                                                                null
+                                                            ) == entry.secret
+                                                        ) {
+                                                            remove("fav3_name")
+                                                            remove("fav3_secret")
+                                                        }
+                                                        apply()
+                                                    }
+                                                    db.twoFADao().delete(entry)
+                                                    deleteTwoFaEntryFromSupabase(entry)
+                                                    entries = db.twoFADao().getAll()
+                                                    selectedEntry = null
+                                                    showDeleteDialog = false
+                                                }
+                                            }
+                                        ) { Text("Ja, löschen") }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = {
+                                            showDeleteDialog = false
+                                        }) { Text("Abbrechen") }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (showAddDialog) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .clickable { showAddDialog = false },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card(
+                        Modifier
+                            .padding(32.dp)
+                            .clickable(enabled = false) {}
+                    ) {
+                        Column(
+                            Modifier
+                                .padding(24.dp)
+                                .fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                "Neuen Code hinzufügen",
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                            Spacer(Modifier.height(16.dp))
+
+                            TextField(
+                                value = name,
+                                onValueChange = { name = it },
+                                label = { Text("Name (nur für dich)") }
+                            )
+                            TextField(
+                                value = secret,
+                                onValueChange = { secret = it },
+                                label = { Text("Schlüssel") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
+                            )
+
+                            Spacer(Modifier.height(16.dp))
+                            Button(
+                                onClick = {
+                                    if (name.isNotBlank() && secret.isNotBlank()) {
                                         scope.launch {
-                                            if (editedName.isNotBlank()) {
-                                                val updatedEntry = entry.copy(
-                                                    name = editedName
+                                            val existingEntries = db.twoFADao().getAll()
+                                            val secretExists =
+                                                existingEntries.any { it.secret == secret }
+
+                                            if (secretExists) {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Eintrag mit diesem Secret existiert bereits!",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            } else {
+                                                val normalizedSecret =
+                                                    secret.trim().replace(" ", "")
+                                                        .uppercase(java.util.Locale.US)
+                                                val isValidBase32 =
+                                                    normalizedSecret.all { it in "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567=" }
+
+                                                if (!isValidBase32 || normalizedSecret.isEmpty()) {
+                                                    Toast.makeText(
+                                                        context,
+                                                        "❌ Ungültiger Schlüssel (kein gültiges Base32)",
+                                                        Toast.LENGTH_LONG
+                                                    ).show()
+                                                    return@launch
+                                                }
+
+                                                val newEntry = TwoFAEntry(
+                                                    name = name.trim(),
+                                                    secret = normalizedSecret
                                                 )
-                                                db.twoFADao().update(updatedEntry)
 
-                                                val supabaseSuccess =
-                                                    updateTwoFaEntryInSupabase(updatedEntry)
+                                                try {
+                                                    db.twoFADao().insert(newEntry)
 
-                                                if (!supabaseSuccess) {
+                                                    val supabaseSuccess =
+                                                        saveTwoFaEntryToSupabase(newEntry, db)
+
+                                                    withContext(Dispatchers.Main) {
+                                                        if (supabaseSuccess) {
+                                                            Toast.makeText(
+                                                                context,
+                                                                "Gespeichert (lokal & Cloud)",
+                                                                Toast.LENGTH_SHORT
+                                                            ).show()
+                                                        } else {
+                                                            Toast.makeText(
+                                                                context,
+                                                                "Lokal gespeichert (Cloud-Sync fehlgeschlagen)",
+                                                                Toast.LENGTH_LONG
+                                                            ).show()
+                                                        }
+                                                    }
+                                                } catch (e: Exception) {
+                                                    withContext(Dispatchers.Main) {
+                                                        Toast.makeText(
+                                                            context,
+                                                            "Fehler beim Speichern: ${e.message}",
+                                                            Toast.LENGTH_LONG
+                                                        ).show()
+                                                    }
                                                     scope.launch {
                                                         ERRORINSERT(
                                                             ERRORINSERTDATA(
                                                                 "TwoFAListScreen",
-                                                                "Supabase-Update fehlgeschlagen, aber lokal gespeichert",
+                                                                "Fehler beim Speichern: ${e.message}",
                                                                 Instant.now().toString(),
-                                                                "Warning"
+                                                                "Error"
                                                             )
                                                         )
                                                     }
                                                 }
 
                                                 entries = db.twoFADao().getAll()
-                                                selectedEntry = updatedEntry
-                                                isEditingEntry = false
-                                                Toast.makeText(
-                                                    context,
-                                                    "Eintrag aktualisiert!",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
+                                                name = ""
+                                                secret = ""
+                                                showAddDialog = false
                                             }
                                         }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(
-                                            0xFF4CAF50
-                                        )
-                                    )
-                                ) {
-                                    Text("Speichern", color = Color.White)
-                                }
-
-                                Button(
-                                    onClick = {
-                                        isEditingEntry = false
-                                        editedName = entry.name
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
-                                ) {
-                                    Text("Abbrechen", color = Color.White)
-                                }
-                            }
-                        } else {
-                            Text(
-                                entry.name,
-                                fontSize = 18.sp,
-                                color = Color.White,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier
-                                    .clickable {
-                                        isEditingEntry = true
-                                        editedName = entry.name
                                     }
-                                    .fillMaxWidth()
-                            )
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Code: $generatedCode",
-                            fontSize = 30.sp,
-                            textAlign = TextAlign.Center,
-                            color = Color(0xFFB388FF),
-                            modifier = Modifier.clickable {
-                                val clipboard =
-                                    context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(
-                                    ClipData.newPlainText(
-                                        "Generated Code",
-                                        generatedCode
-                                    )
-                                )
-                                Toast.makeText(context, "Code kopiert!", Toast.LENGTH_SHORT).show()
-                            }
-                        )
-
-                        Spacer(Modifier.height(8.dp))
-                        Text("Gültig noch: ${secondsLeft}s", color = Color.White)
-                        Spacer(Modifier.height(4.dp))
-                        Row {
-                            Icon(
-                                imageVector = Icons.Filled.Info,
-                                contentDescription = "Information",
-                                tint = Color.Gray
-                            )
-                            Text(
-                                "Codes die hier abgelaufen sind, sind generell noch bis zu 10sek gültig",
-                                color = Color.Gray,
-                                textAlign = TextAlign.Center,
-                            )
-                        }
-                        Spacer(Modifier.height(4.dp))
-
-                        Button(
-                            onClick = {
-                                val clipboard =
-                                    context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(
-                                    ClipData.newPlainText(
-                                        "Generated Code",
-                                        generatedCode
-                                    )
-                                )
-                                Toast.makeText(context, "Code kopiert!", Toast.LENGTH_SHORT).show()
-                                selectedEntry = null
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B4DCA)),
-                            modifier = Modifier.padding(10.dp)
-                        ) {
-                            Text("Code kopieren", color = Color.White)
-                        }
-
-                        var showDeleteDialog by remember { mutableStateOf(false) }
-
-                        Button(
-                            onClick = { showDeleteDialog = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-                        ) {
-                            Text("Eintrag löschen", color = Color.White)
-                        }
-
-                        val favPrefs =
-                            context.getSharedPreferences("favorites", Context.MODE_PRIVATE)
-                        val favIndex = when (entry.secret) {
-                            favPrefs.getString("fav1_secret", null) -> 1
-                            favPrefs.getString("fav2_secret", null) -> 2
-                            favPrefs.getString("fav3_secret", null) -> 3
-                            else -> null
-                        }
-
-                        if (favIndex != null) {
-                            Button(
-                                onClick = {
-                                    favPrefs.edit(commit = true) {
-                                        remove("fav${favIndex}_name")
-                                        remove("fav${favIndex}_secret")
-                                        apply()
-                                    }
-                                    Toast.makeText(
-                                        context,
-                                        "Favorit $favIndex entfernt!",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
-                                modifier = Modifier.padding(8.dp)
+                                }
                             ) {
-                                Text("Favorit $favIndex entfernen")
+                                Text("Hinzufügen")
                             }
-                        } else {
-                            val favCount = listOf(
-                                favPrefs.getString("fav1_secret", null),
-                                favPrefs.getString("fav2_secret", null),
-                                favPrefs.getString("fav3_secret", null)
-                            ).count { it != null }
-
-                            if (favCount < 3) {
-                                Button(
-                                    onClick = {
-                                        val slot = when {
-                                            favPrefs.getString("fav1_secret", null) == null -> 1
-                                            favPrefs.getString("fav2_secret", null) == null -> 2
-                                            favPrefs.getString("fav3_secret", null) == null -> 3
-                                            else -> null
-                                        }
-                                        slot?.let {
-                                            favPrefs.edit(commit = true) {
-                                                putString("fav${it}_name", entry.name)
-                                                putString("fav${it}_secret", entry.secret)
-                                                apply()
-                                            }
-                                            Toast.makeText(
-                                                context,
-                                                "Als Favorit $it gespeichert!",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                    },
-                                    modifier = Modifier.padding(8.dp)
-                                ) {
-                                    Text("Als Favorit speichern")
-                                }
-                            } else {
-                                Text("Max. 3 Favoriten erreicht", color = Color.Gray)
-                            }
-                        }
-
-                        if (showDeleteDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showDeleteDialog = false },
-                                title = { Text("Eintrag löschen?") },
-                                text = { Text("Bist du sicher, dass du diesen 2FA-Eintrag löschen willst?") },
-                                confirmButton = {
-                                    TextButton(
-                                        onClick = {
-                                            scope.launch {
-                                                val favPrefs = context.getSharedPreferences(
-                                                    "favorites",
-                                                    Context.MODE_PRIVATE
-                                                )
-                                                favPrefs.edit(commit = true) {
-                                                    if (favPrefs.getString(
-                                                            "fav1_secret",
-                                                            null
-                                                        ) == entry.secret
-                                                    ) {
-                                                        remove("fav1_name")
-                                                        remove("fav1_secret")
-                                                    }
-                                                    if (favPrefs.getString(
-                                                            "fav2_secret",
-                                                            null
-                                                        ) == entry.secret
-                                                    ) {
-                                                        remove("fav2_name")
-                                                        remove("fav2_secret")
-                                                    }
-                                                    if (favPrefs.getString(
-                                                            "fav3_secret",
-                                                            null
-                                                        ) == entry.secret
-                                                    ) {
-                                                        remove("fav3_name")
-                                                        remove("fav3_secret")
-                                                    }
-                                                    apply()
-                                                }
-                                                db.twoFADao().delete(entry)
-                                                deleteTwoFaEntryFromSupabase(entry)
-                                                entries = db.twoFADao().getAll()
-                                                selectedEntry = null
-                                                showDeleteDialog = false
-                                            }
-                                        }
-                                    ) { Text("Ja, löschen") }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = {
-                                        showDeleteDialog = false
-                                    }) { Text("Abbrechen") }
-                                }
-                            )
                         }
                     }
                 }
             }
-        }
 
-        if (showAddDialog) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .clickable { showAddDialog = false },
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
-                    Modifier
-                        .padding(32.dp)
-                        .clickable(enabled = false) {}
-                ) {
-                    Column(
-                        Modifier
-                            .padding(24.dp)
-                            .fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("Neuen Code hinzufügen", style = MaterialTheme.typography.titleLarge)
-                        Spacer(Modifier.height(16.dp))
-
-                        TextField(
-                            value = name,
-                            onValueChange = { name = it },
-                            label = { Text("Name (nur für dich)") }
-                        )
-                        TextField(
-                            value = secret,
-                            onValueChange = { secret = it },
-                            label = { Text("Schlüssel") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
-                        )
-
-                        Spacer(Modifier.height(16.dp))
-                        Button(
-                            onClick = {
-                                if (name.isNotBlank() && secret.isNotBlank()) {
-                                    scope.launch {
-                                        val existingEntries = db.twoFADao().getAll()
-                                        val secretExists =
-                                            existingEntries.any { it.secret == secret }
-
-                                        if (secretExists) {
-                                            Toast.makeText(
-                                                context,
-                                                "Eintrag mit diesem Secret existiert bereits!",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        } else {
-                                            val normalizedSecret = secret.trim().replace(" ", "").uppercase(java.util.Locale.US)
-                                            val isValidBase32 = normalizedSecret.all { it in "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567=" }
-
-                                            if (!isValidBase32 || normalizedSecret.isEmpty()) {
-                                                Toast.makeText(context, "❌ Ungültiger Schlüssel (kein gültiges Base32)", Toast.LENGTH_LONG).show()
-                                                return@launch
-                                            }
-
-                                            val newEntry = TwoFAEntry(name = name.trim(), secret = normalizedSecret)
-
-                                            try {
-                                                db.twoFADao().insert(newEntry)
-
-                                                val supabaseSuccess =
-                                                    saveTwoFaEntryToSupabase(newEntry, db)
-
-                                                withContext(Dispatchers.Main) {
-                                                    if (supabaseSuccess) {
-                                                        Toast.makeText(
-                                                            context,
-                                                            "Gespeichert (lokal & Cloud)",
-                                                            Toast.LENGTH_SHORT
-                                                        ).show()
-                                                    } else {
-                                                        Toast.makeText(
-                                                            context,
-                                                            "Lokal gespeichert (Cloud-Sync fehlgeschlagen)",
-                                                            Toast.LENGTH_LONG
-                                                        ).show()
-                                                    }
-                                                }
-                                            } catch (e: Exception) {
-                                                withContext(Dispatchers.Main) {
-                                                    Toast.makeText(
-                                                        context,
-                                                        "Fehler beim Speichern: ${e.message}",
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
-                                                }
-                                                scope.launch {
-                                                    ERRORINSERT(
-                                                        ERRORINSERTDATA(
-                                                            "TwoFAListScreen",
-                                                            "Fehler beim Speichern: ${e.message}",
-                                                            Instant.now().toString(),
-                                                            "Error"
-                                                        )
-                                                    )
-                                                }
-                                            }
-
-                                            entries = db.twoFADao().getAll()
-                                            name = ""
-                                            secret = ""
-                                            showAddDialog = false
-                                        }
-                                    }
-                                }
+            if (showSyncDialog && pendingEntries.isNotEmpty()) {
+                SyncConfirmationDialog(
+                    entries = pendingEntries,
+                    onDecision = { entry, decision ->
+                        scope.launch {
+                            val success = processSyncDecision(db, entry, decision)
+                            if (success) {
+                                entries = db.twoFADao().getAll()
                             }
-                        ) {
-                            Text("Hinzufügen")
                         }
+                    },
+                    onDismiss = {
+                        showSyncDialog = false
+                        pendingEntries = emptyList()
                     }
-                }
+                )
             }
-        }
-
-        if (showSyncDialog && pendingEntries.isNotEmpty()) {
-            SyncConfirmationDialog(
-                entries = pendingEntries,
-                onDecision = { entry, decision ->
-                    scope.launch {
-                        val success = processSyncDecision(db, entry, decision)
-                        if (success) {
-                            entries = db.twoFADao().getAll()
-                        }
-                    }
-                },
-                onDismiss = {
-                    showSyncDialog = false
-                    pendingEntries = emptyList()
-                }
-            )
         }
     }
 }
@@ -986,11 +1037,7 @@ fun SettingsScreenWithScreenshotProtection(onBackClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(Color(0xFF3E1E68), Color(0xFF9B4DCA), Color(0xFF6E48AA))
-                )
-            )
+            .background(Color.Transparent)
             .padding(24.dp)
     ) {
         Column(
@@ -1033,7 +1080,12 @@ fun SettingsScreenWithScreenshotProtection(onBackClick: () -> Unit) {
                             putBoolean("authenticated", !enabled)
                             apply()
                         }
-                    }
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedIconColor = c(),
+                        checkedTrackColor = c(),
+                        checkedBorderColor = c(),
+                    )
                 )
                 Text(
                     text = if (lockEnabled) "App-Sperre aktiviert" else "App-Sperre deaktiviert",
@@ -1065,7 +1117,12 @@ fun SettingsScreenWithScreenshotProtection(onBackClick: () -> Unit) {
                             if (enabled) "Screenshots jetzt gesperrt" else "Screenshots jetzt erlaubt",
                             Toast.LENGTH_SHORT
                         ).show()
-                    }
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedIconColor = c(),
+                        checkedTrackColor = c(),
+                        checkedBorderColor = c(),
+                    )
                 )
                 Text(
                     text = if (screenshotProtectionEnabled) "Screenshots gesperrt" else "Screenshots erlaubt",
@@ -1080,6 +1137,17 @@ fun SettingsScreenWithScreenshotProtection(onBackClick: () -> Unit) {
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B4DCA))
             ) {
                 Text("Zurück", color = Color.White)
+            }
+
+            // In SettingsScreenWithScreenshotProtection → nach den Switches
+            val autofillIntent = Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE).apply {
+                data = Uri.parse("package:${context.packageName}")
+            }
+            Button(
+                onClick = { context.startActivity(autofillIntent) },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B4DCA))
+            ) {
+                Text("Autofill aktivieren", color = Color.White)
             }
         }
     }
