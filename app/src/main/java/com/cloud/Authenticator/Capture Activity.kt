@@ -1,4 +1,4 @@
-package com.example.cloud.authenticator
+package com.cloud.authenticator
 
 import android.app.Activity
 import android.content.Context
@@ -31,8 +31,9 @@ import kotlin.text.equals
 import kotlin.text.isNullOrBlank
 import kotlin.text.removePrefix
 import androidx.core.net.toUri
-import com.example.cloud.ERRORINSERT
-import com.example.cloud.ERRORINSERTDATA
+import com.google.zxing.ResultPoint
+import com.cloud.ERRORINSERT
+import com.cloud.ERRORINSERTDATA
 import java.time.Instant
 
 class SilentCaptureActivity : ComponentActivity() {
@@ -73,7 +74,7 @@ fun SilentCaptureScreen() {
                             }
                         }
 
-                        override fun possibleResultPoints(resultPoints: MutableList<com.google.zxing.ResultPoint>?) {}
+                        override fun possibleResultPoints(resultPoints: MutableList<ResultPoint>?) {}
                     })
                     resume()
                 }
