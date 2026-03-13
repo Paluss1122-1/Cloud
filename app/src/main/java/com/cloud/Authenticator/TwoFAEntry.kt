@@ -12,5 +12,6 @@ data class TwoFAEntry(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val supabaseId: String? = null,
     val name: String,
-    val secret: String
+    val secret: String,
+    val url: String = ""
 )
