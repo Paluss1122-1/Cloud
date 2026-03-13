@@ -14,14 +14,8 @@ import java.util.Calendar
 import kotlin.time.Clock
 
 class BootReceiver : BroadcastReceiver() {
-    companion object {
-        private const val EXPECTED_ACTION = "android.intent.action.BOOT_COMPLETED"
-    }
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (EXPECTED_ACTION != intent.action) {
-            return
-        }
         val prefs: SharedPreferences =
             context.getSharedPreferences("quick_settings_prefs", Context.MODE_PRIVATE)
         val quietStart = prefs.getString("saved_number_start", null)?.toIntOrNull() ?: 22
@@ -86,6 +80,7 @@ class BootReceiver : BroadcastReceiver() {
                         )
                     )
                 }
+                return
             }
 
             val stopIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
