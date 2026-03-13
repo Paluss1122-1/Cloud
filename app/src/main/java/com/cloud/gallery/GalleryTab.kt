@@ -39,6 +39,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
+import com.cloud.ui.theme.Cloud
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -81,14 +82,10 @@ fun GalleryTab() {
         }
     }
 
-    val gradient = Brush.verticalGradient(
-        colors = listOf(Color.DarkGray, Color.Black, Color.DarkGray)
-    )
-
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(gradient)
+            .background(Color.Transparent)
     ) {
         if (mediaItems.value.isEmpty()) {
             Text("Keine Medien gefunden", color = Color.White, modifier = Modifier.align(Alignment.Center))
