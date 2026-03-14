@@ -1,4 +1,4 @@
-package com.example.cloud.service
+package com.cloud.service
 
 import android.Manifest
 import android.app.NotificationChannel
@@ -9,15 +9,14 @@ import android.net.Uri
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
-import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
-import com.example.cloud.Config.LAPTOP_IPS
-import com.example.cloud.Config.NOTIFICATION_PORT
-import com.example.cloud.database.WhatsAppMessage
-import com.example.cloud.database.WhatsAppMessageRepository
-import com.example.cloud.objects.NotificationRepository
-import com.example.cloud.quiethoursnotificationhelper.isLaptopConnected
+import com.cloud.Config.LAPTOP_IPS
+import com.cloud.Config.NOTIFICATION_PORT
+import com.cloud.database.WhatsAppMessage
+import com.cloud.database.WhatsAppMessageRepository
+import com.cloud.objects.NotificationRepository
+import com.cloud.quiethoursnotificationhelper.isLaptopConnected
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -27,12 +26,14 @@ import kotlinx.coroutines.launch
 
 class WhatsAppNotificationListener : NotificationListenerService() {
 
+    @Volatile
+    private var listenerConnected = false
+
     companion object {
         private val repository = WhatsAppMessageRepository()
         val replyActions = mutableMapOf<String, ReplyData>()
         val messagesByContact = mutableMapOf<String, MutableList<ChatMessage>>()
 
-        // Unterstützte Apps
         private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
         private val TELEGRAM_PACKAGES =
             setOf("org.telegram.messenger", "org.telegram.messenger.web")
@@ -60,10 +61,32 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         private const val FORWARD_DEBOUNCE_MS = 500L
         private var pendingForwardJob: Job? = null
 
+        private var instance: WhatsAppNotificationListener? = null
+
+        private val BLOCKED_SENDERS = setOf("N", "Nico", "E") // beliebig erweiterbar
+        private const val PREFS_BLOCKED = "blocked_notifications_prefs"
+
+        private fun keyFor(packageName: String, title: String): String {
+            return "$packageName|$title"
+        }
+
+        fun forwardNotificationsToLaptop1() {
+            val svc = instance ?: return
+            if (!svc.listenerConnected) return
+            try {
+                svc.activeNotifications?.let { forwardNotificationsToLaptop(it, svc.packageManager) }
+            } catch (se: SecurityException) {
+                Log.w("NotifForwarder", "getActiveNotifications not allowed: ${se.message}")
+            }
+        }
+
         fun forwardNotificationsToLaptop(
             notifications: Array<StatusBarNotification>,
             packageManager: PackageManager
         ) {
+            Log.d("NotifDebug", "forwardNotificationsToLaptop called, isLaptopConnected=${isLaptopConnected}")
+            Log.d("NOTS", "$notifications")
+
             if (!isLaptopConnected) return
             pendingForwardJob?.cancel()
             pendingForwardJob = forwardScope.launch {
@@ -76,7 +99,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 val jsonArray = org.json.JSONArray()
 
                 notifications
-                    .filter { !it.isOngoing && it.packageName !== "com.example.cloud" && it.packageName != "com.android.systemui" }
+                    .filter { it.packageName != "com.example.cloud" && it.packageName != "com.android.systemui" }
                     .sortedByDescending { it.postTime }
                     .forEach { sbn ->
                         val extras = sbn.notification.extras
@@ -102,6 +125,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                             put("time", sbn.postTime)
                         })
                     }
+
+                if (jsonArray.length() == 0) return@launch
 
                 forwardScope.launch {
                     for (ip in LAPTOP_IPS) {
@@ -136,8 +161,16 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         super.onNotificationPosted(sbn)
 
-        if (sbn.packageName != "com.example.cloud") {
-            activeNotifications?.let { forwardNotificationsToLaptop(it, packageManager) }
+        Log.d("NotifDebug", "onNotificationPosted: ${sbn.packageName}, listenerConnected=$listenerConnected, activeNotifs=${activeNotifications?.size}")
+
+        if (sbn.packageName != "com.cloud") {
+            if (listenerConnected) {
+                try {
+                    activeNotifications?.let { forwardNotificationsToLaptop(it, packageManager) }
+                } catch (se: SecurityException) {
+                    Log.w("MessageListener", "getActiveNotifications not allowed yet: ${se.message}")
+                }
+            }
         }
 
         if (!isSupportedApp(sbn.packageName)) {
@@ -149,6 +182,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         val title = extras.getString(android.app.Notification.EXTRA_TITLE) ?: ""
         val text = extras.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString() ?: ""
 
+        if (handleBlockedSender(sbn, title, text)) return
+
         // System-Nachrichten filtern
         if (title.contains("Backup", ignoreCase = true) ||
             title.contains("Du", ignoreCase = true) ||
@@ -159,7 +194,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         }
 
         // Duplikate vermeiden
-        val existingMessages = messagesByContact[title] ?: mutableListOf()
+        val existingMessages = messagesByContact[keyFor(sbn.packageName, title)] ?: mutableListOf()
         val lastMessage = existingMessages.lastOrNull()
 
         if (lastMessage != null &&
@@ -171,7 +206,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             return
         }
 
-        Toast.makeText(this, title, Toast.LENGTH_SHORT).show()
+        Log.d("MessageListener", "Received message from $title")
 
         // Reply-Action extrahieren
         notification.actions?.forEach { action ->
@@ -182,7 +217,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                     .setAllowFreeFormInput(systemRemoteInput.allowFreeFormInput)
                     .build()
 
-                replyActions[title] = ReplyData(
+                replyActions[keyFor(sbn.packageName, title)] = ReplyData(
                     pendingIntent = action.actionIntent,
                     remoteInput = remoteInput,
                     originalResultKey = systemRemoteInput.resultKey,
@@ -195,8 +230,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             }
         }
 
-        // Empfangene Nachricht zur Liste hinzufügen
-        messagesByContact.getOrPut(title) { mutableListOf() }.add(
+        messagesByContact.getOrPut(keyFor(sbn.packageName, title)) { mutableListOf() }.add(
             ChatMessage(text, isOwnMessage = false)
         )
 
@@ -229,79 +263,32 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         }
 
         QuietHoursNotificationService.updateSingleSenderNotification(this, title)
-
-        // Notification Channel erstellen
-        val channelId = "whatsapp_listener_channel"
-        val notificationManager = getSystemService(NotificationManager::class.java)
-        if (notificationManager.getNotificationChannel(channelId) == null) {
-            val channel = NotificationChannel(
-                channelId,
-                "Messenger Listener",
-                NotificationManager.IMPORTANCE_HIGH
-            )
-            notificationManager.createNotificationChannel(channel)
-        }
-
-        // Notification mit Reply-Action erstellen
-        val replyData = replyActions[title]
-        if (replyData != null) {
-            val action = NotificationCompat.Action.Builder(
-                android.R.drawable.ic_menu_send,
-                "Antworten",
-                replyData.pendingIntent
-            )
-                .addRemoteInput(replyData.remoteInput)
-                .setShowsUserInterface(false)
-                .build()
-
-            val messages = messagesByContact[title] ?: mutableListOf()
-
-            val messagingStyle = NotificationCompat.MessagingStyle("Du")
-                .setConversationTitle(title)
-
-            val recentMessages = messages.takeLast(5)
-
-            recentMessages.forEach { msg ->
-                messagingStyle.addMessage(
-                    NotificationCompat.MessagingStyle.Message(
-                        msg.text,
-                        msg.timestamp,
-                        if (msg.isOwnMessage) "Du" else title
-                    )
-                )
-            }
-
-            val newNotification = NotificationCompat.Builder(this, channelId)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setStyle(messagingStyle)
-                .addAction(action)
-                .setAutoCancel(true)
-                .setOnlyAlertOnce(true)
-                .build()
-
-            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                notificationManager.notify(title.hashCode(), newNotification)
-            } else {
-                Log.w("MessageListener", "POST_NOTIFICATIONS permission not granted")
-            }
-        }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         super.onNotificationRemoved(sbn)
 
         if (
-            sbn.packageName != "com.example.cloud" &&
-            sbn.packageName != "com.android.systemui"
+            sbn.packageName != "com.cloud" &&
+            sbn.packageName != "com.android.systemui" &&
+            sbn.packageName != "com.google.android.gms.supervision" &&
+            sbn.packageName != "com.spotify.music"
         ) {
-            activeNotifications?.let { forwardNotificationsToLaptop(it, packageManager) }
+            if (listenerConnected) {
+                try {
+                    activeNotifications?.let { forwardNotificationsToLaptop(it, packageManager) }
+                } catch (se: SecurityException) {
+                    Log.w("MessageListener", "getActiveNotifications not allowed yet: ${se.message}")
+                }
+            }
         }
 
         if (isSupportedApp(sbn.packageName)) {
             val title = sbn.notification.extras.getString(android.app.Notification.EXTRA_TITLE)
             title?.let {
-                replyActions.remove(it)
-                messagesByContact.remove(it)
+                val key = keyFor(sbn.packageName, it)
+                replyActions.remove(key)
+                messagesByContact.remove(key)
                 Log.d("MessageListener", "Removed reply action for $title")
             }
         }
@@ -309,8 +296,167 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         NotificationRepository.removeNotification(sbn)
     }
 
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        listenerConnected = true
+        instance = this
+        scheduleBlockedNotificationsAlarm()
+    }
+
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        listenerConnected = false
+        instance = null
+        replyActions.clear()
+        messagesByContact.clear()
         NotificationRepository.clear()
+    }
+
+    private fun handleBlockedSender(sbn: StatusBarNotification, title: String, text: String): Boolean {
+        val normalizedTitle = title.trim()
+
+        if (BLOCKED_SENDERS.none { it.equals(normalizedTitle, ignoreCase = true) }) {
+            return false
+        }
+
+        // Nur Mo-Fr zwischen 7 und 14 Uhr blocken
+        val cal = java.util.Calendar.getInstance()
+        val hour = cal.get(java.util.Calendar.HOUR_OF_DAY)
+        val dow  = cal.get(java.util.Calendar.DAY_OF_WEEK)
+
+        val isWeekday    = dow in java.util.Calendar.MONDAY..java.util.Calendar.FRIDAY
+        val isBlockHours = hour in 7..13
+
+        if (!isWeekday || !isBlockHours) return false
+
+        val prefs = getSharedPreferences(PREFS_BLOCKED, MODE_PRIVATE)
+        val timestamp = System.currentTimeMillis()
+        val entryKey = "blocked_${timestamp}_${title.replace(" ", "_")}"
+
+        prefs.edit().apply {
+            putString("${entryKey}_sender",    title)
+            putString("${entryKey}_text",      text)
+            putLong("${entryKey}_timestamp",   timestamp)
+            putString("${entryKey}_package",   sbn.packageName)
+            val existingKeys = prefs.getStringSet("all_blocked_keys", mutableSetOf()) ?: mutableSetOf()
+            putStringSet("all_blocked_keys", existingKeys.toMutableSet().also { it.add(entryKey) })
+            apply()
+        }
+
+        try {
+            cancelNotification(sbn.key)
+            Log.d("BlockedSender", "Cancelled notification for $title (key=${sbn.key})")
+        } catch (e: Exception) {
+            Log.w("BlockedSender", "Could not cancel notification: ${e.message}")
+        }
+
+        return true
+    }
+    private fun scheduleBlockedNotificationsAlarm() {
+        val cal = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 14)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+            // Falls 14 Uhr heute schon vorbei → morgen
+            if (timeInMillis <= System.currentTimeMillis()) {
+                add(java.util.Calendar.DAY_OF_YEAR, 1)
+            }
+        }
+
+        val intent = Intent(this, BlockedNotificationReceiver::class.java)
+        val pendingIntent = android.app.PendingIntent.getBroadcast(
+            this, 0, intent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val alarmManager = getSystemService(ALARM_SERVICE) as android.app.AlarmManager
+        if (alarmManager.canScheduleExactAlarms()) {
+            alarmManager.setExactAndAllowWhileIdle(
+                android.app.AlarmManager.RTC_WAKEUP,
+                cal.timeInMillis,
+                pendingIntent
+            )
+        }
+        Log.d("BlockedSender", "Alarm gesetzt für 14:00 Uhr (${cal.time})")
+    }
+}
+
+class BlockedNotificationReceiver : android.content.BroadcastReceiver() {
+
+    override fun onReceive(context: android.content.Context, intent: Intent) {
+        val prefs = context.getSharedPreferences("blocked_notifications_prefs", android.content.Context.MODE_PRIVATE)
+        val keys = prefs.getStringSet("all_blocked_keys", emptySet()) ?: emptySet()
+
+        if (keys.isEmpty()) return
+
+        val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+
+        // Channel sicherstellen
+        val channel = android.app.NotificationChannel(
+            "blocked_summary_channel",
+            "Zurückgehaltene Nachrichten",
+            android.app.NotificationManager.IMPORTANCE_HIGH
+        )
+        notificationManager.createNotificationChannel(channel)
+
+        // Alle gespeicherten Nachrichten posten
+        keys.forEachIndexed { index, key ->
+            val sender    = prefs.getString("${key}_sender", null) ?: return@forEachIndexed
+            val text      = prefs.getString("${key}_text",   null) ?: return@forEachIndexed
+            val timestamp = prefs.getLong("${key}_timestamp", 0L)
+
+            val timeStr = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                .format(java.util.Date(timestamp))
+
+            val notification = androidx.core.app.NotificationCompat.Builder(context, "blocked_summary_channel")
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle(sender)
+                .setContentText(text)
+                .setSubText("Erhalten um $timeStr (zurückgehalten)")
+                .setAutoCancel(true)
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+                .build()
+
+            notificationManager.notify(9000 + index, notification)
+        }
+
+        // Prefs leeren nach dem Posten
+        prefs.edit().apply {
+            keys.forEach { key ->
+                remove("${key}_sender")
+                remove("${key}_text")
+                remove("${key}_timestamp")
+                remove("${key}_package")
+            }
+            remove("all_blocked_keys")
+            apply()
+        }
+
+        // Alarm für nächsten Tag neu setzen
+        rescheduleAlarm(context)
+    }
+
+    private fun rescheduleAlarm(context: android.content.Context) {
+        val cal = java.util.Calendar.getInstance().apply {
+            add(java.util.Calendar.DAY_OF_YEAR, 1)
+            set(java.util.Calendar.HOUR_OF_DAY, 14)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+
+        val intent = Intent(context, BlockedNotificationReceiver::class.java)
+        val pendingIntent = android.app.PendingIntent.getBroadcast(
+            context, 0, intent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+        alarmManager.setExactAndAllowWhileIdle(
+            android.app.AlarmManager.RTC_WAKEUP,
+            cal.timeInMillis,
+            pendingIntent
+        )
     }
 }
