@@ -1,6 +1,6 @@
 @file:Suppress("AssignedValueIsNeverRead")
 
-package com.example.cloud.privatecloudapp
+package com.cloud.privatecloudapp
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -10,6 +10,7 @@ import android.app.ActivityManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Context.WIFI_SERVICE
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
@@ -60,6 +61,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -114,9 +116,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -136,33 +140,43 @@ import androidx.core.content.FileProvider
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import coil.compose.rememberAsyncImagePainter
-import com.example.cloud.AesEncryption
-import com.example.cloud.Config
-import com.example.cloud.audiorecorder.AudioRecorderContent
-import com.example.cloud.authenticator.AuthenticatorTab
-import com.example.cloud.autoclickertab.AutoClickerTabContent
-import com.example.cloud.browsertab.BrowserTabContent
-import com.example.cloud.contactstab.ContactsRepository
-import com.example.cloud.contactstab.ContactsTabContent
-import com.example.cloud.contactstab.ContactsViewModel
-import com.example.cloud.datecalculator.DateCalculatorContent
-import com.example.cloud.gallery.GalleryTab
-import com.example.cloud.mediaplayer.MediaTab
-import com.example.cloud.mediarecorder.MediaRecorderContent
-import com.example.cloud.movietab.MovieDiscoveryTabContent
-import com.example.cloud.musicstatstab.MusicStatsTabContent
-import com.example.cloud.notes.NotizenApp
-import com.example.cloud.objects.FavoriteManager
-import com.example.cloud.quicksettingsfunctions.BatteryChartScreen
-import com.example.cloud.quicksettingsfunctions.BatteryDataRepository
-import com.example.cloud.quicksettingsfunctions.showNetworkInfo
-import com.example.cloud.quicksettingsfunctions.showSensorsInfo
-import com.example.cloud.service.ChatService
-import com.example.cloud.service.QuietHoursNotificationService
-import com.example.cloud.ui.theme.Cloud
-import com.example.cloud.ui.theme.gruen
-import com.example.cloud.ui.theme.hellgruen
-import com.example.cloud.weathertab.WeatherTabContent
+import coil.request.ImageRequest
+import com.cloud.AesEncryption
+import com.cloud.Config
+import com.cloud.R
+import com.cloud.ShizukuManager
+import com.cloud.audiorecorder.AudioRecorderContent
+import com.cloud.authenticator.AuthenticatorTab
+import com.cloud.autoclickertab.AutoClickerTabContent
+import com.cloud.browsertab.BrowserTabContent
+import com.cloud.contactstab.ContactsRepository
+import com.cloud.contactstab.ContactsTabContent
+import com.cloud.contactstab.ContactsViewModel
+import com.cloud.datecalculator.DateCalculatorContent
+import com.cloud.gallery.GalleryTab
+import com.cloud.getAppUsageStats
+import com.cloud.getForegroundTimePerApp
+import com.cloud.gmailtab.GmailListScreen
+import com.cloud.mediaplayer.MediaTab
+import com.cloud.mediarecorder.MediaRecorderContent
+import com.cloud.movietab.MovieDiscoveryTabContent
+import com.cloud.notes.NotizenApp
+import com.cloud.objects.FavoriteManager
+import com.cloud.quicksettingsfunctions.BatteryChartScreen
+import com.cloud.quicksettingsfunctions.BatteryDataRepository
+import com.cloud.quicksettingsfunctions.showNetworkInfo
+import com.cloud.quicksettingsfunctions.showSensorsInfo
+import com.cloud.service.ChatService
+import com.cloud.service.QuietHoursNotificationService
+import com.cloud.spotifydownloader.SpotifyDownloaderApp
+import com.cloud.spotifydownloadertab.SpotifyDownloaderTab
+import com.cloud.toReadableTime
+import com.cloud.ui.theme.Cloud
+import com.cloud.ui.theme.c
+import com.cloud.ui.theme.gruen
+import com.cloud.ui.theme.hellgruen
+import com.cloud.vocabtab.VocabTab
+import com.cloud.weathertab.WeatherTabContent
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -279,15 +293,15 @@ enum class MenuItem(
         "📖",
         { NotizenApp() }
     ),
-    MUSICSTATS(
-        "Musik Statistiken",
-        "🎵 ",
-        { MusicStatsTabContent() }
-    ),
     MEDIARECORDER(
         "Media Recorder",
         "🎵 ",
         { MediaRecorderContent() }
+    ),
+    SPOTIFYDOWNLOADER(
+        "Spotify Downloader",
+        "🎧",
+        { SpotifyDownloaderTab() }
     ),
     AUTOKLICKER(
         "Autoklicker",
@@ -298,7 +312,22 @@ enum class MenuItem(
         "Media Player",
         "️️🎶 ",
         { MediaTab() }
-    )
+    ),
+    GMAIL(
+        "Gmail",
+        "️️✉️ ",
+        { GmailListScreen() }
+    ),
+    Vocabs(
+        "Vokabeln",
+        "️️🏫️ ",
+        { VocabTab() }
+    ),
+    SPOTIY(
+        "Spotify 2.0",
+        "️️🏫️ ",
+        { SpotifyDownloaderApp() }
+    ),
 }
 
 fun saveRecentTab(context: Context, menuItem: MenuItem) {
@@ -369,7 +398,8 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
 @Composable
 fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
     val context = LocalContext.current
-    val recentTabs = remember { loadRecentTabs(context) }
+    var recentTabs by remember { mutableStateOf<List<MenuItem>>(emptyList()) }
+    recentTabs = loadRecentTabs(context)
     val allTabsSorted = remember { MenuItem.entries.sortedBy { it.title } }
     val haptic = LocalHapticFeedback.current
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
@@ -409,9 +439,9 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
 
     val bgpicture = remember {
         when (currentHour) {
-            in 6..11 -> com.example.cloud.R.drawable.sunset // Morgen
-            in 12..16 -> com.example.cloud.R.drawable.mittag // Mittag
-            else -> com.example.cloud.R.drawable.night
+            in 6..11 -> R.drawable.sunset
+            in 12..16 -> R.drawable.mittag
+            else -> R.drawable.night
         }
     }
 
@@ -436,6 +466,55 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
                     .fillMaxSize()
                     .padding(16.dp)
             ) {
+                Button(onClick = {
+                    if (ShizukuManager.isAvailable() && !ShizukuManager.hasPermission()) {
+                        ShizukuManager.requestPermission()
+                    }
+
+                    /*ShizukuManager.suspendApp("com.google.android.gms.supervision", true)
+                    context.startService(Intent(context, QuietHoursNotificationService::class.java).apply {
+                        action = "ACTION_TEST_OVERLAY"
+                    })
+
+                    // In einer Activity oder einem ViewModel:
+                    getForegroundTimePerApp(context, days = 1).forEach { (pkg, ms) ->
+                        val minutes = ms / 1000 / 60
+                        if (minutes.toInt() != 0) {
+                            Log.d("Usage", "$pkg → $minutes min")
+                        }
+                    }*/
+
+                    /*try {
+                        // Methode 1: Reflection über WifiManager (funktioniert mit Shizuku/Root)
+                        val wifiManager = context.applicationContext.getSystemService(WIFI_SERVICE) as android.net.wifi.WifiManager
+                        val method = wifiManager.javaClass.getDeclaredMethod(
+                            "startLocalOnlyHotspot", /* kein Param nötig für force-enable */
+                        )
+                        // Für echtes Einschalten ohne Shizuku-IPC nutzen wir setWifiApEnabled via Reflection:
+                        val setHotspot = wifiManager.javaClass.getDeclaredMethod(
+                            "setWifiApEnabled",
+                            android.net.wifi.WifiConfiguration::class.java,
+                            Boolean::class.javaPrimitiveType
+                        )
+                        setHotspot.isAccessible = true
+                        val result = setHotspot.invoke(wifiManager, null, true) as Boolean
+                        if (result) {
+                            Log.d("📶 Hotspot", "Hotspot wurde aktiviert")
+                        } else {
+                            Log.d("📶 Hotspot", "Aktivierung fehlgeschlagen – versuche Settings")
+                        }
+                    } catch (e: Exception) {
+                        Log.e("Hotspot", "Hotspot via Reflection fehlgeschlagen", e)
+                    }*/
+
+                    /*val pm = context.packageManager
+                    val packages = pm.getInstalledApplications(0)
+                    for (app in packages) {
+                        Log.d("InstalledApp", app.packageName)
+                    }*/
+
+                }) { Text("HI") }
+
                 Text(
                     text = "Cloud",
                     style = MaterialTheme.typography.headlineLarge,
@@ -446,27 +525,32 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
                     textAlign = TextAlign.Center
                 )
 
-                if (recentTabs.isNotEmpty()) {
-                    Text(
-                        text = "Zuletzt verwendet",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
+                val listState = rememberLazyListState()
 
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(bottom = 32.dp)
+                ) {
+                    if (recentTabs.isNotEmpty()) {
+                        item(key = "recent_header") {
+                            Text(
+                                text = "Zuletzt verwendet",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+                        }
+
                         items(items = recentTabs, key = { "recent_${it.ordinal}" }) { menuItem ->
-                            TabCard(
-                                menuItem = menuItem,
-                                isRecent = true,
-                                onClick = {
+                            val onClick = remember(menuItem) {
+                                {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     onTabSelected(menuItem)
                                 }
-                            )
+                            }
+                            TabCard(menuItem = menuItem, isRecent = true, onClick = onClick)
                         }
 
                         item(key = "divider") {
@@ -475,7 +559,6 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
                                 thickness = 1.dp,
                                 color = Color.White.copy(alpha = 0.3f)
                             )
-
                             Text(
                                 text = "Alle Tabs",
                                 style = MaterialTheme.typography.titleMedium,
@@ -483,36 +566,16 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
                                 modifier = Modifier.padding(bottom = 12.dp)
                             )
                         }
-
-                        items(items = allTabsSorted, key = { "all_${it.ordinal}" }) { menuItem ->
-                            TabCard(
-                                menuItem = menuItem,
-                                isRecent = false,
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onTabSelected(menuItem)
-                                }
-                            )
-                        }
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(
-                            items = allTabsSorted,
-                            key = { "all_${it.ordinal}" }
-                        ) { menuItem ->
-                            TabCard(
-                                menuItem = menuItem,
-                                isRecent = false,
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onTabSelected(menuItem)
-                                }
-                            )
+
+                    items(items = allTabsSorted, key = { "all_${it.ordinal}" }) { menuItem ->
+                        val onClick = remember(menuItem) {
+                            {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onTabSelected(menuItem)
+                            }
                         }
+                        TabCard(menuItem = menuItem, isRecent = false, onClick = onClick)
                     }
                 }
             }
@@ -526,13 +589,13 @@ fun TabCard(
     isRecent: Boolean,
     onClick: () -> Unit
 ) {
+    val containerColor = if (isRecent) Color(0xFF4CAF50) else Color(0xFF333333)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .height(if (isRecent) 72.dp else 64.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isRecent) Color(0xFF4CAF50) else Color(0xFF333333)
-        ),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
         onClick = onClick
     ) {
         Row(
@@ -546,7 +609,6 @@ fun TabCard(
                 fontSize = if (isRecent) 32.sp else 28.sp,
                 modifier = Modifier.padding(end = 16.dp)
             )
-
             Text(
                 text = menuItem.title,
                 style = MaterialTheme.typography.titleMedium,
@@ -567,7 +629,9 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?, initialMenuItem: Men
         mutableStateOf(initialMenuItem ?: loadLastMenuItem(context))
     }
     val scope = rememberCoroutineScope()
-    var currentUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var currentUrl by rememberSaveable { mutableStateOf(webViewUrl) }
+    var webViewState by remember { mutableStateOf<WebView?>(null) }
+    var isDesktopMode by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(startTarget) {
         if (startTarget == "weather") {
@@ -576,11 +640,8 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?, initialMenuItem: Men
     }
 
     LaunchedEffect(currentUrl) {
-        currentUrl?.let { url ->
-            saveLastUrl(context, url)
-        }
+        saveLastUrl(context, currentUrl)
     }
-    var webViewState by remember { mutableStateOf<WebView?>(null) }
 
     val drawerState = rememberDrawerState(
         initialValue = DrawerValue.Closed,
@@ -617,7 +678,8 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?, initialMenuItem: Men
             gesturesEnabled = false,
             drawerContent = {
                 ModalDrawerSheet(
-                    drawerContainerColor = Color.DarkGray
+                    drawerContainerColor = Color.DarkGray,
+                    modifier = Modifier.fillMaxWidth(0.75f)
                 ) {
                     Text(
                         text = "Cloud App",
@@ -652,13 +714,13 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?, initialMenuItem: Men
                                 onClick = {
                                     selectedMenuItem = item
                                     saveLastMenuItem(context, item)
-                                    saveRecentTab(context, item)  // ✅ NEU: Recent Tab speichern
+                                    saveRecentTab(context, item)
                                     scope.launch {
                                         drawerState.close()
                                     }
                                 },
                                 colors = NavigationDrawerItemDefaults.colors(
-                                    selectedContainerColor = Color(0xFF4CAF50),
+                                    selectedContainerColor = c(),
                                     unselectedContainerColor = Color.Transparent,
                                     selectedTextColor = Color.White,
                                     unselectedTextColor = Color.White
@@ -670,41 +732,69 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?, initialMenuItem: Men
                 }
             }
         ) {
-            Scaffold(
-                topBar = {
-                    TopAppBar(
-                        title = {
-                            Text(
-                                text = "${selectedMenuItem.icon} ${selectedMenuItem.title}",
-                                color = Color.White
-                            )
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = {
-                                scope.launch {
-                                    drawerState.open()
-                                }
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Default.Menu,
-                                    contentDescription = "Menü öffnen",
-                                    tint = Color.White
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Cloud.copy(0.8f))
+            ) {
+                // Hintergrundbild über alles inkl. TopAppBar
+                val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+                val bgpicture = remember {
+                    when (currentHour) {
+                        in 6..11 -> R.drawable.sunset
+                        in 12..16 -> R.drawable.mittag
+                        else -> R.drawable.night
+                    }
+                }
+                Image(
+                    painter = painterResource(id = bgpicture),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Cloud.copy(0.5f))
+                )
+                Scaffold(
+                    topBar = {
+                        TopAppBar(
+                            title = {
+                                Text(
+                                    text = "${selectedMenuItem.icon} ${selectedMenuItem.title}",
+                                    color = Color.White
                                 )
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color(0xFF2A2A2A)
-                        ),
-                        windowInsets = WindowInsets(0, 40, 0, 0)
-                    )
-                },
-                contentWindowInsets = WindowInsets(0, 0, 0, 0)
-            ) { paddingValues ->
-                Box(modifier = Modifier.padding(paddingValues)) {
-                    if (selectedMenuItem == MenuItem.PRIVATE_CLOUD) {
-                        MainCloudScreen(storage = storage)
-                    } else {
-                        selectedMenuItem.content()
+                            },
+                            navigationIcon = {
+                                IconButton(onClick = {
+                                    scope.launch {
+                                        drawerState.open()
+                                    }
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Menu,
+                                        contentDescription = "Menü öffnen",
+                                        tint = Color.White
+                                    )
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = Color.Transparent
+                            ),
+                            windowInsets = WindowInsets(0, 40, 0, 0)
+                        )
+                    },
+                    containerColor = Color.Transparent,
+                    contentWindowInsets = WindowInsets(0, 0, 0, 0)
+                ) { paddingValues ->
+                    Box(modifier = Modifier.padding(paddingValues)) {
+                        if (selectedMenuItem == MenuItem.PRIVATE_CLOUD) {
+                            MainCloudScreen(storage = storage)
+                        } else {
+                            selectedMenuItem.content()
+                        }
                     }
                 }
             }
@@ -716,10 +806,6 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?, initialMenuItem: Men
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
-            var webViewState by remember { mutableStateOf<WebView?>(null) }
-            var currentUrl by remember { mutableStateOf(webViewUrl) }
-            var isDesktopMode by remember { mutableStateOf(false) }
-
             val webView = remember {
                 WebView(context).apply {
                     webChromeClient = object : WebChromeClient() {
@@ -867,11 +953,16 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?, initialMenuItem: Men
     }
 }
 
-// Der Original-Cloud-Screen (ohne Navigation)
 @OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class)
 @Composable
 fun MainCloudScreen(storage: Storage) {
-    var fileList by remember { mutableStateOf<List<String>>(emptyList()) }
+    data class CloudFileMeta(
+        val name: String,
+        val updatedAt: String,
+        val size: Long,
+    )
+
+    var fileList by remember { mutableStateOf<List<CloudFileMeta>>(emptyList()) }
     var isUploading by remember { mutableStateOf(false) }
     var isDownloading by remember { mutableStateOf<String?>(null) }
     var selectedFilter by remember { mutableStateOf("Alle") }
@@ -895,8 +986,7 @@ fun MainCloudScreen(storage: Storage) {
                 storage.from(Config.SUPABASE_BUCKET).list()
             }
 
-            // Gruppiere Chunks und normale Dateien
-            val groupedFiles = files
+            val groupedFiles: List<CloudFileMeta> = files
                 .filter { it.name != ".emptyFolderPlaceholder" }
                 .groupBy { file ->
                     if (file.name.contains(".part")) {
@@ -912,9 +1002,14 @@ fun MainCloudScreen(storage: Storage) {
                                 else -> 0L
                             }
                         }
-                        val latestDate = chunks.mapNotNull { it.updatedAt }.maxOrNull() ?: ""
-                        // Rückgabe als String
-                        "$baseName|$latestDate|$totalSize"
+                        val latestDate = chunks.mapNotNull { it.updatedAt }.maxOrNull()
+                        val updatedAtString = latestDate?.toString() ?: ""
+
+                        CloudFileMeta(
+                            name = baseName,
+                            updatedAt = updatedAtString,
+                            size = totalSize,
+                        )
                     } else {
                         val file = chunks.first()
                         val localDate = file.updatedAt
@@ -924,7 +1019,11 @@ fun MainCloudScreen(storage: Storage) {
                             }
                             ?.toString() ?: ""
 
-                        "${file.name}|$localDate|${0}"
+                        CloudFileMeta(
+                            name = file.name,
+                            updatedAt = localDate,
+                            size = 0L,
+                        )
                     }
                 }
 
@@ -938,9 +1037,9 @@ fun MainCloudScreen(storage: Storage) {
         }
     }
 
-    suspend fun deleteFile(fileWithMetadata: String) {
+    suspend fun deleteFile(file: CloudFileMeta) {
         try {
-            val fileName = fileWithMetadata.substringBefore("|")
+            val fileName = file.name
             withContext(Dispatchers.IO) {
                 storage.from(Config.SUPABASE_BUCKET).delete(fileName)
             }
@@ -980,7 +1079,6 @@ fun MainCloudScreen(storage: Storage) {
                         val fileName = getFileNameFromUri(uri, context) ?: "unnamed_file"
                         val file = File(context.cacheDir, fileName)
 
-                        // Kopiere Datei lokal (falls nötig)
                         context.contentResolver.openInputStream(uri)?.use { input ->
                             file.outputStream().use { output ->
                                 input.copyTo(output)
@@ -988,19 +1086,17 @@ fun MainCloudScreen(storage: Storage) {
                         }
 
                         val fileSize = file.length()
-                        val maxChunkSize = 20 * 1024 * 1024L // 20 MB
+                        val maxChunkSize = 20 * 1024 * 1024L
                         val shouldEncrypt =
                             !isImageFile(fileName) && !fileName.endsWith(".apk", true)
 
                         if (fileSize <= maxChunkSize) {
-                            // Kleine Datei
                             val bytes = file.readBytes()
                             val dataToUpload =
                                 if (shouldEncrypt) AesEncryption.encrypt(bytes) else bytes
                             storage.from(Config.SUPABASE_BUCKET)
                                 .upload(fileName, dataToUpload)
                         } else {
-                            // Große Datei: split in 20MB-Teile
                             val inputStream = file.inputStream()
                             var chunkIndex = 0
                             val buffer = ByteArray(maxChunkSize.toInt())
@@ -1018,7 +1114,6 @@ fun MainCloudScreen(storage: Storage) {
                             inputStream.close()
                         }
 
-                        // Optional: temporäre lokale Datei löschen
                         file.delete()
                     }
 
@@ -1050,16 +1145,11 @@ fun MainCloudScreen(storage: Storage) {
         }
     }
 
-    val gradient = Brush.linearGradient(
-        colors = listOf(hellgruen, gruen, hellgruen),
-        start = Offset.Zero,
-        end = Offset.Infinite
-    )
     Box(
         modifier = Modifier
             .fillMaxSize()
             .padding(0.dp)
-            .background(gradient),
+            .background(Color.Transparent),
     ) {
         Column(
             modifier = Modifier
@@ -1098,8 +1188,8 @@ fun MainCloudScreen(storage: Storage) {
             }
             val preFilteredFileList = remember(fileList, selectedFilter) {
                 when (selectedFilter) {
-                    "Bilder" -> fileList.filter { isImageFile(it.substringBefore("|")) }
-                    "Dateien" -> fileList.filter { !isImageFile(it.substringBefore("|")) }
+                    "Bilder" -> fileList.filter { isImageFile(it.name) }
+                    "Dateien" -> fileList.filter { !isImageFile(it.name) }
                     else -> fileList
                 }
             }
@@ -1190,7 +1280,7 @@ fun MainCloudScreen(storage: Storage) {
                     favoriteFiles
                 ) {
                     val filtered = fileList.filter { file ->
-                        val fileName = file.substringBefore("|")
+                        val fileName = file.name
                         val matchesFilter = when (selectedFilter) {
                             "Bilder" -> isImageFile(fileName)
                             "Dateien" -> !isImageFile(fileName)
@@ -1202,13 +1292,13 @@ fun MainCloudScreen(storage: Storage) {
                     }
 
                     when (sortOption) {
-                        "A-Z" -> filtered.sortedBy { it.substringBefore("|").lowercase() }
+                        "A-Z" -> filtered.sortedBy { it.name.lowercase() }
                         "Größte Datei" -> filtered.sortedByDescending {
-                            it.split("|").getOrNull(2)?.toLongOrNull() ?: 0L
+                            it.size
                         }
 
                         "Zuletzt hochgeladen" -> filtered.sortedByDescending {
-                            it.split("|").getOrNull(1) ?: ""
+                            it.updatedAt
                         }
 
                         else -> filtered
@@ -1236,16 +1326,12 @@ fun MainCloudScreen(storage: Storage) {
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 rowFiles.forEach { file ->
-                                    val parts = file.split("|")
-                                    val fileName = parts.getOrNull(0) ?: "Unbekannt"
+                                    val fileName = file.name
                                     val fileDate =
-                                        parts.getOrNull(1)?.replace("T", " ")
-                                            ?.substringBefore(".")
-                                            ?: "Unbekannt"
-                                    val filesize =
-                                        parts.getOrNull(2)?.replace("T", " ")
-                                            ?.substringBefore(".")
-                                            ?: "Unbekannt"
+                                        file.updatedAt.replace("T", " ")
+                                            .substringBefore(".")
+                                            .ifEmpty { "Unbekannt" }
+                                    val sizeBytes = file.size
                                     var publicUrl by remember(fileName) {
                                         mutableStateOf<String?>(
                                             null
@@ -1257,7 +1343,6 @@ fun MainCloudScreen(storage: Storage) {
                                             .aspectRatio(1f),
                                         onClick = {
                                             if (publicUrl != null) {
-                                                val sizeBytes = filesize.toLongOrNull() ?: -1L
                                                 fullscreenImageDialogData =
                                                     Triple(publicUrl, fileName, sizeBytes)
                                             }
@@ -1306,19 +1391,14 @@ fun MainCloudScreen(storage: Storage) {
                                                     modifier = Modifier.fillMaxWidth(),
                                                     horizontalArrangement = Arrangement.SpaceBetween
                                                 ) {
-                                                    val remoteSize =
-                                                        filesize.toLongOrNull() ?: -1L
                                                     val imageAlreadyDownloaded =
-                                                        remoteSize >= 0 && fileExistsLocallyWithSameSize(
+                                                        sizeBytes >= 0 && fileExistsLocallyWithSameSize(
                                                             fileName,
-                                                            remoteSize
+                                                            sizeBytes
                                                         )
                                                     val isFavorite =
                                                         favoriteFiles.contains(fileName)
 
-
-                                                    val sizeBytes =
-                                                        filesize.toLongOrNull() ?: 0L
                                                     val sizeText = when {
                                                         sizeBytes >= 1_000_000_000 -> "Dateigröße: %.2f GB".format(
                                                             sizeBytes / 1_000_000_000.0
@@ -1366,7 +1446,7 @@ fun MainCloudScreen(storage: Storage) {
                                                     if (!imageAlreadyDownloaded) {
                                                         IconButton(
                                                             onClick = {
-                                                                isDownloading = file
+                                                                isDownloading = fileName
                                                                 scope.launch {
                                                                     showDownloadProgress = true
                                                                     try {
@@ -1432,10 +1512,10 @@ fun MainCloudScreen(storage: Storage) {
                                                                     }
                                                                 }
                                                             },
-                                                            enabled = isDownloading != file,
+                                                            enabled = isDownloading != fileName,
                                                             modifier = Modifier.size(32.dp)
                                                         ) {
-                                                            if (isDownloading == file) {
+                                                            if (isDownloading == fileName) {
                                                                 CircularProgressIndicator(
                                                                     modifier = Modifier.size(16.dp),
                                                                     color = Color.White
@@ -1512,19 +1592,17 @@ fun MainCloudScreen(storage: Storage) {
                         }
                     } else {
                         items(filteredFileList) { file ->
-                            val parts = file.split("|")
-                            val fileName = parts.getOrNull(0) ?: "Unbekannt"
+                            val fileName = file.name
                             val fileDate =
-                                parts.getOrNull(1)?.replace("T", " ")?.substringBefore(".")
-                                    ?: "Unbekannt"
-                            val filesize =
-                                parts.getOrNull(2)?.replace("T", " ")?.substringBefore(".")
-                                    ?: "Unbekannt"
-                            val remoteSize = filesize.toLongOrNull() ?: -1L
+                                file.updatedAt
+                                    .replace("T", " ")
+                                    .substringBefore(".")
+                                    .ifEmpty { "Unbekannt" }
+                            val sizeBytes = file.size
                             val showOpenButton =
-                                remoteSize >= 0 && fileExistsLocallyWithSameSize(
+                                sizeBytes >= 0 && fileExistsLocallyWithSameSize(
                                     fileName,
-                                    remoteSize
+                                    sizeBytes
                                 )
 
                             Card(modifier = Modifier.fillMaxWidth()) {
@@ -1563,7 +1641,6 @@ fun MainCloudScreen(storage: Storage) {
                                                 fontSize = 10.sp
                                             )
 
-                                            val sizeBytes = filesize.toLongOrNull() ?: 0L
                                             val sizeText = when {
                                                 sizeBytes >= 1_000_000_000 -> "%.2f GB".format(
                                                     sizeBytes / 1_000_000_000.0
@@ -1608,7 +1685,7 @@ fun MainCloudScreen(storage: Storage) {
 
                                         if (showOpenButton && !isImageFile(fileName)) {
                                             val localFile =
-                                                getLocalFileWithPath(fileName, remoteSize)
+                                                getLocalFileWithPath(fileName, sizeBytes)
                                             if (localFile != null) {
                                                 IconButton(onClick = {
                                                     val fileUri = FileProvider.getUriForFile(
@@ -1665,7 +1742,7 @@ fun MainCloudScreen(storage: Storage) {
                                         } else {
                                             IconButton(
                                                 onClick = {
-                                                    isDownloading = file
+                                                    isDownloading = fileName
                                                     scope.launch {
                                                         showDownloadProgress = true
                                                         try {
@@ -1680,12 +1757,11 @@ fun MainCloudScreen(storage: Storage) {
                                                                     ".part"
                                                                 )
                                                             }.sortedBy {
-                                                                // Sortierung nach part1, part2, etc.
                                                                 val partMatch =
                                                                     Regex("part(\\d+)of").find(it.name)
                                                                 partMatch?.groupValues?.get(1)
                                                                     ?.toIntOrNull() ?: 0
-                                                            }// Dynamischen Zielordner wählen
+                                                            }
                                                             val targetBaseFolder =
                                                                 if (isImageFile(fileName) || fileName.endsWith(
                                                                         ".mp4",
@@ -1707,7 +1783,6 @@ fun MainCloudScreen(storage: Storage) {
                                                                 appFolder.mkdirs()
                                                             }
 
-                                                            // Original-Dateinamen ohne .partXofY verwenden
                                                             val cleanFileName =
                                                                 fileName.substringBefore(".part")
                                                             val outputFile =
@@ -1716,7 +1791,6 @@ fun MainCloudScreen(storage: Storage) {
                                                             withContext(Dispatchers.IO) {
                                                                 FileOutputStream(outputFile).use { fos ->
                                                                     if (chunks.isNotEmpty()) {
-                                                                        // Chunks direkt in Datei schreiben (spart Speicher!)
                                                                         for (chunk in chunks) {
                                                                             val chunkData =
                                                                                 storage.from(
@@ -1745,11 +1819,9 @@ fun MainCloudScreen(storage: Storage) {
                                                                                     }
                                                                                 }
 
-                                                                            // Direkt in Datei schreiben
                                                                             fos.write(decryptedChunk)
                                                                         }
                                                                     } else {
-                                                                        // Normale Datei downloaden
                                                                         val downloadedData =
                                                                             storage.from(
                                                                                 Config.SUPABASE_BUCKET
@@ -1816,10 +1888,10 @@ fun MainCloudScreen(storage: Storage) {
                                                         }
                                                     }
                                                 },
-                                                enabled = isDownloading != file,
+                                                enabled = isDownloading != fileName,
                                                 modifier = Modifier.size(32.dp)
                                             ) {
-                                                if (isDownloading == file) {
+                                                if (isDownloading == fileName) {
                                                     CircularProgressIndicator(
                                                         modifier = Modifier.size(16.dp),
                                                         color = Color.White
@@ -1850,7 +1922,7 @@ fun MainCloudScreen(storage: Storage) {
                     Button(
                         onClick = {
                             val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-                                type = "*/*"  // ✅ CORRECT
+                                type = "*/*"
                                 addCategory(Intent.CATEGORY_OPENABLE)
                                 putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
                             }
@@ -2078,51 +2150,36 @@ fun QuickSettingsTabContent() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF2A2A2A))
+            .background(Color.Transparent),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item {
-                QuickSettingRow(
-                    listOf(
-                        "Netzwerk\nInfos" to { showNetworkInfo(context) },
-                        "Sensoren\nInfos" to { showSensorsInfo(context) },
-                        "Display\nInfos" to { showDisplayInfo(context) }
-                    )
-                )
-            }
+        QuickSettingRow(
+            listOf(
+                "Netzwerk\nInfos" to { showNetworkInfo(context) },
+                "Sensoren\nInfos" to { showSensorsInfo(context) },
+                "Display\nInfos" to { showDisplayInfo(context) }
+            ))
+        QuickSettingRow(
+            listOf(
+                "📊\nDaten\nnutzung" to { openDataUsage(context) },
+                "🔋\nBatterie\nInfo" to { showBatteryInfo(context) },
+                "💾\nSpeicher" to { openStorageSettings(context) }
+            )
+        )
+        QuickSettingRow(
+            listOf(
+                "Batterie\nDiagramm" to { showBatteryChart = true },
+                "📱\nGeräte\nInfo" to { showDeviceInfo(context) },
+                "🔨\nEntwickler" to { openDeveloperOptions(context) }
+            )
+        )
+        QuickSettingRow(
+            listOf(
+                "Downtime" to { showNumberDialog = true },
+                "Uptime" to { showNumberDialogSave = true }
+            )
+        )
 
-            item {
-                QuickSettingRow(
-                    listOf(
-                        "📊\nDaten\nnutzung" to { openDataUsage(context) },
-                        "🔋\nBatterie\nInfo" to { showBatteryInfo(context) },
-                        "💾\nSpeicher" to { openStorageSettings(context) }
-                    )
-                )
-            }
-
-            item {
-                QuickSettingRow(
-                    listOf(
-                        "Batterie\nDiagramm" to { showBatteryChart = true },
-                        "📱\nGeräte\nInfo" to { showDeviceInfo(context) },
-                        "🔨\nEntwickler" to { openDeveloperOptions(context) }
-                    )
-                )
-            }
-
-            item {
-                QuickSettingRow(
-                    listOf(
-                        "Downtime" to { showNumberDialog = true },
-                        "Uptime" to { showNumberDialogSave = true }
-                    )
-                )
-            }
-        }
     }
     if (showBatteryChart) {
         BatteryChartScreen(
@@ -2156,13 +2213,11 @@ fun QuickSettingsTabContent() {
 private fun saveNumber(context: Context, number: String) {
     val sharedPrefs = context.getSharedPreferences("quick_settings_prefs", Context.MODE_PRIVATE)
     sharedPrefs.edit(commit = true) { putString("saved_number", number) }
-    Log.d("QuickSettings", "Number saved: $number")
 }
 
 private fun saveNumber1(context: Context, number: String) {
     val sharedPrefs = context.getSharedPreferences("quick_settings_prefs", Context.MODE_PRIVATE)
     sharedPrefs.edit(commit = true) { putString("saved_number_start", number) }
-    Log.d("QuickSettings", "Number saved: $number")
 }
 
 @Composable
@@ -2299,7 +2354,7 @@ fun showNetworkNotificationNow(context: Context, content: String, final: Boolean
         .setContentText(content.lines().firstOrNull() ?: "Netzwerkinfo")
         .setStyle(NotificationCompat.BigTextStyle().bigText(content))
         .setPriority(NotificationCompat.PRIORITY_LOW)
-        .setAutoCancel(final) // Nur letzte Benachrichtigung automatisch schließen
+        .setAutoCancel(final)
 
     if (ActivityCompat.checkSelfPermission(
             context,
@@ -2308,7 +2363,6 @@ fun showNetworkNotificationNow(context: Context, content: String, final: Boolean
     ) {
         NotificationManagerCompat.from(context).notify(1020, builder.build())
     } else {
-        // Fallback: Nur bei erster Anzeige (sonst Spam)
         if (!final) {
             val preview = content.lines().take(2).joinToString("\n")
             Toast.makeText(context, "Netzwerk:\n$preview", Toast.LENGTH_LONG).show()
@@ -2361,7 +2415,6 @@ fun showBatteryInfo(context: Context) {
             else -> "Unbekannt"
         }
 
-        // Notification Channel erstellen (für Android 8.0+)
         val channelId = "battery_info_channel"
         val channel = NotificationChannel(
             channelId,
@@ -2400,7 +2453,6 @@ fun showBatteryInfo(context: Context) {
         ) {
             notificationManager.notify(1001, builder.build())
         } else {
-            // Fallback zu Toast wenn keine Notification-Berechtigung
             Toast.makeText(
                 context,
                 "Ladezustand: $percentage% | Temp: $temperature°C",
@@ -2561,7 +2613,6 @@ fun openStorageSettings(context: Context) {
     }
 }
 
-// === Speicherung des zuletzt ausgewählten Menüs ===
 private const val PREFS_NAME = "cloud_app_prefs"
 private const val KEY_LAST_MENU_ITEM = "last_menu_item"
 
