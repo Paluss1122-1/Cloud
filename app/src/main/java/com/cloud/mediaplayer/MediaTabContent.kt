@@ -171,7 +171,6 @@ fun MediaTab(viewModel: MediaViewModel = viewModel()) {
                             )
                         }
                     )
-
                     MediaBottomBar(
                         currentTab = state.currentTab,
                         onTabSelected = { viewModel.setTab(it) }
@@ -1839,7 +1838,6 @@ private fun PodcastEpisodeRow(
             }
             if (episode.isCompleted) Text("✓", color = Color(0xFF43A047), fontSize = 14.sp)
         }
-
         if (episode.savedPositionMs > 0 && episode.durationMs > 0 && !episode.isCompleted) {
             Spacer(Modifier.height(6.dp))
             Box(
@@ -1960,12 +1958,10 @@ private fun CompletionRing(fraction: Float, size: androidx.compose.ui.unit.Dp, c
         val strokeWidth = 4.dp.toPx()
         val radius = (this.size.minDimension - strokeWidth) / 2f
         val center = Offset(this.size.width / 2, this.size.height / 2)
-
         drawCircle(
             color = Color.White.copy(alpha = 0.1f), radius = radius, center = center,
             style = Stroke(strokeWidth)
         )
-
         if (fraction > 0f) {
             drawArc(
                 color = color,
