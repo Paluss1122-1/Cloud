@@ -292,16 +292,10 @@ fun OtherBucketViewer(
         loadFilesFromPrivateStorage()
     }
 
-    val gradient = Brush.linearGradient(
-        colors = listOf(hellgruen, gruen, hellgruen),
-        start = Offset.Zero,
-        end = Offset.Infinite
-    )
-
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(gradient)
+            .background(Color.Transparent)
     ) {
         Column(
             modifier = Modifier
