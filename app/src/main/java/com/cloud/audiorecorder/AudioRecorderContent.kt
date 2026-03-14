@@ -187,9 +187,6 @@ fun AudioRecorderContent(
                     isRecording = true
                 }
             },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (isRecording) Color.Red else Color(0xFF4CAF50)
-            ),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(60.dp)
