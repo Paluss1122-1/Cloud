@@ -1,11 +1,15 @@
 package com.cloud
 
 import android.Manifest
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.view.View
 import android.view.WindowManager
+import android.view.animation.AnticipateInterpolator
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -15,7 +19,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.core.animation.doOnEnd
 import androidx.core.app.ActivityCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
 import com.cloud.errorreportsclaude.ErrorMonitorService
@@ -23,6 +29,7 @@ import com.cloud.jsoneditor.JsonEditorContent
 import com.cloud.privatecloudapp.LandingPageOrApp
 import com.cloud.privatecloudapp.PrivateCloudApp
 import com.cloud.quicksettingsfunctions.BatteryDataRepository
+import com.cloud.ui.theme.c
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.storage.storage
@@ -41,7 +48,19 @@ class MainActivity : FragmentActivity() {
     private var showJsonEditor by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         enableEdgeToEdge()
+        splashScreen.setOnExitAnimationListener { splashScreenView ->
+            val animator = AnimatorSet().apply {
+                playTogether(
+                    ObjectAnimator.ofFloat(splashScreenView, View.TRANSLATION_Y, 0f, -splashScreenView.height.toFloat())
+                )
+                interpolator = AnticipateInterpolator()
+                duration = 2000L
+            }
+            animator.doOnEnd { splashScreenView.remove() }
+            animator.start()
+        }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.attributes.layoutInDisplayCutoutMode =
             WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -90,10 +109,10 @@ class MainActivity : FragmentActivity() {
 
         // Content setzen
         setContent {
-            MaterialTheme {
+            MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = c())) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = c()
                 ) {
                     if (showJsonEditor && jsonFilePath != null) {
                         JsonEditorContent(
