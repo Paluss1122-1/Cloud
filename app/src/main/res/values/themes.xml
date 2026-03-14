@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.Cloud" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Cloud" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#1A1A2E</item>
+        <item name="postSplashScreenTheme">@style/Theme.Cloud.Base</item>
+    </style>
+
+    <style name="Theme.Cloud.Base" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>
