@@ -30,6 +30,7 @@ import com.cloud.Config
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
 import com.cloud.SupabaseConfigALT
+import com.cloud.ui.theme.c
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -353,7 +354,7 @@ fun SyncConfirmationDialog(
                         onDecision(currentEntry, SyncDecision.UPLOAD)
                         currentIndex++
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                    colors = ButtonDefaults.buttonColors(containerColor = c()),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp)
