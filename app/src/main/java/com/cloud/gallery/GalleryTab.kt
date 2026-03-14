@@ -7,9 +7,13 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
@@ -24,7 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -39,7 +43,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
-import com.cloud.ui.theme.Cloud
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -52,6 +55,7 @@ data class GalleryMediaItem(
     val dateAdded: Long
 )
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun GalleryTab() {
     val mediaItems = remember { mutableStateOf(listOf<GalleryMediaItem>()) }
@@ -76,117 +80,129 @@ fun GalleryTab() {
         withContext(Dispatchers.IO) {
             val images = loadImagesFromMediaStore(context)
             val videos = loadVideosFromMediaStore(context)
-            mediaItems.value = (images + videos).sortedByDescending {
-                it.dateAdded
-            }
+            mediaItems.value = (images + videos).sortedByDescending { it.dateAdded }
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Transparent)
-    ) {
-        if (mediaItems.value.isEmpty()) {
-            Text("Keine Medien gefunden", color = Color.White, modifier = Modifier.align(Alignment.Center))
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                modifier = Modifier.padding(8.dp)
-            ) {
-                items(mediaItems.value) { mediaItem ->
-                    Box(
-                        modifier = Modifier
-                            .padding(4.dp)
-                            .aspectRatio(1f)
-                    ) {
-                        AsyncImage(
-                            model = mediaItem.uri,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clickable {
-                                    showFullscreenMedia = true
-                                    fullscreenMediaUri = mediaItem.uri
-                                    isFullscreenVideo = mediaItem.isVideo
-                                }
-                        )
+    SharedTransitionLayout {
+        AnimatedContent(targetState = showFullscreenMedia, label = "gallery_transition") { isFullscreen ->
+            if (!isFullscreen) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Transparent)
+                ) {
+                    if (mediaItems.value.isEmpty()) {
+                        Text("Keine Medien gefunden", color = Color.White, modifier = Modifier.align(Alignment.Center))
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier.padding(8.dp)
+                        ) {
+                            items(mediaItems.value) { mediaItem ->
+                                Box(
+                                    modifier = Modifier
+                                        .padding(4.dp)
+                                        .aspectRatio(1f)
+                                ) {
+                                    AsyncImage(
+                                        model = mediaItem.uri,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .sharedElement(
+                                                rememberSharedContentState(key = mediaItem.uri),
+                                                animatedVisibilityScope = this@AnimatedContent
+                                            )
+                                            .clickable {
+                                                showFullscreenMedia = true
+                                                fullscreenMediaUri = mediaItem.uri
+                                                isFullscreenVideo = mediaItem.isVideo
+                                            }
+                                    )
 
-                        if (mediaItem.isVideo) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.3f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = "Video",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(48.dp)
-                                )
+                                    if (mediaItem.isVideo) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Color.Black.copy(alpha = 0.3f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.PlayArrow,
+                                                contentDescription = "Video",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(48.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
+            } else {
+                if (isFullscreenVideo) {
+                    VideoPlayerFullscreen(
+                        videoUri = fullscreenMediaUri ?: "",
+                        onDismiss = { showFullscreenMedia = false },
+                        onDelete = {
+                            fullscreenMediaUri?.let { uriString ->
+                                val uri = uriString.toUri()
+                                val pendingIntent = MediaStore.createDeleteRequest(
+                                    context.contentResolver,
+                                    listOf(uri)
+                                )
+                                deleteLauncher.launch(
+                                    IntentSenderRequest.Builder(pendingIntent.intentSender).build()
+                                )
+                            }
+                        }
+                    )
+                } else {
+                    ImageFullscreen(
+                        imageUri = fullscreenMediaUri ?: "",
+                        animatedVisibilityScope = this@AnimatedContent,
+                        onDismiss = { showFullscreenMedia = false },
+                        onDelete = {
+                            fullscreenMediaUri?.let { uriString ->
+                                val uri = uriString.toUri()
+                                val pendingIntent = MediaStore.createDeleteRequest(
+                                    context.contentResolver,
+                                    listOf(uri)
+                                )
+                                deleteLauncher.launch(
+                                    IntentSenderRequest.Builder(pendingIntent.intentSender).build()
+                                )
+                            }
+                        }
+                    )
+                }
             }
-        }
-    }
-
-    if (showFullscreenMedia) {
-        if (isFullscreenVideo) {
-            VideoPlayerFullscreen(
-                videoUri = fullscreenMediaUri ?: "",
-                onDismiss = { showFullscreenMedia = false },
-                onDelete = {
-                    fullscreenMediaUri?.let { uriString ->
-                        val uri = uriString.toUri()
-                        val pendingIntent = MediaStore.createDeleteRequest(
-                            context.contentResolver,
-                            listOf(uri)
-                        )
-                        deleteLauncher.launch(
-                            IntentSenderRequest.Builder(pendingIntent.intentSender).build()
-                        )
-                    }
-                }
-            )
-        } else {
-            ImageFullscreen(
-                imageUri = fullscreenMediaUri ?: "",
-                onDismiss = { showFullscreenMedia = false },
-                onDelete = {
-                    fullscreenMediaUri?.let { uriString ->
-                        val uri = uriString.toUri()
-                        val pendingIntent = MediaStore.createDeleteRequest(
-                            context.contentResolver,
-                            listOf(uri)
-                        )
-                        deleteLauncher.launch(
-                            IntentSenderRequest.Builder(pendingIntent.intentSender).build()
-                        )
-                    }
-                }
-            )
         }
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun ImageFullscreen(
+fun SharedTransitionScope.ImageFullscreen(
     imageUri: String,
+    animatedVisibilityScope: AnimatedVisibilityScope,
     onDismiss: () -> Unit,
     onDelete: () -> Unit
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
 
-    BackHandler { onDismiss() }
+    BackHandler {
+        scale = 1f
+        offset = Offset.Zero
+        onDismiss()
+    }
 
     val state = rememberTransformableState { zoomChange, offsetChange, _ ->
         scale = (scale * zoomChange).coerceAtLeast(1f)
-
         val maxX = (scale - 1) * 500f
         val maxY = (scale - 1) * 500f
         offset += offsetChange
@@ -199,24 +215,31 @@ fun ImageFullscreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(Color.Transparent)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .transformable(state = state)
-                .graphicsLayer(
-                    scaleX = scale,
-                    scaleY = scale,
-                    translationX = offset.x,
-                    translationY = offset.y
+                .then(
+                    if (scale > 1f) Modifier.graphicsLayer(
+                        scaleX = scale,
+                        scaleY = scale,
+                        translationX = offset.x,
+                        translationY = offset.y
+                    ) else Modifier
                 )
         ) {
             AsyncImage(
                 model = imageUri,
                 contentDescription = "Fullscreen",
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .sharedElement(
+                        rememberSharedContentState(key = imageUri),
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
             )
         }
 
@@ -250,9 +273,7 @@ fun VideoPlayerFullscreen(
     }
 
     DisposableEffect(Unit) {
-        onDispose {
-            exoPlayer.release()
-        }
+        onDispose { exoPlayer.release() }
     }
 
     BackHandler { onDismiss() }
@@ -286,107 +307,56 @@ fun VideoPlayerFullscreen(
 
 fun loadImagesFromMediaStore(context: android.content.Context): List<GalleryMediaItem> {
     val images = mutableListOf<GalleryMediaItem>()
-
     try {
         val projection = arrayOf(
             MediaStore.Images.Media._ID,
-            MediaStore.Images.Media.DATE_ADDED,
-            MediaStore.Images.Media.DISPLAY_NAME
+            MediaStore.Images.Media.DATE_ADDED
         )
-
-        val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
-
-        val query = context.contentResolver.query(
+        context.contentResolver.query(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            projection,
-            null,
-            null,
-            sortOrder
-        )
-
-        if (query == null) {
-            return images
-        }
-
-        query.use { cursor ->
+            projection, null, null,
+            "${MediaStore.Images.Media.DATE_ADDED} DESC"
+        )?.use { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
             val dateColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
-                val dateAdded = cursor.getLong(dateColumn)
-                val uri = ContentUris.withAppendedId(
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    id
-                )
-                images.add(GalleryMediaItem(uri.toString(), isVideo = false, dateAdded = dateAdded))
+                val uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+                images.add(GalleryMediaItem(uri.toString(), isVideo = false, dateAdded = cursor.getLong(dateColumn)))
             }
         }
     } catch (e: Exception) {
         CoroutineScope(Dispatchers.IO).launch {
-            ERRORINSERT(
-                ERRORINSERTDATA(
-                    "GalleryTab",
-                    "Fehler bei Laden von Bildern: ${e.message}",
-                    Instant.now().toString(),
-                    "Error"
-                )
-            )
+            ERRORINSERT(ERRORINSERTDATA("GalleryTab", "Fehler bei Laden von Bildern: ${e.message}", Instant.now().toString(), "Error"))
         }
     }
-
     return images
 }
 
 fun loadVideosFromMediaStore(context: android.content.Context): List<GalleryMediaItem> {
     val videos = mutableListOf<GalleryMediaItem>()
-
     try {
         val projection = arrayOf(
             MediaStore.Video.Media._ID,
-            MediaStore.Video.Media.DATE_ADDED,
-            MediaStore.Video.Media.DISPLAY_NAME
+            MediaStore.Video.Media.DATE_ADDED
         )
-
-        val sortOrder = "${MediaStore.Video.Media.DATE_ADDED} DESC"
-
-        val query = context.contentResolver.query(
+        context.contentResolver.query(
             MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-            projection,
-            null,
-            null,
-            sortOrder
-        )
-
-        if (query == null) {
-            return videos
-        }
-
-        query.use { cursor ->
+            projection, null, null,
+            "${MediaStore.Video.Media.DATE_ADDED} DESC"
+        )?.use { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
             val dateColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
-
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
-                val dateAdded = cursor.getLong(dateColumn)
-                val uri = ContentUris.withAppendedId(
-                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                    id
-                )
-                videos.add(GalleryMediaItem(uri.toString(), isVideo = true, dateAdded = dateAdded))
+                val uri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
+                videos.add(GalleryMediaItem(uri.toString(), isVideo = true, dateAdded = cursor.getLong(dateColumn)))
             }
         }
     } catch (e: Exception) {
         CoroutineScope(Dispatchers.IO).launch {
-            ERRORINSERT(
-                ERRORINSERTDATA(
-                    "GalleryTab",
-                    "Fehler bei Laden von Videos: ${e.message}",
-                    Instant.now().toString(),
-                    "Error"
-                )
-            )
+            ERRORINSERT(ERRORINSERTDATA("GalleryTab", "Fehler bei Laden von Videos: ${e.message}", Instant.now().toString(), "Error"))
         }
     }
-
     return videos
 }
