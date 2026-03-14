@@ -1,4 +1,4 @@
-package com.example.cloud.service
+package com.cloud.service
 
 import android.app.Service
 import android.content.Intent
@@ -11,7 +11,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.*
-import com.example.cloud.autoclickertab.ClickPoint
+import com.cloud.autoclickertab.ClickPoint
 import kotlinx.coroutines.*
 
 class AutoClickerService : Service() {
