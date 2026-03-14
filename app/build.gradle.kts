@@ -180,4 +180,6 @@ dependencies {
     implementation(libs.shizuku.provider)
 
     implementation("dev.rikka.shizuku:api:13.1.5") { isTransitive = true }
+
+    implementation(libs.androidx.core.splashscreen)
 }
