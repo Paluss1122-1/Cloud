@@ -1,4 +1,4 @@
-package com.example.cloud.quiethoursnotificationhelper
+package com.cloud.quiethoursnotificationhelper
 
 import android.Manifest
 import android.R
@@ -11,10 +11,10 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
-import com.example.cloud.ERRORINSERT
-import com.example.cloud.ERRORINSERTDATA
-import com.example.cloud.service.PodcastPlayerServiceCompat.startService
-import com.example.cloud.showSimpleNotificationExtern
+import com.cloud.ERRORINSERT
+import com.cloud.ERRORINSERTDATA
+import com.cloud.service.PodcastPlayerServiceCompat.startService
+import com.cloud.showSimpleNotificationExtern
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
