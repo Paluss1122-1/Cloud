@@ -56,7 +56,6 @@ fun ContactsTabContent(
                     selectedContact = Contact("", "", "", "")
                     showDialog = true
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
                 modifier = Modifier
                     .weight(1f)
                     .height(56.dp)
