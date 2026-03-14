@@ -1,4 +1,4 @@
-package com.example.cloud.vocabtab
+package com.cloud.vocabtab
 
 import android.graphics.Bitmap
 import android.net.Uri
@@ -34,8 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.cloud.quiethoursnotificationhelper.flashcardVokabelnFlow
-import com.example.cloud.quiethoursnotificationhelper.trySendOcrToLaptop
+import com.cloud.quiethoursnotificationhelper.flashcardVokabelnFlow
+import com.cloud.quiethoursnotificationhelper.trySendOcrToLaptop
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
