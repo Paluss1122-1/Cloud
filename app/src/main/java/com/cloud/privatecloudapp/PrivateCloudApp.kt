@@ -10,7 +10,6 @@ import android.app.ActivityManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import android.content.Context.WIFI_SERVICE
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
@@ -25,7 +24,6 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
-import android.util.Log
 import android.view.Display
 import android.view.Surface
 import android.view.View
@@ -116,11 +114,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -140,7 +136,6 @@ import androidx.core.content.FileProvider
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import coil.compose.rememberAsyncImagePainter
-import coil.request.ImageRequest
 import com.cloud.AesEncryption
 import com.cloud.Config
 import com.cloud.R
@@ -154,8 +149,6 @@ import com.cloud.contactstab.ContactsTabContent
 import com.cloud.contactstab.ContactsViewModel
 import com.cloud.datecalculator.DateCalculatorContent
 import com.cloud.gallery.GalleryTab
-import com.cloud.getAppUsageStats
-import com.cloud.getForegroundTimePerApp
 import com.cloud.gmailtab.GmailListScreen
 import com.cloud.mediaplayer.MediaTab
 import com.cloud.mediarecorder.MediaRecorderContent
@@ -170,11 +163,8 @@ import com.cloud.service.ChatService
 import com.cloud.service.QuietHoursNotificationService
 import com.cloud.spotifydownloader.SpotifyDownloaderApp
 import com.cloud.spotifydownloadertab.SpotifyDownloaderTab
-import com.cloud.toReadableTime
 import com.cloud.ui.theme.Cloud
 import com.cloud.ui.theme.c
-import com.cloud.ui.theme.gruen
-import com.cloud.ui.theme.hellgruen
 import com.cloud.vocabtab.VocabTab
 import com.cloud.weathertab.WeatherTabContent
 import io.github.jan.supabase.storage.Storage
@@ -589,7 +579,7 @@ fun TabCard(
     isRecent: Boolean,
     onClick: () -> Unit
 ) {
-    val containerColor = if (isRecent) Color(0xFF4CAF50) else Color(0xFF333333)
+    val containerColor = if (isRecent) c() else Color(0xFF333333)
 
     Card(
         modifier = Modifier
@@ -1145,410 +1135,299 @@ fun MainCloudScreen(storage: Storage) {
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(0.dp)
-            .background(Color.Transparent),
-    ) {
-        Column(
+    if (!showOtherBucket) {
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                listOf("Alle", "Dateien", "Bilder", "Favoriten").forEach { filter ->
-                    FilterChip(
-                        selected = selectedFilter == filter,
-                        onClick = {
-                            if (filter == "Favoriten") {
-                                favoritesClickCount++
-                                if (favoritesClickCount >= 5) {
-                                    showOtherBucket = true
-                                    favoritesClickCount = 0
-                                }
-                            } else {
-                                favoritesClickCount = 0
-                            }
-                            selectedFilter = filter
-                        },
-                        label = {
-                            Text(
-                                filter,
-                                color = if (selectedFilter == filter) Color.Black else Color.White
-                            )
-                        })
-                }
-            }
-            val preFilteredFileList = remember(fileList, selectedFilter) {
-                when (selectedFilter) {
-                    "Bilder" -> fileList.filter { isImageFile(it.name) }
-                    "Dateien" -> fileList.filter { !isImageFile(it.name) }
-                    else -> fileList
-                }
-            }
-
-            var searchQuery by remember { mutableStateOf("") }
-
+                .padding(0.dp)
+                .background(Color.Transparent)
+        )
+        {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
+                    .fillMaxSize()
+                    .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = {
-                            Text(
-                                "Suche",
-                                color = Color.White
-                            )
-                        },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-
-                    val sortOptions = listOf("A-Z", "Größte Datei", "Zuletzt hochgeladen")
-                    ExposedDropdownMenuBox(
-                        expanded = expanded,
-                        onExpandedChange = { expanded = it },
-                        modifier = Modifier.width(150.dp)
-                    ) {
-                        OutlinedTextField(
-                            readOnly = true,
-                            value = sortOption,
-                            onValueChange = {},
-                            trailingIcon = {
-                                Icon(
-                                    imageVector = Icons.Filled.ArrowDropDown,
-                                    contentDescription = "Sortierung öffnen",
-                                    tint = Color.White
-                                )
+                    listOf("Alle", "Dateien", "Bilder", "Favoriten").forEach { filter ->
+                        FilterChip(
+                            selected = selectedFilter == filter,
+                            onClick = {
+                                if (filter == "Favoriten") {
+                                    favoritesClickCount++
+                                    if (favoritesClickCount >= 5) {
+                                        showOtherBucket = true
+                                        favoritesClickCount = 0
+                                    }
+                                } else {
+                                    favoritesClickCount = 0
+                                }
+                                selectedFilter = filter
                             },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                unfocusedContainerColor = Color.DarkGray,
-                                focusedContainerColor = Color.DarkGray,
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White
-                            ),
-                            modifier = Modifier
-                                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, true)
-                                .fillMaxWidth()
-                        )
-
-                        ExposedDropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false },
-                            modifier = Modifier.background(Color.DarkGray)
-                        ) {
-                            sortOptions.forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option, color = Color.White) },
-                                    onClick = {
-                                        sortOption = option
-                                        expanded = false
-                                    },
-                                    contentPadding = PaddingValues(16.dp),
-                                    colors = MenuDefaults.itemColors(
-                                        textColor = Color.White
-                                    )
+                            label = {
+                                Text(
+                                    filter,
+                                    color = if (selectedFilter == filter) Color.Black else Color.White
                                 )
-                            }
-                        }
+                            })
+                    }
+                }
+                val preFilteredFileList = remember(fileList, selectedFilter) {
+                    when (selectedFilter) {
+                        "Bilder" -> fileList.filter { isImageFile(it.name) }
+                        "Dateien" -> fileList.filter { !isImageFile(it.name) }
+                        else -> fileList
                     }
                 }
 
-                val filteredFileList = remember(
-                    fileList,
-                    selectedFilter,
-                    searchQuery,
-                    sortOption,
-                    favoriteFiles
-                ) {
-                    val filtered = fileList.filter { file ->
-                        val fileName = file.name
-                        val matchesFilter = when (selectedFilter) {
-                            "Bilder" -> isImageFile(fileName)
-                            "Dateien" -> !isImageFile(fileName)
-                            "Favoriten" -> favoriteFiles.contains(fileName)
-                            else -> true
-                        }
-                        val matchesSearch = fileName.contains(searchQuery, ignoreCase = true)
-                        matchesFilter && matchesSearch
-                    }
+                var searchQuery by remember { mutableStateOf("") }
 
-                    when (sortOption) {
-                        "A-Z" -> filtered.sortedBy { it.name.lowercase() }
-                        "Größte Datei" -> filtered.sortedByDescending {
-                            it.size
-                        }
-
-                        "Zuletzt hochgeladen" -> filtered.sortedByDescending {
-                            it.updatedAt
-                        }
-
-                        else -> filtered
-                    }
-                }
-
-                if (preFilteredFileList.isEmpty()) {
-                    Text(
-                        "Keine ${if (selectedFilter == "Alle") "Dateien" else selectedFilter} vorhanden",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White
-                    )
-                }
-
-                LazyColumn(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (selectedFilter == "Bilder") {
-                        items(filteredFileList.chunked(2)) { rowFiles ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = {
+                                Text(
+                                    "Suche",
+                                    color = Color.White
+                                )
+                            },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+
+                        val sortOptions = listOf("A-Z", "Größte Datei", "Zuletzt hochgeladen")
+                        ExposedDropdownMenuBox(
+                            expanded = expanded,
+                            onExpandedChange = { expanded = it },
+                            modifier = Modifier.width(150.dp)
+                        ) {
+                            OutlinedTextField(
+                                readOnly = true,
+                                value = sortOption,
+                                onValueChange = {},
+                                trailingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Filled.ArrowDropDown,
+                                        contentDescription = "Sortierung öffnen",
+                                        tint = Color.White
+                                    )
+                                },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    unfocusedContainerColor = Color.DarkGray,
+                                    focusedContainerColor = Color.DarkGray,
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                ),
+                                modifier = Modifier
+                                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, true)
+                                    .fillMaxWidth()
+                            )
+
+                            ExposedDropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false },
+                                modifier = Modifier.background(Color.DarkGray)
                             ) {
-                                rowFiles.forEach { file ->
-                                    val fileName = file.name
-                                    val fileDate =
-                                        file.updatedAt.replace("T", " ")
-                                            .substringBefore(".")
-                                            .ifEmpty { "Unbekannt" }
-                                    val sizeBytes = file.size
-                                    var publicUrl by remember(fileName) {
-                                        mutableStateOf<String?>(
-                                            null
-                                        )
-                                    }
-                                    Card(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .aspectRatio(1f),
+                                sortOptions.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(option, color = Color.White) },
                                         onClick = {
-                                            if (publicUrl != null) {
-                                                fullscreenImageDialogData =
-                                                    Triple(publicUrl, fileName, sizeBytes)
-                                            }
+                                            sortOption = option
+                                            expanded = false
+                                        },
+                                        contentPadding = PaddingValues(16.dp),
+                                        colors = MenuDefaults.itemColors(
+                                            textColor = Color.White
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    val filteredFileList = remember(
+                        fileList,
+                        selectedFilter,
+                        searchQuery,
+                        sortOption,
+                        favoriteFiles
+                    ) {
+                        val filtered = fileList.filter { file ->
+                            val fileName = file.name
+                            val matchesFilter = when (selectedFilter) {
+                                "Bilder" -> isImageFile(fileName)
+                                "Dateien" -> !isImageFile(fileName)
+                                "Favoriten" -> favoriteFiles.contains(fileName)
+                                else -> true
+                            }
+                            val matchesSearch = fileName.contains(searchQuery, ignoreCase = true)
+                            matchesFilter && matchesSearch
+                        }
+
+                        when (sortOption) {
+                            "A-Z" -> filtered.sortedBy { it.name.lowercase() }
+                            "Größte Datei" -> filtered.sortedByDescending {
+                                it.size
+                            }
+
+                            "Zuletzt hochgeladen" -> filtered.sortedByDescending {
+                                it.updatedAt
+                            }
+
+                            else -> filtered
+                        }
+                    }
+
+                    if (preFilteredFileList.isEmpty()) {
+                        Text(
+                            "Keine ${if (selectedFilter == "Alle") "Dateien" else selectedFilter} vorhanden",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White
+                        )
+                    }
+
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (selectedFilter == "Bilder") {
+                            items(filteredFileList.chunked(2)) { rowFiles ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    rowFiles.forEach { file ->
+                                        val fileName = file.name
+                                        val fileDate =
+                                            file.updatedAt.replace("T", " ")
+                                                .substringBefore(".")
+                                                .ifEmpty { "Unbekannt" }
+                                        val sizeBytes = file.size
+                                        var publicUrl by remember(fileName) {
+                                            mutableStateOf<String?>(
+                                                null
+                                            )
                                         }
-                                    ) {
-                                        Box(modifier = Modifier.fillMaxSize()) {
-                                            LaunchedEffect(fileName) {
-                                                try {
-                                                    val signed = withContext(Dispatchers.IO) {
-                                                        storage.from(Config.SUPABASE_BUCKET)
-                                                            .createSignedUrl(fileName, 600.seconds)
-                                                    }
-                                                    publicUrl = signed
-                                                } catch (e: Exception) {
-                                                    e.printStackTrace()
+                                        Card(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .aspectRatio(1f),
+                                            onClick = {
+                                                if (publicUrl != null) {
+                                                    fullscreenImageDialogData =
+                                                        Triple(publicUrl, fileName, sizeBytes)
                                                 }
                                             }
-
-                                            if (publicUrl != null) {
-                                                Image(
-                                                    painter = rememberAsyncImagePainter(publicUrl),
-                                                    contentDescription = fileName,
-                                                    contentScale = ContentScale.Crop,
-                                                    modifier = Modifier.fillMaxSize()
-                                                )
-                                            } else {
-                                                Box(
-                                                    modifier = Modifier.fillMaxSize(),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    CircularProgressIndicator(
-                                                        modifier = Modifier.size(24.dp),
-                                                        color = Color.White
-                                                    )
-                                                }
-                                            }
-
-                                            Column(
-                                                modifier = Modifier
-                                                    .align(Alignment.BottomCenter)
-                                                    .fillMaxWidth()
-                                                    .background(Color.Black.copy(alpha = 0.7f))
-                                                    .padding(4.dp)
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween
-                                                ) {
-                                                    val imageAlreadyDownloaded =
-                                                        sizeBytes >= 0 && fileExistsLocallyWithSameSize(
-                                                            fileName,
-                                                            sizeBytes
-                                                        )
-                                                    val isFavorite =
-                                                        favoriteFiles.contains(fileName)
-
-                                                    val sizeText = when {
-                                                        sizeBytes >= 1_000_000_000 -> "Dateigröße: %.2f GB".format(
-                                                            sizeBytes / 1_000_000_000.0
-                                                        )
-
-                                                        sizeBytes >= 1_000_000 -> "Dateigröße: %.2f MB".format(
-                                                            sizeBytes / 1_000_000.0
-                                                        )
-
-                                                        else -> "Dateigröße: %.1f KB".format(
-                                                            sizeBytes / 1_000.0
-                                                        )
-                                                    }
-                                                    Text(
-                                                        text = "$fileName\n $fileDate\n $sizeText",
-                                                        style = MaterialTheme.typography.bodySmall.copy(
-                                                            fontSize = 9.sp
-                                                        ),
-                                                        color = Color.White,
-                                                        maxLines = 3
-                                                    )
-                                                    IconButton(
-                                                        onClick = {
-                                                            favoriteFiles = if (isFavorite) {
-                                                                favoriteFiles - fileName
-                                                            } else {
-                                                                favoriteFiles + fileName
-                                                            }
-                                                            FavoriteManager.saveFavorites(
-                                                                context,
-                                                                favoriteFiles
-                                                            )
-                                                            haptic.performHapticFeedback(
-                                                                HapticFeedbackType.LongPress
-                                                            )
-                                                        },
-                                                        modifier = Modifier.size(32.dp)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
-                                                            contentDescription = "Favorit",
-                                                            tint = if (isFavorite) Color.Yellow else Color.White
-                                                        )
-                                                    }
-                                                    if (!imageAlreadyDownloaded) {
-                                                        IconButton(
-                                                            onClick = {
-                                                                isDownloading = fileName
-                                                                scope.launch {
-                                                                    showDownloadProgress = true
-                                                                    try {
-                                                                        val data =
-                                                                            withContext(Dispatchers.IO) {
-                                                                                storage.from(
-                                                                                    Config.SUPABASE_BUCKET
-                                                                                )
-                                                                                    .downloadAuthenticated(
-                                                                                        fileName
-                                                                                    )
-                                                                            }
-
-                                                                        val dcimDir =
-                                                                            Environment.getExternalStoragePublicDirectory(
-                                                                                Environment.DIRECTORY_DCIM
-                                                                            )
-                                                                        val appFolder =
-                                                                            File(dcimDir, "Cloud")
-                                                                        if (!appFolder.exists()) {
-                                                                            appFolder.mkdirs()
-                                                                        }
-
-                                                                        val outputFile = File(
-                                                                            appFolder,
-                                                                            fileName
-                                                                        )
-
-                                                                        withContext(Dispatchers.IO) {
-                                                                            FileOutputStream(
-                                                                                outputFile
-                                                                            ).use { fos ->
-                                                                                fos.write(data)
-                                                                            }
-                                                                        }
-
-                                                                        MediaScannerConnection.scanFile(
-                                                                            context,
-                                                                            arrayOf(outputFile.absolutePath),
-                                                                            null,
-                                                                            null
-                                                                        )
-
-                                                                        Toast.makeText(
-                                                                            context,
-                                                                            "Bild gespeichert ✅",
-                                                                            Toast.LENGTH_SHORT
-                                                                        ).show()
-
-                                                                        haptic.performHapticFeedback(
-                                                                            HapticFeedbackType.LongPress
-                                                                        )
-                                                                    } catch (e: Exception) {
-                                                                        Toast.makeText(
-                                                                            context,
-                                                                            "Fehler: ${e.message}",
-                                                                            Toast.LENGTH_LONG
-                                                                        ).show()
-                                                                    } finally {
-                                                                        isDownloading = null
-                                                                        delay(500)
-                                                                        showDownloadProgress = false
-                                                                    }
-                                                                }
-                                                            },
-                                                            enabled = isDownloading != fileName,
-                                                            modifier = Modifier.size(32.dp)
-                                                        ) {
-                                                            if (isDownloading == fileName) {
-                                                                CircularProgressIndicator(
-                                                                    modifier = Modifier.size(16.dp),
-                                                                    color = Color.White
+                                        ) {
+                                            Box(modifier = Modifier.fillMaxSize()) {
+                                                LaunchedEffect(fileName) {
+                                                    try {
+                                                        val signed = withContext(Dispatchers.IO) {
+                                                            storage.from(Config.SUPABASE_BUCKET)
+                                                                .createSignedUrl(
+                                                                    fileName,
+                                                                    600.seconds
                                                                 )
-                                                            } else {
-                                                                Icon(
-                                                                    imageVector = Icons.Filled.ArrowDropDown,
-                                                                    contentDescription = "Download",
-                                                                    tint = Color.Black
-                                                                )
-                                                            }
                                                         }
-                                                    } else {
+                                                        publicUrl = signed
+                                                    } catch (e: Exception) {
+                                                        e.printStackTrace()
+                                                    }
+                                                }
+
+                                                if (publicUrl != null) {
+                                                    Image(
+                                                        painter = rememberAsyncImagePainter(
+                                                            publicUrl
+                                                        ),
+                                                        contentDescription = fileName,
+                                                        contentScale = ContentScale.Crop,
+                                                        modifier = Modifier.fillMaxSize()
+                                                    )
+                                                } else {
+                                                    Box(
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        CircularProgressIndicator(
+                                                            modifier = Modifier.size(24.dp),
+                                                            color = Color.White
+                                                        )
+                                                    }
+                                                }
+
+                                                Column(
+                                                    modifier = Modifier
+                                                        .align(Alignment.BottomCenter)
+                                                        .fillMaxWidth()
+                                                        .background(Color.Black.copy(alpha = 0.7f))
+                                                        .padding(4.dp)
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween
+                                                    ) {
+                                                        val imageAlreadyDownloaded =
+                                                            sizeBytes >= 0 && fileExistsLocallyWithSameSize(
+                                                                fileName,
+                                                                sizeBytes
+                                                            )
+                                                        val isFavorite =
+                                                            favoriteFiles.contains(fileName)
+
+                                                        val sizeText = when {
+                                                            sizeBytes >= 1_000_000_000 -> "Dateigröße: %.2f GB".format(
+                                                                sizeBytes / 1_000_000_000.0
+                                                            )
+
+                                                            sizeBytes >= 1_000_000 -> "Dateigröße: %.2f MB".format(
+                                                                sizeBytes / 1_000_000.0
+                                                            )
+
+                                                            else -> "Dateigröße: %.1f KB".format(
+                                                                sizeBytes / 1_000.0
+                                                            )
+                                                        }
+                                                        Text(
+                                                            text = "$fileName\n $fileDate\n $sizeText",
+                                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                                fontSize = 9.sp
+                                                            ),
+                                                            color = Color.White,
+                                                            maxLines = 3
+                                                        )
                                                         IconButton(
                                                             onClick = {
-                                                                val localImageFile =
-                                                                    fileExistsInDCIM(fileName)!!
-                                                                val fileUri =
-                                                                    FileProvider.getUriForFile(
-                                                                        context,
-                                                                        "${context.packageName}.fileprovider",
-                                                                        localImageFile
-                                                                    )
-                                                                val intent =
-                                                                    Intent(Intent.ACTION_VIEW).apply {
-                                                                        setDataAndType(
-                                                                            fileUri,
-                                                                            "image/*"
-                                                                        )
-                                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                                    }
-                                                                context.startActivity(intent)
+                                                                favoriteFiles = if (isFavorite) {
+                                                                    favoriteFiles - fileName
+                                                                } else {
+                                                                    favoriteFiles + fileName
+                                                                }
+                                                                FavoriteManager.saveFavorites(
+                                                                    context,
+                                                                    favoriteFiles
+                                                                )
                                                                 haptic.performHapticFeedback(
                                                                     HapticFeedbackType.LongPress
                                                                 )
@@ -1556,152 +1435,306 @@ fun MainCloudScreen(storage: Storage) {
                                                             modifier = Modifier.size(32.dp)
                                                         ) {
                                                             Icon(
-                                                                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                                                                contentDescription = "Öffnen",
-                                                                tint = Color.White
+                                                                imageVector = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
+                                                                contentDescription = "Favorit",
+                                                                tint = if (isFavorite) Color.Yellow else Color.White
                                                             )
                                                         }
-                                                    }
+                                                        if (!imageAlreadyDownloaded) {
+                                                            IconButton(
+                                                                onClick = {
+                                                                    isDownloading = fileName
+                                                                    scope.launch {
+                                                                        showDownloadProgress = true
+                                                                        try {
+                                                                            val data =
+                                                                                withContext(
+                                                                                    Dispatchers.IO
+                                                                                ) {
+                                                                                    storage.from(
+                                                                                        Config.SUPABASE_BUCKET
+                                                                                    )
+                                                                                        .downloadAuthenticated(
+                                                                                            fileName
+                                                                                        )
+                                                                                }
 
-                                                    IconButton(
-                                                        onClick = {
-                                                            scope.launch {
-                                                                deleteFile(file)
+                                                                            val dcimDir =
+                                                                                Environment.getExternalStoragePublicDirectory(
+                                                                                    Environment.DIRECTORY_DCIM
+                                                                                )
+                                                                            val appFolder =
+                                                                                File(
+                                                                                    dcimDir,
+                                                                                    "Cloud"
+                                                                                )
+                                                                            if (!appFolder.exists()) {
+                                                                                appFolder.mkdirs()
+                                                                            }
+
+                                                                            val outputFile = File(
+                                                                                appFolder,
+                                                                                fileName
+                                                                            )
+
+                                                                            withContext(Dispatchers.IO) {
+                                                                                FileOutputStream(
+                                                                                    outputFile
+                                                                                ).use { fos ->
+                                                                                    fos.write(data)
+                                                                                }
+                                                                            }
+
+                                                                            MediaScannerConnection.scanFile(
+                                                                                context,
+                                                                                arrayOf(outputFile.absolutePath),
+                                                                                null,
+                                                                                null
+                                                                            )
+
+                                                                            Toast.makeText(
+                                                                                context,
+                                                                                "Bild gespeichert ✅",
+                                                                                Toast.LENGTH_SHORT
+                                                                            ).show()
+
+                                                                            haptic.performHapticFeedback(
+                                                                                HapticFeedbackType.LongPress
+                                                                            )
+                                                                        } catch (e: Exception) {
+                                                                            Toast.makeText(
+                                                                                context,
+                                                                                "Fehler: ${e.message}",
+                                                                                Toast.LENGTH_LONG
+                                                                            ).show()
+                                                                        } finally {
+                                                                            isDownloading = null
+                                                                            delay(500)
+                                                                            showDownloadProgress =
+                                                                                false
+                                                                        }
+                                                                    }
+                                                                },
+                                                                enabled = isDownloading != fileName,
+                                                                modifier = Modifier.size(32.dp)
+                                                            ) {
+                                                                if (isDownloading == fileName) {
+                                                                    CircularProgressIndicator(
+                                                                        modifier = Modifier.size(16.dp),
+                                                                        color = Color.White
+                                                                    )
+                                                                } else {
+                                                                    Icon(
+                                                                        imageVector = Icons.Filled.ArrowDropDown,
+                                                                        contentDescription = "Download",
+                                                                        tint = Color.Black
+                                                                    )
+                                                                }
                                                             }
-                                                            haptic.performHapticFeedback(
-                                                                HapticFeedbackType.LongPress
+                                                        } else {
+                                                            IconButton(
+                                                                onClick = {
+                                                                    val localImageFile =
+                                                                        fileExistsInDCIM(fileName)!!
+                                                                    val fileUri =
+                                                                        FileProvider.getUriForFile(
+                                                                            context,
+                                                                            "${context.packageName}.fileprovider",
+                                                                            localImageFile
+                                                                        )
+                                                                    val intent =
+                                                                        Intent(Intent.ACTION_VIEW).apply {
+                                                                            setDataAndType(
+                                                                                fileUri,
+                                                                                "image/*"
+                                                                            )
+                                                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                                        }
+                                                                    context.startActivity(intent)
+                                                                    haptic.performHapticFeedback(
+                                                                        HapticFeedbackType.LongPress
+                                                                    )
+                                                                },
+                                                                modifier = Modifier.size(32.dp)
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                                                                    contentDescription = "Öffnen",
+                                                                    tint = Color.White
+                                                                )
+                                                            }
+                                                        }
+
+                                                        IconButton(
+                                                            onClick = {
+                                                                scope.launch {
+                                                                    deleteFile(file)
+                                                                }
+                                                                haptic.performHapticFeedback(
+                                                                    HapticFeedbackType.LongPress
+                                                                )
+                                                            },
+                                                            modifier = Modifier.size(32.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Delete,
+                                                                contentDescription = "Löschen",
+                                                                tint = Color.Red
                                                             )
-                                                        },
-                                                        modifier = Modifier.size(32.dp)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.Delete,
-                                                            contentDescription = "Löschen",
-                                                            tint = Color.Red
-                                                        )
+                                                        }
                                                     }
                                                 }
                                             }
                                         }
                                     }
-                                }
-                                if (rowFiles.size == 1) {
-                                    Spacer(modifier = Modifier.weight(1f))
+                                    if (rowFiles.size == 1) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
                                 }
                             }
-                        }
-                    } else {
-                        items(filteredFileList) { file ->
-                            val fileName = file.name
-                            val fileDate =
-                                file.updatedAt
-                                    .replace("T", " ")
-                                    .substringBefore(".")
-                                    .ifEmpty { "Unbekannt" }
-                            val sizeBytes = file.size
-                            val showOpenButton =
-                                sizeBytes >= 0 && fileExistsLocallyWithSameSize(
-                                    fileName,
-                                    sizeBytes
-                                )
+                        } else {
+                            items(filteredFileList) { file ->
+                                val fileName = file.name
+                                val fileDate =
+                                    file.updatedAt
+                                        .replace("T", " ")
+                                        .substringBefore(".")
+                                        .ifEmpty { "Unbekannt" }
+                                val sizeBytes = file.size
+                                val showOpenButton =
+                                    sizeBytes >= 0 && fileExistsLocallyWithSameSize(
+                                        fileName,
+                                        sizeBytes
+                                    )
 
-                            Card(modifier = Modifier.fillMaxWidth()) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(Color.DarkGray)
-                                        .padding(12.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
+                                Card(modifier = Modifier.fillMaxWidth()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(Color.DarkGray)
+                                            .padding(12.dp)
                                     ) {
-                                        FileIcon(
-                                            fileName = fileName,
-                                            storage = storage,
-                                            modifier = Modifier
-                                                .size(56.dp)
-                                                .padding(end = 12.dp)
-                                        )
-
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = fileName,
-                                                style = MaterialTheme.typography.bodyMedium.copy(
-                                                    fontSize = 16.sp
-                                                ),
-                                                color = Color.White,
-                                                maxLines = 1
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            FileIcon(
+                                                fileName = fileName,
+                                                storage = storage,
+                                                modifier = Modifier
+                                                    .size(56.dp)
+                                                    .padding(end = 12.dp)
                                             )
 
-                                            Text(
-                                                text = "Hochgeladen: $fileDate",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = Color.LightGray,
-                                                fontSize = 10.sp
-                                            )
-
-                                            val sizeText = when {
-                                                sizeBytes >= 1_000_000_000 -> "%.2f GB".format(
-                                                    sizeBytes / 1_000_000_000.0
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = fileName,
+                                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                                        fontSize = 16.sp
+                                                    ),
+                                                    color = Color.White,
+                                                    maxLines = 1
                                                 )
 
-                                                sizeBytes >= 1_000_000 -> "%.2f MB".format(
-                                                    sizeBytes / 1_000_000.0
+                                                Text(
+                                                    text = "Hochgeladen: $fileDate",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = Color.LightGray,
+                                                    fontSize = 10.sp
                                                 )
 
-                                                else -> "%.1f KB".format(sizeBytes / 1_000.0)
+                                                val sizeText = when {
+                                                    sizeBytes >= 1_000_000_000 -> "%.2f GB".format(
+                                                        sizeBytes / 1_000_000_000.0
+                                                    )
+
+                                                    sizeBytes >= 1_000_000 -> "%.2f MB".format(
+                                                        sizeBytes / 1_000_000.0
+                                                    )
+
+                                                    else -> "%.1f KB".format(sizeBytes / 1_000.0)
+                                                }
+
+                                                Text(
+                                                    text = sizeText,
+                                                    fontSize = 10.sp,
+                                                    color = Color.White.copy(alpha = 0.6f)
+                                                )
                                             }
 
-                                            Text(
-                                                text = sizeText,
-                                                fontSize = 10.sp,
-                                                color = Color.White.copy(alpha = 0.6f)
-                                            )
-                                        }
-
-                                        val isFavorite = favoriteFiles.contains(fileName)
-                                        IconButton(
-                                            onClick = {
-                                                favoriteFiles = if (isFavorite) {
-                                                    favoriteFiles - fileName
-                                                } else {
-                                                    favoriteFiles + fileName
-                                                }
-                                                FavoriteManager.saveFavorites(
-                                                    context,
-                                                    favoriteFiles
+                                            val isFavorite = favoriteFiles.contains(fileName)
+                                            IconButton(
+                                                onClick = {
+                                                    favoriteFiles = if (isFavorite) {
+                                                        favoriteFiles - fileName
+                                                    } else {
+                                                        favoriteFiles + fileName
+                                                    }
+                                                    FavoriteManager.saveFavorites(
+                                                        context,
+                                                        favoriteFiles
+                                                    )
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
+                                                    contentDescription = "Favorit",
+                                                    tint = if (isFavorite) Color.Yellow else Color.White
                                                 )
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            },
-                                            modifier = Modifier.size(32.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
-                                                contentDescription = "Favorit",
-                                                tint = if (isFavorite) Color.Yellow else Color.White
-                                            )
-                                        }
+                                            }
 
-                                        if (showOpenButton && !isImageFile(fileName)) {
-                                            val localFile =
-                                                getLocalFileWithPath(fileName, sizeBytes)
-                                            if (localFile != null) {
+                                            if (showOpenButton && !isImageFile(fileName)) {
+                                                val localFile =
+                                                    getLocalFileWithPath(fileName, sizeBytes)
+                                                if (localFile != null) {
+                                                    IconButton(onClick = {
+                                                        val fileUri = FileProvider.getUriForFile(
+                                                            context,
+                                                            "${context.packageName}.fileprovider",
+                                                            localFile
+                                                        )
+                                                        val mimeType =
+                                                            context.contentResolver.getType(fileUri)
+                                                                ?: getMimeType(fileName)
+                                                        val intent =
+                                                            Intent(Intent.ACTION_VIEW).apply {
+                                                                setDataAndType(fileUri, mimeType)
+                                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                            }
+                                                        context.startActivity(intent)
+                                                        haptic.performHapticFeedback(
+                                                            HapticFeedbackType.LongPress
+                                                        )
+                                                    }) {
+                                                        Icon(
+                                                            Icons.AutoMirrored.Filled.OpenInNew,
+                                                            contentDescription = "Öffnen",
+                                                            tint = Color.White
+                                                        )
+                                                    }
+                                                } else {
+                                                    Spacer(modifier = Modifier.size(32.dp))
+                                                }
+                                            } else if (isImageFile(fileName) && fileExistsInDCIM(
+                                                    fileName
+                                                ) != null
+                                            ) {
                                                 IconButton(onClick = {
+                                                    val imageFile = fileExistsInDCIM(fileName)!!
                                                     val fileUri = FileProvider.getUriForFile(
                                                         context,
                                                         "${context.packageName}.fileprovider",
-                                                        localFile
+                                                        imageFile
                                                     )
-                                                    val mimeType =
-                                                        context.contentResolver.getType(fileUri)
-                                                            ?: getMimeType(fileName)
-                                                    val intent =
-                                                        Intent(Intent.ACTION_VIEW).apply {
-                                                            setDataAndType(fileUri, mimeType)
-                                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                        }
+                                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                        setDataAndType(fileUri, "image/*")
+                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    }
                                                     context.startActivity(intent)
                                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                 }) {
@@ -1712,95 +1745,101 @@ fun MainCloudScreen(storage: Storage) {
                                                     )
                                                 }
                                             } else {
-                                                Spacer(modifier = Modifier.size(32.dp))
-                                            }
-                                        } else if (isImageFile(fileName) && fileExistsInDCIM(
-                                                fileName
-                                            ) != null
-                                        ) {
-                                            IconButton(onClick = {
-                                                val imageFile = fileExistsInDCIM(fileName)!!
-                                                val fileUri = FileProvider.getUriForFile(
-                                                    context,
-                                                    "${context.packageName}.fileprovider",
-                                                    imageFile
-                                                )
-                                                val intent = Intent(Intent.ACTION_VIEW).apply {
-                                                    setDataAndType(fileUri, "image/*")
-                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                }
-                                                context.startActivity(intent)
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            }) {
-                                                Icon(
-                                                    Icons.AutoMirrored.Filled.OpenInNew,
-                                                    contentDescription = "Öffnen",
-                                                    tint = Color.White
-                                                )
-                                            }
-                                        } else {
-                                            IconButton(
-                                                onClick = {
-                                                    isDownloading = fileName
-                                                    scope.launch {
-                                                        showDownloadProgress = true
-                                                        try {
-                                                            val allFiles =
+                                                IconButton(
+                                                    onClick = {
+                                                        isDownloading = fileName
+                                                        scope.launch {
+                                                            showDownloadProgress = true
+                                                            try {
+                                                                val allFiles =
+                                                                    withContext(Dispatchers.IO) {
+                                                                        storage.from(Config.SUPABASE_BUCKET)
+                                                                            .list()
+                                                                    }
+
+                                                                val chunks = allFiles.filter {
+                                                                    it.name.startsWith(fileName) && it.name.contains(
+                                                                        ".part"
+                                                                    )
+                                                                }.sortedBy {
+                                                                    val partMatch =
+                                                                        Regex("part(\\d+)of").find(
+                                                                            it.name
+                                                                        )
+                                                                    partMatch?.groupValues?.get(1)
+                                                                        ?.toIntOrNull() ?: 0
+                                                                }
+                                                                val targetBaseFolder =
+                                                                    if (isImageFile(fileName) || fileName.endsWith(
+                                                                            ".mp4",
+                                                                            ignoreCase = true
+                                                                        )
+                                                                    ) {
+                                                                        Environment.getExternalStoragePublicDirectory(
+                                                                            Environment.DIRECTORY_DCIM
+                                                                        )
+                                                                    } else {
+                                                                        Environment.getExternalStoragePublicDirectory(
+                                                                            Environment.DIRECTORY_DOWNLOADS
+                                                                        )
+                                                                    }
+
+                                                                val appFolder =
+                                                                    File(targetBaseFolder, "Cloud")
+                                                                if (!appFolder.exists()) {
+                                                                    appFolder.mkdirs()
+                                                                }
+
+                                                                val cleanFileName =
+                                                                    fileName.substringBefore(".part")
+                                                                val outputFile =
+                                                                    File(appFolder, cleanFileName)
+
                                                                 withContext(Dispatchers.IO) {
-                                                                    storage.from(Config.SUPABASE_BUCKET)
-                                                                        .list()
-                                                                }
+                                                                    FileOutputStream(outputFile).use { fos ->
+                                                                        if (chunks.isNotEmpty()) {
+                                                                            for (chunk in chunks) {
+                                                                                val chunkData =
+                                                                                    storage.from(
+                                                                                        Config.SUPABASE_BUCKET
+                                                                                    )
+                                                                                        .downloadAuthenticated(
+                                                                                            chunk.name
+                                                                                        )
 
-                                                            val chunks = allFiles.filter {
-                                                                it.name.startsWith(fileName) && it.name.contains(
-                                                                    ".part"
-                                                                )
-                                                            }.sortedBy {
-                                                                val partMatch =
-                                                                    Regex("part(\\d+)of").find(it.name)
-                                                                partMatch?.groupValues?.get(1)
-                                                                    ?.toIntOrNull() ?: 0
-                                                            }
-                                                            val targetBaseFolder =
-                                                                if (isImageFile(fileName) || fileName.endsWith(
-                                                                        ".mp4",
-                                                                        ignoreCase = true
-                                                                    )
-                                                                ) {
-                                                                    Environment.getExternalStoragePublicDirectory(
-                                                                        Environment.DIRECTORY_DCIM
-                                                                    )
-                                                                } else {
-                                                                    Environment.getExternalStoragePublicDirectory(
-                                                                        Environment.DIRECTORY_DOWNLOADS
-                                                                    )
-                                                                }
+                                                                                val decryptedChunk =
+                                                                                    if (isImageFile(
+                                                                                            fileName
+                                                                                        ) || fileName.endsWith(
+                                                                                            ".apk",
+                                                                                            ignoreCase = true
+                                                                                        )
+                                                                                    ) {
+                                                                                        chunkData
+                                                                                    } else {
+                                                                                        try {
+                                                                                            AesEncryption.decrypt(
+                                                                                                chunkData
+                                                                                            )
+                                                                                        } catch (_: Exception) {
+                                                                                            chunkData
+                                                                                        }
+                                                                                    }
 
-                                                            val appFolder =
-                                                                File(targetBaseFolder, "Cloud")
-                                                            if (!appFolder.exists()) {
-                                                                appFolder.mkdirs()
-                                                            }
-
-                                                            val cleanFileName =
-                                                                fileName.substringBefore(".part")
-                                                            val outputFile =
-                                                                File(appFolder, cleanFileName)
-
-                                                            withContext(Dispatchers.IO) {
-                                                                FileOutputStream(outputFile).use { fos ->
-                                                                    if (chunks.isNotEmpty()) {
-                                                                        for (chunk in chunks) {
-                                                                            val chunkData =
+                                                                                fos.write(
+                                                                                    decryptedChunk
+                                                                                )
+                                                                            }
+                                                                        } else {
+                                                                            val downloadedData =
                                                                                 storage.from(
                                                                                     Config.SUPABASE_BUCKET
                                                                                 )
                                                                                     .downloadAuthenticated(
-                                                                                        chunk.name
+                                                                                        fileName
                                                                                     )
 
-                                                                            val decryptedChunk =
+                                                                            val finalData =
                                                                                 if (isImageFile(
                                                                                         fileName
                                                                                     ) || fileName.endsWith(
@@ -1808,100 +1847,73 @@ fun MainCloudScreen(storage: Storage) {
                                                                                         ignoreCase = true
                                                                                     )
                                                                                 ) {
-                                                                                    chunkData
+                                                                                    downloadedData
                                                                                 } else {
                                                                                     try {
                                                                                         AesEncryption.decrypt(
-                                                                                            chunkData
+                                                                                            downloadedData
                                                                                         )
                                                                                     } catch (_: Exception) {
-                                                                                        chunkData
+                                                                                        downloadedData
                                                                                     }
                                                                                 }
 
-                                                                            fos.write(decryptedChunk)
+                                                                            fos.write(finalData)
                                                                         }
-                                                                    } else {
-                                                                        val downloadedData =
-                                                                            storage.from(
-                                                                                Config.SUPABASE_BUCKET
-                                                                            )
-                                                                                .downloadAuthenticated(
-                                                                                    fileName
-                                                                                )
-
-                                                                        val finalData =
-                                                                            if (isImageFile(fileName) || fileName.endsWith(
-                                                                                    ".apk",
-                                                                                    ignoreCase = true
-                                                                                )
-                                                                            ) {
-                                                                                downloadedData
-                                                                            } else {
-                                                                                try {
-                                                                                    AesEncryption.decrypt(
-                                                                                        downloadedData
-                                                                                    )
-                                                                                } catch (_: Exception) {
-                                                                                    downloadedData
-                                                                                }
-                                                                            }
-
-                                                                        fos.write(finalData)
                                                                     }
                                                                 }
-                                                            }
 
-                                                            if (isImageFile(fileName) || fileName.endsWith(
-                                                                    ".mp4",
-                                                                    ignoreCase = true
-                                                                )
-                                                            ) {
-                                                                MediaScannerConnection.scanFile(
+                                                                if (isImageFile(fileName) || fileName.endsWith(
+                                                                        ".mp4",
+                                                                        ignoreCase = true
+                                                                    )
+                                                                ) {
+                                                                    MediaScannerConnection.scanFile(
+                                                                        context,
+                                                                        arrayOf(outputFile.absolutePath),
+                                                                        null,
+                                                                        null
+                                                                    )
+                                                                }
+
+                                                                Toast.makeText(
                                                                     context,
-                                                                    arrayOf(outputFile.absolutePath),
-                                                                    null,
-                                                                    null
+                                                                    "Datei gespeichert ✅",
+                                                                    Toast.LENGTH_SHORT
+                                                                ).show()
+
+                                                                haptic.performHapticFeedback(
+                                                                    HapticFeedbackType.LongPress
                                                                 )
+                                                            } catch (e: Exception) {
+                                                                e.printStackTrace()
+                                                                Toast.makeText(
+                                                                    context,
+                                                                    "Fehler: ${e.message}",
+                                                                    Toast.LENGTH_LONG
+                                                                ).show()
+                                                            } finally {
+                                                                isDownloading = null
+                                                                delay(500)
+                                                                showDownloadProgress = false
                                                             }
-
-                                                            Toast.makeText(
-                                                                context,
-                                                                "Datei gespeichert ✅",
-                                                                Toast.LENGTH_SHORT
-                                                            ).show()
-
-                                                            haptic.performHapticFeedback(
-                                                                HapticFeedbackType.LongPress
-                                                            )
-                                                        } catch (e: Exception) {
-                                                            e.printStackTrace()
-                                                            Toast.makeText(
-                                                                context,
-                                                                "Fehler: ${e.message}",
-                                                                Toast.LENGTH_LONG
-                                                            ).show()
-                                                        } finally {
-                                                            isDownloading = null
-                                                            delay(500)
-                                                            showDownloadProgress = false
                                                         }
+                                                    },
+                                                    enabled = isDownloading != fileName,
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    if (isDownloading == fileName) {
+                                                        CircularProgressIndicator(
+                                                            modifier = Modifier.size(16.dp),
+                                                            color = Color.White
+                                                        )
+                                                    } else {
+                                                        Icon(
+                                                            imageVector = Icons.Filled.ArrowDropDown,
+                                                            contentDescription = "Download",
+                                                            tint = Color.Black
+                                                        )
                                                     }
-                                                },
-                                                enabled = isDownloading != fileName,
-                                                modifier = Modifier.size(32.dp)
-                                            ) {
-                                                if (isDownloading == fileName) {
-                                                    CircularProgressIndicator(
-                                                        modifier = Modifier.size(16.dp),
-                                                        color = Color.White
-                                                    )
-                                                } else {
-                                                    Icon(
-                                                        imageVector = Icons.Filled.ArrowDropDown,
-                                                        contentDescription = "Download",
-                                                        tint = Color.Black
-                                                    )
                                                 }
                                             }
                                         }
@@ -1910,147 +1922,147 @@ fun MainCloudScreen(storage: Storage) {
                             }
                         }
                     }
-                }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Button(
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-                                type = "*/*"
-                                addCategory(Intent.CATEGORY_OPENABLE)
-                                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                            }
-                            uploadLauncher.launch(intent)
-                        },
-                        enabled = !isUploading
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(7.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Datei auswählen & hochladen", fontSize = 12.sp)
-                    }
-
-                    Button(onClick = {
-                        scope.launch {
-                            if (!isOnline(context)) {
-                                Toast.makeText(
-                                    context,
-                                    "🚫 Keine Internetverbindung",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            } else {
-                                loadFiles()
-                                Toast.makeText(
-                                    context,
-                                    "Liste aktualisiert ✅",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        }
-                    }) {
-                        Text("🔄 Aktualisieren", fontSize = 12.sp)
-                    }
-
-                    IconButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            try {
-                                val intent = Intent(Intent.ACTION_VIEW).apply {
-                                    setDataAndType(
-                                        "content://downloads/my_downloads".toUri(),
-                                        "vnd.android.document/directory"
-                                    )
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        Button(
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                                    type = "*/*"
+                                    addCategory(Intent.CATEGORY_OPENABLE)
+                                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
                                 }
-                                context.startActivity(intent)
-                            } catch (_: Exception) {
+                                uploadLauncher.launch(intent)
+                            },
+                            enabled = !isUploading
+                        ) {
+                            Text("Datei auswählen & hochladen", fontSize = 12.sp)
+                        }
+
+                        Button(onClick = {
+                            scope.launch {
+                                if (!isOnline(context)) {
+                                    Toast.makeText(
+                                        context,
+                                        "🚫 Keine Internetverbindung",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                } else {
+                                    loadFiles()
+                                    Toast.makeText(
+                                        context,
+                                        "Liste aktualisiert ✅",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        }) {
+                            Text("🔄 Aktualisieren", fontSize = 12.sp)
+                        }
+
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 try {
-                                    val downloadsUri =
-                                        "content://com.android.externalstorage.documents/document/primary:Download".toUri()
                                     val intent = Intent(Intent.ACTION_VIEW).apply {
                                         setDataAndType(
-                                            downloadsUri,
+                                            "content://downloads/my_downloads".toUri(),
                                             "vnd.android.document/directory"
                                         )
                                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                     }
                                     context.startActivity(intent)
                                 } catch (_: Exception) {
-                                    Toast.makeText(
-                                        context,
-                                        "Downloads-Ordner konnte nicht geöffnet werden",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
+                                    try {
+                                        val downloadsUri =
+                                            "content://com.android.externalstorage.documents/document/primary:Download".toUri()
+                                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                                            setDataAndType(
+                                                downloadsUri,
+                                                "vnd.android.document/directory"
+                                            )
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) {
+                                        Toast.makeText(
+                                            context,
+                                            "Downloads-Ordner konnte nicht geöffnet werden",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
                                 }
-                            }
-                        },
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Settings,
-                            contentDescription = "Settings",
-                            tint = Color.White,
-                            modifier = Modifier.size(28.dp)
-                        )
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = "Settings",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        if (showUploadProgress) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.7f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
+            if (showUploadProgress) {
+                Box(
                     modifier = Modifier
-                        .padding(16.dp)
-                        .size(50.dp)
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.7f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(
+                    Card(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                            .padding(16.dp)
+                            .size(50.dp)
                     ) {
-                        CircularProgressIndicator(
-                            color = Color.Black,
-                            modifier = Modifier.size(40.dp)
-                        )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = Color.Black,
+                                modifier = Modifier.size(40.dp)
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        if (showDownloadProgress) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.7f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
+            if (showDownloadProgress) {
+                Box(
                     modifier = Modifier
-                        .padding(16.dp)
-                        .size(50.dp)
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.7f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(
+                    Card(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                            .padding(16.dp)
+                            .size(50.dp)
                     ) {
-                        CircularProgressIndicator(
-                            color = Color.Black,
-                            modifier = Modifier.size(40.dp)
-                        )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = Color.Black,
+                                modifier = Modifier.size(40.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -2150,7 +2162,8 @@ fun QuickSettingsTabContent() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Transparent),
+            .background(Color.Transparent)
+            .padding(7.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         QuickSettingRow(
