@@ -1,18 +1,27 @@
-package com.example.cloud.service
+package com.cloud.service
 
 import android.Manifest
-import android.R
+import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.AlarmManager
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
+import android.content.Context.WINDOW_SERVICE
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.graphics.PixelFormat
 import android.hardware.camera2.CameraManager
 import android.media.MediaPlayer
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
@@ -20,38 +29,89 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowInsets
+import android.view.WindowInsetsController
+import android.view.WindowManager
+import android.webkit.CookieManager
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.annotation.RequiresPermission
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Laptop
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.NotificationCompat
-import com.example.cloud.mediarecorder.AudioRecorder
-import com.example.cloud.quiethoursnotificationhelper.GalleryImage
-import com.example.cloud.quiethoursnotificationhelper.checkQuietHours
-import com.example.cloud.quiethoursnotificationhelper.cleanupOldMessages
-import com.example.cloud.quiethoursnotificationhelper.commandReceiver
-import com.example.cloud.quiethoursnotificationhelper.createNotification
-import com.example.cloud.quiethoursnotificationhelper.createNotificationChannel
-import com.example.cloud.quiethoursnotificationhelper.deleteGalleryImage
-import com.example.cloud.quiethoursnotificationhelper.isQuietHoursNow
-import com.example.cloud.quiethoursnotificationhelper.loadGalleryImages
-import com.example.cloud.quiethoursnotificationhelper.markReadReceiver
-import com.example.cloud.quiethoursnotificationhelper.messageSentReceiver
-import com.example.cloud.quiethoursnotificationhelper.notificationDismissReceiver
-import com.example.cloud.quiethoursnotificationhelper.playLatestVoiceNote
-import com.example.cloud.quiethoursnotificationhelper.playNextVoiceNote
-import com.example.cloud.quiethoursnotificationhelper.playPreviousVoiceNote
-import com.example.cloud.quiethoursnotificationhelper.restoreSyncIfNeeded
-import com.example.cloud.quiethoursnotificationhelper.scheduleNextCheck
-import com.example.cloud.quiethoursnotificationhelper.showDeleteConfirmation
-import com.example.cloud.quiethoursnotificationhelper.showNextGalleryImage
-import com.example.cloud.quiethoursnotificationhelper.showPreviousGalleryImage
-import com.example.cloud.quiethoursnotificationhelper.showUnreadMessages
-import com.example.cloud.quiethoursnotificationhelper.startTriggerListenerIfHomeWifi
-import com.example.cloud.quiethoursnotificationhelper.stopTriggerListener
-import com.example.cloud.quiethoursnotificationhelper.stopVoiceNote
-import com.example.cloud.quiethoursnotificationhelper.syncTodosWithLaptop
-import com.example.cloud.quiethoursnotificationhelper.timeChangeReceiver
-import com.example.cloud.quiethoursnotificationhelper.updateNotification
-import com.example.cloud.quiethoursnotificationhelper.updateSingleSenderNotification
-import com.example.cloud.showSimpleNotificationExtern
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.cloud.authenticator.CloudAutofillService
+import com.cloud.mediarecorder.AudioRecorder
+import com.cloud.quiethoursnotificationhelper.GalleryImage
+import com.cloud.quiethoursnotificationhelper.checkIfNearLocation
+import com.cloud.quiethoursnotificationhelper.checkQuietHours
+import com.cloud.quiethoursnotificationhelper.cleanupOldMessages
+import com.cloud.quiethoursnotificationhelper.commandReceiver
+import com.cloud.quiethoursnotificationhelper.createNotification
+import com.cloud.quiethoursnotificationhelper.createNotificationChannel
+import com.cloud.quiethoursnotificationhelper.deleteGalleryImage
+import com.cloud.quiethoursnotificationhelper.isQuietHoursNow
+import com.cloud.quiethoursnotificationhelper.loadGalleryImages
+import com.cloud.quiethoursnotificationhelper.markReadReceiver
+import com.cloud.quiethoursnotificationhelper.messageSentReceiver
+import com.cloud.quiethoursnotificationhelper.notificationDismissReceiver
+import com.cloud.quiethoursnotificationhelper.playLatestVoiceNote
+import com.cloud.quiethoursnotificationhelper.playNextVoiceNote
+import com.cloud.quiethoursnotificationhelper.playPreviousVoiceNote
+import com.cloud.quiethoursnotificationhelper.restoreSyncIfNeeded
+import com.cloud.quiethoursnotificationhelper.scheduleNextCheck
+import com.cloud.quiethoursnotificationhelper.showDeleteConfirmation
+import com.cloud.quiethoursnotificationhelper.showNextGalleryImage
+import com.cloud.quiethoursnotificationhelper.showPreviousGalleryImage
+import com.cloud.quiethoursnotificationhelper.showUnreadMessages
+import com.cloud.quiethoursnotificationhelper.startAiResponseListener
+import com.cloud.quiethoursnotificationhelper.startDiscoveryListener
+import com.cloud.quiethoursnotificationhelper.startTriggerListenerIfHomeWifi
+import com.cloud.quiethoursnotificationhelper.stopAllSyncServices
+import com.cloud.quiethoursnotificationhelper.stopVoiceNote
+import com.cloud.quiethoursnotificationhelper.syncTodosWithLaptop
+import com.cloud.quiethoursnotificationhelper.timeChangeReceiver
+import com.cloud.quiethoursnotificationhelper.updateNotification
+import com.cloud.quiethoursnotificationhelper.updateSingleSenderNotification
+import com.cloud.service.AutoClickAccessibilityService.Companion.closeNots
+import com.cloud.showSimpleNotificationExtern
+import rikka.shizuku.SystemServiceHelper.getSystemService
 import java.io.File
 import java.util.Calendar
 import kotlin.time.Duration
@@ -70,35 +130,35 @@ class QuietHoursNotificationService : Service() {
             return WHATSAPP_PACKAGES.contains(packageName) || TELEGRAM_PACKAGES.contains(packageName)
         }
 
-        const val ACTION_SHOW_MESSAGES = "com.example.cloud.ACTION_SHOW_MESSAGES"
-        const val ACTION_SCHEDULED_START = "com.example.cloud.ACTION_QUIET_SCHEDULED_START"
-        const val ACTION_SCHEDULED_STOP = "com.example.cloud.ACTION_QUIET_SCHEDULED_STOP"
-        private const val ACTION_OPEN_SETTINGS = "com.example.cloud.ACTION_OPEN_SETTINGS"
+        const val ACTION_SHOW_MESSAGES = "com.cloud.ACTION_SHOW_MESSAGES"
+        const val ACTION_SCHEDULED_START = "com.cloud.ACTION_QUIET_SCHEDULED_START"
+        const val ACTION_SCHEDULED_STOP = "com.cloud.ACTION_QUIET_SCHEDULED_STOP"
+        private const val ACTION_OPEN_SETTINGS = "com.cloud.ACTION_OPEN_SETTINGS"
 
-        const val ACTION_MESSAGE_SENT = "com.example.cloud.ACTION_MESSAGE_SENT"
+        const val ACTION_MESSAGE_SENT = "com.cloud.ACTION_MESSAGE_SENT"
         const val EXTRA_SENDER = "extra_sender"
         const val CONFIRMATION_CHANNEL_ID = "message_confirmation_channel"
 
         private lateinit var sharedPreferences: SharedPreferences
-        private const val ACTION_OPEN_MUSIC_PLAYER = "com.example.cloud.ACTION_OPEN_MUSIC_PLAYER"
+        private const val ACTION_OPEN_MUSIC_PLAYER = "com.cloud.ACTION_OPEN_MUSIC_PLAYER"
         const val ACTION_RESTART_MUSIC_PLAYER =
-            "com.example.cloud.ACTION_RESTART_MUSIC_PLAYER"
+            "com.cloud.ACTION_RESTART_MUSIC_PLAYER"
 
         const val ACTION_NOTIFICATION_DISMISSED =
-            "com.example.cloud.ACTION_NOTIFICATION_DISMISSED"
+            "com.cloud.ACTION_NOTIFICATION_DISMISSED"
 
-        const val ACTION_CHANGE_START = "com.example.cloud.ACTION_CHANGE_START"
-        const val ACTION_CHANGE_END = "com.example.cloud.ACTION_CHANGE_END"
+        const val ACTION_CHANGE_START = "com.cloud.ACTION_CHANGE_START"
+        const val ACTION_CHANGE_END = "com.cloud.ACTION_CHANGE_END"
 
 
-        const val ACTION_PLAY_VOICE_NOTE = "com.example.cloud.ACTION_PLAY_VOICE_NOTE"
-        const val ACTION_NEXT_VOICE_NOTE = "com.example.cloud.ACTION_NEXT_VOICE_NOTE"
-        const val ACTION_PREV_VOICE_NOTE = "com.example.cloud.ACTION_PREV_VOICE_NOTE"
-        const val ACTION_STOP_VOICE_NOTE = "com.example.cloud.ACTION_STOP_VOICE_NOTE"
+        const val ACTION_PLAY_VOICE_NOTE = "com.cloud.ACTION_PLAY_VOICE_NOTE"
+        const val ACTION_NEXT_VOICE_NOTE = "com.cloud.ACTION_NEXT_VOICE_NOTE"
+        const val ACTION_PREV_VOICE_NOTE = "com.cloud.ACTION_PREV_VOICE_NOTE"
+        const val ACTION_STOP_VOICE_NOTE = "com.cloud.ACTION_STOP_VOICE_NOTE"
         const val EXTRA_SENDER_FOR_VOICE = "extra_sender_for_voice"
 
         const val VOICE_NOTE_CHANNEL_ID = "voice_note_player_channel"
-        const val ACTION_EXECUTE_COMMAND = "com.example.cloud.ACTION_EXECUTE_COMMAND"
+        const val ACTION_EXECUTE_COMMAND = "com.cloud.ACTION_EXECUTE_COMMAND"
 
         const val PREFS_REPLY_DATA = "reply_data_prefs"
         const val KEY_SAVED_SENDER = "saved_sender"
@@ -108,27 +168,32 @@ class QuietHoursNotificationService : Service() {
 
         val commandHistory = mutableListOf<String>()
 
-        private const val ACTION_SHOW_GALLERY = "com.example.cloud.ACTION_SHOW_GALLERY"
-        const val ACTION_NEXT_GALLERY_IMAGE = "com.example.cloud.ACTION_NEXT_GALLERY_IMAGE"
-        const val ACTION_PREV_GALLERY_IMAGE = "com.example.cloud.ACTION_PREV_GALLERY_IMAGE"
+        private const val ACTION_SHOW_GALLERY = "com.cloud.ACTION_SHOW_GALLERY"
+        const val ACTION_NEXT_GALLERY_IMAGE = "com.cloud.ACTION_NEXT_GALLERY_IMAGE"
+        const val ACTION_PREV_GALLERY_IMAGE = "com.cloud.ACTION_PREV_GALLERY_IMAGE"
         const val GALLERY_CHANNEL_ID = "gallery_channel"
 
         const val SSN_CHANNEL_ID = "show_simple_not_channel"
 
         const val ACTION_CONFIRM_DELETE_IMAGE =
-            "com.example.cloud.ACTION_CONFIRM_DELETE_IMAGE"
-        const val ACTION_DELETE_IMAGE = "com.example.cloud.ACTION_DELETE_IMAGE"
-        const val ACTION_CANCEL_DELETE = "com.example.cloud.ACTION_CANCEL_DELETE"
+            "com.cloud.ACTION_CONFIRM_DELETE_IMAGE"
+        const val ACTION_DELETE_IMAGE = "com.cloud.ACTION_DELETE_IMAGE"
+        const val ACTION_CANCEL_DELETE = "com.cloud.ACTION_CANCEL_DELETE"
         const val EXTRA_IMAGE_INDEX = "extra_image_index"
         const val DELETE_CONFIRMATION_CHANNEL_ID = "delete_confirmation_channel"
 
-        const val ACTION_MARK_PARTS_READ = "com.example.cloud.ACTION_MARK_PARTS_READ"
+        const val ACTION_MARK_PARTS_READ = "com.cloud.ACTION_MARK_PARTS_READ"
         const val EXTRA_MESSAGE_ID = "extra_message_id"
         const val ALARM_REQUEST_CODE = 1001
 
         const val THRESHOLD_MINUTES = 30
         const val MAX_MESSAGES_PER_CONTACT = 50
         const val MAX_VOICE_NOTE_FILES = 20
+
+        const val ACTION_ENABLE_HOTSPOT = "com.cloud.ACTION_ENABLE_HOTSPOT"
+        private const val HOTSPOT_HOUR = 20
+        private const val HOTSPOT_MINUTE = 59
+        const val HOTSPOT_REQUEST_CODE = 1002
 
         var currentSenderForVoiceNote: String? = null
         var voiceNoteFiles: List<File> = emptyList()
@@ -161,6 +226,13 @@ class QuietHoursNotificationService : Service() {
             val intent = Intent(context, QuietHoursNotificationService::class.java).apply {
                 action = "ACTION_UPDATE_SINGLE_SENDER"
                 putExtra("EXTRA_SENDER", sender)
+            }
+            context.startService(intent)
+        }
+
+        fun showtestOverlay(context: Context) {
+            val intent = Intent(context, QuietHoursNotificationService::class.java).apply {
+                action = "ACTION_TEST_OVERLAY"
             }
             context.startService(intent)
         }
@@ -212,7 +284,6 @@ class QuietHoursNotificationService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d("QuietHoursService", "Service created")
         sharedPreferences = getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
         createNotificationChannel(this)
 
@@ -225,6 +296,8 @@ class QuietHoursNotificationService : Service() {
         schedulePeriodicCleanup()
         restoreSyncIfNeeded(this)
         startTriggerListenerIfHomeWifi(this)
+        startAiResponseListener(this)
+        startDiscoveryListener()
         registerWifiCallback()
 
         val filter = IntentFilter(ACTION_MESSAGE_SENT)
@@ -257,16 +330,17 @@ class QuietHoursNotificationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d("QuietHoursService", "Service started with intent: ${intent?.action}")
         when (intent?.action) {
             ACTION_SCHEDULED_STOP -> {
-                // Alarm requested that the quiet window ended -> stop the service
                 stopSelf()
                 return START_NOT_STICKY
             }
 
+            "ACTION_TEST_OVERLAY" -> {
+                showTestOverlay()
+            }
+
             ACTION_SCHEDULED_START -> {
-                // Alarm requested start: ensure we enter quiet mode
                 isCurrentlyQuietHours = isQuietHoursNow(this)
                 startForeground(NOTIFICATION_ID, createNotification(isCurrentlyQuietHours, this))
             }
@@ -276,6 +350,7 @@ class QuietHoursNotificationService : Service() {
             }
 
             "ACTION_RESTORE_NOTIFICATION" -> {
+                checkQuietHours(this)
                 val notification = createNotification(isCurrentlyQuietHours, this)
                 startForeground(NOTIFICATION_ID, notification)
             }
@@ -371,10 +446,228 @@ class QuietHoursNotificationService : Service() {
             }
 
             "ACTION_SYNC_LAPTOP" -> {
-                syncTodosWithLaptop(this)
+                closeNots()
+                syncTodosWithLaptop(this@QuietHoursNotificationService)
             }
         }
         return START_STICKY
+    }
+
+    private var testOverlayView: ComposeView? = null
+    private var testOverlayLifecycle: OverlayLifecycleOwner? = null
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun showTestOverlay() {
+        if (!Settings.canDrawOverlays(this)) {
+            showSimpleNotification("Fehler", "Overlay-Berechtigung fehlt!")
+            return
+        }
+
+        val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+
+        testOverlayLifecycle = OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
+
+        var currentUrl = "https://www.youtube.com"
+
+        var isDesktopMode = false
+
+        testOverlayLifecycle = OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
+
+        testOverlayView = ComposeView(this).apply {
+            setViewTreeLifecycleOwner(testOverlayLifecycle)
+            setViewTreeSavedStateRegistryOwner(testOverlayLifecycle)
+            setViewTreeViewModelStoreOwner(testOverlayLifecycle)
+            setContent {
+                val webView = remember {
+                    WebView(context).apply {
+                        webChromeClient = object : WebChromeClient() {
+                            private var customView: View? = null
+                            private var customViewCallback: CustomViewCallback? = null
+
+                            override fun onShowCustomView(
+                                view: View?,
+                                callback: CustomViewCallback?
+                            ) {
+                                (context as? Activity)?.let { activity ->
+                                    val decor = activity.window.decorView as FrameLayout
+                                    decor.addView(
+                                        view,
+                                        FrameLayout.LayoutParams(
+                                            ViewGroup.LayoutParams.MATCH_PARENT,
+                                            ViewGroup.LayoutParams.MATCH_PARENT
+                                        )
+                                    )
+                                    activity.requestedOrientation =
+                                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                                    customView = view
+                                    customViewCallback = callback
+
+                                    activity.window.insetsController?.apply {
+                                        hide(WindowInsets.Type.systemBars())
+                                        systemBarsBehavior =
+                                            WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                                    }
+                                }
+                            }
+
+                            override fun onHideCustomView() {
+                                (context as? Activity)?.let { activity ->
+                                    val decor = activity.window.decorView as FrameLayout
+                                    decor.removeView(customView)
+                                    customView = null
+                                    customViewCallback?.onCustomViewHidden()
+                                    customViewCallback = null
+
+                                    activity.window.insetsController?.show(
+                                        WindowInsets.Type.systemBars()
+                                    )
+                                    activity.requestedOrientation =
+                                        ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                                }
+                            }
+                        }
+
+                        webViewClient = object : WebViewClient() {
+                            override fun shouldOverrideUrlLoading(
+                                view: WebView?,
+                                request: WebResourceRequest?
+                            ): Boolean = false
+
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                if (url != null) currentUrl = url
+                            }
+                        }
+
+                        settings.apply {
+                            javaScriptEnabled = true
+                            domStorageEnabled = true
+
+                            allowFileAccess = true
+                            allowContentAccess = true
+
+                            loadsImagesAutomatically = true
+                            blockNetworkLoads = false
+
+                            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+
+                            useWideViewPort = true
+                            loadWithOverviewMode = true
+
+                            builtInZoomControls = true
+                            displayZoomControls = false
+                            setSupportZoom(true)
+
+                            javaScriptCanOpenWindowsAutomatically = true
+                            setSupportMultipleWindows(true)
+
+                            cacheMode = WebSettings.LOAD_DEFAULT
+                            mediaPlaybackRequiresUserGesture = false
+
+                            userAgentString =
+                                "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                        }
+
+                        val cookieManager = CookieManager.getInstance()
+                        cookieManager.setAcceptCookie(true)
+                        cookieManager.setAcceptThirdPartyCookies(this, true)
+                        cookieManager.flush()
+
+                        loadUrl(currentUrl)
+                    }
+                }
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AndroidView(
+                        factory = { webView },
+                        update = { },
+                        modifier = Modifier.fillMaxSize()
+                    )
+
+                    Button(
+                        onClick = {
+                            isDesktopMode = !isDesktopMode
+
+                            webView.settings.apply {
+                                if (isDesktopMode) {
+                                    userAgentString =
+                                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                                    useWideViewPort = true
+                                    loadWithOverviewMode = true
+                                } else {
+                                    userAgentString =
+                                        "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                                    useWideViewPort = true
+                                    loadWithOverviewMode = true
+                                }
+                            }
+
+                            webView.loadUrl(currentUrl)
+                        },
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 16.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Laptop,
+                            contentDescription = null,
+                            tint = Color.White
+                        )
+                    }
+
+                    IconButton(
+                        onClick = {
+                            testOverlayView?.let { windowManager.removeView(it) }
+                            testOverlayLifecycle?.onDestroy()
+                            testOverlayView = null
+                            testOverlayLifecycle = null
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .size(40.dp)
+                            .background(Color.Black.copy(alpha = 0.6f), shape = RoundedCornerShape(50))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Schließen",
+                            tint = Color.White
+                        )
+                    }
+                }
+            }
+        }
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.CENTER
+        }
+
+        windowManager.addView(testOverlayView, params)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        testOverlayView?.let { view ->
+            val wm = getSystemService(WINDOW_SERVICE) as WindowManager
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.CENTER
+            }
+            wm.updateViewLayout(view, params)
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -386,7 +679,7 @@ class QuietHoursNotificationService : Service() {
         handler.removeCallbacksAndMessages(null)
 
         networkCallback?.let {
-            val cm = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
             cm.unregisterNetworkCallback(it)
             networkCallback = null
         }
@@ -429,11 +722,13 @@ class QuietHoursNotificationService : Service() {
             PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
         val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
-        alarmManager.setExactAndAllowWhileIdle(
-            AlarmManager.ELAPSED_REALTIME_WAKEUP,
-            SystemClock.elapsedRealtime() + 1000,
-            pendingIntent
-        )
+        if (alarmManager.canScheduleExactAlarms()) {
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + 1000,
+                pendingIntent
+            )
+        }
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -476,7 +771,7 @@ class QuietHoursNotificationService : Service() {
         val notificationId = System.currentTimeMillis().toInt()
 
         val notification = NotificationCompat.Builder(this, SSN_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_dialog_info)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -513,38 +808,251 @@ class QuietHoursNotificationService : Service() {
         try {
             MusicPlayerServiceCompat.startService(this)
             MusicPlayerServiceCompat.startAndPlay(this)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             showSimpleNotification("Fehler", "Musik Player konnte nicht geöffnet werden")
         }
     }
 
-    private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     private fun registerWifiCallback() {
         val connectivityManager =
-            getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
-        val request = android.net.NetworkRequest.Builder()
-            .addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+            getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        val request = NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
             .build()
 
-        networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: android.net.Network) {
-                Log.d("TodoSync", "📶 WLAN verbunden, prüfe Heim-WLAN...")
-                showSimpleNotificationExtern(
-                    "📶 WLAN verbunden",
-                    "Prüfe Heim-WLAN...",
-                    10.seconds,
-                    this@QuietHoursNotificationService
-                )
+        networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
                 startTriggerListenerIfHomeWifi(this@QuietHoursNotificationService)
             }
 
-            override fun onLost(network: android.net.Network) {
-                Log.d("TodoSync", "📵 WLAN getrennt, stoppe Trigger Listener")
-                stopTriggerListener()
+            override fun onLost(network: Network) {
+                stopAllSyncServices(this@QuietHoursNotificationService)
             }
         }
 
         connectivityManager.registerNetworkCallback(request, networkCallback!!)
     }
+}
+
+class OverlayLifecycleOwner : LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
+    private val lifecycleRegistry = LifecycleRegistry(this)
+    private val savedStateRegistryController = SavedStateRegistryController.create(this)
+    override val lifecycle: Lifecycle get() = lifecycleRegistry
+    override val viewModelStore = ViewModelStore()
+    override val savedStateRegistry get() = savedStateRegistryController.savedStateRegistry
+
+    fun onCreate() {
+        savedStateRegistryController.performRestore(null)
+        lifecycleRegistry.currentState = Lifecycle.State.CREATED
+    }
+
+    fun onResume() {
+        lifecycleRegistry.currentState = Lifecycle.State.RESUMED
+    }
+
+    fun onDestroy() {
+        lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
+    }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+@Preview
+fun OVERLAY() {
+    val context = LocalContext.current
+    if (!Settings.canDrawOverlays(context)) {
+        showSimpleNotificationExtern("Fehler", "Overlay-Berechtigung fehlt!", context = context)
+        return
+    }
+
+    var testOverlayView: ComposeView? = null
+    var testOverlayLifecycle: OverlayLifecycleOwner?
+
+    val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+
+    var currentUrl = "https://www.youtube.com"
+
+    var isDesktopMode = false
+
+    testOverlayLifecycle = OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
+
+    testOverlayView = ComposeView(context).apply {
+        setViewTreeLifecycleOwner(testOverlayLifecycle)
+        setViewTreeSavedStateRegistryOwner(testOverlayLifecycle)
+        setViewTreeViewModelStoreOwner(testOverlayLifecycle)
+        setContent {
+            val webView = remember {
+                WebView(context).apply {
+                    webChromeClient = object : WebChromeClient() {
+                        private var customView: View? = null
+                        private var customViewCallback: CustomViewCallback? = null
+
+                        override fun onShowCustomView(
+                            view: View?,
+                            callback: CustomViewCallback?
+                        ) {
+                            (context as? Activity)?.let { activity ->
+                                val decor = activity.window.decorView as FrameLayout
+                                decor.addView(
+                                    view,
+                                    FrameLayout.LayoutParams(
+                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ViewGroup.LayoutParams.MATCH_PARENT
+                                    )
+                                )
+                                activity.requestedOrientation =
+                                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                                customView = view
+                                customViewCallback = callback
+
+                                activity.window.insetsController?.apply {
+                                    hide(WindowInsets.Type.systemBars())
+                                    systemBarsBehavior =
+                                        WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                                }
+                            }
+                        }
+
+                        override fun onHideCustomView() {
+                            (context as? Activity)?.let { activity ->
+                                val decor = activity.window.decorView as FrameLayout
+                                decor.removeView(customView)
+                                customView = null
+                                customViewCallback?.onCustomViewHidden()
+                                customViewCallback = null
+
+                                activity.window.insetsController?.show(
+                                    WindowInsets.Type.systemBars()
+                                )
+                                activity.requestedOrientation =
+                                    ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                            }
+                        }
+                    }
+
+                    webViewClient = object : WebViewClient() {
+                        override fun shouldOverrideUrlLoading(
+                            view: WebView?,
+                            request: WebResourceRequest?
+                        ): Boolean = false
+
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            if (url != null) currentUrl = url
+                        }
+                    }
+
+                    settings.apply {
+                        javaScriptEnabled = true
+                        domStorageEnabled = true
+
+                        allowFileAccess = true
+                        allowContentAccess = true
+
+                        loadsImagesAutomatically = true
+                        blockNetworkLoads = false
+
+                        mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+
+                        useWideViewPort = true
+                        loadWithOverviewMode = true
+
+                        builtInZoomControls = true
+                        displayZoomControls = false
+                        setSupportZoom(true)
+
+                        javaScriptCanOpenWindowsAutomatically = true
+                        setSupportMultipleWindows(true)
+
+                        cacheMode = WebSettings.LOAD_DEFAULT
+                        mediaPlaybackRequiresUserGesture = false
+
+                        userAgentString =
+                            "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                    }
+
+                    val cookieManager = CookieManager.getInstance()
+                    cookieManager.setAcceptCookie(true)
+                    cookieManager.setAcceptThirdPartyCookies(this, true)
+                    cookieManager.flush()
+
+                    loadUrl(currentUrl)
+                }
+            }
+
+            Box(modifier = Modifier.fillMaxSize()) {
+                AndroidView(
+                    factory = { webView },
+                    update = { },
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                Button(
+                    onClick = {
+                        isDesktopMode = !isDesktopMode
+
+                        webView.settings.apply {
+                            if (isDesktopMode) {
+                                userAgentString =
+                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                                useWideViewPort = true
+                                loadWithOverviewMode = true
+                            } else {
+                                userAgentString =
+                                    "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                                useWideViewPort = true
+                                loadWithOverviewMode = true
+                            }
+                        }
+
+                        webView.loadUrl(currentUrl)
+                    },
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Laptop,
+                        contentDescription = null,
+                        tint = Color.White
+                    )
+                }
+
+                IconButton(
+                    onClick = {
+                        testOverlayView?.let { windowManager.removeView(it) }
+                        testOverlayLifecycle?.onDestroy()
+                        testOverlayView = null
+                        testOverlayLifecycle = null
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(40.dp)
+                        .background(Color.Black.copy(alpha = 0.6f), shape = RoundedCornerShape(50))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Schließen",
+                        tint = Color.White
+                    )
+                }
+            }
+        }
+    }
+
+    val params = WindowManager.LayoutParams(
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+        PixelFormat.TRANSLUCENT
+    ).apply {
+        gravity = Gravity.CENTER
+    }
+
+    windowManager.addView(testOverlayView, params)
 }
