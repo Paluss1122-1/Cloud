@@ -1,4 +1,4 @@
-package com.example.cloud.spotifydownloadertab
+package com.cloud.spotifydownloadertab
 
 import android.content.Context
 import androidx.compose.runtime.Composable
