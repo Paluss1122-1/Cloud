@@ -1,9 +1,12 @@
-package com.example.cloud.service
+package com.cloud.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.content.Intent
 import android.graphics.Path
+import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
+import io.ktor.network.selector.SelectInterest.Companion.flags
 
 class AutoClickAccessibilityService : AccessibilityService() {
 
@@ -13,6 +16,21 @@ class AutoClickAccessibilityService : AccessibilityService() {
         fun getInstance(): AutoClickAccessibilityService? = instance
 
         fun isServiceEnabled(): Boolean = instance != null
+
+        fun closeNots() {
+            instance?.closeNotificationShade()
+        }
+    }
+
+    fun closeNotificationShade() {
+        if (instance != null) {
+            instance?.closeNotificationShade()
+        } else {
+            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            this.startActivity(intent)
+        }
     }
 
     override fun onServiceConnected() {
