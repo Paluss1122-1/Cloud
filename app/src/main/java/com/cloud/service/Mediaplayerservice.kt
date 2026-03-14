@@ -59,7 +59,6 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import kotlin.time.Duration.Companion.seconds
 
-// Other & Authenticator
 @OptIn(UnstableApi::class)
 class MediaPlayerService : MediaSessionService() {
     companion object {
