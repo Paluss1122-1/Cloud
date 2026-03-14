@@ -56,8 +56,20 @@ class CloudAutofillService : AutofillService() {
 
     private fun extractUrl(structure: AssistStructure): String? {
         for (i in 0 until structure.windowNodeCount) {
-            val url = structure.getWindowNodeAt(i).title?.toString()
-            if (!url.isNullOrBlank()) return url
+            val domain = searchForWebDomain(structure.getWindowNodeAt(i).rootViewNode)
+            if (domain != null) return domain
+            // Fallback: Window-Titel
+            val title = structure.getWindowNodeAt(i).title?.toString()
+            if (!title.isNullOrBlank()) return title
+        }
+        return null
+    }
+
+    private fun searchForWebDomain(node: AssistStructure.ViewNode): String? {
+        node.webDomain?.let { return it }  // z.B. "google.com"
+        for (i in 0 until node.childCount) {
+            val result = searchForWebDomain(node.getChildAt(i))
+            if (result != null) return result
         }
         return null
     }
