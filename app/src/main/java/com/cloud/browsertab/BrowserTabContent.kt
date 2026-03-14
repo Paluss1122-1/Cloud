@@ -73,10 +73,6 @@ fun BrowserTabContent(
 
         Button(
             onClick = { loadAndOpenUrl(url) },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF4CAF50),
-                contentColor = Color.White
-            ),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp)
@@ -85,9 +81,6 @@ fun BrowserTabContent(
         }
 
         Spacer(modifier = Modifier.height(32.dp))
-
-        Text("Schnellzugriff:", color = Color.Gray, fontSize = 14.sp)
-        Spacer(modifier = Modifier.height(16.dp))
         
         Row(
             modifier = Modifier.fillMaxWidth(),
