@@ -6,6 +6,7 @@ api = "13.1.5"
 biometric = "1.1.0"
 coilCompose = "2.7.0"
 core = "3.5.4"
+coreSplashscreen = "1.2.0"
 foundation = "1.10.4"
 gson = "2.13.2"
 isoparser = "1.9.56"
@@ -62,6 +63,7 @@ foundationVersion = "1.10.3"
 uiVersion = "1.10.3"
 
 [libraries]
+androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "coreSplashscreen" }
 androidx-hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
 accompanist-swiperefresh = { module = "com.google.accompanist:accompanist-swiperefresh", version.ref = "accompanistSwiperefresh" }
 android-activation = { module = "com.sun.mail:android-activation", version.ref = "androidMail" }
