@@ -60,13 +60,13 @@ object Config {
     const val SUPABASE_PUBLISHABLE_KEY = "" // Your supabase anon / publisable key (ey... / sb)
     const val SUPABASE_BUCKET = "Files" // create a bucket on supabase for Private Cloud
 
-    const val BWMP = "Sec.P1122.!!\"\"" // Bitwarden Master Password (for Command 'bitwarden')
+    const val BWMP = "" // Bitwarden Master Password (for Command 'bitwarden')
 
     const val DBKEY = "" // deutsche bahn clientkey (create a application on https://developers.deutschebahn.com/db-api-marketplace/apis/frontpage)
 
     const val DBKEY1 = "" // deutsche bahn apikey
 
-    const val NVIDIA = "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" // nvidia api key for ai models
+    const val NVIDIA = "" // nvidia api key for ai models
 
     val LAPTOP_IPS = listOf(
         "192.168.178.20",
