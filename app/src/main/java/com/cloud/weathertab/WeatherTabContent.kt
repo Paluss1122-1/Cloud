@@ -253,7 +253,7 @@ fun WeatherTabContent() {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF14141B))
+                .background(Color.Transparent)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
