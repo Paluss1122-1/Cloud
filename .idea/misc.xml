@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ExternalStorageConfigurationManager" enabled="true" />
+<<<<<<< HEAD
   <component name="ProjectRootManager" version="2" languageLevel="JDK_11" project-jdk-name="temurin-17" project-jdk-type="JavaSDK">
+=======
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_11" project-jdk-name="jbr-21" project-jdk-type="JavaSDK">
+>>>>>>> 5b2c0d43b49d1b7c8386038afd5b0502557fc336
     <output url="file://$PROJECT_DIR$/build/classes" />
   </component>
   <component name="ProjectType">
