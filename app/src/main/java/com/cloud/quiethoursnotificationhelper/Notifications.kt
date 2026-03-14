@@ -1,6 +1,7 @@
-package com.example.cloud.quiethoursnotificationhelper
+package com.cloud.quiethoursnotificationhelper
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
@@ -15,27 +16,24 @@ import android.util.Log
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
-import com.example.cloud.service.QuietHoursNotificationService
-import com.example.cloud.service.QuietHoursNotificationService.Companion.ACTION_CHANGE_END
-import com.example.cloud.service.QuietHoursNotificationService.Companion.ACTION_CHANGE_START
-import com.example.cloud.service.QuietHoursNotificationService.Companion.ACTION_EXECUTE_COMMAND
-import com.example.cloud.service.QuietHoursNotificationService.Companion.ACTION_NOTIFICATION_DISMISSED
-import com.example.cloud.service.QuietHoursNotificationService.Companion.ACTION_RESTART_MUSIC_PLAYER
-import com.example.cloud.service.QuietHoursNotificationService.Companion.ACTION_SHOW_MESSAGES
-import com.example.cloud.service.QuietHoursNotificationService.Companion.ALARM_REQUEST_CODE
-import com.example.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
-import com.example.cloud.service.QuietHoursNotificationService.Companion.CONFIRMATION_CHANNEL_ID
-import com.example.cloud.service.QuietHoursNotificationService.Companion.DELETE_CONFIRMATION_CHANNEL_ID
-import com.example.cloud.service.QuietHoursNotificationService.Companion.GALLERY_CHANNEL_ID
-import com.example.cloud.service.QuietHoursNotificationService.Companion.NOTIFICATION_ID
-import com.example.cloud.service.QuietHoursNotificationService.Companion.SSN_CHANNEL_ID
-import com.example.cloud.service.QuietHoursNotificationService.Companion.THRESHOLD_MINUTES
-import com.example.cloud.service.QuietHoursNotificationService.Companion.VOICE_NOTE_CHANNEL_ID
-import com.example.cloud.service.QuietHoursNotificationService.Companion.calculateNextStatusChange
-import com.example.cloud.service.QuietHoursNotificationService.Companion.handler
-import com.example.cloud.service.QuietHoursNotificationService.Companion.isCurrentlyQuietHours
-import com.example.cloud.service.QuietHoursNotificationService.Companion.workerHandler
-import com.example.cloud.showSimpleNotificationExtern
+import com.cloud.service.QuietHoursNotificationService
+import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_CHANGE_END
+import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_EXECUTE_COMMAND
+import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_NOTIFICATION_DISMISSED
+import com.cloud.service.QuietHoursNotificationService.Companion.ALARM_REQUEST_CODE
+import com.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
+import com.cloud.service.QuietHoursNotificationService.Companion.CONFIRMATION_CHANNEL_ID
+import com.cloud.service.QuietHoursNotificationService.Companion.DELETE_CONFIRMATION_CHANNEL_ID
+import com.cloud.service.QuietHoursNotificationService.Companion.GALLERY_CHANNEL_ID
+import com.cloud.service.QuietHoursNotificationService.Companion.NOTIFICATION_ID
+import com.cloud.service.QuietHoursNotificationService.Companion.SSN_CHANNEL_ID
+import com.cloud.service.QuietHoursNotificationService.Companion.THRESHOLD_MINUTES
+import com.cloud.service.QuietHoursNotificationService.Companion.VOICE_NOTE_CHANNEL_ID
+import com.cloud.service.QuietHoursNotificationService.Companion.calculateNextStatusChange
+import com.cloud.service.QuietHoursNotificationService.Companion.handler
+import com.cloud.service.QuietHoursNotificationService.Companion.isCurrentlyQuietHours
+import com.cloud.service.QuietHoursNotificationService.Companion.workerHandler
+import com.cloud.showSimpleNotificationExtern
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -79,7 +77,7 @@ fun scheduleNextCheck(context: Context) {
     val now = Calendar.getInstance()
     val quietStart = getQuietStartHour(context)
     val quietEnd = getQuietEndHour(context)
-    val nextChange = calculateNextStatusChange(now, quietStart, quietEnd)
+    val nextChange = calculateNextStatusChange(now, quietEnd,quietStart)
     val delayMillis = nextChange.timeInMillis - now.timeInMillis
     val delayMinutes = delayMillis / 1000 / 60
 
@@ -90,7 +88,10 @@ fun scheduleNextCheck(context: Context) {
         workerHandler.postDelayed(checkRunnable, maxOf(delayMillis, 30_000L))
     } else {
         workerHandler.removeCallbacksAndMessages(null)
-        scheduleWithAlarmManager(nextChange.timeInMillis, context, checkRunnable)
+        val alarmManager = context.getSystemService(ALARM_SERVICE) as AlarmManager
+        if (alarmManager.canScheduleExactAlarms()) {
+            scheduleWithAlarmManager(nextChange.timeInMillis, context, checkRunnable)
+        }
     }
 }
 
@@ -215,6 +216,7 @@ fun createNotificationChannel(context: Context) {
     notificationManager.createNotificationChannel(deleteConfirmationChannel)
 }
 
+@SuppressLint("LaunchActivityFromNotification")
 fun createNotification(isQuietHours: Boolean, context: Context): Notification {
     val deleteIntent = Intent(ACTION_NOTIFICATION_DISMISSED).apply {
         putExtra("notification_id", NOTIFICATION_ID)
