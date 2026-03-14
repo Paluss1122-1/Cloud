@@ -1,32 +1,80 @@
-﻿package com.example.cloud.quiethoursnotificationhelper
+package com.cloud.quiethoursnotificationhelper
 
+import android.Manifest
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Context.CAMERA_SERVICE
 import android.content.Context.MODE_PRIVATE
+import android.content.Context.WINDOW_SERVICE
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.PixelFormat
 import android.hardware.camera2.CameraManager
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
+import android.view.WindowManager
+import android.webkit.WebView
+import androidx.activity.OnBackPressedDispatcher
+import androidx.activity.OnBackPressedDispatcherOwner
+import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
+import androidx.core.app.RemoteInput
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
-import com.example.cloud.Config
-import com.example.cloud.mediaplayer.MediaAnalyticsManager
-import com.example.cloud.mediaplayer.PodcastShowManager
-import com.example.cloud.privatecloudapp.showBatteryInfo
-import com.example.cloud.service.MediaPlayerService
-import com.example.cloud.service.MusicPlayerServiceCompat
-import com.example.cloud.service.PodcastPlayerServiceCompat
-import com.example.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
-import com.example.cloud.service.QuietHoursNotificationService.Companion.commandHistory
-import com.example.cloud.service.WhatsAppNotificationListener
-import com.example.cloud.service.restartMusicPlayer
-import com.example.cloud.showSimpleNotificationExtern
-import com.example.cloud.weathertab.fetchWeatherForecast
-import com.example.cloud.weathertab.getLastKnownLocation
-import com.example.cloud.weathertab.weathernot
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.cloud.Config
+import com.cloud.SupabaseConfigALT
+import com.cloud.mediaplayer.AlgorithmicPlaylistRegistry
+import com.cloud.mediaplayer.MediaAnalyticsManager
+import com.cloud.mediaplayer.MediaAnalyticsManager.rebuildSessions
+import com.cloud.mediaplayer.PodcastShowManager
+import com.cloud.privatecloudapp.LandingPageOrApp
+import com.cloud.privatecloudapp.OtherBucketViewer
+import com.cloud.privatecloudapp.PrivateCloudApp
+import com.cloud.privatecloudapp.showBatteryInfo
+import com.cloud.service.MediaPlayerService
+import com.cloud.service.MusicPlayerServiceCompat
+import com.cloud.service.OverlayLifecycleOwner
+import com.cloud.service.PodcastPlayerServiceCompat
+import com.cloud.service.QuietHoursNotificationService
+import com.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
+import com.cloud.service.QuietHoursNotificationService.Companion.commandHistory
+import com.cloud.service.QuietHoursNotificationService.Companion.showtestOverlay
+import com.cloud.service.WhatsAppNotificationListener
+import com.cloud.service.restartMusicPlayer
+import com.cloud.showSimpleNotificationExtern
+import com.cloud.storage
+import com.cloud.weathertab.fetchWeatherForecast
+import com.cloud.weathertab.getLastKnownLocation
+import com.cloud.weathertab.weathernot
+import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -48,6 +96,9 @@ data class Command(
     val action: () -> Unit
 )
 
+private var testOverlayView: ComposeView? = null
+private var testOverlayLifecycle: OverlayLifecycleOwner? = null
+
 private fun getAvailableCommands(context: Context): List<Command> {
     return listOf(
         Command(
@@ -56,6 +107,17 @@ private fun getAvailableCommands(context: Context): List<Command> {
             description = "Zeigt ungelesene Nachrichten"
         ) {
             showUnreadMessages(context)
+        },
+        Command(
+            name = "nvchat",
+            aliases = listOf("ai", "aichat", "nv"),
+            description = "Erstellt einen neuen NVIDIA-Chat (nvchat [name])"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ NVIDIA-Chat",
+                "Syntax: nvchat [chat-name]\nBeispiel: nvchat vokabeln",
+                context = context
+            )
         },
         Command(
             name = "music",
@@ -195,33 +257,16 @@ private fun getAvailableCommands(context: Context): List<Command> {
             )
         },
         Command(
-            name = "stopmusic",
-            aliases = listOf("stopm", "musicstop", "sm"),
-            description = "Stoppt NUR Musik Player Service"
+            name = "stopmediaplayer",
+            aliases = listOf("stopm", "mediaplayerstop", "sm"),
+            description = "Stoppt Media Player Service"
         ) {
             try {
-                MusicPlayerServiceCompat.stopService(context)
+                MediaPlayerService.stopService(context)
             } catch (e: Exception) {
-                Log.e("QuietHoursService", "Error in stopmusic command", e)
                 showSimpleNotificationExtern(
                     "❌ Fehler",
-                    "Music Player konnte nicht gestoppt werden: ${e.message}",
-                    context = context
-                )
-            }
-        },
-        Command(
-            name = "stoppodcast",
-            aliases = listOf("stopp", "podcaststop", "sp"),
-            description = "Stoppt NUR Podcast Player Service"
-        ) {
-            try {
-                PodcastPlayerServiceCompat.stopService(context)
-            } catch (e: Exception) {
-                Log.e("QuietHoursService", "Error in stoppodcast command", e)
-                showSimpleNotificationExtern(
-                    "❌ Fehler",
-                    "Podcast Player konnte nicht gestoppt werden: ${e.message}",
+                    "Media Player konnte nicht gestoppt werden: ${e.message}",
                     context = context
                 )
             }
@@ -328,6 +373,15 @@ private fun getAvailableCommands(context: Context): List<Command> {
             description = "Schaltet Favoriten-Modus um (nur Favoriten abspielen)"
         ) {
             MusicPlayerServiceCompat.toggleFavoritesMode(context)
+        },
+        Command(
+            name = "algplay",
+            aliases = listOf("ap", "algp", "smartplay"),
+            description = "Spielt algorithmische Playlist ab (algplay [id|name])"
+        ) {
+            val playlists = AlgorithmicPlaylistRegistry.all
+            val text = playlists.joinToString("\n") { "${it.icon} ${it.id} – ${it.name}" }
+            showSimpleNotificationExtern("🎵 Smart Playlists", text, context = context)
         },
         Command(
             name = "speed",
@@ -541,6 +595,122 @@ private fun getAvailableCommands(context: Context): List<Command> {
         ) {
             MediaPlayerService.showPlaylists(context)
         },
+        Command(
+            name = "test",
+            aliases = listOf(),
+            description = "Zeigt Playlist-Details mit Song-Liste"
+        ) {
+            runMessagingTests(context)
+        },
+        Command(
+            name = "Overlay",
+            aliases = listOf("o", "ov"),
+            description = "Zeigt Overlay an"
+        ) {
+            showtestOverlay(context)
+        },
+        Command(
+            name = "Other",
+            aliases = listOf("Othertab", "ot"),
+            description = "Zeigt Overlay an"
+        ) {
+            if (!Settings.canDrawOverlays(context)) {
+                showSimpleNotificationExtern(
+                    "Fehler",
+                    "Overlay-Berechtigung fehlt!",
+                    context = context
+                )
+                return@Command
+            }
+
+            val windowManager = context.getSystemService(WINDOW_SERVICE) as WindowManager
+
+            testOverlayLifecycle = OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
+            val supabase: SupabaseClient = SupabaseConfigALT.client
+
+            testOverlayView = ComposeView(context).apply {
+                setViewTreeLifecycleOwner(testOverlayLifecycle)
+                setViewTreeSavedStateRegistryOwner(testOverlayLifecycle)
+                setViewTreeViewModelStoreOwner(testOverlayLifecycle)
+                val startTarget = "null"
+                setContent {
+                    val backDispatcher = remember { OnBackPressedDispatcher(null) }
+                    val backDispatcherOwner = remember {
+                        object : OnBackPressedDispatcherOwner {
+                            override val lifecycle get() = testOverlayLifecycle!!.lifecycle
+                            override val onBackPressedDispatcher get() = backDispatcher
+                        }
+                    }
+                    val activityResultRegistry = remember {
+                        object : androidx.activity.result.ActivityResultRegistry() {
+                            override fun <I, O> onLaunch(
+                                requestCode: Int,
+                                contract: androidx.activity.result.contract.ActivityResultContract<I, O>,
+                                input: I,
+                                options: androidx.core.app.ActivityOptionsCompat?
+                            ) {
+                                // Overlay kann keine Activity starten → no-op
+                            }
+                        }
+                    }
+                    val activityResultRegistryOwner = remember {
+                        object : androidx.activity.result.ActivityResultRegistryOwner {
+                            override val activityResultRegistry = activityResultRegistry
+                        }
+                    }
+
+                    CompositionLocalProvider(
+                        LocalOnBackPressedDispatcherOwner provides backDispatcherOwner,
+                        LocalActivityResultRegistryOwner provides activityResultRegistryOwner
+                    ) {
+                        Box(Modifier.fillMaxSize()) {
+                            OtherBucketViewer {
+                                testOverlayView?.let { windowManager.removeView(it) }
+                                testOverlayLifecycle?.onDestroy()
+                                testOverlayView = null
+                                testOverlayLifecycle = null
+                            }
+                            IconButton(
+                                onClick = {
+                                    testOverlayView?.let { windowManager.removeView(it) }
+                                    testOverlayLifecycle?.onDestroy()
+                                    testOverlayView = null
+                                    testOverlayLifecycle = null
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(8.dp)
+                                    .size(40.dp)
+                                    .background(
+                                        Color.Black.copy(alpha = 0.6f),
+                                        shape = RoundedCornerShape(50)
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Schließen",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.CENTER
+            }
+
+            windowManager.addView(testOverlayView, params)
+        },
     )
 }
 
@@ -553,7 +723,8 @@ fun executeCommand(commandText: String, context: Context) {
         }
     }
 
-    val parts = commandText.split(" ", limit = 3)
+    val parts = commandText.split(" ")
+
     val commandInput = parts[0].lowercase()
     val argument = if (parts.size > 1) parts[1] else null
 
@@ -590,6 +761,18 @@ fun executeCommand(commandText: String, context: Context) {
                     )
                 }
             }
+            return
+        }
+
+        "nvchat", "ai", "aichat", "nv" -> {
+            // Alles hinter dem ersten Leerzeichen als Chat-Namen verwenden (inkl. ggf. Spaces/Quotes)
+            val name = if (parts.size > 1) {
+                commandText.substringAfter(" ", "").trim().ifEmpty { null }
+            } else {
+                null
+            }
+
+            createNvidiaChat(name, context)
             return
         }
 
@@ -680,7 +863,6 @@ fun executeCommand(commandText: String, context: Context) {
                                     )
 
                                 } catch (e: Exception) {
-                                    Log.e("QuietHoursService", "Weather fetch error", e)
                                     showSimpleNotificationExtern(
                                         "❌ Wetter-Fehler",
                                         "Wetterdaten konnten nicht abgerufen werden: ${e.message}",
@@ -728,7 +910,6 @@ fun executeCommand(commandText: String, context: Context) {
                         val clampedLevel = level.coerceIn(1, 5)
                         cameraManager.turnOnTorchWithStrengthLevel(cameraId, clampedLevel)
                     } catch (e: Exception) {
-                        Log.e("QuietHoursService", "Error setting flashlight level", e)
                         showSimpleNotificationExtern(
                             "❌ Taschenlampe",
                             "Helligkeit konnte nicht gesetzt werden: ${e.message}",
@@ -743,7 +924,6 @@ fun executeCommand(commandText: String, context: Context) {
                         val cameraId = cameraManager.cameraIdList.firstOrNull() ?: return
                         cameraManager.setTorchMode(cameraId, false)
                     } catch (e: Exception) {
-                        Log.e("QuietHoursService", "Error setting flashlight", e)
                         showSimpleNotificationExtern(
                             "❌ Taschenlampe",
                             "Taschenlampe konnte nicht geschaltet werden",
@@ -850,7 +1030,6 @@ fun executeCommand(commandText: String, context: Context) {
                 if (parts.size >= 2) {
                     val restOfCommand = parts[1]
 
-                    // Parse Datum und optionalen Namen (auch mit Leerzeichen in Quotes)
                     val dateAndName = parseCommandWithQuotes(restOfCommand)
 
                     if (dateAndName.isNotEmpty()) {
@@ -933,19 +1112,16 @@ fun executeCommand(commandText: String, context: Context) {
 
         "*", "todo", "task", "aufgabe" -> {
             if (argument != null) {
-                val parts = commandText.split(" ", limit = 2)
-                if (parts.size >= 2) {
-                    val todoText = parseCommandWithQuotes(parts[1])
-                    if (todoText.isNotEmpty()) {
-                        addTodo(todoText[0], context)
-                    } else {
-                        showSimpleNotificationExtern(
-                            "❌ Fehler",
-                            "Syntax: * \"deine aufgabe\"",
-                            20.seconds,
-                            context
-                        )
-                    }
+                val todoText = parts.drop(1).joinToString(" ")
+                if (todoText.isNotEmpty()) {
+                    addTodo(todoText, context)
+                } else {
+                    showSimpleNotificationExtern(
+                        "❌ Fehler",
+                        "Syntax: * \"deine aufgabe\"",
+                        20.seconds,
+                        context
+                    )
                 }
             } else {
                 showSimpleNotificationExtern(
@@ -1139,8 +1315,6 @@ fun executeCommand(commandText: String, context: Context) {
         }
 
         "showassign", "sa" -> {
-            // showassign [pattern] [show-name]
-            // Example: showassign "heise" "Heise Show"
             val parts = commandText.split(" ", limit = 2)
             if (parts.size >= 2) {
                 val args = parseCommandWithQuotes(parts[1])
@@ -1166,7 +1340,6 @@ fun executeCommand(commandText: String, context: Context) {
         }
 
         "showcreate", "sc" -> {
-            // showcreate [show-name]
             val parts = commandText.split(" ", limit = 2)
             if (parts.size >= 2) {
                 val args = parseCommandWithQuotes(parts[1])
@@ -1221,7 +1394,6 @@ fun executeCommand(commandText: String, context: Context) {
         }
 
         "showrename", "sr" -> {
-            // showrename [alter-name] [neuer-name]
             val parts = commandText.split(" ", limit = 2)
             if (parts.size >= 2) {
                 val args = parseCommandWithQuotes(parts[1])
@@ -1246,10 +1418,7 @@ fun executeCommand(commandText: String, context: Context) {
             return
         }
 
-        // ── Analytics Commands ────────────────────────────────────────────────────
-
         "stats" -> {
-            // stats [song|podcast] [dateiname-teilstring]
             val parts = commandText.split(" ", limit = 3)
             val type = parts.getOrNull(1)?.lowercase()
             val query = parts.getOrNull(2)?.lowercase()
@@ -1257,7 +1426,7 @@ fun executeCommand(commandText: String, context: Context) {
             if (type == null || query == null) {
                 showSimpleNotificationExtern(
                     "ℹ️ Stats",
-                    "Syntax: stats [song|podcast] [dateiname-teilstring]\nBeispiel: stats song beatles",
+                    "Syntax: stats [song|podcast] [suche]\nBeispiel: stats song beatles",
                     20.seconds, context
                 )
                 return
@@ -1265,25 +1434,37 @@ fun executeCommand(commandText: String, context: Context) {
 
             when (type) {
                 "song", "music", "m" -> {
-                    val allAnalytics = MediaAnalyticsManager.getAllSongAnalytics()
-                    val matched = allAnalytics.values.filter { it.path.lowercase().contains(query) }
-                    if (matched.isEmpty()) {
+                    val sessions = MediaAnalyticsManager.getSessionsForLabel(
+                        MediaAnalyticsManager.getSessions()
+                            .filter { it.type == "music" && it.label.lowercase().contains(query) }
+                            .groupBy { it.label }
+                            .maxByOrNull { (_, s) -> s.size }
+                            ?.key ?: ""
+                    )
+                    if (sessions.isEmpty()) {
                         showSimpleNotificationExtern(
                             "❌ Nicht gefunden",
                             "Kein Song mit \"$query\" in der Statistik",
                             context = context
                         )
                     } else {
-                        matched.take(3).forEach { a ->
-                            val name = a.path.substringAfterLast("/").substringBeforeLast(".")
-                            val lastPlayed = a.lastPlayedAt?.let {
-                                java.text.SimpleDateFormat("dd.MM.yyyy", Locale.GERMANY)
-                                    .format(Date(it))
-                            } ?: "Noch nie"
+                        val matchedLabels = MediaAnalyticsManager.getSessions()
+                            .filter { it.type == "music" && it.label.lowercase().contains(query) }
+                            .groupBy { it.label }
+
+                        matchedLabels.entries.take(3).forEach { (label, labelSessions) ->
+                            val totalMs = labelSessions.sumOf { it.listenedMs }
+                            val sessionCount = labelSessions.size
+                            val lastPlayedAt = labelSessions.maxOf { it.startedAt }
+                            val lastPlayed =
+                                java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMANY)
+                                    .format(Date(lastPlayedAt))
+                            val maxRepeat = labelSessions.maxOf { it.repeatCount }
+                            val repeatInfo =
+                                if (maxRepeat > 1) " · max ${maxRepeat}× wiederholt" else ""
                             showSimpleNotificationExtern(
-                                "📊 $name",
-                                "▶ ${a.playCount} Plays · ✅ ${(a.completionRate * 100).toInt()}% · ⏭ ${a.skipCount} Skips\n" +
-                                        "⏱ ${formatMs(a.totalListenedMs)} gehört\n🕐 Zuletzt: $lastPlayed",
+                                "📊 $label",
+                                "▶ ${sessionCount} Sessions · ⏱ ${formatMs(totalMs)} gehört\n🕐 Zuletzt: $lastPlayed$repeatInfo",
                                 context = context
                             )
                         }
@@ -1291,27 +1472,27 @@ fun executeCommand(commandText: String, context: Context) {
                 }
 
                 "podcast", "pod", "pd" -> {
-                    val allAnalytics = MediaAnalyticsManager.getAllPodcastAnalytics()
-                    val matched = allAnalytics.values.filter { it.path.lowercase().contains(query) }
-                    if (matched.isEmpty()) {
+                    val matchedShows = MediaAnalyticsManager.getSessions()
+                        .filter { it.type == "podcast" && it.label.lowercase().contains(query) }
+                        .groupBy { it.label }
+
+                    if (matchedShows.isEmpty()) {
                         showSimpleNotificationExtern(
                             "❌ Nicht gefunden",
                             "Kein Podcast mit \"$query\" in der Statistik",
                             context = context
                         )
                     } else {
-                        matched.take(3).forEach { a ->
-                            val name = a.path.substringAfterLast("/").substringBeforeLast(".")
-                            val completed = if (a.isCompleted) "✓ Fertig" else "In Bearbeitung"
+                        matchedShows.entries.take(3).forEach { (showName, showSessions) ->
+                            val totalMs = showSessions.sumOf { it.listenedMs }
+                            val sessionCount = showSessions.size
+                            val lastPlayedAt = showSessions.maxOf { it.startedAt }
+                            val lastPlayed =
+                                java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMANY)
+                                    .format(Date(lastPlayedAt))
                             showSimpleNotificationExtern(
-                                "📊 $name",
-                                "▶ ${a.playCount} Sessions · ${formatMs(a.totalListenedMs)} gehört\n" +
-                                        "🚀 Ø ${
-                                            String.format(
-                                                "%.1f",
-                                                a.averageSpeed
-                                            )
-                                        }x · ⏪ ${a.rewindCount} Zurückspulen\n$completed",
+                                "📊 $showName",
+                                "▶ $sessionCount Sessions · ⏱ ${formatMs(totalMs)} gehört\n🕐 Zuletzt: $lastPlayed",
                                 context = context
                             )
                         }
@@ -1328,7 +1509,6 @@ fun executeCommand(commandText: String, context: Context) {
         }
 
         "statsreset", "resetstats" -> {
-            // statsreset [song|podcast] [dateiname-teilstring]
             val parts = commandText.split(" ", limit = 3)
             val type = parts.getOrNull(1)?.lowercase()
             val query = parts.getOrNull(2)?.lowercase()
@@ -1336,45 +1516,86 @@ fun executeCommand(commandText: String, context: Context) {
             if (type == null || query == null) {
                 showSimpleNotificationExtern(
                     "ℹ️ statsreset",
-                    "Syntax: statsreset [song|podcast] [dateiname-teilstring]",
-                    20.seconds,
-                    context
+                    "Syntax: statsreset [song|podcast|all] [suche]\nstatsreset all → alles löschen",
+                    20.seconds, context
                 )
                 return
             }
 
             when (type) {
-                "song" -> {
-                    val allAnalytics = MediaAnalyticsManager.getAllSongAnalytics()
-                    var count = 0
-                    allAnalytics.values.filter { it.path.lowercase().contains(query) }.forEach {
-                        MediaAnalyticsManager.resetSongAnalytics(it.path)
-                        count++
-                    }
+                "all" -> {
+                    MediaAnalyticsManager.clearAll()
                     showSimpleNotificationExtern(
                         "✓ Reset",
-                        "$count Song-Statistiken zurückgesetzt",
+                        "Alle Analytics-Daten wurden gelöscht",
                         context = context
                     )
                 }
 
-                "podcast" -> {
-                    val allAnalytics = MediaAnalyticsManager.getAllPodcastAnalytics()
-                    var count = 0
-                    allAnalytics.values.filter { it.path.lowercase().contains(query) }.forEach {
-                        MediaAnalyticsManager.resetPodcastAnalytics(it.path)
-                        count++
+                "song", "music", "m" -> {
+                    val allSessions = MediaAnalyticsManager.getSessions()
+                    val matchedLabels = allSessions
+                        .filter { it.type == "music" && it.label.lowercase().contains(query) }
+                        .map { it.label }
+                        .toSet()
+
+                    if (matchedLabels.isEmpty()) {
+                        showSimpleNotificationExtern(
+                            "❌ Nicht gefunden",
+                            "Kein Song mit \"$query\" in der Statistik",
+                            context = context
+                        )
+                    } else {
+                        val remaining = allSessions.filter {
+                            !(it.type == "music" && matchedLabels.contains(it.label))
+                        }
+
+                        rebuildSessions(remaining)
+                        showSimpleNotificationExtern(
+                            "✓ Reset",
+                            "${matchedLabels.size} Song(s) aus Analytics entfernt:\n${
+                                matchedLabels.joinToString(
+                                    ", "
+                                )
+                            }",
+                            context = context
+                        )
                     }
-                    showSimpleNotificationExtern(
-                        "✓ Reset",
-                        "$count Podcast-Statistiken zurückgesetzt",
-                        context = context
-                    )
+                }
+
+                "podcast", "pod", "pd" -> {
+                    val allSessions = MediaAnalyticsManager.getSessions()
+                    val matchedLabels = allSessions
+                        .filter { it.type == "podcast" && it.label.lowercase().contains(query) }
+                        .map { it.label }
+                        .toSet()
+
+                    if (matchedLabels.isEmpty()) {
+                        showSimpleNotificationExtern(
+                            "❌ Nicht gefunden",
+                            "Kein Podcast mit \"$query\" in der Statistik",
+                            context = context
+                        )
+                    } else {
+                        val remaining = allSessions.filter {
+                            !(it.type == "podcast" && matchedLabels.contains(it.label))
+                        }
+                        rebuildSessions(remaining)
+                        showSimpleNotificationExtern(
+                            "✓ Reset",
+                            "${matchedLabels.size} Show(s) aus Analytics entfernt:\n${
+                                matchedLabels.joinToString(
+                                    ", "
+                                )
+                            }",
+                            context = context
+                        )
+                    }
                 }
 
                 else -> showSimpleNotificationExtern(
                     "❌ Typ",
-                    "Verwende 'song' oder 'podcast'",
+                    "Verwende 'song', 'podcast' oder 'all'",
                     context = context
                 )
             }
@@ -1382,9 +1603,7 @@ fun executeCommand(commandText: String, context: Context) {
         }
 
         "plshow", "pldetails" -> {
-            // plshow [playlist-id] — Shows playlist details with song list
             if (argument != null) {
-                // Delegate to service to show notification
                 MediaPlayerService.showPlaylists(context, MediaPlayerService.PlaylistType.MUSIC)
             } else {
                 MediaPlayerService.showPlaylists(context)
@@ -1406,18 +1625,29 @@ fun executeCommand(commandText: String, context: Context) {
             return
         }
 
-        "pla", "addtoplaylist" -> {
-            // pla [playlist-id] — Add current song to playlist
+        "algplay", "ap", "algp", "smartplay" -> {
             if (argument != null) {
-                MediaPlayerService.addCurrentToPlaylist(context, argument)
+                val query = commandText.substringAfter(" ").trim().lowercase()
+                val source = AlgorithmicPlaylistRegistry.all.find {
+                    it.id.equals(query, ignoreCase = true) ||
+                            it.name.lowercase().contains(query) ||
+                            it.id.lowercase().contains(query)
+                }
+                if (source != null) {
+                    MediaPlayerService.activateAlgorithmicPlaylist(context, source.id, 0)
+                } else {
+                    val list =
+                        AlgorithmicPlaylistRegistry.all.joinToString("\n") { "${it.icon} ${it.id} – ${it.name}" }
+                    showSimpleNotificationExtern(
+                        "❌ Nicht gefunden",
+                        "Verfügbare Playlists:\n$list",
+                        20.seconds, context
+                    )
+                }
             } else {
-                MediaPlayerService.showPlaylists(context)
-                showSimpleNotificationExtern(
-                    "ℹ️ pla",
-                    "Syntax: pla [playlist-id]",
-                    20.seconds,
-                    context
-                )
+                val playlists = AlgorithmicPlaylistRegistry.all
+                val text = playlists.joinToString(",") { it.id }
+                showSimpleNotificationExtern("🎵 Smart Playlists", text, context = context)
             }
             return
         }
@@ -1433,8 +1663,7 @@ fun executeCommand(commandText: String, context: Context) {
     if (matchedCommand != null) {
         try {
             matchedCommand.action()
-        } catch (e: Exception) {
-            Log.e("QuietHoursService", "Error executing command", e)
+        } catch (_: Exception) {
             showSimpleNotificationExtern(
                 "❌ Fehler",
                 "Befehl '${matchedCommand.name}' konnte nicht ausgeführt werden",
@@ -1548,7 +1777,6 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
         val evaNo = "8000120"
         val targetPlannedArrival = "07:05"
 
-        // Datum/Zeit für X Tage im Voraus
         val cal = Calendar.getInstance()
         cal.add(Calendar.DAY_OF_MONTH, daysAhead)
         cal.set(Calendar.HOUR_OF_DAY, 7)
@@ -1642,7 +1870,6 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
             )
         }
     } catch (e: Exception) {
-        Log.e("BahnAPI", "Fehler beim Abrufen der Bahn-Daten", e)
         showSimpleNotificationExtern(
             "❌ Bahn-Fehler",
             "Verbindungsfehler: ${e.message}",
@@ -1661,7 +1888,6 @@ private fun formatDbPlanTime(timeString: String): String {
     return timeString
 }
 
-// Hilfsfunktion: Berechne Verspätung in Minuten
 private fun calculateDbDelayMinutes(plannedTime: String, changedTime: String): Int {
     if (plannedTime.length >= 10 && changedTime.length >= 10) {
         val pHours = plannedTime.substring(6, 8).toIntOrNull() ?: 0
