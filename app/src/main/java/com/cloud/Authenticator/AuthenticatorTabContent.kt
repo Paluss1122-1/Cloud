@@ -2,7 +2,6 @@ package com.cloud.authenticator
 
 import android.content.Context
 import android.content.ContextWrapper
-import android.util.Log
 import androidx.biometric.BiometricPrompt
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators
