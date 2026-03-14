@@ -1,5 +1,6 @@
 *.iml
 .gradle
+gradle/
 /local.properties
 /.idea/caches
 /.idea/libraries
@@ -13,7 +14,8 @@
 .externalNativeBuild
 .cxx
 local.properties
-app/src/main/java/com/example/cloud/Config.kt
 gradle.properties
-keystore/
 app/src/main/java/com/cloud/Config.kt
+local.properties
+keystore/
+.idea/
