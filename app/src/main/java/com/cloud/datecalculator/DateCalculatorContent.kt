@@ -56,7 +56,6 @@ fun DateCalculatorContent(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Enddatum auswählen
         DateSelectionCard(
             label = "Enddatum",
             selectedDate = endDate,
@@ -75,10 +74,7 @@ fun DateCalculatorContent(modifier: Modifier = Modifier) {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFF4CAF50)
-                )
+                    .padding(vertical = 16.dp)
             ) {
                 Column(
                     modifier = Modifier
@@ -174,9 +170,6 @@ fun DateSelectionCard(
                         calendar.get(Calendar.DAY_OF_MONTH)
                     ).show()
                 },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF4CAF50)
-                ),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
