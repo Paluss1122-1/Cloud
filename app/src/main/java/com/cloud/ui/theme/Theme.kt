@@ -1,6 +1,5 @@
 package com.cloud.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -10,6 +9,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import java.util.Calendar
 
 val hellgruen = Color(0xFF4C8000) // Dunklere Chartreuse / Olive
 val gruen = Color(0xFF228B22) // ForestGreen (Waldgrün)
@@ -44,7 +44,7 @@ fun CloudTheme(
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        dynamicColor -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
@@ -58,4 +58,13 @@ fun CloudTheme(
         typography = Typography,
         content = content
     )
+}
+
+fun c(): Color {
+    val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+
+    return when (currentHour) {
+        in 6..16 -> Color(0xFF4CAF50)
+        else -> Color(0xFF001FBB)
+    }
 }
