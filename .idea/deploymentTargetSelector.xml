@@ -4,11 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="app">
         <option name="selectionMode" value="DROPDOWN" />
-<<<<<<< HEAD
-        <DropdownSelection timestamp="2026-03-11T19:17:45.561904900Z">
-=======
-        <DropdownSelection timestamp="2026-02-23T15:17:12.244225700Z">
->>>>>>> 5b2c0d43b49d1b7c8386038afd5b0502557fc336
+      </SelectionState>
+      <SelectionState runConfigName="AiTab">
+        <option name="selectionMode" value="DROPDOWN" />
+        <DropdownSelection timestamp="2026-03-14T22:32:24.179218900Z">
           <Target type="DEFAULT_BOOT">
             <handle>
               <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\Paul\.android\avd\Pixel_9.avd" />
@@ -16,6 +15,12 @@
           </Target>
         </DropdownSelection>
         <DialogSelection />
+      </SelectionState>
+      <SelectionState runConfigName="MainActivity">
+        <option name="selectionMode" value="DROPDOWN" />
+      </SelectionState>
+      <SelectionState runConfigName="TestMainActivity">
+        <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
     </selectionStates>
   </component>
