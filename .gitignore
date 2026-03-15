@@ -18,3 +18,5 @@ app/src/main/java/com/cloud/Config.kt
 local.properties
 keystore/
 .idea/
+postcommit.py
+AI/
