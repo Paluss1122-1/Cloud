@@ -138,7 +138,6 @@ import androidx.core.net.toUri
 import coil.compose.rememberAsyncImagePainter
 import com.cloud.AesEncryption
 import com.cloud.Config
-import com.cloud.R
 import com.cloud.ShizukuManager
 import com.cloud.audiorecorder.AudioRecorderContent
 import com.cloud.authenticator.AuthenticatorTab
@@ -167,6 +166,8 @@ import com.cloud.ui.theme.Cloud
 import com.cloud.ui.theme.c
 import com.cloud.vocabtab.VocabTab
 import com.cloud.weathertab.WeatherTabContent
+import com.cloud.R
+import com.cloud.aitab.AITabContent
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -198,6 +199,11 @@ enum class MenuItem(
         "Private Cloud",
         "☁️",
         {}
+    ),
+    AITAB(
+        "AI Tab",
+        "☁️",
+        { AITabContent() }
     ),
     BROWSER(
         "Browser",
