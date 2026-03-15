@@ -56,7 +56,7 @@ class MainActivity : FragmentActivity() {
                     ObjectAnimator.ofFloat(splashScreenView, View.TRANSLATION_Y, 0f, -splashScreenView.height.toFloat())
                 )
                 interpolator = AnticipateInterpolator()
-                duration = 2000L
+                duration = 1000L
             }
             animator.doOnEnd { splashScreenView.remove() }
             animator.start()
