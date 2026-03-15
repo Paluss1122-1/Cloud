@@ -248,14 +248,14 @@ class QuietHoursNotificationService : Service() {
             }
 
             if (isCurrentlyQuietHours) {
-                nextChange.set(Calendar.HOUR_OF_DAY, quietEnd)
+                nextChange.set(Calendar.HOUR_OF_DAY, quietStart)
                 nextChange.set(Calendar.MINUTE, 0)
 
                 if (nextChange.timeInMillis <= now.timeInMillis) {
                     nextChange.add(Calendar.DAY_OF_YEAR, 1)
                 }
             } else {
-                nextChange.set(Calendar.HOUR_OF_DAY, quietStart)
+                nextChange.set(Calendar.HOUR_OF_DAY, quietEnd)
                 nextChange.set(Calendar.MINUTE, 0)
 
                 if (nextChange.timeInMillis <= now.timeInMillis) {
