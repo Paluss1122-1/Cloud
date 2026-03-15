@@ -16,30 +16,15 @@ data class ERRORINSERTDATA(
 
 suspend fun ERRORINSERT(data: ERRORINSERTDATA): Int {
     try {
-        SupabaseConfigALT.client.from("error_reports")
-            .insert(data)
-            .decodeSingle<ErrorReportResponse>()
-
+        SupabaseConfigALT.client.from("error_reports").insert(data)
         return 1
     } catch (e: CancellationException) {
-        Log.w("ERRORINSERT", "⚠️ Coroutine was cancelled")
         throw e
     } catch (e: Exception) {
         Log.e("ERRORINSERT", "❌ FAILURE - Error insertion failed")
-        Log.e("ERRORINSERT", "🔴 Exception type: ${e::class.simpleName}")
-        Log.e("ERRORINSERT", "🔴 Error message: ${e.message}")
-        Log.e("ERRORINSERT", "🔴 Error code: ${if (e is io.github.jan.supabase.postgrest.exception.PostgrestRestException) e.code else "N/A"}")
+        Log.e("ERRORINSERT", "🔴 ${e::class.simpleName}: ${e.message}")
         Log.e("ERRORINSERT", "📝 Failed data: $data")
         Log.e("ERRORINSERT", "Stack trace:", e)
     }
     return 0
 }
-
-@Serializable
-data class ErrorReportResponse(
-    val id: Int,
-    val service_name: String,
-    val error_message: String,
-    val created_at: String,
-    val severity: String
-)
