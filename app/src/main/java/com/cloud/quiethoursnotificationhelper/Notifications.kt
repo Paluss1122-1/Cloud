@@ -77,7 +77,7 @@ fun scheduleNextCheck(context: Context) {
     val now = Calendar.getInstance()
     val quietStart = getQuietStartHour(context)
     val quietEnd = getQuietEndHour(context)
-    val nextChange = calculateNextStatusChange(now, quietEnd,quietStart)
+    val nextChange = calculateNextStatusChange(now,quietStart, quietEnd)
     val delayMillis = nextChange.timeInMillis - now.timeInMillis
     val delayMinutes = delayMillis / 1000 / 60
 
