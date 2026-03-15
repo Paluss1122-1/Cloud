@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import com.cloud.quiethoursnotificationhelper.isLaptopConnected
 import com.cloud.quiethoursnotificationhelper.isLaptopConnectedFlow
+import com.cloud.quiethoursnotificationhelper.laptopIp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -129,22 +130,20 @@ class ShareActivity : ComponentActivity() {
         fileName: String,
         mimeType: String
     ): Boolean {
-        val laptopIps = Config.LAPTOP_IPS
-        for (ip in laptopIps) {
-            try {
-                val socket = java.net.Socket()
-                socket.connect(java.net.InetSocketAddress(ip, Config.IMAGE_SHARE_PORT), 3000)
-                val out = socket.getOutputStream()
+        if (laptopIp == "") return false
+        try {
+            val socket = java.net.Socket()
+            socket.connect(java.net.InetSocketAddress(laptopIp, Config.IMAGE_SHARE_PORT), 3000)
+            val out = socket.getOutputStream()
 
-                // Header: "fileName|mimeType\n" dann raw bytes
-                val header = "$fileName|$mimeType\n".toByteArray(Charsets.UTF_8)
-                out.write(header)
-                out.write(bytes)
-                out.flush()
-                socket.close()
-                return true
-            } catch (_: Exception) {
-            }
+            // Header: "fileName|mimeType\n" dann raw bytes
+            val header = "$fileName|$mimeType\n".toByteArray(Charsets.UTF_8)
+            out.write(header)
+            out.write(bytes)
+            out.flush()
+            socket.close()
+            return true
+        } catch (_: Exception) {
         }
         return false
     }
