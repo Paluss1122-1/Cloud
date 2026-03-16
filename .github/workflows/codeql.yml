@@ -49,6 +49,84 @@ jobs:
         run: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
+      - name: Create Config.kt
+        run: |
+          cat > app/src/main/java/com/cloud/Config.kt << 'EOF'
+          package com.cloud
+          import android.annotation.SuppressLint
+          import android.util.Base64
+          import io.github.jan.supabase.annotations.SupabaseInternal
+          import io.github.jan.supabase.createSupabaseClient
+          import io.github.jan.supabase.postgrest.Postgrest
+          import io.github.jan.supabase.realtime.Realtime
+          import io.github.jan.supabase.storage.Storage
+          import io.ktor.client.engine.okhttp.OkHttp
+          import io.ktor.client.plugins.websocket.WebSockets
+          import javax.crypto.Cipher
+          import javax.crypto.spec.SecretKeySpec
+          object Config {
+              const val SUPABASE_URL = "${{ secrets.SUPABASE_URL }}"
+              const val SUPABASE_PUBLISHABLE_KEY = "${{ secrets.SUPABASE_KEY }}"
+              const val SUPABASE_BUCKET = "Files"
+              const val BWMP = "${{ secrets.BWMP }}"
+              const val DBKEY = "${{ secrets.DBKEY }}"
+              const val DBKEY1 = "${{ secrets.DBKEY1 }}"
+              const val NVIDIA = "${{ secrets.NVIDIA }}"
+              const val WEATHERAPI_KEY = "${{ secrets.WEATHERAPI_KEY }}"
+              const val LAT = ${{ secrets.LAT }}
+              const val LON = ${{ secrets.LON }}
+              val LAPTOP_IPS = listOf("192.168.178.20", "192.168.178.72")
+              const val SYNC_PORT = 8888
+              const val NOTIFICATION_PORT = 8889
+              const val UPDATE_PORT = 8890
+              const val CLIPBOARD_PORT = 8891
+              const val DISCOVERY_PORT = 8892
+              const val TRIGGER_PORT = 8893
+              const val SESSION_PORT = 8894
+              const val AI_RECEIVE_PORT = 8895
+              const val FLASHCARD_SEND_PORT = 8896
+              const val FLASHCARD_RECEIVE_PORT = 8897
+              const val IMAGE_SHARE_PORT = 8898
+              const val MEDIA_COMMAND_PORT = 8899
+              const val MEDIA_STATE_PORT = 8900
+              const val AI_PORT = 8902
+              const val GMAILPASSWORD = "${{ secrets.GMAILPASSWORD }}"
+              @OptIn(SupabaseInternal::class)
+              val client = createSupabaseClient(supabaseUrl = SUPABASE_URL, supabaseKey = SUPABASE_PUBLISHABLE_KEY) {
+                  install(Storage); install(Postgrest); install(Realtime)
+                  httpConfig { install(WebSockets) }
+                  httpEngine = OkHttp.create()
+              }
+              private const val FIXED_KEY = "${{ secrets.FIXED_KEY }}"
+              private val secretKey = SecretKeySpec(FIXED_KEY.toByteArray(), "AES")
+              @SuppressLint("GetInstance")
+              fun encrypt(plainText: String): String {
+                  val cipher = Cipher.getInstance("AES")
+                  cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+                  return Base64.encodeToString(cipher.doFinal(plainText.toByteArray()), Base64.NO_WRAP)
+              }
+              @SuppressLint("GetInstance")
+              fun decrypt(encryptedBase64: String): String {
+                  val cipher = Cipher.getInstance("AES")
+                  cipher.init(Cipher.DECRYPT_MODE, secretKey)
+                  return cipher.doFinal(Base64.decode(encryptedBase64, Base64.NO_WRAP)).toString(Charsets.UTF_8)
+              }
+          }
+          object SupabaseConfigALT {
+              const val SUPABASE_URL = "${{ secrets.SUPABASE_ALT_URL }}"
+              const val SUPABASE_PUBLISHABLE_KEY = "${{ secrets.SUPABASE_ALT_KEY }}"
+              @OptIn(SupabaseInternal::class)
+              val client = createSupabaseClient(supabaseUrl = SUPABASE_URL, supabaseKey = SUPABASE_PUBLISHABLE_KEY) {
+                  install(Storage); install(Postgrest); install(Realtime)
+                  httpConfig { install(WebSockets) }
+                  httpEngine = OkHttp.create()
+              }
+          }
+          object TMDBConfig {
+              const val APIKEY = "${{ secrets.TMDB_APIKEY }}"
+          }
+          EOF
+
       - name: Build project
         if: matrix.build-mode == 'manual'
         run: ./gradlew assembleDebug
