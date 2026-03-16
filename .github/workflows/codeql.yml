@@ -45,6 +45,10 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
 
+      - name: Setup local.properties
+        run: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+
       - name: Build project
         if: matrix.build-mode == 'manual'
         run: ./gradlew assembleDebug
