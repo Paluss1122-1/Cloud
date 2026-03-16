@@ -16,4 +16,3 @@ keystore/
 .idea/
 postcommit.py
 AI/
-gradle.properties
