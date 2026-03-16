@@ -18,7 +18,7 @@ kotlin {
 }
 
 android {
-    signingConfigs {
+    /*signingConfigs {
         create("release") {
             storeFile =
                 file("C:\\Users\\pauls\\AndroidStudioProjects\\Cloud\\keystore\\my-release-key.jks")
@@ -26,7 +26,7 @@ android {
             keyAlias = localProps["KEY_ALIAS"] as String
             keyPassword = localProps["KEY_PASSWORD"] as String
         }
-    }
+    }*/
     namespace = "com.cloud"
     compileSdk = 36
 
@@ -38,18 +38,6 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        buildConfigField(
-            "String",
-            "SUPABASE_ANON_KEY",
-            "\"${project.properties["SUPABASE_ANON_KEY"]}\""
-        )
-
-        buildConfigField(
-            "String",
-            "WEATHERAPI_API_KEY",
-            "\"${project.properties["WEATHERAPI_api_key"]}\""
-        )
     }
 
     buildFeatures {
@@ -66,7 +54,7 @@ android {
                 "\"${project.properties["SUPABASE_PUBLISHABLE_KEY"]}\""
             )
         }
-        release {
+        /*release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -78,7 +66,7 @@ android {
                 "\"${project.properties["SUPABASE_PUBLISHABLE_KEY"]}\""
             )
             signingConfig = signingConfigs.getByName("release")
-        }
+        }*/
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
