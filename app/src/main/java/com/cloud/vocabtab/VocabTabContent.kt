@@ -35,7 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cloud.quiethoursnotificationhelper.flashcardVokabelnFlow
-import com.cloud.quiethoursnotificationhelper.trySendOcrToLaptop
+import com.cloud.quiethoursnotificationhelper.trySendImageToLaptop
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -65,7 +65,6 @@ fun VocabTab() {
     val scope = rememberCoroutineScope()
 
     var screen by remember { mutableStateOf(VokabelTabScreen.UPLOAD) }
-    var selectedUri by remember { mutableStateOf<Uri?>(null) }
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     var rawText by remember { mutableStateOf("") }
     var vokabeln by remember { mutableStateOf<List<Vokabel>>(emptyList()) }
@@ -77,7 +76,6 @@ fun VocabTab() {
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         uri?.let {
-            selectedUri = it
             bitmap = uriToBitmap(context, it)
             rawText = ""
             vokabeln = emptyList()
@@ -109,13 +107,11 @@ fun VocabTab() {
                         errorMessage = null
                         scope.launch {
                             try {
-                                rawText = extractTextFromBitmap(bmp)
-                                if (rawText.isBlank()) {
-                                    errorMessage = "Kein Text erkannt."
-                                    return@launch
-                                }
-                                // Immer Laptop versuchen, kein isLaptopConnected-Gate
-                                val sent = trySendOcrToLaptop(rawText)
+                                // In VocabTab.kt → onExtract-Block
+                                val bytes = java.io.ByteArrayOutputStream().also {
+                                    bmp.compress(Bitmap.CompressFormat.JPEG, 90, it)
+                                }.toByteArray()
+                                val sent = trySendImageToLaptop(bytes)
                                 if (sent) {
                                     val result = flashcardVokabelnFlow
                                         .first { it != null }  // wartet auf Antwort (Flow hat 30s Timeout)
@@ -708,13 +704,6 @@ fun uriToBitmap(context: android.content.Context, uri: Uri): Bitmap? {
     } catch (_: Exception) {
         null
     }
-}
-
-suspend fun extractTextFromBitmap(bitmap: Bitmap): String {
-    val image = InputImage.fromBitmap(bitmap, 0)
-    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-    val result = recognizer.process(image).await()
-    return result.text
 }
 
 suspend fun extractVokabelnFromBitmap(bitmap: Bitmap): List<Vokabel> {
