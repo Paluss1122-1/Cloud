@@ -220,10 +220,12 @@ class QuietHoursNotificationService : Service() {
         const val MAX_MESSAGES_PER_CONTACT = 50
         const val MAX_VOICE_NOTE_FILES = 20
 
-        const val ACTION_ENABLE_HOTSPOT = "com.cloud.ACTION_ENABLE_HOTSPOT"
-        private const val HOTSPOT_HOUR = 20
-        private const val HOTSPOT_MINUTE = 59
-        const val HOTSPOT_REQUEST_CODE = 1002
+        const val ACTION_RESTORE_NOTIFICATION = "com.cloud.ACTION_RESTORE_NOTIFICATION"
+
+        const val ACTION_UPDATE_SINGLE_SENDER = "com.cloud.ACTION_UPDATE_SINGLE_SENDER"
+        const val ACTION_CONTENT_INTENT = "com.cloud.ACTION_CONTENT_INTENT"
+        const val ACTION_SYNC_LAPTOP = "com.cloud.ACTION_SYNC_LAPTOP"
+        const val SHOW_OVERLAY = "com.cloud.SHOW_OVERLAY"
 
         var currentSenderForVoiceNote: String? = null
         var voiceNoteFiles: List<File> = emptyList()
@@ -272,7 +274,7 @@ class QuietHoursNotificationService : Service() {
 
         fun updateSingleSenderNotification(context: Context, sender: String) {
             val intent = Intent(context, QuietHoursNotificationService::class.java).apply {
-                action = "ACTION_UPDATE_SINGLE_SENDER"
+                action = ACTION_UPDATE_SINGLE_SENDER
                 putExtra("EXTRA_SENDER", sender)
             }
             context.startService(intent)
@@ -280,7 +282,7 @@ class QuietHoursNotificationService : Service() {
 
         fun showtestOverlay(context: Context) {
             val intent = Intent(context, QuietHoursNotificationService::class.java).apply {
-                action = "ACTION_TEST_OVERLAY"
+                action = SHOW_OVERLAY
             }
             context.startService(intent)
         }
@@ -426,11 +428,6 @@ class QuietHoursNotificationService : Service() {
                     START_NOT_STICKY
                 }
 
-                "ACTION_TEST_OVERLAY" -> {
-                    showTestOverlay()
-                    START_STICKY
-                }
-
                 ACTION_SCHEDULED_START -> {
                     isCurrentlyQuietHours = isQuietHoursNow(this)
                     startForeground(NOTIFICATION_ID, createNotification(isCurrentlyQuietHours, this))
@@ -442,20 +439,25 @@ class QuietHoursNotificationService : Service() {
                     START_STICKY
                 }
 
-                "ACTION_RESTORE_NOTIFICATION" -> {
+                SHOW_OVERLAY -> {
+                    showTestOverlay()
+                    START_STICKY
+                }
+
+                ACTION_RESTORE_NOTIFICATION -> {
                     checkQuietHours(this)
                     val notification = createNotification(isCurrentlyQuietHours, this)
                     startForeground(NOTIFICATION_ID, notification)
                     START_STICKY
                 }
 
-                "ACTION_UPDATE_SINGLE_SENDER" -> {
+                ACTION_UPDATE_SINGLE_SENDER -> {
                     val sender = intent.getStringExtra("EXTRA_SENDER")
                     if (sender != null) updateSingleSenderNotification(sender, this)
                     START_STICKY
                 }
 
-                "ACTION_CONTENT_INTENT" -> {
+                ACTION_CONTENT_INTENT -> {
                     val cameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
                     try {
                         val cameraId = cameraManager.cameraIdList.firstOrNull()
@@ -540,7 +542,7 @@ class QuietHoursNotificationService : Service() {
                     START_STICKY
                 }
 
-                "ACTION_SYNC_LAPTOP" -> {
+                ACTION_SYNC_LAPTOP -> {
                     closeNots()
                     syncTodosWithLaptop(this@QuietHoursNotificationService)
                     START_STICKY
