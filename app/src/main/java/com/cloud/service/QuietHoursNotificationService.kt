@@ -76,10 +76,10 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.cloud.authenticator.CloudAutofillService
+import com.cloud.Config.DEL_GAL_CONF
+import com.cloud.Config.cms
 import com.cloud.mediarecorder.AudioRecorder
 import com.cloud.quiethoursnotificationhelper.GalleryImage
-import com.cloud.quiethoursnotificationhelper.checkIfNearLocation
 import com.cloud.quiethoursnotificationhelper.checkQuietHours
 import com.cloud.quiethoursnotificationhelper.cleanupOldMessages
 import com.cloud.quiethoursnotificationhelper.commandReceiver
@@ -111,13 +111,43 @@ import com.cloud.quiethoursnotificationhelper.updateNotification
 import com.cloud.quiethoursnotificationhelper.updateSingleSenderNotification
 import com.cloud.service.AutoClickAccessibilityService.Companion.closeNots
 import com.cloud.showSimpleNotificationExtern
+import com.cloud.ERRORINSERT
+import com.cloud.ERRORINSERTDATA
 import rikka.shizuku.SystemServiceHelper.getSystemService
 import java.io.File
 import java.util.Calendar
+import java.time.Instant
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class QuietHoursNotificationService : Service() {
+    private val errorScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    private fun reportServiceError(where: String, t: Throwable) {
+        Log.e("QuietHoursService", "Unhandled error in $where", t)
+        val stack = t.stackTraceToString()
+        val trimmed = if (stack.length > 8000) stack.take(8000) + "\n...[truncated]" else stack
+        errorScope.launch {
+            try {
+                ERRORINSERT(
+                    ERRORINSERTDATA(
+                        service_name = "QuietHoursNotificationService:$where",
+                        error_message = trimmed,
+                        created_at = Instant.now().toString(),
+                        severity = "Error"
+                    )
+                )
+            } catch (_: Exception) {
+                // Nothing: Fehlerreporting darf selbst keinen Crash auslösen.
+            }
+        }
+    }
+
     companion object {
         const val CHANNEL_ID = "quiet_hours_channel"
         const val NOTIFICATION_ID = 999999
@@ -213,8 +243,26 @@ class QuietHoursNotificationService : Service() {
         var currentRecordingFile: File? = null
 
         fun getCheckRunnable(context: Context): Runnable = Runnable {
-            checkQuietHours(context)
-            scheduleNextCheck(context)
+            try {
+                checkQuietHours(context)
+                scheduleNextCheck(context)
+            } catch (e: Exception) {
+                Log.e("QuietHoursService", "checkRunnable failed", e)
+                // Nachts ohne Logcat: zumindest via Error-Backend melden.
+                CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+                    try {
+                        ERRORINSERT(
+                            ERRORINSERTDATA(
+                                service_name = "QuietHoursNotificationService:checkRunnable",
+                                error_message = e.stackTraceToString().take(8000),
+                                created_at = Instant.now().toString(),
+                                severity = "Error"
+                            )
+                        )
+                    } catch (_: Exception) {
+                    }
+                }
+            }
         }
 
         fun startService(context: Context) {
@@ -274,9 +322,12 @@ class QuietHoursNotificationService : Service() {
             if (key == "saved_number" || key == "saved_number_start") {
                 handler.removeCallbacks(checkRunnable)
 
-                isCurrentlyQuietHours = isQuietHoursNow(this)
-
-                updateNotification(this)
+                try {
+                    isCurrentlyQuietHours = isQuietHoursNow(this)
+                    updateNotification(this)
+                } catch (e: Exception) {
+                    reportServiceError("prefChangeListener:$key", e)
+                }
 
                 handler.post(checkRunnable)
             }
@@ -288,9 +339,17 @@ class QuietHoursNotificationService : Service() {
         createNotificationChannel(this)
 
         isCurrentlyQuietHours = isQuietHoursNow(this)
-        startForeground(NOTIFICATION_ID, createNotification(isCurrentlyQuietHours, this))
+        try {
+            startForeground(NOTIFICATION_ID, createNotification(isCurrentlyQuietHours, this))
+        } catch (e: Exception) {
+            reportServiceError("onCreate:startForeground", e)
+        }
 
-        sharedPreferences.registerOnSharedPreferenceChangeListener(prefChangeListener)
+        try {
+            sharedPreferences.registerOnSharedPreferenceChangeListener(prefChangeListener)
+        } catch (e: Exception) {
+            reportServiceError("onCreate:registerOnSharedPreferenceChangeListener", e)
+        }
 
         handler.post(checkRunnable)
         schedulePeriodicCleanup()
@@ -298,159 +357,201 @@ class QuietHoursNotificationService : Service() {
         startTriggerListenerIfHomeWifi(this)
         startAiResponseListener(this)
         startDiscoveryListener()
-        registerWifiCallback()
+        try {
+            registerWifiCallback()
+        } catch (e: Exception) {
+            reportServiceError("onCreate:registerWifiCallback", e)
+        }
 
         val filter = IntentFilter(ACTION_MESSAGE_SENT)
-        registerReceiver(messageSentReceiver, filter, RECEIVER_NOT_EXPORTED)
+        try {
+            registerReceiver(messageSentReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } catch (e: Exception) {
+            reportServiceError("onCreate:registerReceiver messageSentReceiver", e)
+        }
 
         val dismissFilter = IntentFilter(ACTION_NOTIFICATION_DISMISSED)
-        registerReceiver(notificationDismissReceiver, dismissFilter, RECEIVER_NOT_EXPORTED)
+        try {
+            registerReceiver(notificationDismissReceiver, dismissFilter, RECEIVER_NOT_EXPORTED)
+        } catch (e: Exception) {
+            reportServiceError("onCreate:registerReceiver notificationDismissReceiver", e)
+        }
 
         val timeChangeFilter = IntentFilter().apply {
             addAction(ACTION_CHANGE_START)
             addAction(ACTION_CHANGE_END)
         }
-        registerReceiver(timeChangeReceiver, timeChangeFilter, RECEIVER_NOT_EXPORTED)
+        try {
+            registerReceiver(timeChangeReceiver, timeChangeFilter, RECEIVER_NOT_EXPORTED)
+        } catch (e: Exception) {
+            reportServiceError("onCreate:registerReceiver timeChangeReceiver", e)
+        }
 
         val commandFilter = IntentFilter(ACTION_EXECUTE_COMMAND)
-        registerReceiver(commandReceiver, commandFilter, RECEIVER_NOT_EXPORTED)
+        try {
+            registerReceiver(commandReceiver, commandFilter, RECEIVER_NOT_EXPORTED)
+        } catch (e: Exception) {
+            reportServiceError("onCreate:registerReceiver commandReceiver", e)
+        }
 
         val markReadFilter = IntentFilter(ACTION_MARK_PARTS_READ)
-        registerReceiver(markReadReceiver, markReadFilter, RECEIVER_NOT_EXPORTED)
+        try {
+            registerReceiver(markReadReceiver, markReadFilter, RECEIVER_NOT_EXPORTED)
+        } catch (e: Exception) {
+            reportServiceError("onCreate:registerReceiver markReadReceiver", e)
+        }
     }
 
     private fun schedulePeriodicCleanup() {
         workerHandler.postDelayed(object : Runnable {
             override fun run() {
-                cleanupReadMessages()
-                cleanupOldMessages()
-                workerHandler.postDelayed(this, 6 * 60 * 60 * 1000) // 6h
+                try {
+                    cleanupReadMessages()
+                    cleanupOldMessages()
+                } catch (e: Exception) {
+                    reportServiceError("schedulePeriodicCleanup", e)
+                } finally {
+                    // Egal ob Crash-Fall: nächstes Cleanup wieder planen.
+                    workerHandler.postDelayed(this, 6 * 60 * 60 * 1000) // 6h
+                }
             }
         }, 6 * 60 * 60 * 1000)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_SCHEDULED_STOP -> {
-                stopSelf()
-                return START_NOT_STICKY
-            }
-
-            "ACTION_TEST_OVERLAY" -> {
-                showTestOverlay()
-            }
-
-            ACTION_SCHEDULED_START -> {
-                isCurrentlyQuietHours = isQuietHoursNow(this)
-                startForeground(NOTIFICATION_ID, createNotification(isCurrentlyQuietHours, this))
-            }
-
-            ACTION_SHOW_MESSAGES -> {
-                showUnreadMessages(this)
-            }
-
-            "ACTION_RESTORE_NOTIFICATION" -> {
-                checkQuietHours(this)
-                val notification = createNotification(isCurrentlyQuietHours, this)
-                startForeground(NOTIFICATION_ID, notification)
-            }
-
-            "ACTION_UPDATE_SINGLE_SENDER" -> {
-                val sender = intent.getStringExtra("EXTRA_SENDER")
-                if (sender != null) {
-                    updateSingleSenderNotification(sender, this)
+        return try {
+            when (intent?.action) {
+                ACTION_SCHEDULED_STOP -> {
+                    stopSelf()
+                    START_NOT_STICKY
                 }
-            }
 
-            "ACTION_CONTENT_INTENT" -> {
-                val cameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
-                try {
-                    val cameraId = cameraManager.cameraIdList.firstOrNull()
+                "ACTION_TEST_OVERLAY" -> {
+                    showTestOverlay()
+                    START_STICKY
+                }
 
-                    if (cameraId != null) {
-                        cameraManager.turnOnTorchWithStrengthLevel(cameraId, 1)
+                ACTION_SCHEDULED_START -> {
+                    isCurrentlyQuietHours = isQuietHoursNow(this)
+                    startForeground(NOTIFICATION_ID, createNotification(isCurrentlyQuietHours, this))
+                    START_STICKY
+                }
+
+                ACTION_SHOW_MESSAGES -> {
+                    showUnreadMessages(this)
+                    START_STICKY
+                }
+
+                "ACTION_RESTORE_NOTIFICATION" -> {
+                    checkQuietHours(this)
+                    val notification = createNotification(isCurrentlyQuietHours, this)
+                    startForeground(NOTIFICATION_ID, notification)
+                    START_STICKY
+                }
+
+                "ACTION_UPDATE_SINGLE_SENDER" -> {
+                    val sender = intent.getStringExtra("EXTRA_SENDER")
+                    if (sender != null) updateSingleSenderNotification(sender, this)
+                    START_STICKY
+                }
+
+                "ACTION_CONTENT_INTENT" -> {
+                    val cameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
+                    try {
+                        val cameraId = cameraManager.cameraIdList.firstOrNull()
+                        if (cameraId != null) cameraManager.turnOnTorchWithStrengthLevel(cameraId, 1)
+                    } catch (e: Exception) {
+                        Log.e("QuietHoursService", "Error setting flashlight level", e)
+                        showSimpleNotification(
+                            "❌ Taschenlampe",
+                            "Helligkeit konnte nicht gesetzt werden: ${e.message}",
+                            20.seconds
+                        )
                     }
-                } catch (e: Exception) {
-                    Log.e("QuietHoursService", "Error setting flashlight level", e)
-                    showSimpleNotification(
-                        "❌ Taschenlampe",
-                        "Helligkeit konnte nicht gesetzt werden: ${e.message}",
-                        20.seconds
-                    )
+                    START_STICKY
                 }
-            }
 
-            ACTION_OPEN_SETTINGS -> {
-                openAndroidSettings()
-            }
-
-            ACTION_OPEN_MUSIC_PLAYER -> {
-                openMusicPlayer()
-            }
-
-            ACTION_RESTART_MUSIC_PLAYER -> {
-                restartMusicPlayer(context = this)
-            }
-
-            ACTION_PLAY_VOICE_NOTE -> {
-                val sender = intent.getStringExtra(EXTRA_SENDER_FOR_VOICE)
-                if (sender != null) {
-                    playLatestVoiceNote(
-                        sender,
-                        this
-                    )
+                ACTION_OPEN_SETTINGS -> {
+                    openAndroidSettings()
+                    START_STICKY
                 }
-            }
 
-            ACTION_NEXT_VOICE_NOTE -> {
-                playNextVoiceNote(this)
-            }
-
-            ACTION_PREV_VOICE_NOTE -> {
-                playPreviousVoiceNote(this)
-            }
-
-            ACTION_STOP_VOICE_NOTE -> {
-                stopVoiceNote(this)
-            }
-
-            ACTION_SHOW_GALLERY -> {
-                loadGalleryImages(0, this)
-            }
-
-            ACTION_NEXT_GALLERY_IMAGE -> {
-                showNextGalleryImage(this)
-            }
-
-            ACTION_PREV_GALLERY_IMAGE -> {
-                showPreviousGalleryImage(this)
-            }
-
-            ACTION_CONFIRM_DELETE_IMAGE -> {
-                val imageIndex = intent.getIntExtra(EXTRA_IMAGE_INDEX, -1)
-                if (imageIndex >= 0) {
-                    showDeleteConfirmation(imageIndex, this)
+                ACTION_OPEN_MUSIC_PLAYER -> {
+                    openMusicPlayer()
+                    START_STICKY
                 }
-            }
 
-            ACTION_DELETE_IMAGE -> {
-                val imageIndex = intent.getIntExtra(EXTRA_IMAGE_INDEX, -1)
-                if (imageIndex >= 0) {
-                    deleteGalleryImage(imageIndex, this)
+                ACTION_RESTART_MUSIC_PLAYER -> {
+                    restartMusicPlayer(context = this)
+                    START_STICKY
                 }
-            }
 
-            ACTION_CANCEL_DELETE -> {
-                val notificationManager = getSystemService(NotificationManager::class.java)
-                notificationManager.cancel(80000)
-            }
+                ACTION_PLAY_VOICE_NOTE -> {
+                    val sender = intent.getStringExtra(EXTRA_SENDER_FOR_VOICE)
+                    if (sender != null) playLatestVoiceNote(sender, this)
+                    START_STICKY
+                }
 
-            "ACTION_SYNC_LAPTOP" -> {
-                closeNots()
-                syncTodosWithLaptop(this@QuietHoursNotificationService)
+                ACTION_NEXT_VOICE_NOTE -> {
+                    playNextVoiceNote(this)
+                    START_STICKY
+                }
+
+                ACTION_PREV_VOICE_NOTE -> {
+                    playPreviousVoiceNote(this)
+                    START_STICKY
+                }
+
+                ACTION_STOP_VOICE_NOTE -> {
+                    stopVoiceNote(this)
+                    START_STICKY
+                }
+
+                ACTION_SHOW_GALLERY -> {
+                    loadGalleryImages(0, this)
+                    START_STICKY
+                }
+
+                ACTION_NEXT_GALLERY_IMAGE -> {
+                    showNextGalleryImage(this)
+                    START_STICKY
+                }
+
+                ACTION_PREV_GALLERY_IMAGE -> {
+                    showPreviousGalleryImage(this)
+                    START_STICKY
+                }
+
+                ACTION_CONFIRM_DELETE_IMAGE -> {
+                    val imageIndex = intent.getIntExtra(EXTRA_IMAGE_INDEX, -1)
+                    if (imageIndex >= 0) showDeleteConfirmation(imageIndex, this)
+                    START_STICKY
+                }
+
+                ACTION_DELETE_IMAGE -> {
+                    val imageIndex = intent.getIntExtra(EXTRA_IMAGE_INDEX, -1)
+                    if (imageIndex >= 0) deleteGalleryImage(imageIndex, this)
+                    START_STICKY
+                }
+
+                ACTION_CANCEL_DELETE -> {
+                    val notificationManager = getSystemService(NotificationManager::class.java)
+                    notificationManager.cancel(DEL_GAL_CONF)
+                    START_STICKY
+                }
+
+                "ACTION_SYNC_LAPTOP" -> {
+                    closeNots()
+                    syncTodosWithLaptop(this@QuietHoursNotificationService)
+                    START_STICKY
+                }
+
+                else -> START_STICKY
             }
+        } catch (e: Exception) {
+            reportServiceError("onStartCommand", e)
+            START_STICKY
         }
-        return START_STICKY
     }
 
     private var testOverlayView: ComposeView? = null
@@ -464,8 +565,6 @@ class QuietHoursNotificationService : Service() {
         }
 
         val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-
-        testOverlayLifecycle = OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
 
         var currentUrl = "https://www.youtube.com"
 
@@ -489,9 +588,10 @@ class QuietHoursNotificationService : Service() {
                                 callback: CustomViewCallback?
                             ) {
                                 (context as? Activity)?.let { activity ->
-                                    val decor = activity.window.decorView as FrameLayout
+                                    val decor = activity.window.decorView as? FrameLayout ?: return@let
+                                    val toAdd = view ?: return@let
                                     decor.addView(
-                                        view,
+                                        toAdd,
                                         FrameLayout.LayoutParams(
                                             ViewGroup.LayoutParams.MATCH_PARENT,
                                             ViewGroup.LayoutParams.MATCH_PARENT
@@ -499,7 +599,7 @@ class QuietHoursNotificationService : Service() {
                                     )
                                     activity.requestedOrientation =
                                         ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                                    customView = view
+                                    customView = toAdd
                                     customViewCallback = callback
 
                                     activity.window.insetsController?.apply {
@@ -512,8 +612,8 @@ class QuietHoursNotificationService : Service() {
 
                             override fun onHideCustomView() {
                                 (context as? Activity)?.let { activity ->
-                                    val decor = activity.window.decorView as FrameLayout
-                                    decor.removeView(customView)
+                                    val decor = activity.window.decorView as? FrameLayout ?: return@let
+                                    customView?.let { decor.removeView(it) }
                                     customView = null
                                     customViewCallback?.onCustomViewHidden()
                                     customViewCallback = null
@@ -616,8 +716,18 @@ class QuietHoursNotificationService : Service() {
 
                     IconButton(
                         onClick = {
-                            testOverlayView?.let { windowManager.removeView(it) }
-                            testOverlayLifecycle?.onDestroy()
+                            try {
+                                testOverlayView?.let { windowManager.removeView(it) }
+                            } catch (e: Exception) {
+                                reportServiceError("showTestOverlay:removeView", e)
+                            }
+                            try {
+                                testOverlayLifecycle?.onDestroy()
+                            } catch (e: Exception) {
+                                reportServiceError("showTestOverlay:overlayLifecycle:onDestroy", e)
+                            }
+                            webView.stopLoading()
+                            webView.destroy()
                             testOverlayView = null
                             testOverlayLifecycle = null
                         },
@@ -649,7 +759,12 @@ class QuietHoursNotificationService : Service() {
             gravity = Gravity.CENTER
         }
 
-        windowManager.addView(testOverlayView, params)
+        try {
+            windowManager.addView(testOverlayView, params)
+        } catch (e: Exception) {
+            reportServiceError("showTestOverlay:addView", e)
+            showSimpleNotification("Fehler", "Overlay konnte nicht gestartet werden")
+        }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -666,7 +781,11 @@ class QuietHoursNotificationService : Service() {
             ).apply {
                 gravity = Gravity.CENTER
             }
-            wm.updateViewLayout(view, params)
+            try {
+                wm.updateViewLayout(view, params)
+            } catch (e: Exception) {
+                reportServiceError("onConfigurationChanged:updateViewLayout", e)
+            }
         }
     }
 
@@ -679,21 +798,34 @@ class QuietHoursNotificationService : Service() {
         handler.removeCallbacksAndMessages(null)
 
         networkCallback?.let {
-            val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
-            cm.unregisterNetworkCallback(it)
-            networkCallback = null
+            try {
+                val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+                cm.unregisterNetworkCallback(it)
+            } catch (e: Exception) {
+                reportServiceError("onDestroy:unregisterNetworkCallback", e)
+            } finally {
+                networkCallback = null
+            }
         }
 
         // MediaPlayer
         voiceNotePlayer?.apply {
-            if (isPlaying) stop()
-            reset()
-            release()
+            try {
+                if (isPlaying) stop()
+                reset()
+                release()
+            } catch (e: Exception) {
+                reportServiceError("onDestroy:voiceNotePlayerRelease", e)
+            }
         }
         voiceNotePlayer = null
 
         // AudioRecorder
-        audioRecorder?.stopRecording()
+        try {
+            audioRecorder?.stopRecording()
+        } catch (e: Exception) {
+            reportServiceError("onDestroy:audioRecorderStop", e)
+        }
         audioRecorder = null
 
         // Collections leeren
@@ -714,7 +846,11 @@ class QuietHoursNotificationService : Service() {
         }
 
         // SharedPreferences Listener
-        sharedPreferences.unregisterOnSharedPreferenceChangeListener(prefChangeListener)
+        try {
+            sharedPreferences.unregisterOnSharedPreferenceChangeListener(prefChangeListener)
+        } catch (e: Exception) {
+            reportServiceError("onDestroy:unregisterOnSharedPreferenceChangeListener", e)
+        }
 
         val restartIntent = Intent(applicationContext, QuietHoursNotificationService::class.java)
         val pendingIntent = PendingIntent.getService(
@@ -729,6 +865,8 @@ class QuietHoursNotificationService : Service() {
                 pendingIntent
             )
         }
+
+        errorScope.cancel()
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -768,8 +906,6 @@ class QuietHoursNotificationService : Service() {
         text: String,
         duration: Duration = Duration.ZERO
     ) {
-        val notificationId = System.currentTimeMillis().toInt()
-
         val notification = NotificationCompat.Builder(this, SSN_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
@@ -784,11 +920,11 @@ class QuietHoursNotificationService : Service() {
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            notificationManager.notify(notificationId, notification)
+            notificationManager.notify(cms(), notification)
 
             if (duration > Duration.ZERO) {
                 Handler(Looper.getMainLooper()).postDelayed(
-                    { notificationManager.cancel(notificationId) },
+                    { notificationManager.cancel(cms()) },
                     duration.inWholeMilliseconds
                 )
             }
@@ -824,15 +960,27 @@ class QuietHoursNotificationService : Service() {
 
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                startTriggerListenerIfHomeWifi(this@QuietHoursNotificationService)
+                try {
+                    startTriggerListenerIfHomeWifi(this@QuietHoursNotificationService)
+                } catch (e: Exception) {
+                    reportServiceError("registerWifiCallback:onAvailable", e)
+                }
             }
 
             override fun onLost(network: Network) {
-                stopAllSyncServices(this@QuietHoursNotificationService)
+                try {
+                    stopAllSyncServices(this@QuietHoursNotificationService)
+                } catch (e: Exception) {
+                    reportServiceError("registerWifiCallback:onLost", e)
+                }
             }
         }
 
-        connectivityManager.registerNetworkCallback(request, networkCallback!!)
+        try {
+            connectivityManager.registerNetworkCallback(request, networkCallback!!)
+        } catch (e: Exception) {
+            reportServiceError("registerWifiCallback:registerNetworkCallback", e)
+        }
     }
 }
 
