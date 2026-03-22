@@ -1,7 +1,7 @@
-package com.example.spotifydownloader.di
+package com.cloud.spotidownloader.di
 
-import com.example.spotifydownloader.data.DownloadRepositoryImpl
-import com.example.spotifydownloader.domain.DownloadRepository
+import com.cloud.spotidownloader.data.DownloadRepositoryImpl
+import com.cloud.spotidownloader.domain.DownloadRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn

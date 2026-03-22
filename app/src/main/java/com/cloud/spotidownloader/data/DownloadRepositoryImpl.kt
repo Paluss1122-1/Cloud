@@ -1,12 +1,12 @@
-package com.example.spotifydownloader.data
+package com.cloud.spotidownloader.data
 
 import android.content.ContentValues
 import android.content.Context
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import com.example.spotifydownloader.domain.DownloadRepository
-import com.example.spotifydownloader.domain.DownloadState
+import com.cloud.spotidownloader.domain.DownloadRepository
+import com.cloud.spotidownloader.domain.DownloadState
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get

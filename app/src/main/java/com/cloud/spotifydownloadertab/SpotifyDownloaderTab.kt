@@ -7,9 +7,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.spotifydownloader.data.DownloadRepositoryImpl
-import com.example.spotifydownloader.ui.DownloadScreen
-import com.example.spotifydownloader.ui.DownloadViewModel
+import com.cloud.spotidownloader.data.DownloadRepositoryImpl
+import com.cloud.spotidownloader.ui.DownloadScreen
+import com.cloud.spotidownloader.ui.DownloadViewModel
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation

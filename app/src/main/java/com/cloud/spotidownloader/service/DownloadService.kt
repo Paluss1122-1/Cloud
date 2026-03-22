@@ -1,4 +1,4 @@
-package com.example.spotifydownloader.service
+package com.cloud.spotidownloader.service
 
 import android.app.Notification
 import android.app.NotificationChannel

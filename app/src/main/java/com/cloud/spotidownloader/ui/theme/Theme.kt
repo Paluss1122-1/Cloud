@@ -1,4 +1,4 @@
-package com.example.spotifydownloader.ui.theme
+package com.cloud.spotidownloader.ui.theme
 
 import android.app.Activity
 import android.os.Build

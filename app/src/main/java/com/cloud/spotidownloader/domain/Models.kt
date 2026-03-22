@@ -1,4 +1,4 @@
-package com.example.spotifydownloader.domain
+package com.cloud.spotidownloader.domain
 
 data class TrackInfo(
     val title: String,
