@@ -55,8 +55,9 @@ fun checkQuietHours(context: Context) {
             } else {
                 "Normale Benachrichtigungen aktiv"
             },
-            3.seconds,
-            context
+            10.seconds,
+            context,
+            silent = false
         )
     }
 }
@@ -157,6 +158,18 @@ fun createNotificationChannel(context: Context) {
 
     val notificationManager = context.getSystemService(NotificationManager::class.java)
     notificationManager.createNotificationChannel(channel)
+
+    val msgschannel = NotificationChannel(
+        "Nachrichten",
+        "Nachrichten",
+        NotificationManager.IMPORTANCE_LOW
+    ).apply {
+        description = "Nachrichten"
+        setShowBadge(true)
+        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+    }
+
+    notificationManager.createNotificationChannel(msgschannel)
 
     val confirmationChannel = NotificationChannel(
         CONFIRMATION_CHANNEL_ID,
@@ -270,10 +283,21 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
         .setDeleteIntent(deletePendingIntent)
         .setContentIntent(contentPendingIntent)
         .setRequestPromotedOngoing(true)
+        .setOngoing(true)
         .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-        .setGroup("group_services")
-        .setGroupSummary(false)
         .addAction(commandAction)
+
+    val now = Calendar.getInstance()
+    val nextChange = calculateNextStatusChange(
+        now,
+        getQuietStartHour(context),
+        getQuietEndHour(context)
+    )
+
+    builder
+        .setWhen(nextChange.timeInMillis)
+        .setUsesChronometer(true)
+        .setChronometerCountDown(true)
 
     if (isQuietHours) {
         builder
