@@ -11,6 +11,9 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
+import com.cloud.Config.COMPLETED_PODCASTS
+import com.cloud.Config.PD_QUEUE
+import com.cloud.Config.PODCASTS
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
 import com.cloud.service.PodcastPlayerServiceCompat.startService
@@ -30,13 +33,13 @@ fun clearPodcastSelectionNotifications(context: Context) {
         val notificationManager = context.getSystemService(NotificationManager::class.java)
 
         for (i in 0..998) {
-            notificationManager.cancel(60000 + i)
+            notificationManager.cancel(PODCASTS + i)
         }
 
-        notificationManager.cancel(60999)
+        notificationManager.cancel(PODCASTS)
 
         for (i in 0..999) {
-            notificationManager.cancel(70000 + i)
+            notificationManager.cancel(COMPLETED_PODCASTS + i)
         }
 
         showSimpleNotificationExtern(
@@ -181,7 +184,7 @@ fun showPodcastQueue(context: Context) {
             if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                 == PackageManager.PERMISSION_GRANTED
             ) {
-                notificationManager.notify(50010, notification)
+                notificationManager.notify(PD_QUEUE, notification)
             }
         }, 300)
 
