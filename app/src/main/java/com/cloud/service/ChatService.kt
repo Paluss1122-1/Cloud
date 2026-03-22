@@ -18,6 +18,9 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import androidx.core.content.edit
+import com.cloud.Config.CHAT_SERVICE
+import com.cloud.Config.CHAT_SERVICE_HISTORY
+import com.cloud.Config.cms
 import com.cloud.SupabaseConfigALT
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.realtime.PostgresAction
@@ -48,12 +51,10 @@ class ChatService : Service() {
         private const val KEY_REPLY_TEXT = "key_reply_text"
         private const val KEY_NOTIFICATION_ID = "key_notification_id"
         private const val POLL_INTERVAL_MS = 3000L
-        private const val SERVICE_NOTIFICATION_ID = 1
 
         private const val PREFS_NAME = "ChatServicePrefs"
         private const val KEY_SEEN_MESSAGES = "seen_message_ids"
 
-        // Timeout for realtime setup (5 seconds to be safe, well under Android's ~8 second limit)
         private const val REALTIME_SETUP_TIMEOUT_MS = 5000L
 
         fun startService(context: Context) {
@@ -92,7 +93,7 @@ class ChatService : Service() {
                         serviceScope.launch {
                             sendMessage(replyText)
                             withContext(Dispatchers.Main) {
-                                if (notificationId != SERVICE_NOTIFICATION_ID && notificationId != -1) {
+                                if (notificationId != CHAT_SERVICE && notificationId != -1) {
                                     val notificationManager =
                                         getSystemService(NotificationManager::class.java)
                                     notificationManager.cancel(notificationId)
@@ -133,7 +134,7 @@ class ChatService : Service() {
         registerReceiver(replyReceiver, filter, RECEIVER_NOT_EXPORTED)
 
         startForeground(
-            SERVICE_NOTIFICATION_ID,
+            CHAT_SERVICE,
             createServiceNotification(),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
         )
@@ -150,7 +151,7 @@ class ChatService : Service() {
                     try {
                         val notification = createServiceNotification()
                         val notificationManager = getSystemService(NotificationManager::class.java)
-                        notificationManager.notify(SERVICE_NOTIFICATION_ID, notification)
+                        notificationManager.notify(CHAT_SERVICE, notification)
                     } catch (_: Exception) {
                     }
                 }, 100)
@@ -222,13 +223,13 @@ class ChatService : Service() {
             .build()
 
         val replyIntent = Intent(ACTION_REPLY).apply {
-            putExtra(KEY_NOTIFICATION_ID, SERVICE_NOTIFICATION_ID)
+            putExtra(KEY_NOTIFICATION_ID, CHAT_SERVICE)
             `package` = packageName
         }
 
         val replyPendingIntent = PendingIntent.getBroadcast(
             this,
-            SERVICE_NOTIFICATION_ID,
+            CHAT_SERVICE,
             replyIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
@@ -288,10 +289,8 @@ class ChatService : Service() {
         try {
             val notificationManager = getSystemService(NotificationManager::class.java)
             val notification = createServiceNotification()
-            notificationManager.notify(SERVICE_NOTIFICATION_ID, notification)
-            Log.d("ChatService", "Service notification updated")
-        } catch (e: Exception) {
-            Log.e("ChatService", "Error updating service notification", e)
+            notificationManager.notify(CHAT_SERVICE, notification)
+        } catch (_: Exception) {
         }
     }
 
@@ -342,12 +341,10 @@ class ChatService : Service() {
             val notificationManager = getSystemService(NotificationManager::class.java)
 
             if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                notificationManager.notify(2000, notification)
-                Log.d("ChatService", "✅ History notification shown")
+                notificationManager.notify(CHAT_SERVICE_HISTORY, notification)
             }
 
         } catch (e: Exception) {
-            Log.e("ChatService", "Error showing history notification", e)
         }
     }
 
@@ -433,22 +430,18 @@ class ChatService : Service() {
 
     private fun showMessageNotification(message: Message) {
         try {
-            Log.d("ChatService", "🔔 Showing notification: ${message.content}")
-
-            val notificationId = Date().time.toInt()
-
             val replyRemoteInput = RemoteInput.Builder(KEY_REPLY_TEXT)
                 .setLabel("Antwort")
                 .build()
 
             val replyIntent = Intent(ACTION_REPLY).apply {
-                putExtra(KEY_NOTIFICATION_ID, notificationId)
+                putExtra(KEY_NOTIFICATION_ID, cms())
                 `package` = packageName
             }
 
             val replyPendingIntent = PendingIntent.getBroadcast(
                 this,
-                notificationId,
+                cms(),
                 replyIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
             )
@@ -483,14 +476,10 @@ class ChatService : Service() {
             val notificationManager = getSystemService(NotificationManager::class.java)
 
             if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                notificationManager.notify(notificationId, notification)
-                Log.d("ChatService", "✅ Notification shown")
-            } else {
-                Log.e("ChatService", "❌ Missing POST_NOTIFICATIONS permission")
+                notificationManager.notify(cms(), notification)
             }
 
         } catch (e: Exception) {
-            Log.e("ChatService", "Error showing notification", e)
         }
     }
 
