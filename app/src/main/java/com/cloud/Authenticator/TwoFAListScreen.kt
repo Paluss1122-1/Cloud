@@ -12,13 +12,14 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.Settings
 import android.util.Base64
+import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.content.MediaType.Companion.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -69,13 +70,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role.Companion.Image
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.net.toUri
@@ -86,10 +86,15 @@ import coil.compose.AsyncImage
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
 import com.cloud.ui.theme.c
+import com.google.zxing.ResultPoint
+import com.journeyapps.barcodescanner.BarcodeCallback
+import com.journeyapps.barcodescanner.BarcodeResult
+import com.journeyapps.barcodescanner.DecoratedBarcodeView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.URLDecoder
 import java.time.Instant
 
 /*@Composable
@@ -127,9 +132,9 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
     var pendingEntries by remember { mutableStateOf<List<TwoFAEntry>>(emptyList()) }
     var showSyncDialog by remember { mutableStateOf(false) }
     var isSyncing by remember { mutableStateOf(false) }
+    var showScanner by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
-    val activity = LocalActivity.current
 
     LaunchedEffect(true) {
         if (isSyncing) return@LaunchedEffect
@@ -450,9 +455,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                 Manifest.permission.CAMERA
                             )
                         if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
-                            val intent = Intent(activity, SilentCaptureActivity::class.java)
-                            intent.putExtra("SCAN_MODE", "QR_CODE_MODE")
-                            activity?.startActivity(intent)
+                            showScanner = true
                         } else {
                             try {
                                 val intent =
@@ -987,6 +990,10 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                 }
             )
         }
+
+        if (showScanner) {
+            SilentCaptureScreen(onDismiss = { showScanner = false })
+        }
     }
 }
 
@@ -1130,6 +1137,192 @@ fun MainApp(db: TwoFADatabase) {
         }
         composable("settings") {
             SettingsScreenWithScreenshotProtection(onBackClick = { navController.popBackStack() })
+        }
+    }
+}
+
+@Composable
+fun SilentCaptureScreen(onDismiss: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    var isProcessing by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        AndroidView(
+            factory = { ctx ->
+                DecoratedBarcodeView(ctx).apply {
+                    viewFinder.visibility = View.GONE
+                    setStatusText("")
+                    decodeContinuous(object : BarcodeCallback {
+                        override fun barcodeResult(result: BarcodeResult?) {
+                            if (!isProcessing && result?.text != null) {
+                                isProcessing = true
+                                pause()
+
+                                scope.launch {
+                                    try {
+                                        val decodedText = withContext(Dispatchers.IO) {
+                                            URLDecoder.decode(result.text, "UTF-8")
+                                        }
+                                        val uri = decodedText.toUri()
+
+                                        if (uri.scheme != "otpauth") {
+                                            withContext(Dispatchers.Main) {
+                                                Toast.makeText(
+                                                    context,
+                                                    "❌ Ungültiges Format!",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                                ERRORINSERT(
+                                                    ERRORINSERTDATA(
+                                                        "Capture Activity",
+                                                        "❌ Ungültiges Format! (${uri})",
+                                                        Instant.now().toString(),
+                                                        "Error"
+                                                    )
+                                                )
+                                                isProcessing = false
+                                                onDismiss()
+                                            }
+                                            return@launch
+                                        }
+
+                                        val label = uri.path?.removePrefix("/") ?: "Unbekannt"
+                                        val secretParam = uri.getQueryParameter("secret")
+                                        val issuerParam = uri.getQueryParameter("issuer")
+                                        val displayName =
+                                            issuerParam?.let { "$it ($label)" } ?: label
+
+                                        if (secretParam.isNullOrBlank()) {
+                                            Toast.makeText(
+                                                context,
+                                                "❌ Kein Secret gefunden!",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                            ERRORINSERT(
+                                                ERRORINSERTDATA(
+                                                    "Capture Activity",
+                                                    "❌ Kein Secret gefunden! (uri: $uri, secret: $secretParam)",
+                                                    Instant.now().toString(),
+                                                    "Error"
+                                                )
+                                            )
+                                            isProcessing = false
+                                            onDismiss()
+                                            return@launch
+                                        }
+
+                                        val db = TwoFADatabase.getDatabase(context)
+
+                                        val existingEntries = db.twoFADao().getAll()
+                                        val alreadyExists = existingEntries.any {
+                                            it.secret == secretParam || it.name.equals(
+                                                displayName,
+                                                ignoreCase = true
+                                            )
+                                        }
+
+                                        if (alreadyExists) {
+                                            Toast.makeText(
+                                                context,
+                                                "⚠️ Eintrag existiert bereits!",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                            isProcessing = false
+                                            onDismiss()
+                                            ERRORINSERT(
+                                                ERRORINSERTDATA(
+                                                    "Capture Activity",
+                                                    "⚠️ Eintrag existiert bereits! (secret: ${secretParam}, name: $displayName)",
+                                                    Instant.now().toString(),
+                                                    "Warning"
+                                                )
+                                            )
+                                            return@launch
+                                        }
+
+                                        val newEntry = TwoFAEntry(
+                                            name = displayName,
+                                            secret = secretParam
+                                        )
+
+                                        val inserted = db.twoFADao().insertOrIgnore(newEntry)
+                                        if (inserted == -1L) {
+                                            Toast.makeText(
+                                                context,
+                                                "⚠️ Eintrag existiert bereits!",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                            isProcessing = false
+                                            onDismiss()
+                                            return@launch
+                                        }
+
+                                        val supabaseSuccess = saveTwoFaEntryToSupabase(newEntry, db)
+
+                                        withContext(Dispatchers.Main) {
+                                            val message = if (supabaseSuccess) {
+                                                "✅ Token für $displayName hinzugefügt (lokal & Cloud)!"
+                                            } else {
+                                                "✅ Token für $displayName hinzugefügt (Cloud-Sync fehlgeschlagen)"
+                                            }
+                                            Toast.makeText(context, message, Toast.LENGTH_LONG)
+                                                .show()
+
+                                            isProcessing = false
+                                            onDismiss()
+                                        }
+
+                                    } catch (e: Exception) {
+                                        Toast.makeText(
+                                            context,
+                                            "❌ Fehler: ${e.message}",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                        isProcessing = false
+                                        onDismiss()
+                                        ERRORINSERT(
+                                            ERRORINSERTDATA(
+                                                "Capture Activity",
+                                                "❌ Fehler: ${e.message}",
+                                                Instant.now().toString(),
+                                                "Error"
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        override fun possibleResultPoints(resultPoints: MutableList<ResultPoint>?) {}
+                    })
+                    resume()
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(250.dp)
+                    .border(4.dp, Color(0xFF9B4DCA), RoundedCornerShape(16.dp))
+                    .background(Color.Transparent)
+            )
+            Spacer(Modifier.height(40.dp))
+            Text(
+                text = "Halte den QR-Code in den Rahmen",
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium
+            )
         }
     }
 }
