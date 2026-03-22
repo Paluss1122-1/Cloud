@@ -19,6 +19,7 @@ import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.MediaStore
 import android.view.KeyEvent
 import android.view.Surface
@@ -44,7 +45,10 @@ import androidx.media3.common.util.Size
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import com.android.identity.util.UUID
+import com.cloud.Config.COMPLETED_PODCASTS
+import com.cloud.Config.MEDIA_PLAYER
+import com.cloud.Config.PLALISTS
+import com.cloud.Config.PODCASTS
 import com.cloud.MainActivity
 import com.cloud.mediaplayer.AlgorithmicPlaylistRegistry
 import com.cloud.mediaplayer.FavoritesPlaylist
@@ -55,6 +59,7 @@ import com.cloud.quiethoursnotificationhelper.pushMediaStateToLaptop
 import com.cloud.showSimpleNotificationExtern
 import java.io.File
 import java.net.URLDecoder
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import kotlin.time.Duration.Companion.seconds
@@ -69,7 +74,6 @@ class MediaPlayerService : MediaSessionService() {
         const val EXTRA_SONG_INDEX = "extra_song_index"
 
         private const val CHANNEL_ID = "media_player_channel"
-        private const val NOTIFICATION_ID = 888888
 
         private const val ACTION_MUSIC_PLAY = "com.cloud.ACTION_MUSIC_PLAY"
         private const val ACTION_MUSIC_PAUSE = "com.cloud.ACTION_MUSIC_PAUSE"
@@ -78,7 +82,6 @@ class MediaPlayerService : MediaSessionService() {
         private const val ACTION_TOGGLE_REPEAT = "com.cloud.ACTION_TOGGLE_REPEAT"
         private const val ACTION_TOGGLE_FAVORITE = "com.cloud.ACTION_TOGGLE_FAVORITE"
         const val ACTION_TOGGLE_FAVORITES_MODE = "TOGGLE_FAVORITES_MODE"
-        const val ACTION_SHOW_FAVORITES = "SHOW_FAVORITES"
 
         private const val ACTION_PODCAST_PLAY = "com.cloud.ACTION_PODCAST_PLAY"
         private const val ACTION_PODCAST_PAUSE = "com.cloud.ACTION_PODCAST_PAUSE"
@@ -164,10 +167,6 @@ class MediaPlayerService : MediaSessionService() {
             Intent(context, MediaPlayerService::class.java).apply {
                 action = ACTION_TOGGLE_FAVORITES_MODE
             }
-        )
-
-        fun showFavorites(context: Context) = context.startService(
-            Intent(context, MediaPlayerService::class.java).apply { action = ACTION_SHOW_FAVORITES }
         )
 
         fun startPodcastService(context: Context) = context.startForegroundService(
@@ -285,7 +284,7 @@ class MediaPlayerService : MediaSessionService() {
                         .setGroup("podcast_delete")
                         .build()
                 if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
-                    nm?.notify(70000 + i, n)
+                    nm?.notify(COMPLETED_PODCASTS + i, n)
             }
 
             val summary =
@@ -299,7 +298,7 @@ class MediaPlayerService : MediaSessionService() {
                     .setAutoCancel(true)
                     .build()
             if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
-                nm?.notify(70999, summary)
+                nm?.notify(COMPLETED_PODCASTS+50, summary)
         }
 
         fun setPlaybackSpeed(context: Context, speed: Float) = context.startService(
@@ -393,22 +392,31 @@ class MediaPlayerService : MediaSessionService() {
         MUSIC
     }
 
-    @Volatile private var currentMode = MODE_MUSIC
+    @Volatile
+    private var currentMode = MODE_MUSIC
 
     private var musicPlayer: MediaPlayer? = null
     private var playlist: List<Song> = emptyList()
-    @Volatile private var currentSongIndex = 0
-    @Volatile private var isPlayingMusic = false
+
+    @Volatile
+    private var currentSongIndex = 0
+
+    @Volatile
+    private var isPlayingMusic = false
     private var isRepeatEnabled = false
     private var favoritesMode = false
     private val favoriteSongs = mutableMapOf<String, Long>()
-    @Volatile private var isServiceDestroyed = false
+
+    @Volatile
+    private var isServiceDestroyed = false
 
     private var podcastPlayer: MediaPlayer? = null
     private var podcasts: List<Podcast> = emptyList()
     private var podcastQueue: MutableList<String> = mutableListOf()
     private var currentPodcast: Podcast? = null
-    @Volatile private var isPlayingPodcast = false
+
+    @Volatile
+    private var isPlayingPodcast = false
     private var positionSaveRunnable: Runnable? = null
     private var canPostNotifications = true
 
@@ -438,6 +446,10 @@ class MediaPlayerService : MediaSessionService() {
         musicPrefs = getSharedPreferences(MUSIC_PREFS, MODE_PRIVATE)
         podcastPrefs = getSharedPreferences(PODCAST_PREFS, MODE_PRIVATE)
 
+        MediaAnalyticsManager.init(this)
+        FavoritesPlaylist.setContext(this)
+        PodcastShowManager.init(this)
+
         currentMode = musicPrefs.getString(KEY_CURRENT_MODE, MODE_MUSIC) ?: MODE_MUSIC
         currentSongIndex = musicPrefs.getInt(KEY_CURRENT_SONG_INDEX, 0)
         isRepeatEnabled = musicPrefs.getBoolean(KEY_REPEAT_MODE, false)
@@ -451,8 +463,6 @@ class MediaPlayerService : MediaSessionService() {
 
         activeAlgorithmicPlaylistId = musicPrefs.getString(KEY_ACTIVE_ALGORITHMIC_PLAYLIST, null)
         if (activeAlgorithmicPlaylistId != null) {
-            FavoritesPlaylist.setContext(this)
-            MediaAnalyticsManager.init(this)
             val src = AlgorithmicPlaylistRegistry.findById(activeAlgorithmicPlaylistId!!)
             if (src != null) {
                 algorithmicPlaylistSongs = src.getSongs(playlist, emptyMap())
@@ -472,12 +482,13 @@ class MediaPlayerService : MediaSessionService() {
         }
 
         createMediaSession()
-        startForeground(NOTIFICATION_ID, buildNotification(), getServiceForegroundType())
+        startForeground(MEDIA_PLAYER, buildNotification(), getServiceForegroundType())
         startPositionSaving()
         registerBluetoothReceiver()
 
         // Cache permission check result to avoid repeated checks
-        canPostNotifications = checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        canPostNotifications =
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -511,7 +522,6 @@ class MediaPlayerService : MediaSessionService() {
 
             ACTION_TOGGLE_REPEAT -> toggleRepeat()
             ACTION_TOGGLE_FAVORITE -> toggleFavorite()
-            ACTION_SHOW_FAVORITES -> showFavorites()
             ACTION_TOGGLE_FAVORITES_MODE -> toggleFavoritesMode()
 
             ACTION_PODCAST_PLAY -> {
@@ -664,8 +674,10 @@ class MediaPlayerService : MediaSessionService() {
             "CREATE_PLAYLIST_WITH_SONGS" -> {
                 val name = intent.getStringExtra("PLAYLIST_NAME") ?: "Neue Playlist"
                 val paths = intent.getStringArrayListExtra("SONG_PATHS") ?: arrayListOf()
-                val pl = Playlist(name = name, type = PlaylistType.MUSIC,
-                    items = paths.filter { p -> playlist.any { it.path == p } }.toMutableList())
+                val pl = Playlist(
+                    name = name, type = PlaylistType.MUSIC,
+                    items = paths.filter { p -> playlist.any { it.path == p } }.toMutableList()
+                )
                 playlists.add(pl)
                 savePlaylists()
                 showSimpleNotificationExtern(
@@ -682,7 +694,8 @@ class MediaPlayerService : MediaSessionService() {
             }
 
             "DEACTIVATE_ALGORITHMIC_PLAYLIST" -> {
-                val name = AlgorithmicPlaylistRegistry.findById(activeAlgorithmicPlaylistId ?: "")?.name
+                val name =
+                    AlgorithmicPlaylistRegistry.findById(activeAlgorithmicPlaylistId ?: "")?.name
                 activeAlgorithmicPlaylistId = null
                 algorithmicPlaylistSongs = emptyList()
                 saveMusicState()
@@ -771,14 +784,18 @@ class MediaPlayerService : MediaSessionService() {
     override fun onDestroy() {
         super.onDestroy()
         isRunning = false
-        isServiceDestroyed = true // Mark as destroyed to prevent handler callbacks from rescheduling
+        isServiceDestroyed = true
         try {
             val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
-            nm?.cancel(NOTIFICATION_ID)
+            nm?.cancel(MEDIA_PLAYER)
         } catch (_: Exception) {
         }
         try {
             bluetoothReceiver?.let { unregisterReceiver(it); bluetoothReceiver = null }
+        } catch (_: Exception) {
+        }
+        try {
+            screenReceiver?.let { unregisterReceiver(it); screenReceiver = null }
         } catch (_: Exception) {
         }
         positionSaveRunnable?.let { handler.removeCallbacks(it) }
@@ -930,7 +947,8 @@ class MediaPlayerService : MediaSessionService() {
                                 return true
                             }
                         }
-                    } catch (_: Exception) {}
+                    } catch (_: Exception) {
+                    }
                     return super.onMediaButtonEvent(session, controllerInfo, intent)
                 }
             })
@@ -1131,7 +1149,8 @@ class MediaPlayerService : MediaSessionService() {
                     oldSet.forEach { entry ->
                         val parts = entry.split(":::")
                         if (parts.size == 2) {
-                            favoriteSongs[parts[0]] = parts[1].toLongOrNull() ?: System.currentTimeMillis()
+                            favoriteSongs[parts[0]] =
+                                parts[1].toLongOrNull() ?: System.currentTimeMillis()
                         } else if (parts.size == 1 && parts[0].isNotEmpty()) {
                             favoriteSongs[parts[0]] = System.currentTimeMillis()
                         }
@@ -1225,28 +1244,6 @@ class MediaPlayerService : MediaSessionService() {
         } else updateNotification()
     }
 
-    private fun showFavorites() {
-        if (favoriteSongs.isEmpty()) {
-            showSimpleNotificationExtern(
-                "📂 Favoriten",
-                "Keine Favoriten gespeichert",
-                10.seconds,
-                context = this
-            )
-            return
-        }
-        val list = playlist.filter { favoriteSongs.containsKey(it.path) }
-            .mapIndexed { i, s -> "${i + 1}. ${s.name}" }.joinToString("\n")
-        val n = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.btn_star_big_on)
-            .setContentTitle("⭐ Favoriten (${favoriteSongs.size})")
-            .setContentText("${favoriteSongs.size} Songs")
-            .setStyle(NotificationCompat.BigTextStyle().bigText(list))
-            .setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).build()
-        val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
-        nm?.notify(77777, n)
-    }
-
     private fun playPodcast() {
         if (currentPodcast == null) {
             podcastPrefs.getString(KEY_CURRENT_PODCAST, null)?.let { path ->
@@ -1262,6 +1259,11 @@ class MediaPlayerService : MediaSessionService() {
         }
 
         val podcast = currentPodcast ?: return
+
+        if (getPodcastCompleted(podcast.path)) {
+            showPodcastSelection()
+            return
+        }
 
         if (podcastPlayer != null && !isPlayingPodcast) {
             val savedPos = getPodcastSavedPosition(podcast.path)
@@ -1366,7 +1368,10 @@ class MediaPlayerService : MediaSessionService() {
             savePodcastSession()
         }
 
-        try { podcastPlayer?.stop(); podcastPlayer?.release(); podcastPlayer = null } catch (_: Exception) {}
+        try {
+            podcastPlayer?.stop(); podcastPlayer?.release(); podcastPlayer = null
+        } catch (_: Exception) {
+        }
         isPlayingPodcast = false
         loadPodcastQueue()
 
@@ -1379,7 +1384,9 @@ class MediaPlayerService : MediaSessionService() {
                 loadPodcast(currentPodcast!!)
             } else {
                 if (podcastQueue.isNotEmpty()) onPodcastComplete()
-                else { currentPodcast = null; updateNotification() }
+                else {
+                    currentPodcast = null; updateNotification()
+                }
             }
         } else {
             currentPodcast = null; updateNotification()
@@ -1405,7 +1412,7 @@ class MediaPlayerService : MediaSessionService() {
     @SuppressLint("LaunchActivityFromNotification")
     private fun showPodcastSelection() {
         if (podcasts.isEmpty()) return
-        val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
+        val nm = getSystemService(NotificationManager::class.java)
         val updated = podcasts.map {
             it.copy(
                 savedPosition = getPodcastSavedPosition(it.path),
@@ -1430,10 +1437,12 @@ class MediaPlayerService : MediaSessionService() {
                 .setSmallIcon(android.R.drawable.ic_menu_info_details)
                 .setContentTitle("${i + 1} $status ${p.name}")
                 .setContentText("Antippen zum Abspielen$progress")
-                .setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true)
-                .setContentIntent(pi).setGroup("podcast_selection").build()
-            if (hasNotificationPermission())
-                nm?.notify(60000 + i, n)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .setContentIntent(pi)
+                .setGroup("podcast_selection")
+                .build()
+            if (hasNotificationPermission()) nm?.notify(PODCASTS + i, n)
         }
         val completedCount = updated.count { it.isCompleted }
         val summary = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -1441,9 +1450,11 @@ class MediaPlayerService : MediaSessionService() {
             .setContentTitle("Podcast auswählen")
             .setContentText("${podcasts.size} Podcasts${if (completedCount > 0) " ($completedCount fertig)" else ""}")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setGroup("podcast_selection").setGroupSummary(true).setAutoCancel(true).build()
-        if (hasNotificationPermission())
-            nm?.notify(60999, summary)
+            .setGroup("podcast_selection")
+            .setGroupSummary(true)
+            .setAutoCancel(true)
+            .build()
+        if (hasNotificationPermission()) nm?.notify(PODCASTS+50, summary)
     }
 
     @SuppressLint("LaunchActivityFromNotification")
@@ -1469,7 +1480,7 @@ class MediaPlayerService : MediaSessionService() {
                 .setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true)
                 .setContentIntent(pi).setGroup("podcast_delete").build()
             if (hasNotificationPermission())
-                nm?.notify(70000 + i, n)
+                nm?.notify(COMPLETED_PODCASTS + i, n)
         }
         val summary = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_delete)
@@ -1478,13 +1489,14 @@ class MediaPlayerService : MediaSessionService() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setGroup("podcast_delete").setGroupSummary(true).setAutoCancel(true).build()
         if (hasNotificationPermission())
-            nm?.notify(70999, summary)
+            nm?.notify(COMPLETED_PODCASTS+50, summary)
     }
 
     private fun showNoCompletedPodcastsNotification() {
-        postSimpleNotification(
-            71000, android.R.drawable.ic_menu_info_details,
-            "Keine fertigen Podcasts", "Es gibt aktuell keine fertigen Podcasts zum Löschen", 10000
+        showSimpleNotificationExtern(
+            "Keine fertigen Podcasts",
+            "Es gibt aktuell keine fertigen Podcasts zum Löschen",
+            context = this
         )
     }
 
@@ -1509,37 +1521,19 @@ class MediaPlayerService : MediaSessionService() {
     }
 
     private fun showDeleteSuccessNotification(name: String) =
-        postSimpleNotification(71001, android.R.drawable.ic_menu_delete, "✓ Gelöscht", name, 2000)
+        showSimpleNotificationExtern("✓ Gelöscht", name, 5.seconds, context = this)
 
     private fun showDeleteErrorNotification(name: String) =
-        postSimpleNotification(
-            71002,
-            android.R.drawable.ic_dialog_alert,
+        showSimpleNotificationExtern(
             "✗ Fehler beim Löschen",
             name,
-            4000
+            context = this
         )
-
-    private fun postSimpleNotification(
-        id: Int,
-        icon: Int,
-        title: String,
-        text: String,
-        timeoutMs: Long
-    ) {
-        if (!hasNotificationPermission()) return
-        val n = NotificationCompat.Builder(this, CHANNEL_ID).setSmallIcon(icon)
-            .setContentTitle(title).setContentText(text)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT).setAutoCancel(true)
-            .setTimeoutAfter(timeoutMs).build()
-        val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
-        nm?.notify(id, n)
-    }
 
     private fun updateNotification() {
         val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
         nm?.notify(
-            NOTIFICATION_ID,
+            MEDIA_PLAYER,
             buildNotification()
         )
         pushMediaStateToLaptop(this)
@@ -1551,7 +1545,8 @@ class MediaPlayerService : MediaSessionService() {
     private fun buildMusicNotification(): Notification {
         val active = getActivePlaylist()
         val songName = active.getOrNull(currentSongIndex)?.name ?: "Keine Playlist"
-        val isFav = active.getOrNull(currentSongIndex)?.let { favoriteSongs.containsKey(it.path) } ?: false
+        val isFav =
+            active.getOrNull(currentSongIndex)?.let { favoriteSongs.containsKey(it.path) } ?: false
 
         fun pi(reqCode: Int, action: String) = PendingIntent.getService(
             this, reqCode,
@@ -1563,12 +1558,12 @@ class MediaPlayerService : MediaSessionService() {
             activeAlgorithmicPlaylistId != null ->
                 AlgorithmicPlaylistRegistry.findById(activeAlgorithmicPlaylistId!!)
                     ?.let { " [${it.icon}${it.name}]" } ?: ""
+
             activePlaylistId != null ->
                 playlists.find { it.id == activePlaylistId }?.let { " [${it.name}]" } ?: ""
+
             else -> ""
         }
-
-        val currentPositionMs = musicPlayer?.currentPosition?.toLong() ?: 0L
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
@@ -1589,19 +1584,9 @@ class MediaPlayerService : MediaSessionService() {
                 pi(1, if (isPlayingMusic) ACTION_MUSIC_PAUSE else ACTION_MUSIC_PLAY)
             )
             .addAction(android.R.drawable.ic_media_next, "Weiter", pi(2, ACTION_MUSIC_NEXT))
-
-        if (isPlayingMusic) {
-            builder
-                .setWhen(System.currentTimeMillis() - currentPositionMs)
-                .setUsesChronometer(true)
-                .setShowWhen(true)
-        } else {
-            builder
-                .setUsesChronometer(false)
-                .setShowWhen(true)
-                .setSubText(formatTime(currentPositionMs))
-        }
-
+        val dur = musicPlayer?.duration?.takeIf { it > 0 } ?: 0
+        val pos = musicPlayer?.currentPosition ?: 0
+        if (dur > 0) builder.setProgress(dur, pos, false)
         return builder.build()
     }
 
@@ -1621,7 +1606,7 @@ class MediaPlayerService : MediaSessionService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle("🎙️ $title $speedStr")
             .setContentText(progress)
@@ -1638,7 +1623,8 @@ class MediaPlayerService : MediaSessionService() {
                 pi(1, if (isPlayingPodcast) ACTION_PODCAST_PAUSE else ACTION_PODCAST_PLAY)
             )
             .addAction(android.R.drawable.ic_media_ff, "+15s", pi(2, ACTION_PODCAST_FORWARD))
-            .build()
+        if (dur > 0) builder.setProgress(dur.toInt(), pos.toInt(), false)
+        return builder.build()
     }
 
     private fun loadPlaylist() {
@@ -1813,24 +1799,45 @@ class MediaPlayerService : MediaSessionService() {
         }
     }
 
+    private var screenReceiver: BroadcastReceiver? = null
+
     private fun startPositionSaving() {
+        positionSaveRunnable?.let { handler.removeCallbacks(it) }
         var lastSaved = 0L
+
         positionSaveRunnable = object : Runnable {
             override fun run() {
                 if (isServiceDestroyed) return
+                val screenOn = getSystemService(PowerManager::class.java)?.isInteractive ?: true
 
-                if (isPlayingPodcast && podcastPlayer != null && currentPodcast != null) {
-                    val pos = podcastPlayer?.currentPosition?.toLong() ?: 0
-                    if (abs(pos - lastSaved) > 5000) {
-                        savePodcastPosition(currentPodcast!!.path, pos)
-                        updateNotification()
-                        lastSaved = pos
+                if (screenOn) {
+                    if (isPlayingPodcast || isPlayingMusic) updateNotification()
+                    if (isPlayingPodcast && podcastPlayer != null && currentPodcast != null) {
+                        val pos = podcastPlayer!!.currentPosition.toLong()
+                        if (abs(pos - lastSaved) > 5000) {
+                            savePodcastPosition(currentPodcast!!.path, pos)
+                            lastSaved = pos
+                        }
                     }
                 }
-                handler.postDelayed(this, 60000)
+
+                handler.postDelayed(
+                    this,
+                    if (screenOn && (isPlayingPodcast || isPlayingMusic)) 1000L else 3000_000L
+                )
             }
         }
         handler.post(positionSaveRunnable!!)
+
+        screenReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == Intent.ACTION_SCREEN_ON) {
+                    positionSaveRunnable?.let { handler.removeCallbacks(it) }
+                    handler.post(positionSaveRunnable!!)
+                }
+            }
+        }
+        registerReceiver(screenReceiver, IntentFilter(Intent.ACTION_SCREEN_ON))
     }
 
     private fun registerBluetoothReceiver() {
@@ -2075,7 +2082,7 @@ class MediaPlayerService : MediaSessionService() {
                 .build()
 
             if (hasNotificationPermission())
-                nm?.notify(80000 + i, n)
+                nm?.notify(PLALISTS + i, n)
         }
 
         val summary = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -2089,7 +2096,7 @@ class MediaPlayerService : MediaSessionService() {
             .build()
 
         if (hasNotificationPermission())
-            nm?.notify(80999, summary)
+            nm?.notify(PLALISTS+50, summary)
     }
 
     @UnstableApi
@@ -2263,11 +2270,14 @@ class MediaPlayerService : MediaSessionService() {
         ) {
         }
     }
+
     private fun savePodcastSession() {
         val podcast = currentPodcast ?: return
         if (podcastSessionStartedAt == 0L) return
         val listenedMs = System.currentTimeMillis() - podcastSessionStartedAt
-        if (listenedMs < 3000) { podcastSessionStartedAt = 0L; return }
+        if (listenedMs < 3000) {
+            podcastSessionStartedAt = 0L; return
+        }
 
         val showId = podcast.path.let { path ->
             PodcastShowManager.resolveShowForEpisode(path, podcast.name)
@@ -2289,12 +2299,22 @@ class MediaPlayerService : MediaSessionService() {
         FavoritesPlaylist.setContext(this)
         MediaAnalyticsManager.init(this)
         val source = AlgorithmicPlaylistRegistry.findById(sourceId) ?: run {
-            showSimpleNotificationExtern("❌ Fehler", "Playlist nicht gefunden", 10.seconds, context = this)
+            showSimpleNotificationExtern(
+                "❌ Fehler",
+                "Playlist nicht gefunden",
+                10.seconds,
+                context = this
+            )
             return
         }
         val songs = source.getSongs(playlist, emptyMap())
         if (songs.isEmpty()) {
-            showSimpleNotificationExtern("❌ Leer", "Keine Songs in \"${source.name}\"", 10.seconds, context = this)
+            showSimpleNotificationExtern(
+                "❌ Leer",
+                "Keine Songs in \"${source.name}\"",
+                10.seconds,
+                context = this
+            )
             return
         }
         activeAlgorithmicPlaylistId = sourceId
@@ -2321,7 +2341,6 @@ object MusicPlayerServiceCompat {
 
     fun toggleFavorite(context: Context) = MediaPlayerService.toggleFavorite(context)
     fun toggleFavoritesMode(context: Context) = MediaPlayerService.toggleFavoritesMode(context)
-    fun showFavorites(context: Context) = MediaPlayerService.showFavorites(context)
 }
 
 object PodcastPlayerServiceCompat {
@@ -2350,5 +2369,5 @@ fun restartMusicPlayer(number: Int? = null, context: Context) {
 }
 
 private fun SharedPreferences.editAsync(block: SharedPreferences.Editor.() -> Unit) {
-    edit {apply(block).apply()}
+    edit { apply(block).apply() }
 }
