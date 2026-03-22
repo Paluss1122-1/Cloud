@@ -11,6 +11,7 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
+import com.cloud.Config.BLOCKED_MESSAGES
 import com.cloud.Config.LAPTOP_IPS
 import com.cloud.Config.NOTIFICATION_PORT
 import com.cloud.database.WhatsAppMessage
@@ -415,10 +416,10 @@ class BlockedNotificationReceiver : android.content.BroadcastReceiver() {
                 .setContentText(text)
                 .setSubText("Erhalten um $timeStr (zurückgehalten)")
                 .setAutoCancel(true)
-                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .build()
 
-            notificationManager.notify(9000 + index, notification)
+            notificationManager.notify(BLOCKED_MESSAGES + index, notification)
         }
 
         // Prefs leeren nach dem Posten
