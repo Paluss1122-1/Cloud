@@ -128,7 +128,7 @@ val timeChangeReceiver = object : BroadcastReceiver() {
                         }
                         showSimpleNotificationExtern(
                             "✓ Startzeit geändert",
-                            "Neue Startzeit: $timeValue:00 Uhr",
+                            "Neue Startzeit: $timeValue Uhr",
                             context = context
                         )
                     }
@@ -142,18 +142,19 @@ val timeChangeReceiver = object : BroadcastReceiver() {
                         }
                         showSimpleNotificationExtern(
                             "✓ Endzeit geändert",
-                            "Neue Endzeit: $timeValue:00 Uhr",
+                            "Neue Endzeit: $timeValue Uhr",
                             context = context
                         )
                     }
                 }
 
-                setResultCode(Activity.RESULT_OK)
+                resultCode = Activity.RESULT_OK
             } else {
                 showSimpleNotificationExtern(
                     "❌ Ungültige Zeit",
                     "Bitte eine Zahl zwischen 0 und 23 eingeben",
-                    context = context
+                    context = context,
+                    silent = false
                 )
             }
         }
