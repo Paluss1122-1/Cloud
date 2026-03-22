@@ -16,12 +16,11 @@ import androidx.core.app.Person
 import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import com.cloud.Config.cms
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
-import com.cloud.service.QuietHoursNotificationService
 import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_MARK_PARTS_READ
 import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_MESSAGE_SENT
-import com.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.cloud.service.QuietHoursNotificationService.Companion.EXTRA_MESSAGE_ID
 import com.cloud.service.QuietHoursNotificationService.Companion.EXTRA_SENDER
 import com.cloud.service.QuietHoursNotificationService.Companion.KEY_HAS_SAVED_DATA
@@ -94,7 +93,6 @@ data class SavedReplyData(
     val resultKey: String
 )
 
-// "packageName|title"-Key aus plain Sender-Name ableiten
 private fun resolveKey(sender: String): String? {
     if (sender.contains("|")) return sender
     if (sender.startsWith(NVIDIA_CHAT_PREFIX)) return sender
@@ -105,8 +103,6 @@ private fun resolveKey(sender: String): String? {
 }
 
 private fun buildReplyAction(key: String, notificationId: Int, context: Context): NotificationCompat.Action {
-    // IMMER eigenen Broadcast verwenden → messageSentReceiver feuert →
-    // handleMessageSent() sendet an WhatsApp UND updated Notification → Spinner stoppt
     val pi = PendingIntent.getBroadcast(
         context, notificationId,
         Intent(ACTION_MESSAGE_SENT).apply {
@@ -124,16 +120,14 @@ private fun buildReplyAction(key: String, notificationId: Int, context: Context)
         .build()
 }
 
-// Kern: MessagingStyle + Split-Parts posten. sourceLabel erscheint im Titel.
 private fun postChatNotification(key: String, context: Context, sourceLabel: String) {
     try {
         val displayName = if (key.contains("|")) key.substringAfter("|") else key
         val notifId = key.hashCode()
         val nm = context.getSystemService(NotificationManager::class.java)
 
-        // Alte Split-Parts canceln
-        for (i in 0 until 100) nm.cancel(notifId + 10000 + i)
-        nm.cancel(notifId + 19999)
+        for (i in 0 until 100) nm.cancel(notifId + i)
+        nm.cancel(notifId)
 
         val mePerson = Person.Builder().setName("Du").setKey("me").build()
         val senderPerson = Person.Builder().setName(displayName).setKey(displayName).build()
@@ -154,7 +148,7 @@ private fun postChatNotification(key: String, context: Context, sourceLabel: Str
             if (text.length > 200) {
                 val parts = text.chunked(200)
                 parts.reversed().forEachIndexed { idx, part ->
-                    val partId = notifId + 10000 + partIndex
+                    val partId = notifId + partIndex
                     partIndex++
                     val markPi = PendingIntent.getBroadcast(
                         context, partId + 500000,
@@ -168,7 +162,7 @@ private fun postChatNotification(key: String, context: Context, sourceLabel: Str
                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
                         == PackageManager.PERMISSION_GRANTED
                     ) {
-                        nm.notify(partId, NotificationCompat.Builder(context, CHANNEL_ID)
+                        nm.notify(partId, NotificationCompat.Builder(context, "Nachrichten")
                             .setSmallIcon(android.R.drawable.stat_notify_chat)
                             .setContentTitle("$sourceLabel · $displayName (Teil $partNum/${parts.size})")
                             .setContentText(part.take(100) + if (part.length > 100) "..." else "")
@@ -201,7 +195,7 @@ private fun postChatNotification(key: String, context: Context, sourceLabel: Str
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
                 == PackageManager.PERMISSION_GRANTED
             ) {
-                nm.notify(notifId + 19999, NotificationCompat.Builder(context, CHANNEL_ID)
+                nm.notify(notifId, NotificationCompat.Builder(context, "Nachrichten")
                     .setSmallIcon(android.R.drawable.stat_notify_chat)
                     .setContentTitle("$sourceLabel · Lange Nachricht von $displayName")
                     .setContentText("$partIndex Teile")
@@ -214,7 +208,7 @@ private fun postChatNotification(key: String, context: Context, sourceLabel: Str
             }
         }
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, "Nachrichten")
             .setSmallIcon(android.R.drawable.stat_notify_chat)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setStyle(style)
@@ -259,7 +253,8 @@ fun showUnreadMessages(context: Context) {
         showSimpleNotificationExtern(
             "Keine unbeantworteten Nachrichten",
             "Alle Nachrichten wurden beantwortet oder keine Daten verfügbar.",
-            context = context
+            context = context,
+            silent = false
         )
         return
     }
@@ -307,7 +302,8 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
             showSimpleNotificationExtern(
                 "⚠️ Nicht unterstützt",
                 "Messenger wird nicht unterstützt: ${replyData?.pendingIntent?.creatorPackage}",
-                20.seconds, context
+                20.seconds, context,
+                silent = false
             )
             return
         }
@@ -324,7 +320,8 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
             replyData.pendingIntent.send(context, 0, intent)
         } catch (e: Exception) {
             Log.e("Messages", "Send failed: ${e.message}")
-            showSimpleNotificationExtern("Fehler", "Nachricht konnte nicht gesendet werden", context = context)
+            showSimpleNotificationExtern("Fehler", "Nachricht konnte nicht gesendet werden", context = context,
+                silent = false)
             return
         }
 
@@ -363,8 +360,8 @@ fun markMessageAsRead(messageId: String, readMessageIds: MutableSet<String>, con
         val key = messageId.substringBeforeLast("_")
         val hash = key.hashCode()
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        for (i in 0 until 100) nm.cancel(hash + 10000 + i)
-        nm.cancel(hash + 19999)
+        for (i in 0 until 100) nm.cancel(hash + i)
+        nm.cancel(hash)
     } catch (e: Exception) {
         CoroutineScope(Dispatchers.IO).launch {
             ERRORINSERT(ERRORINSERTDATA("markMessageAsRead", "Error: ${e.message}", Instant.now().toString(), "Error"))
@@ -443,7 +440,7 @@ fun showSavedReplyInfo(context: Context) {
     }
     val nm = context.getSystemService(NotificationManager::class.java)
     if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-        nm.notify(50001, NotificationCompat.Builder(context, CHANNEL_ID)
+        nm.notify(cms(), NotificationCompat.Builder(context, "Nachrichten")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("💾 Gespeicherte Reply-Daten")
             .setContentText(savedData.sender)
@@ -474,7 +471,7 @@ fun extractLastMessage(context: Context) {
     val msg = newestMsg ?: return
     val displayName = if (newestKey.contains("|")) newestKey.substringAfter("|") else newestKey
     val timeText = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(msg.timestamp))
-    val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+    val builder = NotificationCompat.Builder(context, "Nachrichten")
         .setSmallIcon(android.R.drawable.ic_menu_info_details)
         .setContentTitle("📋 Extrahierte Nachricht")
         .setContentText("Von: $displayName um $timeText")
@@ -490,165 +487,6 @@ fun extractLastMessage(context: Context) {
     }
     val nm = context.getSystemService(NotificationManager::class.java)
     if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-        nm.notify(60000 + (msg.timestamp % 10000).toInt(), builder.build())
-    }
-}
-
-// Tests
-fun runMessagingTests(context: Context) {
-    val TAG = "MessagingTest"
-    val results = mutableListOf<TestResult>()
-    val fakePackage = "com.whatsapp"
-    val fakeSender = "Test Kontakt"
-    val fakeKey = "$fakePackage|$fakeSender"
-    val fakeTs1 = System.currentTimeMillis() - 60_000
-    val fakeTs2 = System.currentTimeMillis() - 30_000
-    val fakeTs3 = System.currentTimeMillis()
-
-    val dummyIntent = PendingIntent.getBroadcast(
-        context, 99999,
-        Intent("com.cloud.TEST_DUMMY").apply { `package` = context.packageName },
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-    )
-    val fakeRemoteInput = RemoteInput.Builder("key_text_reply").setLabel("Antwort").setAllowFreeFormInput(true).build()
-    val fakeReplyData = WhatsAppNotificationListener.Companion.ReplyData(dummyIntent, fakeRemoteInput, "key_text_reply")
-
-    fun setup() {
-        WhatsAppNotificationListener.messagesByContact[fakeKey] = mutableListOf(
-            WhatsAppNotificationListener.Companion.ChatMessage("Hallo, wie geht's?", fakeTs1, false),
-            WhatsAppNotificationListener.Companion.ChatMessage("Alles gut, danke!", fakeTs2, true),
-            WhatsAppNotificationListener.Companion.ChatMessage("Noch eine neue Nachricht.", fakeTs3, false)
-        )
-        WhatsAppNotificationListener.replyActions[fakeKey] = fakeReplyData
-    }
-
-    fun teardown() {
-        WhatsAppNotificationListener.messagesByContact.remove(fakeKey)
-        WhatsAppNotificationListener.replyActions.remove(fakeKey)
-        QuietHoursNotificationService.readMessageIds.removeAll { it.startsWith(fakeKey) }
-    }
-
-    fun test(name: String, expected: String, block: () -> Boolean) {
-        val passed = try { block() } catch (e: Exception) {
-            Log.e(TAG, "💥 $name threw: ${e.message}", e)
-            results += TestResult(name, false, expected, "Exception: ${e.message}")
-            return
-        }
-        Log.d(TAG, "${if (passed) "✅" else "❌"} $name | erwartet: $expected")
-        results += TestResult(name, passed, expected, if (passed) "OK" else "FEHLGESCHLAGEN")
-    }
-
-    setup()
-    test("resolveKey – voller Key", "gibt '$fakeKey' zurück") { resolveKey(fakeKey) == fakeKey }
-    test("resolveKey – plain Sender", "gibt '$fakeKey' für '$fakeSender' zurück") { resolveKey(fakeSender) == fakeKey }
-    test("resolveKey – unbekannter Sender", "null") { resolveKey("ExistiertNicht_XYZ") == null }
-    test("resolveKey – NVIDIA Chat", "gibt 'NVIDIA Chat' zurück") { resolveKey("NVIDIA Chat") == "NVIDIA Chat" }
-    teardown()
-
-    setup()
-    test("updateSingleSenderNotification – postet Notification", "Notification mit ID ${fakeKey.hashCode()} sichtbar") {
-        updateSingleSenderNotification(fakeSender, context)
-        context.getSystemService(NotificationManager::class.java).activeNotifications.any { it.id == fakeKey.hashCode() }
-    }
-    teardown()
-    test("updateSingleSenderNotification – kein Crash bei leerem State", "kein Crash") {
-        updateSingleSenderNotification("NichtVorhanden_XYZ", context); true
-    }
-
-    setup()
-    val sentText = "Testnachricht_${System.currentTimeMillis()}"
-    test("handleMessageSent – Nachricht in messagesByContact", "ChatMessage mit isOwnMessage=true") {
-        WhatsAppNotificationListener.messagesByContact.getOrPut(fakeKey) { mutableListOf() }
-            .add(WhatsAppNotificationListener.Companion.ChatMessage(sentText, System.currentTimeMillis(), true))
-        WhatsAppNotificationListener.messagesByContact[fakeKey]?.any { it.text == sentText && it.isOwnMessage } == true
-    }
-    test("handleMessageSent – Duplikat-Schutz", "Nachricht nur einmal in Liste") {
-        val before = WhatsAppNotificationListener.messagesByContact[fakeKey]?.count { it.text == sentText } ?: 0
-        handleMessageSent(fakeKey, sentText, context)
-        val after = WhatsAppNotificationListener.messagesByContact[fakeKey]?.count { it.text == sentText } ?: 0
-        after == before
-    }
-    test("handleMessageSent – Notification aktualisiert", "Notification mit ID ${fakeKey.hashCode()} vorhanden") {
-        updateChatNotification(fakeKey, context)
-        context.getSystemService(NotificationManager::class.java).activeNotifications.any { it.id == fakeKey.hashCode() }
-    }
-    teardown()
-
-    setup()
-    test("showUnreadMessages – Notification vorhanden", "Notification mit ID ${fakeKey.hashCode()} nach Aufruf") {
-        showUnreadMessages(context)
-        context.getSystemService(NotificationManager::class.java).activeNotifications.any { it.id == fakeKey.hashCode() }
-    }
-    teardown()
-    test("showUnreadMessages – leer → kein Crash", "kein Crash") { showUnreadMessages(context); true }
-
-    setup()
-    val fakeMsgId = "${fakeKey}_$fakeTs1"
-    test("markMessageAsRead – ID in readMessageIds", "readMessageIds enthält '$fakeMsgId'") {
-        markMessageAsRead(fakeMsgId, QuietHoursNotificationService.readMessageIds, context)
-        QuietHoursNotificationService.readMessageIds.contains(fakeMsgId)
-    }
-    test("markMessageAsRead – Part-Notifications gecancelt", "partId nicht mehr aktiv") {
-        val nm = context.getSystemService(NotificationManager::class.java)
-        val partId = fakeKey.hashCode() + 10000
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-            nm.notify(partId, NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.stat_notify_chat)
-                .setContentTitle("Test Part").setContentText("wird gecancelt").build())
-        }
-        markMessageAsRead("${fakeKey}_$fakeTs2", QuietHoursNotificationService.readMessageIds, context)
-        !nm.activeNotifications.any { it.id == partId }
-    }
-    teardown()
-
-    val oldKey = "$fakePackage|Alter Kontakt"
-    WhatsAppNotificationListener.messagesByContact[oldKey] = mutableListOf(
-        WhatsAppNotificationListener.Companion.ChatMessage("Alte Nachricht", System.currentTimeMillis() - (25 * 60 * 60 * 1000), false),
-        WhatsAppNotificationListener.Companion.ChatMessage("Neue Nachricht", System.currentTimeMillis(), false)
-    )
-    cleanupOldMessages()
-    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-        test("cleanupOldMessages – alte entfernt", "nur 'Neue Nachricht' übrig") {
-            val m = WhatsAppNotificationListener.messagesByContact[oldKey]
-            m?.size == 1 && m.first().text == "Neue Nachricht"
-        }
-        val emptyKey = "$fakePackage|Leerer Kontakt"
-        WhatsAppNotificationListener.messagesByContact[emptyKey] = mutableListOf(
-            WhatsAppNotificationListener.Companion.ChatMessage("Sehr alte", System.currentTimeMillis() - (25 * 60 * 60 * 1000), false)
-        )
-        cleanupOldMessages()
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            test("cleanupOldMessages – leere Kontakte entfernt", "Key '$emptyKey' weg") {
-                !WhatsAppNotificationListener.messagesByContact.containsKey(emptyKey)
-            }
-            WhatsAppNotificationListener.messagesByContact.remove(oldKey)
-            postTestSummary(results, context, TAG)
-        }, 300)
-    }, 300)
-}
-
-private data class TestResult(val name: String, val passed: Boolean, val expected: String, val actual: String)
-
-private fun postTestSummary(results: List<TestResult>, context: Context, TAG: String) {
-    val passed = results.count { it.passed }
-    val failed = results.count { !it.passed }
-    val total = results.size
-    val summaryLine = "✅ $passed/$total bestanden" + if (failed > 0) "  ❌ $failed fehlgeschlagen" else ""
-    val detail = results.joinToString("\n") { r -> "${if (r.passed) "✅" else "❌"} ${r.name}\n     → ${r.actual}" }
-    Log.d(TAG, "═══ TEST SUMMARY ═══")
-    Log.d(TAG, summaryLine)
-    results.forEach { r -> Log.d(TAG, "${if (r.passed) "✅" else "❌"} ${r.name} | ${r.expected} | ${r.actual}") }
-    Log.d(TAG, "════════════════════")
-    if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-        context.getSystemService(NotificationManager::class.java).notify(77777,
-            NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle("🧪 Messaging Tests: $summaryLine")
-                .setContentText(if (failed == 0) "Alle Tests bestanden!" else "$failed Test(s) fehlgeschlagen")
-                .setStyle(NotificationCompat.BigTextStyle().bigText(detail).setSummaryText(summaryLine))
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setAutoCancel(true)
-                .build()
-        )
+        nm.notify(cms(), builder.build())
     }
 }
