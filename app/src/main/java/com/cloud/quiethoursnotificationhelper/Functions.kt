@@ -14,6 +14,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.cloud.Config.cms
 import com.cloud.SupabaseConfigALT
 import com.cloud.mediarecorder.AudioRecorder
 import com.cloud.service.ChatService
@@ -207,7 +208,7 @@ private fun showFriendMessagesNotification(messages: List<ChatService.Message>, 
         if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            notificationManager.notify(60100, notification)
+            notificationManager.notify(cms(), notification)
         }
 
     } catch (e: Exception) {
