@@ -10,6 +10,7 @@ import android.media.MediaPlayer
 import android.os.Environment
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.cloud.Config.VOICE_NOTE
 import com.cloud.service.QuietHoursNotificationService
 import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_NEXT_VOICE_NOTE
 import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_PLAY_VOICE_NOTE
@@ -175,7 +176,7 @@ fun stopVoiceNote(context: Context) {
         }
         voiceNotePlayer = null
         val notificationManager = context.getSystemService(NotificationManager::class.java)
-        notificationManager.cancel(40000)
+        notificationManager.cancel(VOICE_NOTE)
     } catch (e: Exception) {
         Log.e("QuietHoursService", "Error stopping voice note", e)
     }
@@ -240,7 +241,7 @@ private fun showVoiceNotePlayerNotification(file: File, isPlaying: Boolean, cont
         if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            notificationManager.notify(40000, notification)
+            notificationManager.notify(VOICE_NOTE, notification)
         }
 
     } catch (e: Exception) {
