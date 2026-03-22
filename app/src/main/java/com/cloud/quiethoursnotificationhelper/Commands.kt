@@ -1,16 +1,12 @@
 package com.cloud.quiethoursnotificationhelper
 
-import android.Manifest
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Context.CAMERA_SERVICE
 import android.content.Context.MODE_PRIVATE
 import android.content.Context.WINDOW_SERVICE
-import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.PixelFormat
 import android.hardware.camera2.CameraManager
 import android.os.Handler
@@ -19,7 +15,6 @@ import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
-import android.webkit.WebView
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
 import androidx.activity.compose.LocalActivityResultRegistryOwner
@@ -42,39 +37,31 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
-import androidx.core.app.RemoteInput
-import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.cloud.Config
-import com.cloud.SupabaseConfigALT
+import com.cloud.Config.SHOWCOMMANDS
 import com.cloud.mediaplayer.AlgorithmicPlaylistRegistry
 import com.cloud.mediaplayer.MediaAnalyticsManager
 import com.cloud.mediaplayer.MediaAnalyticsManager.rebuildSessions
 import com.cloud.mediaplayer.PodcastShowManager
-import com.cloud.privatecloudapp.LandingPageOrApp
 import com.cloud.privatecloudapp.OtherBucketViewer
-import com.cloud.privatecloudapp.PrivateCloudApp
 import com.cloud.privatecloudapp.showBatteryInfo
 import com.cloud.service.MediaPlayerService
 import com.cloud.service.MusicPlayerServiceCompat
 import com.cloud.service.OverlayLifecycleOwner
 import com.cloud.service.PodcastPlayerServiceCompat
-import com.cloud.service.QuietHoursNotificationService
 import com.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.cloud.service.QuietHoursNotificationService.Companion.commandHistory
 import com.cloud.service.QuietHoursNotificationService.Companion.showtestOverlay
 import com.cloud.service.WhatsAppNotificationListener
 import com.cloud.service.restartMusicPlayer
 import com.cloud.showSimpleNotificationExtern
-import com.cloud.storage
 import com.cloud.weathertab.fetchWeatherForecast
 import com.cloud.weathertab.getLastKnownLocation
 import com.cloud.weathertab.weathernot
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -361,13 +348,6 @@ private fun getAvailableCommands(context: Context): List<Command> {
             MusicPlayerServiceCompat.toggleFavorite(context)
         },
         Command(
-            name = "favorites",
-            aliases = listOf("favs", "showfavs", "listfavs"),
-            description = "Zeigt alle favorisierten Songs"
-        ) {
-            MusicPlayerServiceCompat.showFavorites(context)
-        },
-        Command(
             name = "favmode",
             aliases = listOf("onlyfavs", "favsonly", "favoritesmode"),
             description = "Schaltet Favoriten-Modus um (nur Favoriten abspielen)"
@@ -596,13 +576,6 @@ private fun getAvailableCommands(context: Context): List<Command> {
             MediaPlayerService.showPlaylists(context)
         },
         Command(
-            name = "test",
-            aliases = listOf(),
-            description = "Zeigt Playlist-Details mit Song-Liste"
-        ) {
-            runMessagingTests(context)
-        },
-        Command(
             name = "Overlay",
             aliases = listOf("o", "ov"),
             description = "Zeigt Overlay an"
@@ -626,13 +599,11 @@ private fun getAvailableCommands(context: Context): List<Command> {
             val windowManager = context.getSystemService(WINDOW_SERVICE) as WindowManager
 
             testOverlayLifecycle = OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
-            val supabase: SupabaseClient = SupabaseConfigALT.client
 
             testOverlayView = ComposeView(context).apply {
                 setViewTreeLifecycleOwner(testOverlayLifecycle)
                 setViewTreeSavedStateRegistryOwner(testOverlayLifecycle)
                 setViewTreeViewModelStoreOwner(testOverlayLifecycle)
-                val startTarget = "null"
                 setContent {
                     val backDispatcher = remember { OnBackPressedDispatcher(null) }
                     val backDispatcherOwner = remember {
@@ -741,7 +712,8 @@ fun executeCommand(commandText: String, context: Context) {
                         "❌ Fehler",
                         "Syntax: save [kontakt] oder save \"kontakt mit leerzeichen\"",
                         20.seconds,
-                        context
+                        context,
+                        silent = false
                     )
                 }
             } else {
@@ -751,7 +723,8 @@ fun executeCommand(commandText: String, context: Context) {
                         "❌ Keine Kontakte",
                         "Keine Reply-Daten verfügbar",
                         20.seconds,
-                        context
+                        context,
+                        silent = false
                     )
                 } else {
                     showSimpleNotificationExtern(
@@ -784,7 +757,8 @@ fun executeCommand(commandText: String, context: Context) {
                     "❌ Fehler",
                     "Syntax: message [deine nachricht]",
                     20.seconds,
-                    context
+                    context,
+                    silent = false
                 )
             }
             return
@@ -799,7 +773,8 @@ fun executeCommand(commandText: String, context: Context) {
                         "❌ Fehler",
                         "Syntax: record start | record stop",
                         20.seconds,
-                        context
+                        context,
+                        silent = false
                     )
                 }
             } else {
@@ -877,7 +852,8 @@ fun executeCommand(commandText: String, context: Context) {
                             "❌ Ungültiger Tag",
                             "Tag muss 0, 1 oder 2 sein",
                             20.seconds,
-                            context
+                            context,
+                            silent = false
                         )
                     }
                 } else {
@@ -885,7 +861,8 @@ fun executeCommand(commandText: String, context: Context) {
                         "❌ Fehler",
                         "Syntax: weather [0=Heute, 1=Morgen, 2=Übermorgen] [0-23]",
                         20.seconds,
-                        context
+                        context,
+                        silent = false
                     )
                 }
             } else {
@@ -914,7 +891,8 @@ fun executeCommand(commandText: String, context: Context) {
                             "❌ Taschenlampe",
                             "Helligkeit konnte nicht gesetzt werden: ${e.message}",
                             20.seconds,
-                            context
+                            context,
+                            silent = false
                         )
                     }
                 } else if (level != null && level == 0) {
@@ -923,11 +901,12 @@ fun executeCommand(commandText: String, context: Context) {
                     try {
                         val cameraId = cameraManager.cameraIdList.firstOrNull() ?: return
                         cameraManager.setTorchMode(cameraId, false)
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         showSimpleNotificationExtern(
                             "❌ Taschenlampe",
                             "Taschenlampe konnte nicht geschaltet werden",
-                            context = context
+                            context = context,
+                            silent = false
                         )
                     }
                 } else {
@@ -935,7 +914,8 @@ fun executeCommand(commandText: String, context: Context) {
                         "❌ Ungültiger Wert",
                         "Bitte eine Zahl >= 1 eingeben",
                         20.seconds,
-                        context
+                        context,
+                        silent = false
                     )
                 }
             } else {
@@ -981,7 +961,8 @@ fun executeCommand(commandText: String, context: Context) {
                         "❌ Ungültige Nummer",
                         "Syntax: qadd [podcast-nummer]",
                         20.seconds,
-                        context
+                        context,
+                        silent = false
                     )
                 }
             } else {
@@ -1005,7 +986,8 @@ fun executeCommand(commandText: String, context: Context) {
                         "❌ Ungültige Position",
                         "Syntax: qremove [position]",
                         20.seconds,
-                        context
+                        context,
+                        silent = false
                     )
                 }
             } else {
@@ -1041,7 +1023,8 @@ fun executeCommand(commandText: String, context: Context) {
                             "❌ Fehler",
                             "Syntax: tb [dd.mm.yy] [\"name mit leerzeichen\"]",
                             20.seconds,
-                            context
+                            context,
+                            silent = false
                         )
                     }
                 } else {
@@ -1049,7 +1032,8 @@ fun executeCommand(commandText: String, context: Context) {
                         "❌ Fehler",
                         "Syntax: tb [dd.mm.yy] [\"name mit leerzeichen\"]",
                         20.seconds,
-                        context
+                        context,
+                        silent = false
                     )
                 }
             } else {
@@ -1096,7 +1080,8 @@ fun executeCommand(commandText: String, context: Context) {
                         "❌ Ungültige Geschwindigkeit",
                         "Bitte einen Wert zwischen 0.5 und 3.0 eingeben",
                         20.seconds,
-                        context
+                        context,
+                        silent = false
                     )
                 }
             } else {
@@ -1120,7 +1105,8 @@ fun executeCommand(commandText: String, context: Context) {
                         "❌ Fehler",
                         "Syntax: * \"deine aufgabe\"",
                         20.seconds,
-                        context
+                        context,
+                        silent = false
                     )
                 }
             } else {
@@ -1143,7 +1129,8 @@ fun executeCommand(commandText: String, context: Context) {
                         "❌ Ungültige Nummer",
                         "Syntax: todone [nummer]",
                         20.seconds,
-                        context
+                        context,
+                        silent = false
                     )
                 }
             } else {
@@ -1162,7 +1149,8 @@ fun executeCommand(commandText: String, context: Context) {
                         "❌ Ungültige Nummer",
                         "Syntax: todorm [nummer]",
                         20.seconds,
-                        context
+                        context,
+                        silent = false
                     )
                 }
             } else {
@@ -1182,7 +1170,8 @@ fun executeCommand(commandText: String, context: Context) {
                     "❌ Ungültige Eingabe",
                     "Syntax: bahn [1-7]\n1=Morgen, 2=Übermorgen, etc.",
                     20.seconds,
-                    context
+                    context,
+                    silent = false
                 )
             } else {
                 Handler(Looper.getMainLooper()).post {
@@ -1215,7 +1204,8 @@ fun executeCommand(commandText: String, context: Context) {
                                 "❌ Ungültiger Typ",
                                 "Typ muss 'music' oder 'podcast' sein",
                                 20.seconds,
-                                context
+                                context,
+                                silent = false
                             )
                         }
                     } else {
@@ -1223,7 +1213,8 @@ fun executeCommand(commandText: String, context: Context) {
                             "❌ Fehler",
                             "Syntax: plcreate [music|podcast] \"Name\"",
                             20.seconds,
-                            context
+                            context,
+                            silent = false
                         )
                     }
                 }
@@ -1326,7 +1317,8 @@ fun executeCommand(commandText: String, context: Context) {
                         if (success) "✓ Pattern zugewiesen" else "❌ Fehler",
                         if (success) "\"$pattern\" → \"$showName\"\nAlle Folgen mit diesem Pattern werden dieser Show zugeordnet."
                         else "Zuweisung fehlgeschlagen",
-                        context = context
+                        context = context,
+                        silent = false
                     )
                 } else {
                     showSimpleNotificationExtern(
@@ -1356,7 +1348,8 @@ fun executeCommand(commandText: String, context: Context) {
                         "❌ Fehler",
                         "Syntax: showcreate [show-name]",
                         20.seconds,
-                        context
+                        context,
+                        silent = false
                     )
                 }
             } else {
@@ -1404,7 +1397,8 @@ fun executeCommand(commandText: String, context: Context) {
                     showSimpleNotificationExtern(
                         if (success) "✓ Umbenannt" else "❌ Show nicht gefunden",
                         if (success) "\"$oldName\" → \"$newName\"" else "Keine Show mit Namen \"$oldName\"",
-                        context = context
+                        context = context,
+                        silent = false
                     )
                 } else {
                     showSimpleNotificationExtern(
@@ -1445,7 +1439,8 @@ fun executeCommand(commandText: String, context: Context) {
                         showSimpleNotificationExtern(
                             "❌ Nicht gefunden",
                             "Kein Song mit \"$query\" in der Statistik",
-                            context = context
+                            context = context,
+                            silent = false
                         )
                     } else {
                         val matchedLabels = MediaAnalyticsManager.getSessions()
@@ -1464,7 +1459,7 @@ fun executeCommand(commandText: String, context: Context) {
                                 if (maxRepeat > 1) " · max ${maxRepeat}× wiederholt" else ""
                             showSimpleNotificationExtern(
                                 "📊 $label",
-                                "▶ ${sessionCount} Sessions · ⏱ ${formatMs(totalMs)} gehört\n🕐 Zuletzt: $lastPlayed$repeatInfo",
+                                "▶ $sessionCount Sessions · ⏱ ${formatMs(totalMs)} gehört\n🕐 Zuletzt: $lastPlayed$repeatInfo",
                                 context = context
                             )
                         }
@@ -1480,7 +1475,8 @@ fun executeCommand(commandText: String, context: Context) {
                         showSimpleNotificationExtern(
                             "❌ Nicht gefunden",
                             "Kein Podcast mit \"$query\" in der Statistik",
-                            context = context
+                            context = context,
+                            silent = false
                         )
                     } else {
                         matchedShows.entries.take(3).forEach { (showName, showSessions) ->
@@ -1502,7 +1498,8 @@ fun executeCommand(commandText: String, context: Context) {
                 else -> showSimpleNotificationExtern(
                     "❌ Ungültiger Typ",
                     "Verwende 'song' oder 'podcast'",
-                    context = context
+                    context = context,
+                    silent = false
                 )
             }
             return
@@ -1543,7 +1540,8 @@ fun executeCommand(commandText: String, context: Context) {
                         showSimpleNotificationExtern(
                             "❌ Nicht gefunden",
                             "Kein Song mit \"$query\" in der Statistik",
-                            context = context
+                            context = context,
+                            silent = false
                         )
                     } else {
                         val remaining = allSessions.filter {
@@ -1574,7 +1572,8 @@ fun executeCommand(commandText: String, context: Context) {
                         showSimpleNotificationExtern(
                             "❌ Nicht gefunden",
                             "Kein Podcast mit \"$query\" in der Statistik",
-                            context = context
+                            context = context,
+                            silent = false
                         )
                     } else {
                         val remaining = allSessions.filter {
@@ -1596,7 +1595,8 @@ fun executeCommand(commandText: String, context: Context) {
                 else -> showSimpleNotificationExtern(
                     "❌ Typ",
                     "Verwende 'song', 'podcast' oder 'all'",
-                    context = context
+                    context = context,
+                    silent = false
                 )
             }
             return
@@ -1641,7 +1641,8 @@ fun executeCommand(commandText: String, context: Context) {
                     showSimpleNotificationExtern(
                         "❌ Nicht gefunden",
                         "Verfügbare Playlists:\n$list",
-                        20.seconds, context
+                        20.seconds, context,
+                        silent = false
                     )
                 }
             } else {
@@ -1668,7 +1669,8 @@ fun executeCommand(commandText: String, context: Context) {
                 "❌ Fehler",
                 "Befehl '${matchedCommand.name}' konnte nicht ausgeführt werden",
                 20.seconds,
-                context
+                context,
+                silent = false
             )
         }
     } else {
@@ -1693,14 +1695,16 @@ fun executeCommand(commandText: String, context: Context) {
                 "❓ Unbekannter Befehl",
                 "Meintest du: $suggestionText?",
                 20.seconds,
-                context
+                context,
+                silent = false
             )
         } else {
             showSimpleNotificationExtern(
                 "❌ Unbekannter Befehl",
                 "'$commandInput' nicht gefunden. Verwende 'help' für alle Befehle.",
                 20.seconds,
-                context
+                context,
+                silent = false
             )
         }
     }
@@ -1708,10 +1712,12 @@ fun executeCommand(commandText: String, context: Context) {
 
 private fun showAvailableCommands(context: Context) {
     val commands = getAvailableCommands(context)
+    val notificationManager = context.getSystemService(NotificationManager::class.java)
 
     val chunked = commands.chunked(5)
 
     chunked.forEachIndexed { index, chunk ->
+        Log.d("DEBUGGI", "$index")
         val commandList = chunk
             .filter { it.name != "help" }
             .joinToString("\n") { cmd ->
@@ -1731,11 +1737,23 @@ private fun showAvailableCommands(context: Context) {
             .setStyle(NotificationCompat.BigTextStyle().bigText(commandList))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            .setGroup("commands")
             .build()
 
-        val notificationManager = context.getSystemService(NotificationManager::class.java)
-        notificationManager.notify(50000 + index, notification)
+        notificationManager.notify(SHOWCOMMANDS + index, notification)
     }
+
+    val summary = NotificationCompat.Builder(context, CHANNEL_ID)
+        .setSmallIcon(android.R.drawable.ic_menu_info_details)
+        .setContentTitle("Alle Commands")
+        .setContentText("${chunked.size} Commands")
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setGroup("commands")
+        .setGroupSummary(true)
+        .setAutoCancel(true)
+        .build()
+
+    notificationManager.notify(SHOWCOMMANDS+50, summary)
 }
 
 private fun parseCommandWithQuotes(input: String): List<String> {
@@ -1814,7 +1832,8 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
                 "❌ Bahn API Fehler",
                 "Status: ${response.code}\n$stationName $dayLabel um 07:05 Uhr (planmäßige Ankunft)",
                 20.seconds,
-                context
+                context,
+                silent = false
             )
             return
         }
@@ -1855,7 +1874,8 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
                 showSimpleNotificationExtern(
                     "🚆 $trainDisplay ($dayLabel)",
                     "📍 $fromStation → $toStation\n⏰ Geltendorf: $shownTime Uhr (Plan $targetPlannedArrival)\n🚪 Gleis: $platform\n$statusText",
-                    context = context
+                    context = context,
+                    silent = false
                 )
                 found = true
                 break
@@ -1866,7 +1886,8 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
                 "ℹ️ Kein 07:05-Zug",
                 "In den Plan-Daten wurde kein Zug mit planmäßiger Ankunft 07:05 in $stationName $dayLabel gefunden.",
                 20.seconds,
-                context
+                context,
+                silent = false
             )
         }
     } catch (e: Exception) {
@@ -1874,7 +1895,8 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
             "❌ Bahn-Fehler",
             "Verbindungsfehler: ${e.message}",
             20.seconds,
-            context
+            context,
+            silent = false
         )
     }
 }
