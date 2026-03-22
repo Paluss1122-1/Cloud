@@ -16,12 +16,11 @@ import org.json.JSONObject
 import org.json.JSONArray
 import java.io.File
 import java.net.URLEncoder
-import com.mpatric.mp3agic.Mp3File
-import com.mpatric.mp3agic.ID3v24Tag
 import android.util.Base64
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.RequestBody.Companion.toRequestBody
+import android.util.Log
+import okhttp3.FormBody
 import java.io.FileOutputStream
+import java.net.URLDecoder
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -52,7 +51,7 @@ fun getSpotifyToken(): String {
     val credentials = Base64.encodeToString(
         "$SPOTIFY_CLIENT_ID:$SPOTIFY_CLIENT_SECRET".toByteArray(), Base64.NO_WRAP
     )
-    val body = okhttp3.FormBody.Builder().add("grant_type", "client_credentials").build()
+    val body = FormBody.Builder().add("grant_type", "client_credentials").build()
     val req = Request.Builder()
         .url("https://accounts.spotify.com/api/token")
         .post(body)
@@ -130,7 +129,7 @@ fun getYouTubeAudioUrl(videoId: String): String? {
             val response = http.newCall(req).execute()
             val bodyStr = response.body!!.string()
 
-            android.util.Log.d("YT_DEBUG", "Instance: $instance, Code: ${response.code}, Body: ${bodyStr.take(500)}")
+            Log.d("YT_DEBUG", "Instance: $instance, Code: ${response.code}, Body: ${bodyStr.take(500)}")
 
             if (!response.isSuccessful) continue
 
@@ -144,7 +143,7 @@ fun getYouTubeAudioUrl(videoId: String): String? {
                 val s = streams.getJSONObject(i)
                 val bitrate = s.optInt("bitrate", 0)
                 val mimeType = s.optString("mimeType", "")
-                android.util.Log.d("YT_DEBUG", "Stream: mimeType=$mimeType bitrate=$bitrate url=${s.optString("url").take(80)}")
+                Log.d("YT_DEBUG", "Stream: mimeType=$mimeType bitrate=$bitrate url=${s.optString("url").take(80)}")
                 if (bitrate > bestBitrate) {
                     val url = s.optString("url").takeIf { it.isNotEmpty() }
                     if (url != null) {
@@ -155,7 +154,7 @@ fun getYouTubeAudioUrl(videoId: String): String? {
             }
             if (bestUrl != null) return bestUrl
         } catch (e: Exception) {
-            android.util.Log.e("YT_DEBUG", "Instance $instance failed: ${e.message}")
+            Log.e("YT_DEBUG", "Instance $instance failed: ${e.message}")
             continue
         }
     }
@@ -167,7 +166,7 @@ fun decodeCipher(cipher: String): String? {
     if (cipher.isBlank()) return null
     val params = cipher.split("&").associate {
         val (k, v) = it.split("=", limit = 2)
-        k to java.net.URLDecoder.decode(v, "UTF-8")
+        k to URLDecoder.decode(v, "UTF-8")
     }
     return params["url"]
 }

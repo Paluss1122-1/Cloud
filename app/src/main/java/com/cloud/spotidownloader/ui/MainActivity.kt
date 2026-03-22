@@ -1,4 +1,4 @@
-package com.example.spotifydownloader.ui
+package com.cloud.spotidownloader.ui
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -9,8 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
-import com.example.spotifydownloader.ui.theme.NewSpotifyDownloaderTheme
+import com.cloud.spotidownloader.ui.theme.NewSpotifyDownloaderTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint

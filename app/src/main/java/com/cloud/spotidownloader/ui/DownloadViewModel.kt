@@ -1,9 +1,9 @@
-package com.example.spotifydownloader.ui
+package com.cloud.spotidownloader.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.spotifydownloader.domain.DownloadRepository
-import com.example.spotifydownloader.domain.DownloadState
+import com.cloud.spotidownloader.domain.DownloadRepository
+import com.cloud.spotidownloader.domain.DownloadState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow

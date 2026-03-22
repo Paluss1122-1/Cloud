@@ -1,4 +1,4 @@
-package com.example.spotifydownloader.ui
+package com.cloud.spotidownloader.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -6,7 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.spotifydownloader.domain.DownloadState
+import com.cloud.spotidownloader.domain.DownloadState
 
 @Composable
 fun DownloadScreen(

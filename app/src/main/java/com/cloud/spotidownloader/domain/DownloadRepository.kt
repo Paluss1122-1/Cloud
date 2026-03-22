@@ -1,4 +1,4 @@
-package com.example.spotifydownloader.domain
+package com.cloud.spotidownloader.domain
 
 import kotlinx.coroutines.flow.Flow
 
