@@ -469,9 +469,7 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
                     }
 
                     /*ShizukuManager.suspendApp("com.google.android.gms.supervision", true)
-                    context.startService(Intent(context, QuietHoursNotificationService::class.java).apply {
-                        action = "ACTION_TEST_OVERLAY"
-                    })
+
 
                     // In einer Activity oder einem ViewModel:
                     getForegroundTimePerApp(context, days = 1).forEach { (pkg, ms) ->
