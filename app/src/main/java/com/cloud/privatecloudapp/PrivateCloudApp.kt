@@ -136,8 +136,8 @@ import androidx.core.content.FileProvider
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import coil.compose.rememberAsyncImagePainter
-import com.cloud.AesEncryption
 import com.cloud.Config
+import com.cloud.Config.cms
 import com.cloud.ShizukuManager
 import com.cloud.audiorecorder.AudioRecorderContent
 import com.cloud.authenticator.AuthenticatorTab
@@ -168,6 +168,7 @@ import com.cloud.vocabtab.VocabTab
 import com.cloud.weathertab.WeatherTabContent
 import com.cloud.R
 import com.cloud.aitab.AITabContent
+import com.cloud.quiethoursnotificationhelper.triggerBuild
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -508,6 +509,8 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
                     for (app in packages) {
                         Log.d("InstalledApp", app.packageName)
                     }*/
+
+                    triggerBuild(context)
 
                 }) { Text("HI") }
 
@@ -1088,8 +1091,7 @@ fun MainCloudScreen(storage: Storage) {
 
                         if (fileSize <= maxChunkSize) {
                             val bytes = file.readBytes()
-                            val dataToUpload =
-                                if (shouldEncrypt) AesEncryption.encrypt(bytes) else bytes
+                            val dataToUpload = bytes
                             storage.from(Config.SUPABASE_BUCKET)
                                 .upload(fileName, dataToUpload)
                         } else {
@@ -1100,8 +1102,7 @@ fun MainCloudScreen(storage: Storage) {
 
                             while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                                 val chunkData = buffer.copyOf(bytesRead)
-                                val dataToUpload =
-                                    if (shouldEncrypt) AesEncryption.encrypt(chunkData) else chunkData
+                                val dataToUpload = chunkData
                                 val chunkFileName = "${fileName}.part${chunkIndex + 1}"
                                 storage.from(Config.SUPABASE_BUCKET)
                                     .upload(chunkFileName, dataToUpload)
@@ -1813,24 +1814,7 @@ fun MainCloudScreen(storage: Storage) {
                                                                                             chunk.name
                                                                                         )
 
-                                                                                val decryptedChunk =
-                                                                                    if (isImageFile(
-                                                                                            fileName
-                                                                                        ) || fileName.endsWith(
-                                                                                            ".apk",
-                                                                                            ignoreCase = true
-                                                                                        )
-                                                                                    ) {
-                                                                                        chunkData
-                                                                                    } else {
-                                                                                        try {
-                                                                                            AesEncryption.decrypt(
-                                                                                                chunkData
-                                                                                            )
-                                                                                        } catch (_: Exception) {
-                                                                                            chunkData
-                                                                                        }
-                                                                                    }
+                                                                                val decryptedChunk = chunkData
 
                                                                                 fos.write(
                                                                                     decryptedChunk
@@ -1845,24 +1829,7 @@ fun MainCloudScreen(storage: Storage) {
                                                                                         fileName
                                                                                     )
 
-                                                                            val finalData =
-                                                                                if (isImageFile(
-                                                                                        fileName
-                                                                                    ) || fileName.endsWith(
-                                                                                        ".apk",
-                                                                                        ignoreCase = true
-                                                                                    )
-                                                                                ) {
-                                                                                    downloadedData
-                                                                                } else {
-                                                                                    try {
-                                                                                        AesEncryption.decrypt(
-                                                                                            downloadedData
-                                                                                        )
-                                                                                    } catch (_: Exception) {
-                                                                                        downloadedData
-                                                                                    }
-                                                                                }
+                                                                            val finalData = downloadedData
 
                                                                             fos.write(finalData)
                                                                         }
@@ -2351,7 +2318,7 @@ fun showDisplayInfo(context: Context) {
             Manifest.permission.POST_NOTIFICATIONS
         ) == PackageManager.PERMISSION_GRANTED
     ) {
-        NotificationManagerCompat.from(context).notify(1030, builder.build())
+        NotificationManagerCompat.from(context).notify(cms(), builder.build())
     }
 }
 
@@ -2380,7 +2347,7 @@ fun showNetworkNotificationNow(context: Context, content: String, final: Boolean
             Manifest.permission.POST_NOTIFICATIONS
         ) == PackageManager.PERMISSION_GRANTED
     ) {
-        NotificationManagerCompat.from(context).notify(1020, builder.build())
+        NotificationManagerCompat.from(context).notify(cms(), builder.build())
     } else {
         if (!final) {
             val preview = content.lines().take(2).joinToString("\n")
@@ -2470,7 +2437,7 @@ fun showBatteryInfo(context: Context) {
                 Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED
         ) {
-            notificationManager.notify(1001, builder.build())
+            notificationManager.notify(cms(), builder.build())
         } else {
             Toast.makeText(
                 context,
@@ -2580,7 +2547,6 @@ fun showDeviceInfo(context: Context) {
         "🌐 Netzwerk" to networkInfo
     )
 
-    var id = 1001
     for ((title, content) in categories) {
         val notification = NotificationCompat.Builder(context, channelId)
             .setContentTitle(title)
@@ -2591,7 +2557,7 @@ fun showDeviceInfo(context: Context) {
             .setAutoCancel(true)
             .build()
 
-        notificationManager.notify(id++, notification)
+        notificationManager.notify(cms(), notification)
     }
 }
 
