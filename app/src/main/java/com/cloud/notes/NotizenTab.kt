@@ -82,7 +82,9 @@ fun NotizenApp() {
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Notiz erstellen")
             }
-        }
+        },
+        modifier = Modifier.background(Color.Transparent),
+        containerColor = Color.Transparent
     ) { _ ->
         if (notes.isEmpty()) {
             Box(
