@@ -18,8 +18,11 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import com.cloud.service.QuietHoursNotificationService
 import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_CHANGE_END
+import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_CONTENT_INTENT
 import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_EXECUTE_COMMAND
 import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_NOTIFICATION_DISMISSED
+import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_RESTORE_NOTIFICATION
+import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_SYNC_LAPTOP
 import com.cloud.service.QuietHoursNotificationService.Companion.ALARM_REQUEST_CODE
 import com.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.cloud.service.QuietHoursNotificationService.Companion.CONFIRMATION_CHANNEL_ID
@@ -243,7 +246,7 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
     )
 
     val contentIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-        action = "ACTION_CONTENT_INTENT"
+        action = ACTION_CONTENT_INTENT
     }
     val contentPendingIntent = PendingIntent.getService(
         context,
@@ -353,7 +356,7 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
     }
 
     val syncIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-        action = "ACTION_SYNC_LAPTOP"
+        action = ACTION_SYNC_LAPTOP
     }
     val syncPendingIntent = PendingIntent.getService(
         context, 0, syncIntent,
@@ -370,7 +373,7 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
 
 fun updateNotification(context: Context) {
     val serviceIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-        action = "ACTION_RESTORE_NOTIFICATION"
+        action = ACTION_RESTORE_NOTIFICATION
     }
     context.startForegroundService(serviceIntent)
 }
