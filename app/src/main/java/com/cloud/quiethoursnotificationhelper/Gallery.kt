@@ -14,6 +14,8 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.cloud.Config.DEL_GAL_CONF
+import com.cloud.Config.GAL
 import com.cloud.SupabaseConfigALT
 import com.cloud.service.QuietHoursNotificationService
 import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_CANCEL_DELETE
@@ -357,7 +359,7 @@ fun showDeleteConfirmation(imageIndex: Int, context: Context) {
         if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            notificationManager.notify(80000, builder.build())
+            notificationManager.notify(DEL_GAL_CONF, builder.build())
         }
 
     } catch (e: Exception) {
@@ -388,7 +390,7 @@ fun deleteGalleryImage(imageIndex: Int, context: Context) {
             galleryImages = mutableList
 
             val notificationManager = context.getSystemService(NotificationManager::class.java)
-            notificationManager.cancel(80000)
+            notificationManager.cancel(DEL_GAL_CONF)
 
             showSimpleNotificationExtern(
                 "✅ Gelöscht",
@@ -402,7 +404,7 @@ fun deleteGalleryImage(imageIndex: Int, context: Context) {
                 }
                 showGalleryImage(currentGalleryIndex, context)
             } else {
-                notificationManager.cancel(70000)
+                notificationManager.cancel(GAL)
                 showSimpleNotificationExtern(
                     "📷 Galerie leer",
                     "Alle Bilder wurden gelöscht",
@@ -527,7 +529,7 @@ private fun showGalleryImage(index: Int, context: Context) {
         if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            notificationManager.notify(70000, notification)
+            notificationManager.notify(GAL, notification)
         }
     } catch (e: Exception) {
         Log.e("QuietHoursService", "Error showing gallery image", e)
