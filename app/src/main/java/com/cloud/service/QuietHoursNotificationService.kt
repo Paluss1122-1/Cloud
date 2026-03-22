@@ -548,7 +548,17 @@ class QuietHoursNotificationService : Service() {
                     START_STICKY
                 }
 
-                else -> START_STICKY
+                else -> {
+                    try {
+                        startForeground(
+                            NOTIFICATION_ID,
+                            createNotification(isCurrentlyQuietHours, this)
+                        )
+                    } catch (e: Exception) {
+                        reportServiceError("onStartCommand:else:startForeground", e)
+                    }
+                    START_STICKY
+                }
             }
         } catch (e: Exception) {
             reportServiceError("onStartCommand", e)
