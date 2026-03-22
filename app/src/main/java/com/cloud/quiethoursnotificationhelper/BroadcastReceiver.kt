@@ -18,6 +18,7 @@ import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_EXECUTE_
 import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_MARK_PARTS_READ
 import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_MESSAGE_SENT
 import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_NOTIFICATION_DISMISSED
+import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_RESTORE_NOTIFICATION
 import com.cloud.service.QuietHoursNotificationService.Companion.EXTRA_MESSAGE_ID
 import com.cloud.service.QuietHoursNotificationService.Companion.EXTRA_SENDER
 import com.cloud.service.QuietHoursNotificationService.Companion.NOTIFICATION_ID
@@ -42,10 +43,8 @@ class QuietActionReceiver : BroadcastReceiver() {
 
 class QuietHoursAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        Log.d("QuietHoursAlarmReceiver", "⏰ Alarm triggered!")
-
         val serviceIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-            action = "com.cloud.ACTION_CHECK_QUIET_HOURS"
+            action = ACTION_RESTORE_NOTIFICATION
         }
 
         context.startForegroundService(serviceIntent)
@@ -96,7 +95,7 @@ val notificationDismissReceiver = object : BroadcastReceiver() {
             if (notificationId == NOTIFICATION_ID) {
                 Handler(Looper.getMainLooper()).postDelayed({
                     val serviceIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-                        action = "ACTION_RESTORE_NOTIFICATION"
+                        action = ACTION_RESTORE_NOTIFICATION
                     }
                     context.startForegroundService(serviceIntent)
                 }, 100)
@@ -168,7 +167,7 @@ val commandReceiver = object : BroadcastReceiver() {
                 ?.getCharSequence("key_command_input")?.toString()
 
             val serviceIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-                action = "ACTION_RESTORE_NOTIFICATION"
+                action = ACTION_RESTORE_NOTIFICATION
             }
             context.startForegroundService(serviceIntent)
 
