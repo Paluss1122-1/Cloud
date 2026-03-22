@@ -1,2 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<autofill-service xmlns:android="http://schemas.android.com/apk/res/android" />
+<autofill-service
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.cloud.authenticator.SettingsActivity"
+    android:supportsInlineSuggestions="true">
+
+    <!--
+        android:settingsActivity: Optional - Activity die geöffnet wird wenn User auf Einstellungen klickt
+        android:supportsInlineSuggestions: WICHTIG für Inline Autofill in der Tastatur!
+    -->
+
+</autofill-service>
