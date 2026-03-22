@@ -48,6 +48,27 @@ android {
 
     buildTypes {
         debug {
+            /*isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )*/
+            buildConfigField(
+                "String",
+                "SUPABASE_PUBLISHABLE_KEY",
+                "\"${project.properties["SUPABASE_PUBLISHABLE_KEY"]}\""
+            )
+        }
+        create("minifiedDebug") {
+            initWith(buildTypes.getByName("debug"))
+            isMinifyEnabled = true
+            isShrinkResources = true
+            isDebuggable = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             buildConfigField(
                 "String",
                 "SUPABASE_PUBLISHABLE_KEY",
@@ -101,7 +122,6 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.appcompat)
-    implementation(libs.protolite.well.known.types)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.compose.runtime)
@@ -111,8 +131,6 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.androidx.tools.core)
     implementation(libs.androidx.media3.session)
-    implementation(libs.firebase.crashlytics.buildtools)
-    implementation(libs.identity.jvm)
     implementation(libs.androidx.compose.ui.tooling.preview)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
@@ -135,16 +153,12 @@ dependencies {
     implementation(libs.zxing.android.embedded)
     debugImplementation(libs.androidx.compose.ui.tooling)
     ksp(libs.androidx.room.compiler)
-    implementation(libs.ktor.ktor.client.android)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.websockets)
     implementation(libs.ktor.client.okhttp)
-    implementation(libs.ktor.client.cio)
     implementation(libs.ktor.utils)
     implementation(libs.accompanist.swiperefresh)
     implementation(libs.gson)
-    implementation(libs.android.mail)
-    implementation(libs.android.activation)
     implementation(libs.text.recognition)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.hilt.android)
@@ -162,4 +176,11 @@ dependencies {
     implementation("dev.rikka.shizuku:api:13.1.5") { isTransitive = true }
 
     implementation(libs.androidx.core.splashscreen)
+
+    implementation(libs.android.mail)
+    implementation(libs.android.activation)
+
+    implementation(libs.androidx.autofill)
+
+    implementation(libs.androidx.slice.builders)
 }
