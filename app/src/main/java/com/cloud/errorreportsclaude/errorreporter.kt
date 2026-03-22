@@ -13,6 +13,7 @@ import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
+import com.cloud.Config.cms
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
 import com.cloud.SupabaseConfigALT
@@ -103,7 +104,7 @@ class ErrorNotificationManager(private val context: Context) {
                 .build()
 
             NotificationManagerCompat.from(context)
-                .notify(System.currentTimeMillis().toInt(), notification)
+                .notify(cms(), notification)
         } catch (e: Exception) {
             CoroutineScope(Dispatchers.IO).launch {
                 ERRORINSERT(

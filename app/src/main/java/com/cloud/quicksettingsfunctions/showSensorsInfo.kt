@@ -11,6 +11,7 @@ import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.cloud.Config.cms
 import java.util.Locale
 import kotlin.text.ifEmpty
 
@@ -114,7 +115,7 @@ private fun showSensorNotification(context: Context, content: String) {
             Manifest.permission.POST_NOTIFICATIONS
         ) == PackageManager.PERMISSION_GRANTED
     ) {
-        NotificationManagerCompat.from(context).notify(notificationId, builder.build())
+        NotificationManagerCompat.from(context).notify(cms(), builder.build())
     } else {
         // Fallback: Anzahl + erstes Beispiel
         val lines = content.lines()

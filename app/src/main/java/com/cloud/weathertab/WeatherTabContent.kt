@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import com.cloud.Config.WEATHERAPI_KEY
+import com.cloud.Config.cms
 import com.google.accompanist.swiperefresh.SwipeRefresh
 import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 import com.google.android.gms.location.LocationServices
@@ -800,17 +801,14 @@ private fun createWeatherNotification(context: Context, dayName: String, hourDat
     val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     val channelId = "weather_notifications"
 
-    // Erstelle Notification Channel (für Android 8.0+)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val channel = NotificationChannel(
-            channelId,
-            "Wetter Benachrichtigungen",
-            NotificationManager.IMPORTANCE_DEFAULT
-        ).apply {
-            description = "Benachrichtigungen für Wettervorhersagen"
-        }
-        notificationManager.createNotificationChannel(channel)
+    val channel = NotificationChannel(
+        channelId,
+        "Wetter Benachrichtigungen",
+        NotificationManager.IMPORTANCE_DEFAULT
+    ).apply {
+        description = "Benachrichtigungen für Wettervorhersagen"
     }
+    notificationManager.createNotificationChannel(channel)
 
     // Erstelle die Notification
     val notification = androidx.core.app.NotificationCompat.Builder(context, channelId)
@@ -835,22 +833,5 @@ private fun createWeatherNotification(context: Context, dayName: String, hourDat
         .setAutoCancel(true)
         .build()
 
-    // Zeige die Notification
-    notificationManager.notify(hourData.hashCode(), notification)
+    notificationManager.notify(cms(), notification)
 }
-
-// Beispiel-Verwendung in deiner WeatherTabContent oder einer anderen Composable:
-//
-// Button(onClick = {
-//     scope.launch {
-//         Weathernot(ctx, "Heute", "14", weather)
-//     }
-// }) {
-//     Text("Test Notification")
-// }
-//
-// Oder für Morgen um 10 Uhr:
-// Weathernot(ctx, "Morgen", "10", weather)
-//
-// Oder für Übermorgen um 18 Uhr:
-// Weathernot(ctx, "Übermorgen", "18", weather)
