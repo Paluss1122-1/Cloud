@@ -27,6 +27,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
+import com.cloud.ui.theme.c
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -329,7 +330,7 @@ fun MediaRecorderContent(
         verticalArrangement = Arrangement.Top
     ) {
         Text(
-            text = if (isRecording) "🎵 Aufnahme läuft..." else "🎵 Musik Recorder",
+            text = if (isRecording) "🎵 Aufnahme läuft..." else "",
             fontSize = 24.sp,
             color = if (isRecording) Color(0xFF1DB954) else Color.White
         )
@@ -343,6 +344,7 @@ fun MediaRecorderContent(
                 color = Color.Yellow,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
+            return
         }
 
         Button(
@@ -389,7 +391,7 @@ fun MediaRecorderContent(
                 }
             },
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (isRecording) Color.Red else Color(0xFF1DB954),
+                containerColor = if (isRecording) Color.Red else c(),
                 contentColor = Color.White
             ),
             modifier = Modifier
