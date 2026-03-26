@@ -1,7 +1,11 @@
 package com.cloud.vocabtab
 
+// Speichern welche man richtig / falsch hat -> falsche nochmal extra lernbar machen
+
+import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -12,20 +16,43 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.runtime.*
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -34,87 +61,117 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.edit
+import androidx.core.graphics.scale
 import com.cloud.quiethoursnotificationhelper.flashcardVokabelnFlow
-import com.cloud.quiethoursnotificationhelper.trySendImageToLaptop
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
 // ──────────────────────────────────────────────
 // Data
 // ──────────────────────────────────────────────
 
-data class Vokabel(
-    val latein: String,
-    val deutsch: String
+data class Vokabel(val latein: String, val deutsch: String)
+data class VokabelSet(
+    val name: String,
+    val vokabeln: List<Vokabel>,
+    val createdAt: Long = System.currentTimeMillis()
 )
 
-enum class VokabelTabScreen { UPLOAD, REVIEW, LEARN }
-
-// ──────────────────────────────────────────────
-// Main Tab
-// ──────────────────────────────────────────────
+enum class VokabelTabScreen { HOME, UPLOAD, REVIEW, LEARN }
+private val BgSurface = Color(0xFF1E1E1E)
+private val BgCard = Color(0xFF2A2A2A)
+private val AccentViolet = Color(0xFF7C4DFF)
+private val AccentVioletDim = Color(0xFF4A148C)
+private val TextPrimary = Color(0xFFFFFFFF)
+private val TextSecondary = Color(0xFFB0B0B0)
+private val TextTertiary = Color(0xFF757575)
 
 @Composable
 fun VocabTab() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val prefs = remember { context.getSharedPreferences("vocab_sets", Context.MODE_PRIVATE) }
 
-    var screen by remember { mutableStateOf(VokabelTabScreen.UPLOAD) }
+    var screen by remember { mutableStateOf(VokabelTabScreen.HOME) }
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     var rawText by remember { mutableStateOf("") }
     var vokabeln by remember { mutableStateOf<List<Vokabel>>(emptyList()) }
     var isExtracting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var savedSets by remember { mutableStateOf(loadVokabelSets(prefs)) }
+    var activeSet by remember { mutableStateOf<VokabelSet?>(null) }
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var saveNameInput by remember { mutableStateOf("") }
 
-    // Image picker
-    val imagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let {
-            bitmap = uriToBitmap(context, it)
-            rawText = ""
-            vokabeln = emptyList()
-            screen = VokabelTabScreen.UPLOAD
+    val imagePicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            uri?.let {
+                bitmap = uriToBitmap(context, it)
+                rawText = ""
+                vokabeln = emptyList()
+                screen = VokabelTabScreen.UPLOAD
+            }
         }
+
+    if (showSaveDialog) {
+        SaveSetDialog(
+            initial = saveNameInput,
+            onConfirm = { name ->
+                val set = VokabelSet(name.trim(), vokabeln)
+                savedSets = saveVokabelSet(prefs, set)
+                showSaveDialog = false
+                saveNameInput = ""
+                screen = VokabelTabScreen.HOME
+            },
+            onDismiss = { showSaveDialog = false }
+        )
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .background(Color.Transparent)
     ) {
-        // Top bar with step indicator
-        StepIndicator(current = screen)
-
-        Spacer(Modifier.height(16.dp))
-
         when (screen) {
+            VokabelTabScreen.HOME -> HomeScreen(
+                savedSets = savedSets,
+                onNewSet = { screen = VokabelTabScreen.UPLOAD },
+                onOpenSet = { set ->
+                    activeSet = set
+                    vokabeln = set.vokabeln
+                    screen = VokabelTabScreen.REVIEW
+                },
+                onDeleteSet = { set ->
+                    savedSets = deleteVokabelSet(prefs, set)
+                }
+            )
+
             VokabelTabScreen.UPLOAD -> UploadScreen(
                 bitmap = bitmap,
                 rawText = rawText,
                 isExtracting = isExtracting,
                 errorMessage = errorMessage,
                 onPickImage = { imagePicker.launch("image/*") },
-                // Statt extractVokabelnFromBitmap(bmp) direkt:
+                onBack = { screen = VokabelTabScreen.HOME },
                 onExtract = {
                     bitmap?.let { bmp ->
                         isExtracting = true
                         errorMessage = null
                         scope.launch {
                             try {
-                                // In VocabTab.kt → onExtract-Block
                                 val bytes = java.io.ByteArrayOutputStream().also {
                                     bmp.compress(Bitmap.CompressFormat.JPEG, 90, it)
                                 }.toByteArray()
-                                val sent = trySendImageToLaptop(bytes)
+                                val sent = false
                                 if (sent) {
-                                    val result = flashcardVokabelnFlow
-                                        .first { it != null }  // wartet auf Antwort (Flow hat 30s Timeout)
+                                    val result = flashcardVokabelnFlow.first { it != null }
                                     vokabeln = result ?: emptyList()
                                     if (vokabeln.isNotEmpty()) screen = VokabelTabScreen.REVIEW
                                     else {
@@ -124,8 +181,128 @@ fun VocabTab() {
                                         else errorMessage = "Keine Vokabeln erkannt."
                                     }
                                 } else {
-                                    // Laptop nicht erreichbar → direkt lokal
-                                    vokabeln = extractVokabelnFromBitmap(bmp)
+                                    fun Bitmap.scaleForApi(maxPx: Int = 1280): Bitmap {
+                                        val scale = maxPx.toFloat() / maxOf(width, height)
+                                        if (scale >= 1f) return this
+                                        return this.scale(
+                                            (width * scale).toInt(),
+                                            (height * scale).toInt()
+                                        )
+                                    }
+
+                                    val scaledBmp = bmp.scaleForApi(1280)
+                                    val bytes2 = java.io.ByteArrayOutputStream().also {
+                                        scaledBmp.compress(Bitmap.CompressFormat.JPEG, 92, it)
+                                    }.toByteArray()
+                                    val base64 = android.util.Base64.encodeToString(
+                                        bytes2,
+                                        android.util.Base64.NO_WRAP
+                                    )
+                                    val nvidiaResult =
+                                        withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                            try {
+                                                val messagesJson = org.json.JSONArray().apply {
+                                                    put(org.json.JSONObject().apply {
+                                                        put("role", "user")
+                                                        put("content", org.json.JSONArray().apply {
+                                                            put(org.json.JSONObject().apply {
+                                                                put("type", "image_url")
+                                                                put(
+                                                                    "image_url",
+                                                                    org.json.JSONObject().apply {
+                                                                        put(
+                                                                            "url",
+                                                                            "data:image/jpeg;base64,$base64"
+                                                                        )
+                                                                    })
+                                                            })
+                                                            put(org.json.JSONObject().apply {
+                                                                put("type", "text")
+                                                                put(
+                                                                    "text", """
+Look at this vocabulary list image carefully.
+There are TWO columns: Latin on the LEFT, German on the RIGHT.
+Each row is one vocabulary entry.
+
+Rules:
+- Match each Latin entry with the German entry on the SAME vertical position
+- Latin entries are on the left half of the image
+- German entries are on the right half
+- Ignore page numbers (like "116")
+- Ignore any repeated/duplicate blocks at bottom
+
+Return ONLY a JSON array like this (one object per row):
+[{"latein":"salūtem dīcere (m. Dat.)","deutsch":"(jdn.) grüßen, begrüßen"},{"latein":"gaudium","deutsch":"die Freude"},...]
+
+No markdown, no explanation, ONLY the JSON array.
+""".trimIndent()
+                                                                )
+                                                            })
+                                                        })
+                                                    })
+                                                }
+                                                val body = org.json.JSONObject().apply {
+                                                    put(
+                                                        "model",
+                                                        "nvidia/llama-3.1-nemotron-nano-vl-8b-v1"
+                                                    )
+                                                    put("messages", messagesJson)
+                                                    put("stream", false)
+                                                }
+                                                val conn =
+                                                    java.net.URL("https://integrate.api.nvidia.com/v1/chat/completions")
+                                                        .openConnection() as java.net.HttpURLConnection
+                                                conn.requestMethod = "POST"
+                                                conn.setRequestProperty(
+                                                    "Authorization",
+                                                    "Bearer ${com.cloud.Config.NVIDIA}"
+                                                )
+                                                conn.setRequestProperty(
+                                                    "Content-Type",
+                                                    "application/json"
+                                                )
+                                                conn.doOutput = true
+                                                conn.outputStream.use {
+                                                    it.write(
+                                                        body.toString().toByteArray()
+                                                    )
+                                                }
+                                                val code = conn.responseCode
+                                                if (code != 200) {
+                                                    null
+                                                } else {
+                                                    val raw =
+                                                        conn.inputStream.bufferedReader().readText()
+                                                    org.json.JSONObject(raw).getJSONArray("choices")
+                                                        .getJSONObject(0).getJSONObject("message")
+                                                        .getString("content").trim()
+                                                }
+                                            } catch (_: Exception) {
+                                                null
+                                            }
+                                        }
+                                    if (nvidiaResult != null) {
+                                        try {
+                                            val startIdx = nvidiaResult.indexOf('[')
+                                            val endIdx = nvidiaResult.lastIndexOf(']')
+                                            if (startIdx != -1 && endIdx > startIdx) {
+                                                val arr = org.json.JSONArray(
+                                                    nvidiaResult.substring(
+                                                        startIdx,
+                                                        endIdx + 1
+                                                    )
+                                                )
+                                                vokabeln = (0 until arr.length()).map {
+                                                    val o = arr.getJSONObject(it)
+                                                    Vokabel(
+                                                        o.getString("latein"),
+                                                        o.getString("deutsch")
+                                                    )
+                                                }
+                                            }
+                                        } catch (_: Exception) {
+                                        }
+                                    }
                                     if (vokabeln.isNotEmpty()) screen = VokabelTabScreen.REVIEW
                                     else errorMessage = "Keine Vokabeln erkannt."
                                 }
@@ -141,9 +318,14 @@ fun VocabTab() {
 
             VokabelTabScreen.REVIEW -> ReviewScreen(
                 vokabeln = vokabeln,
+                setName = activeSet?.name,
                 onVokabelnChanged = { vokabeln = it },
                 onStartLearning = { screen = VokabelTabScreen.LEARN },
-                onBack = { screen = VokabelTabScreen.UPLOAD }
+                onSave = { saveNameInput = activeSet?.name ?: ""; showSaveDialog = true },
+                onBack = {
+                    screen =
+                        if (activeSet != null) VokabelTabScreen.HOME else VokabelTabScreen.UPLOAD
+                }
             )
 
             VokabelTabScreen.LEARN -> LearnScreen(
@@ -154,67 +336,166 @@ fun VocabTab() {
     }
 }
 
-// ──────────────────────────────────────────────
-// Step Indicator
-// ──────────────────────────────────────────────
-
 @Composable
-fun StepIndicator(current: VokabelTabScreen) {
-    val steps = listOf(
-        "Bild" to VokabelTabScreen.UPLOAD,
-        "Prüfen" to VokabelTabScreen.REVIEW,
-        "Lernen" to VokabelTabScreen.LEARN
-    )
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        steps.forEachIndexed { i, (label, step) ->
-            val active = current == step
-            val done = current.ordinal > step.ordinal
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+fun HomeScreen(
+    savedSets: List<VokabelSet>,
+    onNewSet: () -> Unit,
+    onOpenSet: (VokabelSet) -> Unit,
+    onDeleteSet: (VokabelSet) -> Unit
+) {
+    var setToDelete by remember { mutableStateOf<VokabelSet?>(null) }
+
+    if (setToDelete != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { setToDelete = null },
+            containerColor = BgSurface,
+            title = { Text("Set löschen?", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = { Text("\"${setToDelete!!.name}\" wird gelöscht.", color = TextSecondary) },
+            confirmButton = {
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
-                        .background(
-                            color = if (active || done) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                            shape = RoundedCornerShape(50)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (done) Icon(
-                        Icons.Default.Check,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    else Text(
-                        "${i + 1}",
-                        color = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFB71C1C))
+                        .clickable { onDeleteSet(setToDelete!!); setToDelete = null }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) { Text("Löschen", color = TextPrimary, fontWeight = FontWeight.SemiBold) }
+            },
+            dismissButton = {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(BgCard)
+                        .clickable { setToDelete = null }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) { Text("Abbrechen", color = TextSecondary) }
+            }
+        )
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    "Vokabeln",
+                    color = TextPrimary,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text("${savedSets.size} gespeicherte Sets", color = TextTertiary, fontSize = 13.sp)
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.primary)
+                .clickable { onNewSet() }
+                .padding(vertical = 18.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("📷", fontSize = 22.sp)
+                Text(
+                    "Neues Set scannen",
+                    color = TextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
-            if (i < steps.lastIndex) {
-                HorizontalDivider(
-                    modifier = Modifier.width(40.dp),
-                    thickness = DividerDefaults.Thickness,
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        if (savedSets.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("📚", fontSize = 56.sp)
+                    Text(
+                        "Noch keine Sets",
+                        color = TextPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text("Scan ein Vokabelbild zum Starten", color = TextTertiary, fontSize = 14.sp)
+                }
+            }
+        } else {
+            Text(
+                "Gespeicherte Sets",
+                color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+            )
+            LazyColumn(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(savedSets, key = { it.createdAt }) { set ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.primary)
+                            .clickable { onOpenSet(set) }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(
+                                            AccentViolet,
+                                            AccentVioletDim
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("📖", fontSize = 22.sp)
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                set.name,
+                                color = TextPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                "${set.vokabeln.size} Vokabeln · ${formatSetDate(set.createdAt)}",
+                                color = TextTertiary, fontSize = 12.sp
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFB71C1C).copy(alpha = 0.15f))
+                                .clickable { setToDelete = set },
+                            contentAlignment = Alignment.Center
+                        ) { Text("🗑", fontSize = 14.sp) }
+                    }
+                }
+                item { Spacer(Modifier.height(16.dp)) }
             }
         }
     }
 }
-
-// ──────────────────────────────────────────────
-// Screen 1: Upload & Extract
-// ──────────────────────────────────────────────
 
 @Composable
 fun UploadScreen(
@@ -223,122 +504,130 @@ fun UploadScreen(
     isExtracting: Boolean,
     errorMessage: String?,
     onPickImage: () -> Unit,
+    onBack: () -> Unit,
     onExtract: () -> Unit
 ) {
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item {
-            // Image area
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(240.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .clickable { onPickImage() },
-                contentAlignment = Alignment.Center
-            ) {
-                if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = "Vokabelbild",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit
-                    )
-                } else {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            Icons.Default.AddPhotoAlternate,
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text("Bild auswählen", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(
-                            "Format: LATEIN | DEUTSCH",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                    }
-                }
+    BackHandler{
+        onBack()
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 4.dp)
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Zurück",
+                    tint = TextPrimary
+                )
             }
+            Text("Neues Set", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
 
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onPickImage, modifier = Modifier.weight(1f)) {
-                    Icon(
-                        Icons.Default.Image,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(if (bitmap != null) "Anderes Bild" else "Bild wählen")
-                }
-                Button(
-                    onClick = onExtract,
-                    enabled = bitmap != null && !isExtracting,
-                    modifier = Modifier.weight(1f)
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(240.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(BgSurface)
+                        .clickable { onPickImage() },
+                    contentAlignment = Alignment.Center
                 ) {
-                    if (isExtracting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit
                         )
-                        Spacer(Modifier.width(4.dp))
-                        Text("Erkenne...")
                     } else {
-                        Icon(
-                            Icons.Default.DocumentScanner,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text("Text erkennen")
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text("📷", fontSize = 48.sp)
+                            Spacer(Modifier.height(8.dp))
+                            Text("Bild auswählen", color = TextSecondary, fontSize = 15.sp)
+                            Text("Format: LATEIN | DEUTSCH", color = TextTertiary, fontSize = 12.sp)
+                        }
                     }
                 }
             }
-        }
 
-        errorMessage?.let {
             item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
-                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(BgSurface)
+                            .clickable { onPickImage() }
+                            .padding(vertical = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            if (bitmap != null) "Anderes Bild" else "Bild wählen",
+                            color = TextSecondary, fontSize = 14.sp
                         )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (bitmap != null && !isExtracting) SolidColor(
+                                    MaterialTheme.colorScheme.primary
+                                ) else Brush.horizontalGradient(listOf(BgCard, BgCard))
+                            )
+                            .clickable(enabled = bitmap != null && !isExtracting) { onExtract() }
+                            .padding(vertical = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isExtracting) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = TextPrimary
+                                )
+                                Text("Erkenne...", color = TextPrimary, fontSize = 14.sp)
+                            }
+                        } else {
+                            Text(
+                                "Text erkennen",
+                                color = if (bitmap != null) TextPrimary else TextTertiary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+
+            errorMessage?.let {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFB71C1C).copy(alpha = 0.15f))
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("⚠️", fontSize = 16.sp)
                         Spacer(Modifier.width(8.dp))
-                        Text(
-                            it,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-            }
-        }
-
-        if (rawText.isNotEmpty()) {
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text(
-                            "Erkannter Text",
-                            fontWeight = FontWeight.SemiBold,
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            rawText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text(it, color = Color(0xFFEF9A9A), fontSize = 13.sp)
                     }
                 }
             }
@@ -346,129 +635,189 @@ fun UploadScreen(
     }
 }
 
-// ──────────────────────────────────────────────
-// Screen 2: Review & Edit
-// ──────────────────────────────────────────────
-
 @Composable
 fun ReviewScreen(
     vokabeln: List<Vokabel>,
+    setName: String?,
     onVokabelnChanged: (List<Vokabel>) -> Unit,
     onStartLearning: () -> Unit,
+    onSave: () -> Unit,
     onBack: () -> Unit
 ) {
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    BackHandler{
+        onBack()
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 4.dp, top = 8.dp, end = 16.dp)
+        ) {
             IconButton(onClick = onBack) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Zurück"
+                    contentDescription = null,
+                    tint = TextPrimary
                 )
             }
-            Text(
-                "${vokabeln.size} Vokabeln erkannt",
-                fontWeight = FontWeight.SemiBold,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(Modifier.weight(1f))
-            Button(onClick = onStartLearning, enabled = vokabeln.isNotEmpty()) {
-                Text("Lernen →")
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    setName ?: "Neue Vokabeln",
+                    color = TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text("${vokabeln.size} Vokabeln", color = TextTertiary, fontSize = 12.sp)
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(BgSurface)
+                    .clickable { onSave() }
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    "💾 Speichern",
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(
+                        if (vokabeln.isNotEmpty()) SolidColor(MaterialTheme.colorScheme.primary) else Brush.horizontalGradient(
+                            listOf(BgCard, BgCard)
+                        )
+                    )
+                    .clickable(enabled = vokabeln.isNotEmpty()) { onStartLearning() }
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    "Lernen →",
+                    color = if (vokabeln.isNotEmpty()) TextPrimary else TextTertiary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
 
-        Spacer(Modifier.height(8.dp))
-
         Text(
-            "Tippe zum Bearbeiten, wische zum Löschen",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.outline
+            "Tippe zum Bearbeiten",
+            color = TextTertiary, fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
         )
-        Spacer(Modifier.height(4.dp))
 
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
             items(vokabeln, key = { "${it.latein}${it.deutsch}" }) { vokabel ->
                 var editMode by remember { mutableStateOf(false) }
                 var editLatein by remember { mutableStateOf(vokabel.latein) }
                 var editDeutsch by remember { mutableStateOf(vokabel.deutsch) }
 
-                Card(
+                BackHandler(editMode) {
+                    editMode = false
+                }
+
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(BgSurface)
                         .clickable { editMode = !editMode }
                 ) {
                     if (editMode) {
                         Column(
-                            Modifier.padding(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             OutlinedTextField(
-                                editLatein,
-                                { editLatein = it },
+                                editLatein, { editLatein = it },
                                 label = { Text("Latein") },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
                             OutlinedTextField(
-                                editDeutsch,
-                                { editDeutsch = it },
+                                editDeutsch, { editDeutsch = it },
                                 label = { Text("Deutsch") },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
                             Row(
-                                horizontalArrangement = Arrangement.End,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                TextButton(onClick = {
-                                    onVokabelnChanged(vokabeln.filter { it != vokabel })
-                                }) { Text("Löschen", color = MaterialTheme.colorScheme.error) }
-                                Spacer(Modifier.width(8.dp))
-                                Button(onClick = {
-                                    val idx = vokabeln.indexOf(vokabel)
-                                    onVokabelnChanged(
-                                        vokabeln.toMutableList().also {
-                                            it[idx] = Vokabel(editLatein.trim(), editDeutsch.trim())
-                                        })
-                                    editMode = false
-                                }) { Text("Speichern") }
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFFB71C1C).copy(alpha = 0.15f))
+                                        .clickable { onVokabelnChanged(vokabeln.filter { it != vokabel }) }
+                                        .padding(vertical = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) { Text("Löschen", color = Color(0xFFEF9A9A), fontSize = 13.sp) }
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(MaterialTheme.colorScheme.primary)
+                                        .clickable {
+                                            val idx = vokabeln.indexOf(vokabel)
+                                            onVokabelnChanged(vokabeln.toMutableList().also {
+                                                it[idx] =
+                                                    Vokabel(editLatein.trim(), editDeutsch.trim())
+                                            })
+                                            editMode = false
+                                        }
+                                        .padding(vertical = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        "Speichern",
+                                        color = TextPrimary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
                             }
                         }
                     } else {
                         Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 vokabel.latein,
                                 modifier = Modifier.weight(1f),
+                                color = TextPrimary,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium
                             )
-                            HorizontalDivider(
+                            Box(
                                 modifier = Modifier
                                     .width(1.dp)
-                                    .height(20.dp),
-                                thickness = DividerDefaults.Thickness,
-                                color = MaterialTheme.colorScheme.outlineVariant
+                                    .height(18.dp)
+                                    .background(BgCard)
                             )
                             Text(
                                 vokabel.deutsch,
                                 modifier = Modifier.weight(1f),
                                 textAlign = TextAlign.End,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = TextSecondary,
+                                fontSize = 14.sp
                             )
                         }
                     }
                 }
             }
-
             item { Spacer(Modifier.height(80.dp)) }
         }
     }
 }
-
-// ──────────────────────────────────────────────
-// Screen 3: Flashcard Learning
-// ──────────────────────────────────────────────
 
 @Composable
 fun LearnScreen(vokabeln: List<Vokabel>, onBack: () -> Unit) {
@@ -479,42 +828,60 @@ fun LearnScreen(vokabeln: List<Vokabel>, onBack: () -> Unit) {
     var correct by remember { mutableIntStateOf(0) }
     var wrong by remember { mutableIntStateOf(0) }
     val flipped by animateFloatAsState(targetValue = if (showAnswer) 180f else 0f, label = "flip")
-
     val done = currentIndex >= shuffled.size
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück") }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 4.dp, top = 8.dp, end = 16.dp)
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = TextPrimary)
+            }
             Text(
                 "Karteikarten",
-                fontWeight = FontWeight.SemiBold,
-                style = MaterialTheme.typography.titleMedium
+                color = TextPrimary,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
             )
-            Spacer(Modifier.weight(1f))
-            // Lat→De / De→Lat toggle
-            FilterChip(
-                selected = showDeutsch,
-                onClick = { showDeutsch = !showDeutsch; showAnswer = false },
-                label = { Text(if (showDeutsch) "DE → LA" else "LA → DE") }
-            )
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(BgSurface)
+                    .clickable { showDeutsch = !showDeutsch; showAnswer = false }
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    if (showDeutsch) "DE → LA" else "LA → DE",
+                    color = AccentViolet,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
 
         if (!done) {
-            // Progress
-            LinearProgressIndicator(
-                progress = { currentIndex.toFloat() / shuffled.size },
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                color = ProgressIndicatorDefaults.linearColor,
-                trackColor = ProgressIndicatorDefaults.linearTrackColor,
-                strokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
-            )
+                    .height(3.dp)
+                    .background(BgSurface)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(currentIndex.toFloat() / shuffled.size)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clip(RoundedCornerShape(2.dp))
+                )
+            }
             Text(
-                "${currentIndex + 1} / ${shuffled.size}  ✓ $correct  ✗ $wrong",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
+                "${currentIndex + 1}/${shuffled.size}  ✓ $correct  ✗ $wrong",
+                color = TextTertiary, fontSize = 12.sp,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 4.dp)
             )
 
             Spacer(Modifier.height(24.dp))
@@ -522,177 +889,357 @@ fun LearnScreen(vokabeln: List<Vokabel>, onBack: () -> Unit) {
             val vokabel = shuffled[currentIndex]
             val frontText = if (showDeutsch) vokabel.deutsch else vokabel.latein
             val backText = if (showDeutsch) vokabel.latein else vokabel.deutsch
-            val frontLabel = if (showDeutsch) "Deutsch" else "Latein"
-            val backLabel = if (showDeutsch) "Latein" else "Deutsch"
+            val frontLabel = if (showDeutsch) "DEUTSCH" else "LATEIN"
+            val backLabel = if (showDeutsch) "LATEIN" else "DEUTSCH"
 
-            // Flashcard
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(220.dp)
-                    .padding(horizontal = 16.dp)
+                    .height(240.dp)
+                    .padding(horizontal = 20.dp)
                     .graphicsLayer { rotationY = flipped; cameraDistance = 12f * density }
                     .clickable { showAnswer = !showAnswer },
                 contentAlignment = Alignment.Center
             ) {
                 if (flipped <= 90f) {
-                    // Front
-                    Card(
-                        modifier = Modifier.fillMaxSize(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                        elevation = CardDefaults.cardElevation(8.dp)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    frontLabel.uppercase(),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(0.6f)
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Text(
-                                    frontText,
-                                    fontSize = 26.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                Spacer(Modifier.height(16.dp))
-                                Text(
-                                    "Tippe zum Aufdecken",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(0.5f)
-                                )
-                            }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                frontLabel,
+                                color = TextPrimary.copy(0.5f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 2.sp
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                frontText,
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                color = TextPrimary,
+                                modifier = Modifier.padding(horizontal = 24.dp)
+                            )
+                            Spacer(Modifier.height(20.dp))
+                            Text(
+                                "Tippe zum Aufdecken",
+                                color = TextPrimary.copy(0.4f),
+                                fontSize = 12.sp
+                            )
                         }
                     }
                 } else {
-                    // Back (mirrored)
-                    Card(
+                    Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(MaterialTheme.colorScheme.primary)
                             .graphicsLayer { rotationY = 180f },
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                        elevation = CardDefaults.cardElevation(8.dp)
+                        contentAlignment = Alignment.Center
                     ) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    backLabel.uppercase(),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(0.6f)
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Text(
-                                    backText,
-                                    fontSize = 26.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                            }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                backLabel,
+                                color = AccentViolet.copy(0.7f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 2.sp
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                backText,
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                color = TextPrimary,
+                                modifier = Modifier.padding(horizontal = 24.dp)
+                            )
+                            // ← gleiche Höhe wie Vorderseite durch Platzhalter
+                            Spacer(Modifier.height(20.dp))
+                            Text(
+                                " ", // unsichtbarer Platzhalter statt "Tippe zum Aufdecken"
+                                fontSize = 12.sp
+                            )
                         }
                     }
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(32.dp))
 
-            // Answer buttons (only visible when card is flipped)
             AnimatedContent(
                 targetState = showAnswer,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "buttons"
+                label = "btns"
             ) { revealed ->
                 if (revealed) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
+                            .padding(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Button(
-                            onClick = { wrong++; showAnswer = false; currentIndex++ },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color(0xFFB71C1C).copy(alpha = 0.2f))
+                                .clickable { wrong++; showAnswer = false; currentIndex++ }
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text("Falsch", color = MaterialTheme.colorScheme.error)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    "✗",
+                                    color = Color(0xFFEF5350),
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "Falsch",
+                                    color = Color(0xFFEF5350),
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
-                        Button(
-                            onClick = { correct++; showAnswer = false; currentIndex++ },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(MaterialTheme.colorScheme.primary)
+                                .clickable { correct++; showAnswer = false; currentIndex++ }
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                Icons.Default.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text("Richtig", color = MaterialTheme.colorScheme.primary)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    "✓",
+                                    color = TextPrimary,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "Richtig",
+                                    color = TextPrimary,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                     }
                 } else {
-                    Box(Modifier.height(48.dp)) // placeholder height
+                    Box(Modifier.height(56.dp))
                 }
             }
         } else {
-            // Results
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Card(modifier = Modifier.padding(24.dp)) {
-                    Column(
-                        modifier = Modifier.padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text("🎉 Fertig!", fontSize = 32.sp)
-                        Text(
-                            "${shuffled.size} Vokabeln abgefragt",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    "$correct",
-                                    fontSize = 28.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Text("Richtig", style = MaterialTheme.typography.labelSmall)
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    "$wrong",
-                                    fontSize = 28.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                                Text("Falsch", style = MaterialTheme.typography.labelSmall)
-                            }
+                Column(
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(BgSurface)
+                        .padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text("🎉", fontSize = 48.sp)
+                    Text(
+                        "Fertig!",
+                        color = TextPrimary,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "${shuffled.size} Vokabeln abgefragt",
+                        color = TextSecondary,
+                        fontSize = 14.sp
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                "$correct",
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = AccentViolet
+                            )
+                            Text("Richtig", color = TextTertiary, fontSize = 12.sp)
                         }
-                        Button(onClick = {
-                            shuffled = vokabeln.shuffled()
-                            currentIndex = 0; correct = 0; wrong = 0; showAnswer = false
-                        }) { Text("Nochmal") }
-                        OutlinedButton(onClick = onBack) { Text("Zurück zur Übersicht") }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                "$wrong",
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFEF5350)
+                            )
+                            Text("Falsch", color = TextTertiary, fontSize = 12.sp)
+                        }
                     }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.primary)
+                            .clickable {
+                                shuffled = vokabeln.shuffled(); currentIndex = 0; correct =
+                                0; wrong = 0; showAnswer = false
+                            }
+                            .padding(vertical = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "Nochmal",
+                            color = TextPrimary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(BgCard)
+                            .clickable { onBack() }
+                            .padding(vertical = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) { Text("Zurück zur Übersicht", color = TextSecondary, fontSize = 14.sp) }
                 }
             }
         }
     }
 }
 
-// ──────────────────────────────────────────────
-// Helpers
-// ──────────────────────────────────────────────
+@Composable
+fun SaveSetDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    var name by remember { mutableStateOf(initial) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = BgSurface,
+        title = { Text("Set speichern", color = TextPrimary, fontWeight = FontWeight.Bold) },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Name", color = TextTertiary) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(
+                        if (name.isNotBlank())
+                            SolidColor(MaterialTheme.colorScheme.primary)
+                        else
+                            Brush.horizontalGradient(listOf(BgCard, BgCard))
+                    )
+                    .clickable(enabled = name.isNotBlank()) { onConfirm(name) }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    "Speichern",
+                    color = if (name.isNotBlank()) TextPrimary else TextTertiary,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        },
+        dismissButton = {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(BgCard)
+                    .clickable { onDismiss() }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) { Text("Abbrechen", color = TextSecondary) }
+        }
+    )
+}
 
-fun uriToBitmap(context: android.content.Context, uri: Uri): Bitmap? {
+private const val SETS_KEY = "vocab_sets"
+
+fun saveVokabelSet(prefs: android.content.SharedPreferences, set: VokabelSet): List<VokabelSet> {
+    val existing = loadVokabelSets(prefs).toMutableList()
+    val idx = existing.indexOfFirst { it.name == set.name }
+    if (idx >= 0) existing[idx] = set else existing.add(0, set)
+    val json = org.json.JSONArray().also { arr ->
+        existing.forEach { s ->
+            arr.put(org.json.JSONObject().apply {
+                put("name", s.name)
+                put("createdAt", s.createdAt)
+                put("vokabeln", org.json.JSONArray().also { va ->
+                    s.vokabeln.forEach { v ->
+                        va.put(
+                            org.json.JSONObject()
+                                .apply { put("latein", v.latein); put("deutsch", v.deutsch) })
+                    }
+                })
+            })
+        }
+    }.toString()
+    prefs.edit { putString(SETS_KEY, json) }
+    return existing
+}
+
+fun loadVokabelSets(prefs: android.content.SharedPreferences): List<VokabelSet> {
+    val raw = prefs.getString(SETS_KEY, null) ?: return emptyList()
+    return try {
+        val arr = org.json.JSONArray(raw)
+        (0 until arr.length()).map {
+            val o = arr.getJSONObject(it)
+            val va = o.getJSONArray("vokabeln")
+            VokabelSet(
+                name = o.getString("name"),
+                createdAt = o.getLong("createdAt"),
+                vokabeln = (0 until va.length()).map { i ->
+                    val v = va.getJSONObject(i)
+                    Vokabel(v.getString("latein"), v.getString("deutsch"))
+                }
+            )
+        }
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+fun deleteVokabelSet(prefs: android.content.SharedPreferences, set: VokabelSet): List<VokabelSet> {
+    val updated = loadVokabelSets(prefs).filter { it.createdAt != set.createdAt }
+    val json = org.json.JSONArray().also { arr ->
+        updated.forEach { s ->
+            arr.put(org.json.JSONObject().apply {
+                put("name", s.name)
+                put("createdAt", s.createdAt)
+                put("vokabeln", org.json.JSONArray().also { va ->
+                    s.vokabeln.forEach { v ->
+                        va.put(
+                            org.json.JSONObject()
+                                .apply { put("latein", v.latein); put("deutsch", v.deutsch) })
+                    }
+                })
+            })
+        }
+    }.toString()
+    prefs.edit { putString(SETS_KEY, json) }
+    return updated
+}
+
+private fun formatSetDate(ts: Long): String =
+    java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.GERMANY).format(java.util.Date(ts))
+
+fun uriToBitmap(context: Context, uri: Uri): Bitmap? {
     return try {
         android.graphics.ImageDecoder.decodeBitmap(
             android.graphics.ImageDecoder.createSource(
@@ -711,14 +1258,20 @@ suspend fun extractVokabelnFromBitmap(bitmap: Bitmap): List<Vokabel> {
     val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     val result = recognizer.process(image).await()
 
-    data class OcrLine(val text: String, val left: Int, val right: Int, val top: Int, val bottom: Int) {
+    data class OcrLine(
+        val text: String,
+        val left: Int,
+        val right: Int,
+        val top: Int,
+        val bottom: Int
+    ) {
         val cx get() = (left + right) / 2
     }
 
     val w = bitmap.width.toFloat()
 
     // 3-Spalten-Zonen: Latein <45%, Deutsch 45–82%, Wortfamilien >82% (ignorieren)
-    val zoneLatinMax  = (w * 0.45f).toInt()
+    val zoneLatinMax = (w * 0.45f).toInt()
     val zoneDeutschMin = (w * 0.44f).toInt()
     val zoneDeutschMax = (w * 0.82f).toInt()
 
@@ -734,23 +1287,29 @@ suspend fun extractVokabelnFromBitmap(bitmap: Bitmap): List<Vokabel> {
     fun OcrLine.isNoise() =
         text.length < 2 || headerKeywords.any { text.lowercase().contains(it) }
 
-    val leftLines  = allLines.filter { it.cx <= zoneLatinMax  && !it.isNoise() }.sortedBy { it.top }
-    val rightLines = allLines.filter { it.left in zoneDeutschMin..zoneDeutschMax && !it.isNoise() }.sortedBy { it.top }
+    val leftLines = allLines.filter { it.cx <= zoneLatinMax && !it.isNoise() }.sortedBy { it.top }
+    val rightLines = allLines.filter { it.left in zoneDeutschMin..zoneDeutschMax && !it.isNoise() }
+        .sortedBy { it.top }
 
     data class Block(val text: String, val top: Int, val bottom: Int)
 
-    // Zeilenabstand-Schwelle: 4% der Bildhöhe → selber Eintrag
     val gapThreshold = bitmap.height * 0.045f
 
     fun List<OcrLine>.mergeBlocks(): List<Block> {
         val blocks = mutableListOf<Block>()
-        var buf = ""; var top = 0; var bottom = 0
+        var buf = "";
+        var top = 0;
+        var bottom = 0
         for (line in this) {
             when {
-                buf.isEmpty() -> { buf = line.text; top = line.top; bottom = line.bottom }
+                buf.isEmpty() -> {
+                    buf = line.text; top = line.top; bottom = line.bottom
+                }
+
                 line.top - bottom < gapThreshold -> {
                     buf += ", ${line.text}"; bottom = line.bottom
                 }
+
                 else -> {
                     blocks += Block(buf, top, bottom)
                     buf = line.text; top = line.top; bottom = line.bottom
@@ -761,16 +1320,14 @@ suspend fun extractVokabelnFromBitmap(bitmap: Bitmap): List<Vokabel> {
         return blocks
     }
 
-    val latinBlocks  = leftLines.mergeBlocks()
+    val latinBlocks = leftLines.mergeBlocks()
     val germanBlocks = rightLines.mergeBlocks()
 
     return latinBlocks.mapNotNull { latin ->
-        // Bestes Match = maximale Y-Überschneidung ODER minimaler Y-Abstand
         val matched = germanBlocks.maxByOrNull { german ->
-            val overlapTop    = maxOf(latin.top, german.top)
+            val overlapTop = maxOf(latin.top, german.top)
             val overlapBottom = minOf(latin.bottom, german.bottom)
             val overlap = maxOf(0, overlapBottom - overlapTop)
-            // Wenn kein direkter Overlap: negativen Abstand als Nähe-Score
             if (overlap > 0) overlap.toFloat()
             else -minOf(
                 abs(latin.top - german.bottom),
@@ -778,7 +1335,6 @@ suspend fun extractVokabelnFromBitmap(bitmap: Bitmap): List<Vokabel> {
             ).toFloat()
         } ?: return@mapNotNull null
 
-        // Zu weit entfernte Paarungen ablehnen (>8% Bildhöhe Abstand)
         val dist = minOf(
             abs(latin.top - matched.bottom),
             abs(latin.bottom - matched.top),
