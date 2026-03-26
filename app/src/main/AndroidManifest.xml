@@ -179,7 +179,6 @@
             </intent-filter>
         </receiver>
 
-
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"
@@ -237,10 +236,6 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
-
-        <activity
-            android:name=".authenticator.SilentCaptureActivity"
-            android:exported="false" />
 
         <receiver
             android:name="androidx.media3.session.MediaButtonReceiver"
