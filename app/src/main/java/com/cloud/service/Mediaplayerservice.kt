@@ -298,7 +298,7 @@ class MediaPlayerService : MediaSessionService() {
                     .setAutoCancel(true)
                     .build()
             if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
-                nm?.notify(COMPLETED_PODCASTS+50, summary)
+                nm?.notify(COMPLETED_PODCASTS + 50, summary)
         }
 
         fun setPlaybackSpeed(context: Context, speed: Float) = context.startService(
@@ -784,42 +784,91 @@ class MediaPlayerService : MediaSessionService() {
     override fun onDestroy() {
         super.onDestroy()
         isRunning = false
+
+        // 1️⃣ ZUERST: Alle Handler Callbacks ENTFERNEN
+        // Das ist KRITISCH - muss VOR isServiceDestroyed = true sein!
+        try {
+            positionSaveRunnable?.let { handler.removeCallbacks(it) }
+            handler.removeCallbacksAndMessages(null)  // ← ALLE Handler Msgs löschen!
+        } catch (_: Exception) {
+        }
+
+        // 2️⃣ Erst DANN: Flag setzen
         isServiceDestroyed = true
+
+        // 3️⃣ Receiver unregistrieren (mit Exception Handling)
+        try {
+            bluetoothReceiver?.let { unregisterReceiver(it) }
+        } catch (_: Exception) {
+        } finally {
+            bluetoothReceiver = null
+        }
+
+        try {
+            screenReceiver?.let { unregisterReceiver(it) }
+        } catch (_: Exception) {
+        } finally {
+            screenReceiver = null
+        }
+
+        // 4️⃣ Player Resources freigeben
         try {
             val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
             nm?.cancel(MEDIA_PLAYER)
         } catch (_: Exception) {
         }
-        try {
-            bluetoothReceiver?.let { unregisterReceiver(it); bluetoothReceiver = null }
-        } catch (_: Exception) {
-        }
-        try {
-            screenReceiver?.let { unregisterReceiver(it); screenReceiver = null }
-        } catch (_: Exception) {
-        }
-        positionSaveRunnable?.let { handler.removeCallbacks(it) }
-        savePodcastCurrentPosition()
 
-        if (isPlayingMusic && songStartedAt > 0L && currentSongName.isNotEmpty()) {
-            val listenedMs = System.currentTimeMillis() - songStartedAt
-            if (listenedMs > 3000) {
-                MediaAnalyticsManager.addSession(
-                    ListenSession(
-                        label = currentSongName,
-                        type = "music",
-                        listenedMs = listenedMs,
-                        startedAt = songStartedAt,
-                        repeatCount = consecutiveRepeatCount.coerceAtLeast(1)
+        try {
+            savePodcastCurrentPosition()
+        } catch (_: Exception) {
+        }
+
+        try {
+            if (isPlayingMusic && songStartedAt > 0L && currentSongName.isNotEmpty()) {
+                val listenedMs = System.currentTimeMillis() - songStartedAt
+                if (listenedMs > 3000) {
+                    MediaAnalyticsManager.addSession(
+                        ListenSession(
+                            label = currentSongName,
+                            type = "music",
+                            listenedMs = listenedMs,
+                            startedAt = songStartedAt,
+                            repeatCount = consecutiveRepeatCount.coerceAtLeast(1)
+                        )
                     )
-                )
+                }
             }
+        } catch (_: Exception) {
         }
-        if (isPlayingPodcast) savePodcastSession()
 
-        musicPlayer?.release(); musicPlayer = null
-        podcastPlayer?.release(); podcastPlayer = null
-        mediaSession?.release(); mediaSession = null
+        try {
+            if (isPlayingPodcast) savePodcastSession()
+        } catch (_: Exception) {
+        }
+
+        // 5️⃣ Player Release
+        try {
+            musicPlayer?.release()
+        } catch (_: Exception) {
+        } finally {
+            musicPlayer = null
+        }
+
+        try {
+            podcastPlayer?.release()
+        } catch (_: Exception) {
+        } finally {
+            podcastPlayer = null
+        }
+
+        try {
+            mediaSession?.release()
+        } catch (_: Exception) {
+        } finally {
+            mediaSession = null
+        }
+
+        super.onDestroy()
     }
 
     private fun ensureMusicMode() {
@@ -1191,8 +1240,9 @@ class MediaPlayerService : MediaSessionService() {
     }
 
     private fun toggleFavorite(songPath: String? = null) {
-        val path = songPath ?: playlist.getOrNull(currentSongIndex)?.path ?: return
-        val name = playlist.find { it.path == path }?.name ?: "Unbekannt"
+        val active = getActivePlaylist()
+        val path = songPath ?: active.getOrNull(currentSongIndex)?.path ?: return
+        val name = active.find { it.path == path }?.name ?: playlist.find { it.path == path }?.name ?: "Unbekannt"
         if (favoriteSongs.containsKey(path)) {
             favoriteSongs.remove(path)
             showSimpleNotificationExtern("💔 Favorit entfernt", name, 10.seconds, context = this)
@@ -1454,7 +1504,7 @@ class MediaPlayerService : MediaSessionService() {
             .setGroupSummary(true)
             .setAutoCancel(true)
             .build()
-        if (hasNotificationPermission()) nm?.notify(PODCASTS+50, summary)
+        if (hasNotificationPermission()) nm?.notify(PODCASTS + 50, summary)
     }
 
     @SuppressLint("LaunchActivityFromNotification")
@@ -1489,7 +1539,7 @@ class MediaPlayerService : MediaSessionService() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setGroup("podcast_delete").setGroupSummary(true).setAutoCancel(true).build()
         if (hasNotificationPermission())
-            nm?.notify(COMPLETED_PODCASTS+50, summary)
+            nm?.notify(COMPLETED_PODCASTS + 50, summary)
     }
 
     private fun showNoCompletedPodcastsNotification() {
@@ -1545,8 +1595,7 @@ class MediaPlayerService : MediaSessionService() {
     private fun buildMusicNotification(): Notification {
         val active = getActivePlaylist()
         val songName = active.getOrNull(currentSongIndex)?.name ?: "Keine Playlist"
-        val isFav =
-            active.getOrNull(currentSongIndex)?.let { favoriteSongs.containsKey(it.path) } ?: false
+        val isFav = active.getOrNull(currentSongIndex)?.let { favoriteSongs.containsKey(it.path) } ?: false
 
         fun pi(reqCode: Int, action: String) = PendingIntent.getService(
             this, reqCode,
@@ -1578,6 +1627,7 @@ class MediaPlayerService : MediaSessionService() {
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(pi(3, ACTION_TOGGLE_REPEAT))
             .addAction(android.R.drawable.ic_media_previous, "Zurück", pi(0, ACTION_MUSIC_PREVIOUS))
+            .setRequestPromotedOngoing(true)
             .addAction(
                 if (isPlayingMusic) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
                 if (isPlayingMusic) "Pause" else "Spielen",
@@ -1807,7 +1857,10 @@ class MediaPlayerService : MediaSessionService() {
 
         positionSaveRunnable = object : Runnable {
             override fun run() {
-                if (isServiceDestroyed) return
+                if (isServiceDestroyed) {
+                    positionSaveRunnable = null
+                    return
+                }
                 val screenOn = getSystemService(PowerManager::class.java)?.isInteractive ?: true
 
                 if (screenOn) {
@@ -1821,17 +1874,19 @@ class MediaPlayerService : MediaSessionService() {
                     }
                 }
 
-                handler.postDelayed(
-                    this,
-                    if (screenOn && (isPlayingPodcast || isPlayingMusic)) 1000L else 3000_000L
-                )
+                if (!isServiceDestroyed) {
+                    handler.postDelayed(
+                        this,
+                        if (screenOn && (isPlayingPodcast || isPlayingMusic)) 1000L else 3000_000L
+                    )
+                }
             }
         }
         handler.post(positionSaveRunnable!!)
 
         screenReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                if (intent?.action == Intent.ACTION_SCREEN_ON) {
+                if (intent?.action == Intent.ACTION_SCREEN_ON && !isServiceDestroyed) {
                     positionSaveRunnable?.let { handler.removeCallbacks(it) }
                     handler.post(positionSaveRunnable!!)
                 }
@@ -2096,7 +2151,7 @@ class MediaPlayerService : MediaSessionService() {
             .build()
 
         if (hasNotificationPermission())
-            nm?.notify(PLALISTS+50, summary)
+            nm?.notify(PLALISTS + 50, summary)
     }
 
     @UnstableApi
