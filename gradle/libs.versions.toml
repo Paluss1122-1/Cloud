@@ -60,6 +60,8 @@ ktorClientContentNegotiation = "3.4.1"
 ktorSerializationKotlinxJson = "3.4.1"
 uiToolingPreview = "1.10.5"
 uiTooling = "1.10.5"
+foundationLayout = "1.10.5"
+uiGraphics = "1.10.5"
 
 [libraries]
 androidx-autofill = { module = "androidx.autofill:autofill", version.ref = "autofill" }
@@ -125,6 +127,8 @@ ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx
 ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktorClientContentNegotiation" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview", version.ref = "uiToolingPreview" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling", version.ref = "uiTooling" }
+androidx-compose-foundation-layout = { group = "androidx.compose.foundation", name = "foundation-layout", version.ref = "foundationLayout" }
+androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics", version.ref = "uiGraphics" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
