@@ -64,7 +64,7 @@ fun c(): Color {
     val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
 
     return when (currentHour) {
-        in 6..16 -> Color(0xFF4CAF50)
+        in 11..16 -> Color(0xFF4CAF50)
         else -> Color(0xFF001FBB)
     }
 }
