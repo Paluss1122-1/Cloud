@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.core.animation.doOnEnd
 import androidx.core.app.ActivityCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -109,7 +110,7 @@ class MainActivity : FragmentActivity() {
 
         // Content setzen
         setContent {
-            MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = c())) {
+            MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = c(), onSurface = Color.White)) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = c()
