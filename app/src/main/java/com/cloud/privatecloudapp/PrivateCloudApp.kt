@@ -43,6 +43,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,11 +52,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -138,7 +142,9 @@ import androidx.core.net.toUri
 import coil.compose.rememberAsyncImagePainter
 import com.cloud.Config
 import com.cloud.Config.cms
+import com.cloud.R
 import com.cloud.ShizukuManager
+import com.cloud.aitab.AITabContent
 import com.cloud.audiorecorder.AudioRecorderContent
 import com.cloud.authenticator.AuthenticatorTab
 import com.cloud.autoclickertab.AutoClickerTabContent
@@ -158,6 +164,7 @@ import com.cloud.quicksettingsfunctions.BatteryChartScreen
 import com.cloud.quicksettingsfunctions.BatteryDataRepository
 import com.cloud.quicksettingsfunctions.showNetworkInfo
 import com.cloud.quicksettingsfunctions.showSensorsInfo
+import com.cloud.quiethoursnotificationhelper.triggerBuild
 import com.cloud.service.ChatService
 import com.cloud.service.QuietHoursNotificationService
 import com.cloud.spotifydownloader.SpotifyDownloaderApp
@@ -166,9 +173,6 @@ import com.cloud.ui.theme.Cloud
 import com.cloud.ui.theme.c
 import com.cloud.vocabtab.VocabTab
 import com.cloud.weathertab.WeatherTabContent
-import com.cloud.R
-import com.cloud.aitab.AITabContent
-import com.cloud.quiethoursnotificationhelper.triggerBuild
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -384,7 +388,12 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
         }
 
         if (targetMenuItem != null) {
-            PrivateCloudApp(storage = storage, startTarget = null, initialMenuItem = targetMenuItem)
+            PrivateCloudApp(
+                storage = storage,
+                startTarget = null,
+                initialMenuItem = targetMenuItem,
+                onBackToLanding = { showLandingPage = true }
+            )
         } else {
             PrivateCloudApp(storage = storage, startTarget = startTarget, initialMenuItem = null)
         }
@@ -403,12 +412,7 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
 
     val gradient = remember {
         val colors = when (currentHour) {
-            in 6..11 -> listOf(
-                Color(0xFFFFE29F).copy(alpha = 0.6f),
-                Color(0xFFFFC3A0).copy(alpha = 0.6f)
-            )
-
-            in 12..16 -> listOf(
+            in 11..16 -> listOf(
                 Color(0xFF00F2FE).copy(alpha = 0.5f),
                 Color(0xFFDEFE4F).copy(alpha = 0.5f)
             )
@@ -428,16 +432,14 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
 
     val txtcolors = remember {
         when (currentHour) {
-            in 6..11 -> Color.Black
-            in 12..16 -> Color.Black
+            in 11..16 -> Color.Black
             else -> Color.White
         }
     }
 
     val bgpicture = remember {
         when (currentHour) {
-            in 6..11 -> R.drawable.sunset
-            in 12..16 -> R.drawable.mittag
+            in 11..16 -> R.drawable.mittag
             else -> R.drawable.night
         }
     }
@@ -620,7 +622,12 @@ fun TabCard(
 @SuppressLint("ContextCastToActivity", "SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrivateCloudApp(storage: Storage, startTarget: String?, initialMenuItem: MenuItem? = null) {
+fun PrivateCloudApp(
+    storage: Storage,
+    startTarget: String?,
+    initialMenuItem: MenuItem? = null,
+    onBackToLanding: (() -> Unit)? = null
+) {
     val context = LocalContext.current
     var selectedMenuItem by remember {
         mutableStateOf(initialMenuItem ?: loadLastMenuItem(context))
@@ -673,58 +680,87 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?, initialMenuItem: Men
         ModalNavigationDrawer(
             drawerState = drawerState,
             gesturesEnabled = false,
+            scrimColor = Color.Black.copy(alpha = 0.6f),
             drawerContent = {
                 ModalDrawerSheet(
                     drawerContainerColor = Color.DarkGray,
-                    modifier = Modifier.fillMaxWidth(0.75f)
+                    modifier = Modifier.fillMaxWidth(0.75f),
+                    windowInsets = WindowInsets(0, 0, 0, 0)
                 ) {
-                    Text(
-                        text = "Cloud App",
-                        modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    HorizontalDivider(thickness = 1.dp, color = Color.Gray)
-
-                    Spacer(Modifier.height(8.dp))
-
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(MenuItem.entries) { item ->
-                            NavigationDrawerItem(
-                                icon = {
-                                    Text(
-                                        text = item.icon,
-                                        fontSize = 24.sp
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = item.title,
-                                        color = Color.White
-                                    )
-                                },
-                                selected = selectedMenuItem == item,
-                                onClick = {
-                                    selectedMenuItem = item
-                                    saveLastMenuItem(context, item)
-                                    saveRecentTab(context, item)
-                                    scope.launch {
-                                        drawerState.close()
-                                    }
-                                },
-                                colors = NavigationDrawerItemDefaults.colors(
-                                    selectedContainerColor = c(),
-                                    unselectedContainerColor = Color.Transparent,
-                                    selectedTextColor = Color.White,
-                                    unselectedTextColor = Color.White
-                                ),
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            Text(
+                                text = "Cloud",
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .clickable { onBackToLanding?.invoke() },
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
                             )
+
+                            HorizontalDivider(thickness = 1.dp, color = Color.Gray)
+
+                            Spacer(Modifier.height(8.dp))
+
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .navigationBarsPadding()
+                            ) {
+                                items(MenuItem.entries) { item ->
+                                    NavigationDrawerItem(
+                                        icon = {
+                                            Text(
+                                                text = item.icon,
+                                                fontSize = 24.sp
+                                            )
+                                        },
+                                        label = {
+                                            Text(
+                                                text = item.title,
+                                                color = Color.White
+                                            )
+                                        },
+                                        selected = selectedMenuItem == item,
+                                        onClick = {
+                                            selectedMenuItem = item
+                                            saveLastMenuItem(context, item)
+                                            saveRecentTab(context, item)
+                                            scope.launch {
+                                                drawerState.close()
+                                            }
+                                        },
+                                        colors = NavigationDrawerItemDefaults.colors(
+                                            selectedContainerColor = c(),
+                                            unselectedContainerColor = Color.Transparent,
+                                            selectedTextColor = Color.White,
+                                            unselectedTextColor = Color.White
+                                        ),
+                                        modifier = Modifier.padding(
+                                            horizontal = 12.dp,
+                                            vertical = 4.dp
+                                        )
+                                    )
+                                }
+                            }
                         }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .width(26.dp)
+                                .align(Alignment.CenterEnd)
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            Color.Black.copy(alpha = 0.4f)
+                                        )
+                                    )
+                                )
+                        )
+
                     }
                 }
             }
@@ -738,8 +774,7 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?, initialMenuItem: Men
                 val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
                 val bgpicture = remember {
                     when (currentHour) {
-                        in 6..11 -> R.drawable.sunset
-                        in 12..16 -> R.drawable.mittag
+                        in 11..16 -> R.drawable.mittag
                         else -> R.drawable.night
                     }
                 }
@@ -780,7 +815,7 @@ fun PrivateCloudApp(storage: Storage, startTarget: String?, initialMenuItem: Men
                             colors = TopAppBarDefaults.topAppBarColors(
                                 containerColor = Color.Transparent
                             ),
-                            windowInsets = WindowInsets(0, 40, 0, 0)
+                            windowInsets = WindowInsets.statusBars
                         )
                     },
                     containerColor = Color.Transparent,
@@ -1084,14 +1119,11 @@ fun MainCloudScreen(storage: Storage) {
 
                         val fileSize = file.length()
                         val maxChunkSize = 20 * 1024 * 1024L
-                        val shouldEncrypt =
-                            !isImageFile(fileName) && !fileName.endsWith(".apk", true)
 
                         if (fileSize <= maxChunkSize) {
                             val bytes = file.readBytes()
-                            val dataToUpload = bytes
                             storage.from(Config.SUPABASE_BUCKET)
-                                .upload(fileName, dataToUpload)
+                                .upload(fileName, bytes)
                         } else {
                             val inputStream = file.inputStream()
                             var chunkIndex = 0
@@ -1100,10 +1132,9 @@ fun MainCloudScreen(storage: Storage) {
 
                             while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                                 val chunkData = buffer.copyOf(bytesRead)
-                                val dataToUpload = chunkData
                                 val chunkFileName = "${fileName}.part${chunkIndex + 1}"
                                 storage.from(Config.SUPABASE_BUCKET)
-                                    .upload(chunkFileName, dataToUpload)
+                                    .upload(chunkFileName, chunkData)
                                 chunkIndex++
                             }
                             inputStream.close()
@@ -1812,10 +1843,8 @@ fun MainCloudScreen(storage: Storage) {
                                                                                             chunk.name
                                                                                         )
 
-                                                                                val decryptedChunk = chunkData
-
                                                                                 fos.write(
-                                                                                    decryptedChunk
+                                                                                    chunkData
                                                                                 )
                                                                             }
                                                                         } else {
@@ -1827,9 +1856,7 @@ fun MainCloudScreen(storage: Storage) {
                                                                                         fileName
                                                                                     )
 
-                                                                            val finalData = downloadedData
-
-                                                                            fos.write(finalData)
+                                                                            fos.write(downloadedData)
                                                                         }
                                                                     }
                                                                 }
