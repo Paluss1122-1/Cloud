@@ -34,8 +34,12 @@ import com.cloud.ui.theme.c
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.storage.storage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
+import java.time.Instant
 
 var storage: Storage? = null
 
@@ -49,12 +53,34 @@ class MainActivity : FragmentActivity() {
     private var showJsonEditor by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            CoroutineScope(Dispatchers.IO).launch {
+                ERRORINSERT(
+                    ERRORINSERTDATA(
+                        "UncaughtException:${thread.name}",
+                        throwable.stackTraceToString().take(8000),
+                        Instant.now().toString(),
+                        "Error"
+                    )
+                )
+            }
+            Thread.sleep(2000)
+            android.os.Process.killProcess(android.os.Process.myPid())
+        }
+
         installSplashScreen()
         enableEdgeToEdge()
         splashScreen.setOnExitAnimationListener { splashScreenView ->
             val animator = AnimatorSet().apply {
                 playTogether(
-                    ObjectAnimator.ofFloat(splashScreenView, View.TRANSLATION_Y, 0f, -splashScreenView.height.toFloat())
+                    ObjectAnimator.ofFloat(
+                        splashScreenView,
+                        View.TRANSLATION_Y,
+                        0f,
+                        -splashScreenView.height.toFloat()
+                    )
                 )
                 interpolator = AnticipateInterpolator()
                 duration = 1000L
@@ -110,7 +136,12 @@ class MainActivity : FragmentActivity() {
 
         // Content setzen
         setContent {
-            MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = c(), onSurface = Color.White)) {
+            MaterialTheme(
+                colorScheme = MaterialTheme.colorScheme.copy(
+                    primary = c(),
+                    onSurface = Color.White
+                )
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = c()
@@ -197,10 +228,12 @@ class MainActivity : FragmentActivity() {
                     // Direkter Dateipfad
                     uri.path ?: throw Exception("Ungültiger Dateipfad")
                 }
+
                 "content" -> {
                     // Content URI (z.B. von Dateimanager)
                     copyContentToTempFile(uri)
                 }
+
                 else -> throw Exception("Nicht unterstütztes URI-Schema: ${uri.scheme}")
             }
 
