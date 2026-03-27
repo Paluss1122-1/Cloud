@@ -32,7 +32,7 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
                         "ContactsViewModel",
                         "❌ Fehler beim Laden von von Kontakten: ${e.message}",
                         Instant.now().toString(),
-                        "Error"
+                        "ERROR"
                     )
                 )
             }
@@ -52,7 +52,7 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
                             "ContactsViewModel",
                             "❌ Fehler beim Speichern von Kontakten",
                             Instant.now().toString(),
-                            "Error"
+                            "ERROR"
                         )
                     )
                 }
@@ -63,7 +63,7 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
                         "ContactsViewModel",
                         "❌ Fehler beim Speichern von Kontakten: ${e.message}",
                         Instant.now().toString(),
-                        "Error"
+                        "ERROR"
                     )
                 )
             }
@@ -83,7 +83,7 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
                             "ContactsViewModel",
                             "❌ Fehler beim Löschen von Kontakten",
                             Instant.now().toString(),
-                            "Error"
+                            "ERROR"
                         )
                     )
                 }
@@ -94,7 +94,7 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
                         "ContactsViewModel",
                         "❌ Fehler beim Löschen von Kontakten: ${e.message}",
                         Instant.now().toString(),
-                        "Error"
+                        "ERROR"
                     )
                 )
             }

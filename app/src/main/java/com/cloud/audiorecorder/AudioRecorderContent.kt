@@ -50,7 +50,7 @@ private fun reportAudioRecorderError(
     serviceName: String,
     message: String,
     throwable: Throwable,
-    severity: String = "Error",
+    severity: String = "ERROR",
     scope: CoroutineScope? = null
 ) {
     val targetScope = scope ?: CoroutineScope(Dispatchers.IO)
@@ -95,7 +95,7 @@ fun AudioRecorderContent(
                         "AudioRecorderContent.permissionCheck",
                         "Keine Mikrofon Berechtigung",
                         Instant.now().toString(),
-                        "Error"
+                        "ERROR"
                     )
                 )
             }
@@ -372,7 +372,7 @@ fun AudioRecorderContent(
                                     "AudioRecorderContent.shareDialog.onError",
                                     it,
                                     Instant.now().toString(),
-                                    "Error"
+                                    "ERROR"
                                 )
                             )
                         }

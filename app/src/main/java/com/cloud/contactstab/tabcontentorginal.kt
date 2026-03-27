@@ -81,7 +81,7 @@ fun ContactsTabContent(
                                 "tabcontentoriginal",
                                 "❌ Fehler beim Laden von Kontakten: ${state.error}",
                                 Instant.now().toString(),
-                                "Error"
+                                "ERROR"
                             )
                         )
                     }

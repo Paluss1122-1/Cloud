@@ -77,7 +77,7 @@ suspend fun loadTwoFaEntriesFromSupabase(): List<TwoFAEntry> {
                     "TwoFaRepository",
                     "Fehler bei Laden von Einträgen aus Supabase: ${e.message}",
                     Instant.now().toString(),
-                    "Error"
+                    "ERROR"
                 )
             )
             emptyList()
@@ -109,7 +109,7 @@ suspend fun saveTwoFaEntryToSupabase(entry: TwoFAEntry, db: TwoFADatabase? = nul
                     "TwoFARepository",
                     "❌ Supabase Fehler: ${e.message}",
                     Instant.now().toString(),
-                    "Error"
+                    "ERROR"
                 )
             )
             false
@@ -151,7 +151,7 @@ suspend fun updateTwoFaEntryInSupabase(entry: TwoFAEntry): Boolean {
                     "TwoFARepository",
                     "❌ Supabase Update-Fehler: ${e.message}",
                     Instant.now().toString(),
-                    "Error"
+                    "ERROR"
                 )
             )
             false
@@ -197,7 +197,7 @@ suspend fun syncTwoFaEntriesWithConfirmation(db: TwoFADatabase): SyncResult {
                             "TwoFARepository",
                             "❌ Fehler beim lokalen Speichern: ${entry.name} (${e.message})",
                             Instant.now().toString(),
-                            "Error"
+                            "ERROR"
                         )
                     )
                 }
@@ -215,7 +215,7 @@ suspend fun syncTwoFaEntriesWithConfirmation(db: TwoFADatabase): SyncResult {
                     "TwoFARepository",
                     "❌ Fehler beim Synchronisieren: ${e.message}",
                     Instant.now().toString(),
-                    "Error"
+                    "ERROR"
                 )
             )
             SyncResult(uploaded = 0, downloaded = 0, total = 0, error = e.message)
@@ -263,7 +263,7 @@ suspend fun processSyncDecision(
                     "TwoFaRepository",
                     "Fehler in processSyncDecision: ${e.message}",
                     Instant.now().toString(),
-                    "Error"
+                    "ERROR"
                 )
             )
             false
@@ -419,7 +419,7 @@ suspend fun deleteTwoFaEntryFromSupabase(entry: TwoFAEntry): Boolean {
                     "TwoFARepository",
                     "❌ Supabase Delete-Fehler: ${e.message}",
                     Instant.now().toString(),
-                    "Error"
+                    "ERROR"
                 )
             )
             false

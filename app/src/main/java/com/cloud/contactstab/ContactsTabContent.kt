@@ -159,7 +159,7 @@ class ContactsRepository(private val context: Context) {
                     "ContactsTabContent",
                     "Fehler beim Speichern von Kontakt: $contact: ${e.message}",
                     Instant.now().toString(),
-                    "Error"
+                    "ERROR"
                 )
             )
             false
