@@ -54,7 +54,6 @@ fun playLatestVoiceNote(sender: String, context: Context) {
                     playVoiceNoteAtIndex(currentVoiceNoteIndex, context)
                 }
             } catch (e: Exception) {
-                Log.e("QuietHoursService", "Error loading voice notes", e)
                 mainHandler.post {
                     showSimpleNotificationExtern(
                         "Fehler",
@@ -65,7 +64,6 @@ fun playLatestVoiceNote(sender: String, context: Context) {
             }
         }
     } catch (e: Exception) {
-        Log.e("QuietHoursService", "Error playing voice note", e)
         showSimpleNotificationExtern("Fehler", "Sprachnachricht konnte nicht abgespielt werden", context = context)
     }
 }
