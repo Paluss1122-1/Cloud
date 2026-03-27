@@ -170,7 +170,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                 "TwoFAListScreen",
                                 "❌ Sync-Fehler: ${result.error}",
                                 Instant.now().toString(),
-                                "Error"
+                                "ERROR"
                             )
                         )
                     } else {
@@ -200,7 +200,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                             "TwoFAListScreen",
                             "❌ Sync-Exception: ${e.message}",
                             Instant.now().toString(),
-                            "Error"
+                            "ERROR"
                         )
                     )
                 } finally {
@@ -488,7 +488,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                                 "TwoFAListScreen",
                                                 "Konnte Einstellungen nicht öffnen: ${e.message}",
                                                 Instant.now().toString(),
-                                                "Error"
+                                                "ERROR"
                                             )
                                         )
                                     }
@@ -951,7 +951,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                                             "TwoFAListScreen",
                                                             "Fehler beim Speichern: ${e.message}",
                                                             Instant.now().toString(),
-                                                            "Error"
+                                                            "ERROR"
                                                         )
                                                     )
                                                 }
@@ -1182,7 +1182,7 @@ fun SilentCaptureScreen(onDismiss: () -> Unit) {
                                                         "Capture Activity",
                                                         "❌ Ungültiges Format! (${uri})",
                                                         Instant.now().toString(),
-                                                        "Error"
+                                                        "ERROR"
                                                     )
                                                 )
                                                 isProcessing = false
@@ -1208,7 +1208,7 @@ fun SilentCaptureScreen(onDismiss: () -> Unit) {
                                                     "Capture Activity",
                                                     "❌ Kein Secret gefunden! (uri: $uri, secret: $secretParam)",
                                                     Instant.now().toString(),
-                                                    "Error"
+                                                    "ERROR"
                                                 )
                                             )
                                             isProcessing = false
@@ -1290,7 +1290,7 @@ fun SilentCaptureScreen(onDismiss: () -> Unit) {
                                                 "Capture Activity",
                                                 "❌ Fehler: ${e.message}",
                                                 Instant.now().toString(),
-                                                "Error"
+                                                "ERROR"
                                             )
                                         )
                                     }

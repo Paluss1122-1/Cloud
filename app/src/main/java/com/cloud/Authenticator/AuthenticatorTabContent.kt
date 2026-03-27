@@ -47,7 +47,7 @@ fun AuthenticatorTab() {
                     "Main Acivity (Authenticator)",
                     "❌ Keine FragmentActivity gefunden!",
                     Instant.now().toString(),
-                    "Error"
+                    "ERROR"
                 )
             )
         }
@@ -126,7 +126,7 @@ fun AuthenticatorTab() {
                                     "Main Activity (Authenticator)",
                                     "❌ AUTH ERROR: $error",
                                     Instant.now().toString(),
-                                    "Error"
+                                    "ERROR"
                                 )
                             )
                         }
