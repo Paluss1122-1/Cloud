@@ -44,47 +44,6 @@ import java.util.Date
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-private fun sendMessageToWhatsApp(
-    key: String,
-    messageText: String,
-    replyData: WhatsAppNotificationListener.Companion.ReplyData,
-    context: Context
-) {
-    val displayName = if (key.contains("|")) key.substringAfter("|") else key
-    try {
-        val intent = Intent().apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-        val bundle = Bundle().apply { putCharSequence(replyData.originalResultKey, messageText) }
-        val remoteInputForSending = RemoteInput.Builder(replyData.originalResultKey)
-            .setLabel(replyData.remoteInput.label)
-            .setChoices(replyData.remoteInput.choices)
-            .setAllowFreeFormInput(replyData.remoteInput.allowFreeFormInput)
-            .build()
-        RemoteInput.addResultsToIntent(arrayOf(remoteInputForSending), intent, bundle)
-        replyData.pendingIntent.send(context, 0, intent)
-
-        val messagesList = WhatsAppNotificationListener.messagesByContact
-            .getOrPut(key) { mutableListOf() }
-
-        val isDuplicate = messagesList.takeLast(3).any { it.text == messageText }
-        if (!isDuplicate) {
-            messagesList.add(
-                WhatsAppNotificationListener.Companion.ChatMessage(
-                    text = messageText,
-                    timestamp = System.currentTimeMillis(),
-                    isOwnMessage = true
-                )
-            )
-        }
-
-        showSimpleNotificationExtern(
-            "✅ Gesendet", "Nachricht an '$displayName': $messageText", context = context
-        )
-    } catch (e: Exception) {
-        Log.e("QuietHoursService", "Error sending message", e)
-        showSimpleNotificationExtern("❌ Fehler", "Versand fehlgeschlagen", context = context)
-    }
-}
-
 private const val NVIDIA_CHAT_PREFIX = "NVIDIA Chat"
 
 data class SavedReplyData(
@@ -102,7 +61,11 @@ private fun resolveKey(sender: String): String? {
             .firstOrNull { it.endsWith("|$sender") }
 }
 
-private fun buildReplyAction(key: String, notificationId: Int, context: Context): NotificationCompat.Action {
+private fun buildReplyAction(
+    key: String,
+    notificationId: Int,
+    context: Context
+): NotificationCompat.Action {
     val pi = PendingIntent.getBroadcast(
         context, notificationId,
         Intent(ACTION_MESSAGE_SENT).apply {
@@ -123,11 +86,10 @@ private fun buildReplyAction(key: String, notificationId: Int, context: Context)
 private fun postChatNotification(key: String, context: Context, sourceLabel: String) {
     try {
         val displayName = if (key.contains("|")) key.substringAfter("|") else key
-        val notifId = key.hashCode()
+        val notifId = key.hashCode() and 0x0FFFFFFF
+        val summaryId = notifId + 1000000
+        val messagingId = notifId + 2000000
         val nm = context.getSystemService(NotificationManager::class.java)
-
-        for (i in 0 until 100) nm.cancel(notifId + i)
-        nm.cancel(notifId)
 
         val mePerson = Person.Builder().setName("Du").setKey("me").build()
         val senderPerson = Person.Builder().setName(displayName).setKey(displayName).build()
@@ -142,7 +104,8 @@ private fun postChatNotification(key: String, context: Context, sourceLabel: Str
             val msgId = "${key}_${msg.timestamp}"
             if (readMessageIds.contains(msgId)) return@forEach
 
-            val timeText = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(msg.timestamp))
+            val timeText =
+                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(msg.timestamp))
             val text = msg.text
 
             if (text.length > 200) {
@@ -159,24 +122,32 @@ private fun postChatNotification(key: String, context: Context, sourceLabel: Str
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
                     val partNum = parts.size - idx
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                    if (ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.POST_NOTIFICATIONS
+                        )
                         == PackageManager.PERMISSION_GRANTED
                     ) {
-                        nm.notify(partId, NotificationCompat.Builder(context, "Nachrichten")
-                            .setSmallIcon(android.R.drawable.stat_notify_chat)
-                            .setContentTitle("$sourceLabel · $displayName (Teil $partNum/${parts.size})")
-                            .setContentText(part.take(100) + if (part.length > 100) "..." else "")
-                            .setStyle(
-                                NotificationCompat.BigTextStyle()
-                                    .bigText(part)
-                                    .setBigContentTitle("$sourceLabel · $displayName (Teil $partNum/${parts.size})")
-                                    .setSummaryText("⏰ $timeText")
-                            )
-                            .setPriority(NotificationCompat.PRIORITY_HIGH)
-                            .setGroup("long_$key")
-                            .setAutoCancel(false)
-                            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Als gelesen", markPi)
-                            .build()
+                        nm.notify(
+                            partId, NotificationCompat.Builder(context, "Nachrichten")
+                                .setSmallIcon(android.R.drawable.stat_notify_chat)
+                                .setContentTitle("$sourceLabel · $displayName (Teil $partNum/${parts.size})")
+                                .setContentText(part.take(100) + if (part.length > 100) "..." else "")
+                                .setStyle(
+                                    NotificationCompat.BigTextStyle()
+                                        .bigText(part)
+                                        .setBigContentTitle("$sourceLabel · $displayName (Teil $partNum/${parts.size})")
+                                        .setSummaryText("⏰ $timeText")
+                                )
+                                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                                .setGroup("long_$key")
+                                .setAutoCancel(false)
+                                .addAction(
+                                    android.R.drawable.ic_menu_close_clear_cancel,
+                                    "Als gelesen",
+                                    markPi
+                                )
+                                .build()
                         )
                     }
                 }
@@ -195,15 +166,16 @@ private fun postChatNotification(key: String, context: Context, sourceLabel: Str
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
                 == PackageManager.PERMISSION_GRANTED
             ) {
-                nm.notify(notifId, NotificationCompat.Builder(context, "Nachrichten")
-                    .setSmallIcon(android.R.drawable.stat_notify_chat)
-                    .setContentTitle("$sourceLabel · Lange Nachricht von $displayName")
-                    .setContentText("$partIndex Teile")
-                    .setPriority(NotificationCompat.PRIORITY_LOW)
-                    .setGroup("long_$key")
-                    .setGroupSummary(true)
-                    .setAutoCancel(true)
-                    .build()
+                nm.notify(
+                    summaryId, NotificationCompat.Builder(context, "Nachrichten")
+                        .setSmallIcon(android.R.drawable.stat_notify_chat)
+                        .setContentTitle("$sourceLabel · Lange Nachricht von $displayName")
+                        .setContentText("$partIndex Teile")
+                        .setPriority(NotificationCompat.PRIORITY_LOW)
+                        .setGroup("long_$key")
+                        .setGroupSummary(true)
+                        .setAutoCancel(true)
+                        .build()
                 )
             }
         }
@@ -215,13 +187,13 @@ private fun postChatNotification(key: String, context: Context, sourceLabel: Str
             .setAutoCancel(false)
             .setOngoing(false)
             .setOnlyAlertOnce(true)
-            .addAction(buildReplyAction(key, notifId, context))
+            .addAction(buildReplyAction(key, messagingId, context))
             .build()
 
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            nm.notify(notifId, notification)
+            nm.notify(messagingId, notification)
         }
     } catch (e: Exception) {
         Log.e("Messages", "postChatNotification failed: ${e.message}")
@@ -258,7 +230,7 @@ fun showUnreadMessages(context: Context) {
         )
         return
     }
-    // Nur je eine Notification pro Kontakt – kein Massenupdate aller
+// Nur je eine Notification pro Kontakt – kein Massenupdate aller
     msgs.keys.forEach { key -> postChatNotification(key, context, "📋 Ungelesen") }
 }
 
@@ -268,10 +240,17 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
 
     try {
         if (displayName == NVIDIA_CHAT_PREFIX || displayName.startsWith("$NVIDIA_CHAT_PREFIX:")) {
-            val list = WhatsAppNotificationListener.messagesByContact.getOrPut(key) { mutableListOf() }
+            val list =
+                WhatsAppNotificationListener.messagesByContact.getOrPut(key) { mutableListOf() }
             val trimmed = messageText.trim()
             if (trimmed.isNotEmpty()) {
-                list.add(WhatsAppNotificationListener.Companion.ChatMessage(trimmed, System.currentTimeMillis(), true))
+                list.add(
+                    WhatsAppNotificationListener.Companion.ChatMessage(
+                        trimmed,
+                        System.currentTimeMillis(),
+                        true
+                    )
+                )
             }
             if (list.size > MAX_MESSAGES_PER_CONTACT)
                 list.subList(0, list.size - MAX_MESSAGES_PER_CONTACT).clear()
@@ -281,13 +260,23 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
                 val snapshot = list.toList()
                 val answer = sendNvidiaChatMessage(snapshot, trimmed)
                 if (!answer.isNullOrBlank()) {
-                    list.add(WhatsAppNotificationListener.Companion.ChatMessage(answer, System.currentTimeMillis(), false))
+                    list.add(
+                        WhatsAppNotificationListener.Companion.ChatMessage(
+                            answer,
+                            System.currentTimeMillis(),
+                            false
+                        )
+                    )
                     if (list.size > MAX_MESSAGES_PER_CONTACT)
                         list.subList(0, list.size - MAX_MESSAGES_PER_CONTACT).clear()
                     withContext(Dispatchers.Main) { updateChatNotification(key, context) }
                 } else {
                     withContext(Dispatchers.Main) {
-                        showSimpleNotificationExtern("❌ NVIDIA Chat", "Antwort konnte nicht geladen werden.", context = context)
+                        showSimpleNotificationExtern(
+                            "❌ NVIDIA Chat",
+                            "Antwort konnte nicht geladen werden.",
+                            context = context
+                        )
                     }
                 }
             }
@@ -295,7 +284,8 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
         }
 
         val replyData = WhatsAppNotificationListener.replyActions[key]
-        val supported = replyData?.pendingIntent?.creatorPackage?.let { isSupportedMessenger(it) } ?: false
+        val supported =
+            replyData?.pendingIntent?.creatorPackage?.let { isSupportedMessenger(it) } ?: false
 
         if (!supported) {
             Log.w("Messages", "Unsupported messenger: ${replyData?.pendingIntent?.creatorPackage}")
@@ -310,8 +300,9 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
 
         try {
             val intent = Intent().apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-            val bundle = Bundle().apply { putCharSequence(replyData!!.originalResultKey, messageText) }
-            val ri = RemoteInput.Builder(replyData!!.originalResultKey)
+            val bundle =
+                Bundle().apply { putCharSequence(replyData.originalResultKey, messageText) }
+            val ri = RemoteInput.Builder(replyData.originalResultKey)
                 .setLabel(replyData.remoteInput.label)
                 .setChoices(replyData.remoteInput.choices)
                 .setAllowFreeFormInput(replyData.remoteInput.allowFreeFormInput)
@@ -320,18 +311,26 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
             replyData.pendingIntent.send(context, 0, intent)
         } catch (e: Exception) {
             Log.e("Messages", "Send failed: ${e.message}")
-            showSimpleNotificationExtern("Fehler", "Nachricht konnte nicht gesendet werden", context = context,
-                silent = false)
+            showSimpleNotificationExtern(
+                "Fehler", "Nachricht konnte nicht gesendet werden", context = context,
+                silent = false
+            )
             return
         }
 
         val list = WhatsAppNotificationListener.messagesByContact.getOrPut(key) { mutableListOf() }
         val isDup = list.takeLast(3).any { it.text == messageText && messageText.length > 5 }
         if (!isDup) {
-            list.add(WhatsAppNotificationListener.Companion.ChatMessage(messageText, System.currentTimeMillis(), true))
+            list.add(
+                WhatsAppNotificationListener.Companion.ChatMessage(
+                    messageText,
+                    System.currentTimeMillis(),
+                    true
+                )
+            )
         }
 
-        // Sofort Notification updaten → beendet den Spinner
+// Sofort Notification updaten → beendet den Spinner
         updateChatNotification(key, context)
 
         if (list.size > MAX_MESSAGES_PER_CONTACT)
@@ -364,7 +363,14 @@ fun markMessageAsRead(messageId: String, readMessageIds: MutableSet<String>, con
         nm.cancel(hash)
     } catch (e: Exception) {
         CoroutineScope(Dispatchers.IO).launch {
-            ERRORINSERT(ERRORINSERTDATA("markMessageAsRead", "Error: ${e.message}", Instant.now().toString(), "Error"))
+            ERRORINSERT(
+                ERRORINSERTDATA(
+                    "markMessageAsRead",
+                    "ERROR: ${e.message}",
+                    Instant.now().toString(),
+                    "ERROR"
+                )
+            )
         }
     }
 }
@@ -373,10 +379,12 @@ fun createNvidiaChat(name: String?, context: Context) {
     val title = if (name.isNullOrBlank()) NVIDIA_CHAT_PREFIX else "$NVIDIA_CHAT_PREFIX: $name"
     val list = WhatsAppNotificationListener.messagesByContact.getOrPut(title) { mutableListOf() }
     if (list.isEmpty()) {
-        list.add(WhatsAppNotificationListener.Companion.ChatMessage(
-            "Neuer NVIDIA-Chat \"$title\" erstellt. Antworte auf diese Nachricht, um zu schreiben.",
-            System.currentTimeMillis(), false
-        ))
+        list.add(
+            WhatsAppNotificationListener.Companion.ChatMessage(
+                "Neuer NVIDIA-Chat \"$title\" erstellt. Antworte auf diese Nachricht, um zu schreiben.",
+                System.currentTimeMillis(), false
+            )
+        )
     }
     updateChatNotification(title, context)
 }
@@ -386,7 +394,11 @@ fun saveReplyDataPermanently(sender: String, context: Context) {
         val key = resolveKey(sender) ?: sender
         val replyData = WhatsAppNotificationListener.replyActions[key]
         if (replyData == null) {
-            showSimpleNotificationExtern("❌ Fehler", "Keine Reply-Daten für '$sender' gefunden", context = context)
+            showSimpleNotificationExtern(
+                "❌ Fehler",
+                "Keine Reply-Daten für '$sender' gefunden",
+                context = context
+            )
             return
         }
         val displayName = key.substringAfter("|")
@@ -396,9 +408,17 @@ fun saveReplyDataPermanently(sender: String, context: Context) {
             putString(KEY_SAVED_RESULT_KEY, replyData.originalResultKey)
             putBoolean(KEY_HAS_SAVED_DATA, true)
         }
-        showSimpleNotificationExtern("✅ Gespeichert", "Reply-Daten für '$displayName' gespeichert", context = context)
-    } catch (e: Exception) {
-        showSimpleNotificationExtern("❌ Fehler", "Konnte Reply-Daten nicht speichern", context = context)
+        showSimpleNotificationExtern(
+            "✅ Gespeichert",
+            "Reply-Daten für '$displayName' gespeichert",
+            context = context
+        )
+    } catch (_: Exception) {
+        showSimpleNotificationExtern(
+            "❌ Fehler",
+            "Konnte Reply-Daten nicht speichern",
+            context = context
+        )
     }
 }
 
@@ -411,12 +431,18 @@ private fun loadSavedReplyData(context: Context): SavedReplyData? {
             prefs.getString(KEY_SAVED_PACKAGE, null) ?: return null,
             prefs.getString(KEY_SAVED_RESULT_KEY, null) ?: return null
         )
-    } catch (e: Exception) { null }
+    } catch (_: Exception) {
+        null
+    }
 }
 
 fun sendMessageViaSavedReplyData(messageText: String, context: Context) {
     val savedData = loadSavedReplyData(context) ?: run {
-        showSimpleNotificationExtern("❌ Keine Daten", "Keine gespeicherten Reply-Daten. Verwende 'save [kontakt]'.", context = context)
+        showSimpleNotificationExtern(
+            "❌ Keine Daten",
+            "Keine gespeicherten Reply-Daten. Verwende 'save [kontakt]'.",
+            context = context
+        )
         return
     }
     val key = resolveKey(savedData.sender) ?: savedData.sender
@@ -435,21 +461,28 @@ fun sendMessageViaSavedReplyData(messageText: String, context: Context) {
 fun showSavedReplyInfo(context: Context) {
     val savedData = loadSavedReplyData(context)
     if (savedData == null) {
-        showSimpleNotificationExtern("ℹ️ Info", "Keine gespeicherten Reply-Daten vorhanden", context = context)
+        showSimpleNotificationExtern(
+            "ℹ️ Info",
+            "Keine gespeicherten Reply-Daten vorhanden",
+            context = context
+        )
         return
     }
     val nm = context.getSystemService(NotificationManager::class.java)
     if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-        nm.notify(cms(), NotificationCompat.Builder(context, "Nachrichten")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("💾 Gespeicherte Reply-Daten")
-            .setContentText(savedData.sender)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(
-                "Kontakt: ${savedData.sender}\nPackage: ${savedData.packageName}\nResult Key: ${savedData.resultKey}\n\nVerwende 'message [text]' zum Senden"
-            ))
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .build()
+        nm.notify(
+            cms(), NotificationCompat.Builder(context, "Nachrichten")
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("💾 Gespeicherte Reply-Daten")
+                .setContentText(savedData.sender)
+                .setStyle(
+                    NotificationCompat.BigTextStyle().bigText(
+                        "Kontakt: ${savedData.sender}\nPackage: ${savedData.packageName}\nResult Key: ${savedData.resultKey}\n\nVerwende 'message [text]' zum Senden"
+                    )
+                )
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .build()
         )
     }
 }
@@ -457,14 +490,18 @@ fun showSavedReplyInfo(context: Context) {
 fun extractLastMessage(context: Context) {
     val msgs = WhatsAppNotificationListener.messagesByContact
     if (msgs.isEmpty()) {
-        showSimpleNotificationExtern("❌ Keine Nachrichten", "Keine Nachrichten verfügbar", context = context)
+        showSimpleNotificationExtern(
+            "❌ Keine Nachrichten",
+            "Keine Nachrichten verfügbar",
+            context = context
+        )
         return
     }
     var newestMsg: WhatsAppNotificationListener.Companion.ChatMessage? = null
     var newestKey = ""
     msgs.forEach { (key, list) ->
         val last = list.lastOrNull()
-        if (last != null && (newestMsg == null || last.timestamp > newestMsg!!.timestamp)) {
+        if (last != null && (newestMsg == null || last.timestamp > newestMsg.timestamp)) {
             newestMsg = last; newestKey = key
         }
     }
@@ -475,15 +512,27 @@ fun extractLastMessage(context: Context) {
         .setSmallIcon(android.R.drawable.ic_menu_info_details)
         .setContentTitle("📋 Extrahierte Nachricht")
         .setContentText("Von: $displayName um $timeText")
-        .setStyle(NotificationCompat.BigTextStyle().bigText("Von: $displayName\nZeit: $timeText\n\n${msg.text}"))
+        .setStyle(
+            NotificationCompat.BigTextStyle()
+                .bigText("Von: $displayName\nZeit: $timeText\n\n${msg.text}")
+        )
         .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setAutoCancel(true)
     if (msg.imageUri != null) {
         try {
-            val bmp = ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, msg.imageUri))
-            builder.setStyle(NotificationCompat.BigPictureStyle().bigPicture(bmp).bigLargeIcon(null as Bitmap?))
+            val bmp = ImageDecoder.decodeBitmap(
+                ImageDecoder.createSource(
+                    context.contentResolver,
+                    msg.imageUri
+                )
+            )
+            builder.setStyle(
+                NotificationCompat.BigPictureStyle().bigPicture(bmp).bigLargeIcon(null as Bitmap?)
+            )
             builder.setLargeIcon(bmp)
-        } catch (e: Exception) { Log.e("Messages", "extractLastMessage image error: ${e.message}") }
+        } catch (e: Exception) {
+            Log.e("Messages", "extractLastMessage image error: ${e.message}")
+        }
     }
     val nm = context.getSystemService(NotificationManager::class.java)
     if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
