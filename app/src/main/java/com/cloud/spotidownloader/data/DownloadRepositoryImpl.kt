@@ -2,7 +2,6 @@ package com.cloud.spotidownloader.data
 
 import android.content.ContentValues
 import android.content.Context
-import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import com.cloud.spotidownloader.domain.DownloadRepository
@@ -21,7 +20,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -85,9 +83,12 @@ class DownloadRepositoryImpl @Inject constructor(
             val channel: ByteReadChannel = audioResponse.bodyAsChannel()
             val contentLength = audioResponse.contentLength() ?: 0L
 
-            val fileName = "${artist.replace(" ", "_")}_-_${trackTitle.replace(" ", "_")}.mp3"
+            val ext = "m4a"
+            val mimeType = "audio/mp4"
 
-            saveFileFromChannel(fileName, channel, contentLength) { progress ->
+            val fileName = "${artist.replace(" ", "_")}_-_${trackTitle.replace(" ", "_")}.$ext"
+
+            saveFileFromChannel(fileName, channel, contentLength, mimeType) { progress ->
                 send(DownloadState.Downloading(20 + (progress * 0.7).toInt()))
             }
 
@@ -104,12 +105,13 @@ class DownloadRepositoryImpl @Inject constructor(
         fileName: String,
         channel: ByteReadChannel,
         contentLength: Long,
+        mimeType: String,
         onProgress: suspend (Int) -> Unit
     ) {
         val resolver = context.contentResolver
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-            put(MediaStore.MediaColumns.MIME_TYPE, "audio/mpeg")
+            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Cloud")
         }
 
@@ -121,10 +123,41 @@ class DownloadRepositoryImpl @Inject constructor(
                 resolver.openOutputStream(uri)?.use { outputStream ->
                     val buffer = ByteArray(8192)
                     var totalBytesRead = 0L
+                    var id3Skipped = false
+                    var id3SkipBytes = 0
+
                     while (!channel.isClosedForRead) {
                         val read = channel.readAvailable(buffer, 0, buffer.size)
                         if (read == -1) break
-                        outputStream.write(buffer, 0, read)
+
+                        var writeOffset = 0
+                        var writeLength = read
+
+                        if (!id3Skipped) {
+                            if (id3SkipBytes == 0 && read >= 10 &&
+                                buffer[0] == 0x49.toByte() && // 'I'
+                                buffer[1] == 0x44.toByte() && // 'D'
+                                buffer[2] == 0x33.toByte()    // '3'
+                            ) {
+                                val tagSize = ((buffer[6].toInt() and 0x7F) shl 21) or
+                                        ((buffer[7].toInt() and 0x7F) shl 14) or
+                                        ((buffer[8].toInt() and 0x7F) shl 7) or
+                                        (buffer[9].toInt() and 0x7F)
+                                id3SkipBytes = 10 + tagSize
+                            }
+
+                            if (id3SkipBytes > 0) {
+                                val skip = minOf(id3SkipBytes, read)
+                                id3SkipBytes -= skip
+                                writeOffset = skip
+                                writeLength = read - skip
+                                if (id3SkipBytes == 0) id3Skipped = true
+                            } else {
+                                id3Skipped = true
+                            }
+                        }
+
+                        if (writeLength > 0) outputStream.write(buffer, writeOffset, writeLength)
                         totalBytesRead += read
                         if (contentLength > 0) {
                             val progress = ((totalBytesRead * 100) / contentLength).toInt()
