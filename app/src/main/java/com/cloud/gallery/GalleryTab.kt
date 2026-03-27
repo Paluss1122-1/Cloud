@@ -327,7 +327,7 @@ fun loadImagesFromMediaStore(context: android.content.Context): List<GalleryMedi
         }
     } catch (e: Exception) {
         CoroutineScope(Dispatchers.IO).launch {
-            ERRORINSERT(ERRORINSERTDATA("GalleryTab", "Fehler bei Laden von Bildern: ${e.message}", Instant.now().toString(), "Error"))
+            ERRORINSERT(ERRORINSERTDATA("GalleryTab", "Fehler bei Laden von Bildern: ${e.message}", Instant.now().toString(), "ERROR"))
         }
     }
     return images
@@ -355,7 +355,7 @@ fun loadVideosFromMediaStore(context: android.content.Context): List<GalleryMedi
         }
     } catch (e: Exception) {
         CoroutineScope(Dispatchers.IO).launch {
-            ERRORINSERT(ERRORINSERTDATA("GalleryTab", "Fehler bei Laden von Videos: ${e.message}", Instant.now().toString(), "Error"))
+            ERRORINSERT(ERRORINSERTDATA("GalleryTab", "Fehler bei Laden von Videos: ${e.message}", Instant.now().toString(), "ERROR"))
         }
     }
     return videos

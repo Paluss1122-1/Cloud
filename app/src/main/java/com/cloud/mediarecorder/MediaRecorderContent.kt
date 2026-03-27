@@ -291,7 +291,7 @@ fun MediaRecorderContent(
                                             "MediaRecorderContent",
                                             "Fehler bei Konvertieren von m4a zu mp3: ${e.message}",
                                             Instant.now().toString(),
-                                            "Error"
+                                            "ERROR"
                                         )
                                     )
                                 }
@@ -380,7 +380,7 @@ fun MediaRecorderContent(
                                         "MediaRecorderContent",
                                         "Fehler bei Starten von Recording: ${e.message}",
                                         Instant.now().toString(),
-                                        "Error"
+                                        "ERROR"
                                     )
                                 )
                             }
