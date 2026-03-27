@@ -108,6 +108,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -190,8 +191,6 @@ import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 
-var isFullScreen by mutableStateOf(false)
-var webViewUrl by mutableStateOf("https://www.google.com")
 private const val KEY_RECENT_TABS = "recent_tabs"
 private const val MAX_RECENT_TABS = 5
 
@@ -213,14 +212,7 @@ enum class MenuItem(
     BROWSER(
         "Browser",
         "🌐",
-        {
-            loadLastUrl(LocalContext.current)
-            BrowserTabContent(
-                url = webViewUrl,
-                onUrlChange = { webViewUrl = it },
-                onEnterFullScreen = { isFullScreen = true }
-            )
-        }
+        {}
     ),
     QUICK(
         "Schnellzugriff",
@@ -629,10 +621,12 @@ fun PrivateCloudApp(
     onBackToLanding: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
-    var selectedMenuItem by remember {
+    var selectedMenuItem by rememberSaveable {
         mutableStateOf(initialMenuItem ?: loadLastMenuItem(context))
     }
+    var isFullScreen by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    var webViewUrl by rememberSaveable { mutableStateOf("https://www.google.com") }
     var currentUrl by rememberSaveable { mutableStateOf(webViewUrl) }
     var webViewState by remember { mutableStateOf<WebView?>(null) }
     var isDesktopMode by rememberSaveable { mutableStateOf(false) }
@@ -660,10 +654,20 @@ fun PrivateCloudApp(
 
     if (isFullScreen) {
         Box(modifier = Modifier.fillMaxSize()) {
-            if (selectedMenuItem == MenuItem.PRIVATE_CLOUD) {
-                MainCloudScreen(storage = storage)
-            } else {
-                selectedMenuItem.content()
+            when (selectedMenuItem) {
+                MenuItem.BROWSER -> {
+                    BrowserTabContent(
+                        url = webViewUrl,
+                        onUrlChange = { webViewUrl = it },
+                        onEnterFullScreen = { isFullScreen = true }
+                    )
+                }
+                MenuItem.PRIVATE_CLOUD -> {
+                    MainCloudScreen(storage = storage)
+                }
+                else -> {
+                    selectedMenuItem.content()
+                }
             }
         }
 
@@ -822,17 +826,26 @@ fun PrivateCloudApp(
                     contentWindowInsets = WindowInsets(0, 0, 0, 0)
                 ) { paddingValues ->
                     Box(modifier = Modifier.padding(paddingValues)) {
-                        if (selectedMenuItem == MenuItem.PRIVATE_CLOUD) {
-                            MainCloudScreen(storage = storage)
-                        } else {
-                            selectedMenuItem.content()
+                        when (selectedMenuItem) {
+                            MenuItem.BROWSER -> {
+                                BrowserTabContent(
+                                    url = webViewUrl,
+                                    onUrlChange = { webViewUrl = it },
+                                    onEnterFullScreen = { isFullScreen = true }
+                                )
+                            }
+                            MenuItem.PRIVATE_CLOUD -> {
+                                MainCloudScreen(storage = storage)
+                            }
+                            else -> {
+                                selectedMenuItem.content()
+                            }
                         }
                     }
                 }
             }
         }
     }
-
 
     if (isFullScreen) {
         Box(
@@ -891,7 +904,8 @@ fun PrivateCloudApp(
                         ): Boolean = false
 
                         override fun onPageFinished(view: WebView?, url: String?) {
-                            if (url != null) currentUrl = url
+                            if (url != null) {currentUrl = url
+                            WebViewCookieBackup.saveCookies(context, url)}
                         }
                     }
 
@@ -929,7 +943,19 @@ fun PrivateCloudApp(
                     cookieManager.setAcceptThirdPartyCookies(this, true)
                     cookieManager.flush()
 
+                    WebViewCookieBackup.restoreCookies(context, webViewUrl)
+
                     loadUrl(webViewUrl)
+                }
+            }
+
+            DisposableEffect(isFullScreen) {
+                onDispose {
+                    if (!isFullScreen) {
+                        webView.stopLoading()
+                        webView.onPause()
+                        webView.destroy()
+                    }
                 }
             }
 
@@ -2722,4 +2748,23 @@ fun NumberInputDialog(
             }
         }
     )
+}
+
+object WebViewCookieBackup {
+
+    fun saveCookies(context: Context, url: String) {
+        val cookies = CookieManager.getInstance().getCookie(url) ?: return
+        context.getSharedPreferences("webview_cookies", Context.MODE_PRIVATE)
+            .edit { putString("cookies_${url.hashCode()}", cookies) }
+    }
+
+    fun restoreCookies(context: Context, url: String) {
+        val cookies = context.getSharedPreferences("webview_cookies", Context.MODE_PRIVATE)
+            .getString("cookies_${url.hashCode()}", null) ?: return
+        val cm = CookieManager.getInstance()
+        cookies.split(";").forEach { cookie ->
+            cm.setCookie(url, cookie.trim())
+        }
+        cm.flush()
+    }
 }
