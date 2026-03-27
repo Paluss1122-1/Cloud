@@ -171,7 +171,6 @@ class ChatService : Service() {
             seenMessageIds.addAll(ids)
             Log.d("ChatService", "✅ Loaded ${seenMessageIds.size} seen messages")
         } catch (e: Exception) {
-            Log.e("ChatService", "Error loading seen messages", e)
         }
     }
 
@@ -180,7 +179,6 @@ class ChatService : Service() {
             val json = Json.encodeToString(seenMessageIds.toList())
             sharedPreferences.edit { putString(KEY_SEEN_MESSAGES, json) }
         } catch (e: Exception) {
-            Log.e("ChatService", "Error saving seen messages", e)
         }
     }
 
@@ -398,7 +396,6 @@ class ChatService : Service() {
                                 saveSeenMessageIds()
                             }
                         } catch (e: Exception) {
-                            Log.e("ChatService", "Error processing message", e)
                         }
                     }.launchIn(serviceScope)
 
@@ -408,7 +405,6 @@ class ChatService : Service() {
 
                     true // Indicate success
                 } catch (e: Exception) {
-                    Log.e("ChatService", "Error in realtime setup", e)
                     false
                 }
             }
@@ -422,7 +418,6 @@ class ChatService : Service() {
         } catch (e: TimeoutCancellationException) {
             Log.e("ChatService", "Realtime setup timed out", e)
         } catch (e: Exception) {
-            Log.e("ChatService", "Error setting up realtime listener", e)
         }
     }
 
