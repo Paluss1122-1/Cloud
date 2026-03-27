@@ -1,4 +1,4 @@
-package com.cloud.errorreportsclaude
+package com.cloud.errorreports
 
 import android.Manifest
 import android.app.NotificationChannel
@@ -34,7 +34,7 @@ data class ErrorReport(
     val service_name: String,
     val error_message: String,
     val created_at: String,
-    val severity: String = "Error"
+    val severity: String = "ERROR"
 )
 
 class ErrorNotificationManager(private val context: Context) {
@@ -66,20 +66,11 @@ class ErrorNotificationManager(private val context: Context) {
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     fun showErrorNotification(errorReport: ErrorReport) {
         try {
-            Log.d("ErrorMonitor", "Severity value: ${errorReport.severity}")
-            /*val severityEmoji = when (errorReport.severity.trim()) {
-                "Error" -> "🔴"
-                "Warning" -> "⚠️"
-                else -> "ℹ️"
-            }*/
-
-            val severityEmoji = if (errorReport.severity == "Error") {
+             val severityEmoji = if (errorReport.severity == "ERROR") {
                 "🔴"
             } else {
                 "ℹ️"
             }
-            Log.d("ErrorMonitor", errorReport.severity)
-            Log.d("ErrorMonitor", "$severityEmoji")
 
             val intent = Intent(
                 Intent.ACTION_VIEW,
@@ -112,7 +103,7 @@ class ErrorNotificationManager(private val context: Context) {
                         "NotificationManager",
                         "❌ Fehler bei Anzeigen von Error Notification: ${e.message}",
                         Instant.now().toString(),
-                        "Error"
+                        "ERROR"
                     )
                 )
             }
@@ -151,11 +142,9 @@ class ErrorMonitorService : Service() {
 
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForeground(NOTIFICATION_ID, createServiceNotification())
         try {
-            startForeground(NOTIFICATION_ID, createServiceNotification())
-
             startRealtimeListener()
-
             return START_STICKY
         } catch (e: Exception) {
             CoroutineScope(Dispatchers.IO).launch {
