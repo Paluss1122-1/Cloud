@@ -233,7 +233,7 @@
             android:foregroundServiceType="dataSync" />
 
         <service
-            android:name=".errorreportsclaude.ErrorMonitorService"
+            android:name=".errorreports.ErrorMonitorService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
