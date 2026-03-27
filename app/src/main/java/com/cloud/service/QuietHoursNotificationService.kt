@@ -127,6 +127,7 @@ import kotlinx.coroutines.launch
 
 class QuietHoursNotificationService : Service() {
     private val errorScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val checkRunnable: Runnable by lazy { getCheckRunnable(this) }
 
     private fun reportServiceError(where: String, t: Throwable) {
         Log.e("QuietHoursService", "Unhandled error in $where", t)
@@ -317,8 +318,6 @@ class QuietHoursNotificationService : Service() {
         }
     }
 
-    private val checkRunnable = getCheckRunnable(this)
-
     private val prefChangeListener =
         SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == "saved_number" || key == "saved_number_start") {
@@ -445,7 +444,6 @@ class QuietHoursNotificationService : Service() {
                 }
 
                 ACTION_RESTORE_NOTIFICATION -> {
-                    checkQuietHours(this)
                     val notification = createNotification(isCurrentlyQuietHours, this)
                     startForeground(NOTIFICATION_ID, notification)
                     START_STICKY
