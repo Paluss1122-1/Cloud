@@ -1793,6 +1793,8 @@ class MediaPlayerService : MediaSessionService() {
             putString(KEY_CURRENT_MODE, currentMode)
             putString("current_song_name", currentSongName)
             putString(KEY_ACTIVE_ALGORITHMIC_PLAYLIST, activeAlgorithmicPlaylistId)
+            putLong("music_position_ms", musicPlayer?.currentPosition?.toLong() ?: 0L)
+            putLong("music_duration_ms", musicPlayer?.duration?.toLong()?.takeIf { it > 0 } ?: 0L)
         }
     }
 
@@ -1870,6 +1872,12 @@ class MediaPlayerService : MediaSessionService() {
                         if (abs(pos - lastSaved) > 5000) {
                             savePodcastPosition(currentPodcast!!.path, pos)
                             lastSaved = pos
+                        }
+                    }
+                    if (isPlayingMusic && musicPlayer != null) {
+                        musicPrefs.edit {
+                            putLong("music_position_ms", musicPlayer!!.currentPosition.toLong())
+                            putLong("music_duration_ms", musicPlayer!!.duration.toLong().takeIf { it > 0 } ?: 0L)
                         }
                     }
                 }
