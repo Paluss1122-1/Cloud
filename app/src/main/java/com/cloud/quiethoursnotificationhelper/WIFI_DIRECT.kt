@@ -119,21 +119,23 @@ private object ConnectionGuard {
     private var isWifiConnected: Boolean = false
     private var isAtHomeLocation: Boolean = false
 
-    private const val MIN_RETRY_DELAY_MS = 5_000L      // 5 Sekunden
-    private const val MAX_RETRY_DELAY_MS = 300_000L    // 5 Minuten
-    private const val QUICK_PING_TIMEOUT_MS = 500      // Sehr kurz für Ping
+    private const val MIN_RETRY_DELAY_MS = 5_000L
+    private const val MAX_RETRY_DELAY_MS = 300_000L
+    private const val QUICK_PING_TIMEOUT_MS = 500
+
+    fun isAtHomeLocation(): Boolean = isAtHomeLocation
 
     fun updateWifiStatus(connected: Boolean) {
         isWifiConnected = connected
         if (!connected) {
-            consecutiveFailures = 0  // Reset bei WiFi-Verlust
+            consecutiveFailures = 0
         }
     }
 
     fun updateLocationStatus(atHome: Boolean) {
         isAtHomeLocation = atHome
         if (!atHome) {
-            consecutiveFailures = 0  // Reset wenn nicht zu Hause
+            consecutiveFailures = 0
         }
     }
 
@@ -160,7 +162,6 @@ private object ConnectionGuard {
     fun recordFailure() {
         lastFailedAttempt = System.currentTimeMillis()
         consecutiveFailures++
-        Log.d("ConnectionGuard", "Fehler #$consecutiveFailures, nächster Versuch in ${calculateBackoffDelay() / 1000}s")
     }
 
     fun recordSuccess() {
@@ -251,7 +252,10 @@ fun registerWifiReconnectReceiver(context: Context) {
 
     // Alten Callback sauber entfernen
     networkCallback?.let {
-        try { cm.unregisterNetworkCallback(it) } catch (_: Exception) { }
+        try {
+            cm.unregisterNetworkCallback(it)
+        } catch (_: Exception) {
+        }
     }
 
     val callback = object : ConnectivityManager.NetworkCallback() {
@@ -261,7 +265,10 @@ fun registerWifiReconnectReceiver(context: Context) {
             ConnectionGuard.updateWifiStatus(true)
             val now = System.currentTimeMillis()
             if (now - lastTriggerTime < MIN_TRIGGER_INTERVAL) {
-                Log.d("NetworkCallback", "⏭️ Sync übersprungen (${(now - lastTriggerTime) / 1000}s seit letztem)")
+                Log.d(
+                    "NetworkCallback",
+                    "⏭️ Sync übersprungen (${(now - lastTriggerTime) / 1000}s seit letztem)"
+                )
                 return
             }
 
@@ -292,9 +299,11 @@ fun registerWifiReconnectReceiver(context: Context) {
 
         override fun onLost(network: Network) {
             ConnectionGuard.updateWifiStatus(false)
-            pendingSyncJob?.cancel()
-            triggerWakeLock?.release()
-            triggerWakeLock = null
+            if (!ConnectionGuard.isAtHomeLocation()) {
+                pendingSyncJob?.cancel()
+                triggerWakeLock?.release()
+                triggerWakeLock = null
+            }
         }
     }
 
@@ -328,8 +337,12 @@ fun startTriggerListener(context: Context) {
                 while (isActive) {
                     try {
                         val client = triggerServerSocket?.accept() ?: break
-                        val pm = context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
-                        val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:AcceptWakeLock")
+                        val pm =
+                            context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+                        val wl = pm.newWakeLock(
+                            PowerManager.PARTIAL_WAKE_LOCK,
+                            "TodoSync:AcceptWakeLock"
+                        )
                         wl.acquire(30_000L)
 
                         val reader = BufferedReader(InputStreamReader(client.getInputStream()))
@@ -348,7 +361,10 @@ fun startTriggerListener(context: Context) {
                                     context
                                 )
 
-                                val syncWl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:SyncWakeLock")
+                                val syncWl = pm.newWakeLock(
+                                    PowerManager.PARTIAL_WAKE_LOCK,
+                                    "TodoSync:SyncWakeLock"
+                                )
                                 syncWl.acquire(60_000L)
 
                                 syncScope.launch {
@@ -546,12 +562,9 @@ fun syncTodosWithLaptop(context: Context) {
                     context
                 )
             }
-        } catch (e: java.net.SocketTimeoutException) {
+        } catch (_: java.net.SocketTimeoutException) {
             // Timeout-Fehler
             ConnectionGuard.recordFailure()
-            Log.d("SYNC", "❌ Timeout: ${e.message}")
-
-            // Auch hier NICHT mehr loggen!
             withContext(Dispatchers.Main) {
                 showSimpleNotificationExtern(
                     "❌ Sync Timeout",
@@ -597,7 +610,8 @@ fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
         wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "TodoSync:WifiLock")
     wifiLock?.acquire()
 
-    val powerManager = context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+    val powerManager =
+        context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
     cpuWakeLock = powerManager.newWakeLock(
         PowerManager.PARTIAL_WAKE_LOCK,
         "TodoSync:UpdateWakeLock"
@@ -679,6 +693,7 @@ fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
         }
     }
 }
+
 fun stopUpdateListener(boolean: Boolean = false) {
     try {
         appContext?.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)?.edit {
@@ -931,7 +946,7 @@ fun showAllTodos(context: Context) {
         .setAutoCancel(true)
         .build()
 
-    notificationManager.notify(TODOS+50, summary)
+    notificationManager.notify(TODOS + 50, summary)
 }
 
 private fun splitText(text: String): List<String> {
@@ -1248,12 +1263,14 @@ suspend fun trySendImageToLaptop(imageBytes: ByteArray): Boolean {
             true
         } catch (e: Exception) {
             syncScope.launch {
-                ERRORINSERT(ERRORINSERTDATA(
-                    service_name = "trySendImageToLaptop",
-                    error_message = e.stackTraceToString(),
-                    created_at = Instant.now().toString(),
-                    severity = "ERROR"
-                ))
+                ERRORINSERT(
+                    ERRORINSERTDATA(
+                        service_name = "trySendImageToLaptop",
+                        error_message = e.stackTraceToString(),
+                        created_at = Instant.now().toString(),
+                        severity = "ERROR"
+                    )
+                )
             }
             flashcardVokabelnFlow.emit(null)
             false
@@ -1436,7 +1453,7 @@ suspend fun sendNvidiaChatMessage(
                     put("role", "system")
                     put(
                         "content",
-                        "Du bist ein hilfreicher Chat-Assistent. Antworte kurz, klar und auf Deutsch."
+                        "Du bist ein hilfreicher Chat-Assistent. Antworte kurz, klar und auf Deutsch und verwende keine Markdown Syntax."
                     )
                 }
             )
@@ -1963,6 +1980,7 @@ fun pushMediaStateToLaptop(context: Context) {
             }
             socket.close()
             return@launch
+        } catch (_: java.net.SocketTimeoutException) {
         } catch (e: Exception) {
             ERRORINSERT(
                 ERRORINSERTDATA(
@@ -2134,7 +2152,12 @@ fun triggerBuild(context: Context) {
     syncScope.launch(Dispatchers.IO) {
         var sock: java.net.Socket? = null
         try {
-            showSimpleNotificationExtern("🔨 Build gestartet", "Warte auf APK...", 10.seconds, context)
+            showSimpleNotificationExtern(
+                "🔨 Build gestartet",
+                "Warte auf APK...",
+                10.seconds,
+                context
+            )
 
             sock = java.net.Socket().apply {
                 receiveBufferSize = 2 * 1024 * 1024  // 2MB
@@ -2155,7 +2178,12 @@ fun triggerBuild(context: Context) {
             val reader = sock.inputStream.bufferedReader()
             val headerLine = reader.readLine() ?: run {
                 sock.close()
-                showSimpleNotificationExtern("❌ Build fehlgeschlagen", "Keine Antwort", 10.seconds, context)
+                showSimpleNotificationExtern(
+                    "❌ Build fehlgeschlagen",
+                    "Keine Antwort",
+                    10.seconds,
+                    context
+                )
                 return@launch
             }
 
@@ -2164,7 +2192,12 @@ fun triggerBuild(context: Context) {
             if (headerLine.startsWith("ERROR:")) {
                 sock.close()
                 val errorMsg = headerLine.substringAfter("ERROR:")
-                showSimpleNotificationExtern("❌ Build fehlgeschlagen", errorMsg, 10.seconds, context)
+                showSimpleNotificationExtern(
+                    "❌ Build fehlgeschlagen",
+                    errorMsg,
+                    10.seconds,
+                    context
+                )
                 return@launch
             }
 
@@ -2192,16 +2225,29 @@ fun triggerBuild(context: Context) {
             }
 
             sock.close()
-            Log.d("BUILD", "APK written: ${apkFile.length()} bytes in ${System.currentTimeMillis()}ms")
+            Log.d(
+                "BUILD",
+                "APK written: ${apkFile.length()} bytes in ${System.currentTimeMillis()}ms"
+            )
 
             if (apkFile.length() == 0L) {
-                showSimpleNotificationExtern("❌ Build fehlgeschlagen", "Leere APK", 10.seconds, context)
+                showSimpleNotificationExtern(
+                    "❌ Build fehlgeschlagen",
+                    "Leere APK",
+                    10.seconds,
+                    context
+                )
                 return@launch
             }
 
             // ✅ Installation
             withContext(Dispatchers.Main) {
-                showSimpleNotificationExtern("✅ Build fertig", "Starte Installation...", 5.seconds, context)
+                showSimpleNotificationExtern(
+                    "✅ Build fertig",
+                    "Starte Installation...",
+                    5.seconds,
+                    context
+                )
                 installApk(context, apkFile)
             }
 
