@@ -86,7 +86,6 @@ class CloudAutofillService : AutofillService() {
             val result = createInlinePresentationWithBuilder(spec, entry)
             result
         } catch (e: Exception) {
-            Log.e(TAG, "Error creating inline presentation", e)
             null
         }
     }
