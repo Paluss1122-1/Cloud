@@ -99,7 +99,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cloud.quiethoursnotificationhelper.AiResponseEntry
 import com.cloud.quiethoursnotificationhelper.aiResponseFlow
 import com.cloud.quiethoursnotificationhelper.deleteAiResponse
-import com.cloud.quiethoursnotificationhelper.formatMs
 import com.cloud.quiethoursnotificationhelper.loadAllAiResponses
 import com.cloud.quiethoursnotificationhelper.loadTodayOrYesterdayEntry
 import com.cloud.service.MediaPlayerService
@@ -139,6 +138,12 @@ data class NowPlayingState(
     val durationMs: Long = 0L,
     val progress: Float = 0f
 )
+
+fun formatMsMTB(ms: Long): String {
+    val m = (ms / 60_000)
+    val s = (ms % 60_000) / 1_000
+    return "%d:%02d".format(m, s)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -2473,8 +2478,8 @@ private fun FullscreenPlayerContent(
 
 @Composable
 private fun PlayerProgressRow(nowPlaying: NowPlayingState) {
-    val posText = formatMs(nowPlaying.positionMs)
-    val durText = if (nowPlaying.durationMs > 0) formatMs(nowPlaying.durationMs) else "--:--"
+    val posText = formatMsMTB(nowPlaying.positionMs)
+    val durText = if (nowPlaying.durationMs > 0) formatMsMTB(nowPlaying.durationMs) else "--:--"
 
     Column {
         Box(
@@ -3088,15 +3093,18 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
 
         return if (mode == "music") {
             val songName = musicPrefs.getString("current_song_name", "") ?: ""
+            val posMs = musicPrefs.getLong("music_position_ms", 0L)
+            val durMs = musicPrefs.getLong("music_duration_ms", 0L)
+            val progress = if (durMs > 0) (posMs.toFloat() / durMs).coerceIn(0f, 1f) else 0f
             NowPlayingState(
                 isActive = songName.isNotEmpty(),
                 mode = "music",
                 title = songName,
                 subtitle = "Musik",
                 isPlaying = musicPrefs.getBoolean("is_playing", false),
-                positionMs = 0L,
-                durationMs = 0L,
-                progress = 0f
+                positionMs = posMs,
+                durationMs = durMs,
+                progress = progress
             )
         } else {
             val path = podcastPrefs.getString("current_podcast_path", null)
