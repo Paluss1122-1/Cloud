@@ -288,7 +288,6 @@ fun loadGalleryImages(number: Int, context: Context) {
         currentGalleryIndex = number
         showGalleryImage(number, context)
     } catch (e: Exception) {
-        Log.e("QuietHoursService", "Error loading gallery images", e)
         showSimpleNotificationExtern(
             "❌ Fehler",
             "Galerie konnte nicht geladen werden: ${e.message}",
