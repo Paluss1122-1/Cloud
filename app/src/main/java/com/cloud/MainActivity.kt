@@ -25,10 +25,9 @@ import androidx.core.app.ActivityCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
-import com.cloud.errorreportsclaude.ErrorMonitorService
+import com.cloud.errorreports.ErrorMonitorService
 import com.cloud.jsoneditor.JsonEditorContent
 import com.cloud.privatecloudapp.LandingPageOrApp
-import com.cloud.privatecloudapp.PrivateCloudApp
 import com.cloud.quicksettingsfunctions.BatteryDataRepository
 import com.cloud.ui.theme.c
 import io.github.jan.supabase.SupabaseClient
@@ -59,10 +58,10 @@ class MainActivity : FragmentActivity() {
             CoroutineScope(Dispatchers.IO).launch {
                 ERRORINSERT(
                     ERRORINSERTDATA(
-                        "UncaughtException:${thread.name}",
+                        "UncaughtException: ${thread.name}",
                         throwable.stackTraceToString().take(8000),
                         Instant.now().toString(),
-                        "Error"
+                        "ERROR"
                     )
                 )
             }
@@ -91,7 +90,6 @@ class MainActivity : FragmentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.attributes.layoutInDisplayCutoutMode =
             WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-        super.onCreate(savedInstanceState)
 
         window.insetsController?.let { controller ->
             controller.hide(android.view.WindowInsets.Type.systemBars())
