@@ -140,7 +140,7 @@ class QuietHoursNotificationService : Service() {
                         service_name = "QuietHoursNotificationService:$where",
                         error_message = trimmed,
                         created_at = Instant.now().toString(),
-                        severity = "Error"
+                        severity = "ERROR"
                     )
                 )
             } catch (_: Exception) {
@@ -259,7 +259,7 @@ class QuietHoursNotificationService : Service() {
                                 service_name = "QuietHoursNotificationService:checkRunnable",
                                 error_message = e.stackTraceToString().take(8000),
                                 created_at = Instant.now().toString(),
-                                severity = "Error"
+                                severity = "ERROR"
                             )
                         )
                     } catch (_: Exception) {
@@ -461,7 +461,6 @@ class QuietHoursNotificationService : Service() {
                         val cameraId = cameraManager.cameraIdList.firstOrNull()
                         if (cameraId != null) cameraManager.turnOnTorchWithStrengthLevel(cameraId, 1)
                     } catch (e: Exception) {
-                        Log.e("QuietHoursService", "Error setting flashlight level", e)
                         showSimpleNotification(
                             "❌ Taschenlampe",
                             "Helligkeit konnte nicht gesetzt werden: ${e.message}",
