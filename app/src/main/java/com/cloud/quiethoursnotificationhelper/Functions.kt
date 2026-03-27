@@ -73,7 +73,6 @@ fun startAudioRecording(context: Context) {
             context = context
         )
     } catch (e: Exception) {
-        Log.e("QuietHoursService", "Error starting audio recording", e)
         showSimpleNotificationExtern(
             "❌ Fehler",
             "Aufnahme konnte nicht gestartet werden",
@@ -106,7 +105,6 @@ fun stopAudioRecording(context: Context) {
         )
         currentRecordingFile = null
     } catch (e: Exception) {
-        Log.e("QuietHoursService", "Error stopping audio recording", e)
         showSimpleNotificationExtern(
             "❌ Fehler",
             "Aufnahme konnte nicht gestoppt werden",
@@ -159,7 +157,6 @@ fun showLastFriendMessages(context: Context) {
             }
 
         } catch (e: Exception) {
-            Log.e("QuietHoursService", "Error loading friend messages", e)
             Handler(Looper.getMainLooper()).post {
                 showSimpleNotificationExtern(
                     "❌ Fehler",
@@ -212,7 +209,6 @@ private fun showFriendMessagesNotification(messages: List<ChatService.Message>, 
         }
 
     } catch (e: Exception) {
-        Log.e("QuietHoursService", "Error showing friend messages notification", e)
         showSimpleNotificationExtern(
             "❌ Fehler",
             "Benachrichtigung konnte nicht angezeigt werden: ${e.message}",
@@ -323,7 +319,6 @@ fun setSoundMode(mode: String, context: Context) {
         }
 
     } catch (e: Exception) {
-        Log.e("QuietHoursService", "Error setting sound mode", e)
         showSimpleNotificationExtern(
             "❌ Fehler",
             "Sound-Modus konnte nicht geändert werden: ${e.message}",
