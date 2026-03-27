@@ -62,7 +62,7 @@ fun clearPodcastSelectionNotifications(context: Context) {
                     "markMessageAsRead",
                     "Konnte Notifications nicht löschen: ${e.message}",
                     Instant.now().toString(),
-                    "Error"
+                    "ERROR"
                 )
             )
         }
@@ -130,7 +130,7 @@ fun loadPodcastsFromMediaStore(context: Context): List<SimplePodcast> {
                     "loadPodcastsFromMediaStore",
                     "Fehler bei Laden von Podcasts von MediaStore: ${e.message}",
                     Instant.now().toString(),
-                    "Error"
+                    "ERROR"
                 )
             )
         }
@@ -189,7 +189,6 @@ fun showPodcastQueue(context: Context) {
         }, 300)
 
     } catch (e: Exception) {
-        Log.e("QuietHoursService", "Error showing podcast queue", e)
         showSimpleNotificationExtern("❌ Fehler", "Queue konnte nicht angezeigt werden", Duration.ZERO, context)
     }
 }
