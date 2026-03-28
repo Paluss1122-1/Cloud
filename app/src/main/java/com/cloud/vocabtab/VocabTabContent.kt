@@ -41,6 +41,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -85,6 +86,7 @@ data class VokabelSet(
 )
 
 enum class VokabelTabScreen { HOME, UPLOAD, REVIEW, LEARN }
+
 private val BgSurface = Color(0xFF1E1E1E)
 private val BgCard = Color(0xFF2A2A2A)
 private val AccentViolet = Color(0xFF7C4DFF)
@@ -142,13 +144,18 @@ fun VocabTab() {
         when (screen) {
             VokabelTabScreen.HOME -> HomeScreen(
                 savedSets = savedSets,
+                prefs = prefs,
                 onNewSet = { screen = VokabelTabScreen.UPLOAD },
                 onOpenSet = { set ->
+                    activeSet = set; vokabeln = set.vokabeln; screen = VokabelTabScreen.REVIEW
+                },
+                onLearnWeak = { set ->
                     activeSet = set
-                    vokabeln = set.vokabeln
-                    screen = VokabelTabScreen.REVIEW
+                    vokabeln = loadWeakVokabeln(prefs, set.createdAt)
+                    screen = VokabelTabScreen.LEARN
                 },
                 onDeleteSet = { set ->
+                    saveWeakVokabeln(prefs, set.createdAt, emptyList())
                     savedSets = deleteVokabelSet(prefs, set)
                 }
             )
@@ -330,6 +337,8 @@ No markdown, no explanation, ONLY the JSON array.
 
             VokabelTabScreen.LEARN -> LearnScreen(
                 vokabeln = vokabeln,
+                prefs = prefs,
+                setCreatedAt = activeSet?.createdAt ?: 0L,
                 onBack = { screen = VokabelTabScreen.REVIEW }
             )
         }
@@ -339,8 +348,10 @@ No markdown, no explanation, ONLY the JSON array.
 @Composable
 fun HomeScreen(
     savedSets: List<VokabelSet>,
+    prefs: android.content.SharedPreferences,
     onNewSet: () -> Unit,
     onOpenSet: (VokabelSet) -> Unit,
+    onLearnWeak: (VokabelSet) -> Unit,
     onDeleteSet: (VokabelSet) -> Unit
 ) {
     var setToDelete by remember { mutableStateOf<VokabelSet?>(null) }
@@ -481,6 +492,24 @@ fun HomeScreen(
                                 color = TextTertiary, fontSize = 12.sp
                             )
                         }
+                        val weakCount = loadWeakVokabeln(prefs, set.createdAt).size
+                        if (weakCount > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFB71C1C).copy(alpha = 0.2f))
+                                    .clickable { onLearnWeak(set) }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    "✗ $weakCount",
+                                    color = Color(0xFFEF5350),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Spacer(Modifier.width(6.dp))
+                        }
                         Box(
                             modifier = Modifier
                                 .size(34.dp)
@@ -507,7 +536,7 @@ fun UploadScreen(
     onBack: () -> Unit,
     onExtract: () -> Unit
 ) {
-    BackHandler{
+    BackHandler {
         onBack()
     }
 
@@ -644,7 +673,7 @@ fun ReviewScreen(
     onSave: () -> Unit,
     onBack: () -> Unit
 ) {
-    BackHandler{
+    BackHandler {
         onBack()
     }
 
@@ -820,7 +849,12 @@ fun ReviewScreen(
 }
 
 @Composable
-fun LearnScreen(vokabeln: List<Vokabel>, onBack: () -> Unit) {
+fun LearnScreen(
+    vokabeln: List<Vokabel>,
+    prefs: android.content.SharedPreferences,
+    setCreatedAt: Long,
+    onBack: () -> Unit
+) {
     var shuffled by remember { mutableStateOf(vokabeln.shuffled()) }
     var currentIndex by remember { mutableIntStateOf(0) }
     var showDeutsch by remember { mutableStateOf(false) }
@@ -829,6 +863,8 @@ fun LearnScreen(vokabeln: List<Vokabel>, onBack: () -> Unit) {
     var wrong by remember { mutableIntStateOf(0) }
     val flipped by animateFloatAsState(targetValue = if (showAnswer) 180f else 0f, label = "flip")
     val done = currentIndex >= shuffled.size
+    var correctVokabeln by remember { mutableStateOf<List<Vokabel>>(emptyList()) }
+    var wrongVokabeln by remember { mutableStateOf<List<Vokabel>>(emptyList()) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -990,7 +1026,12 @@ fun LearnScreen(vokabeln: List<Vokabel>, onBack: () -> Unit) {
                                 .weight(1f)
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(Color(0xFFB71C1C).copy(alpha = 0.2f))
-                                .clickable { wrong++; showAnswer = false; currentIndex++ }
+                                .clickable {
+                                    wrong++
+                                    wrongVokabeln = wrongVokabeln + shuffled[currentIndex]
+                                    showAnswer = false
+                                    currentIndex++
+                                }
                                 .padding(vertical = 16.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1017,7 +1058,13 @@ fun LearnScreen(vokabeln: List<Vokabel>, onBack: () -> Unit) {
                                 .weight(1f)
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(MaterialTheme.colorScheme.primary)
-                                .clickable { correct++; showAnswer = false; currentIndex++ }
+                                // Richtig-Button:
+                                .clickable {
+                                    correct++
+                                    correctVokabeln = correctVokabeln + shuffled[currentIndex]
+                                    showAnswer = false
+                                    currentIndex++
+                                }
                                 .padding(vertical = 16.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1046,6 +1093,12 @@ fun LearnScreen(vokabeln: List<Vokabel>, onBack: () -> Unit) {
             }
         } else {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                var weakCount by remember { mutableIntStateOf(0) }
+
+                LaunchedEffect(true) {
+                    updateWeakVokabeln(prefs, setCreatedAt, correctVokabeln, wrongVokabeln)
+                    weakCount = loadWeakVokabeln(prefs, setCreatedAt).size
+                }
                 Column(
                     modifier = Modifier
                         .padding(24.dp)
@@ -1106,6 +1159,28 @@ fun LearnScreen(vokabeln: List<Vokabel>, onBack: () -> Unit) {
                             fontWeight = FontWeight.SemiBold
                         )
                     }
+                    if (wrongVokabeln.isNotEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFFB71C1C).copy(alpha = 0.25f))
+                                .clickable {
+                                    shuffled = wrongVokabeln.shuffled()
+                                    wrongVokabeln = emptyList()
+                                    currentIndex = 0; correct = 0; wrong = 0; showAnswer = false
+                                }
+                                .padding(vertical = 14.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "✗ Falsche wiederholen (${wrongVokabeln.size})",
+                                color = Color(0xFFEF5350),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1115,6 +1190,13 @@ fun LearnScreen(vokabeln: List<Vokabel>, onBack: () -> Unit) {
                             .padding(vertical = 14.dp),
                         contentAlignment = Alignment.Center
                     ) { Text("Zurück zur Übersicht", color = TextSecondary, fontSize = 14.sp) }
+                }
+                if (weakCount > 0) {
+                    Text(
+                        "📌 $weakCount schwache Vokabeln gespeichert",
+                        color = Color(0xFFEF5350), fontSize = 13.sp,
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
         }
@@ -1344,4 +1426,43 @@ suspend fun extractVokabelnFromBitmap(bitmap: Bitmap): List<Vokabel> {
 
         Vokabel(latin.text, matched.text)
     }.distinctBy { it.latein }
+}
+
+fun loadWeakVokabeln(prefs: android.content.SharedPreferences, setCreatedAt: Long): List<Vokabel> {
+    val raw = prefs.getString("weak_$setCreatedAt", null) ?: return emptyList()
+    return try {
+        val arr = org.json.JSONArray(raw)
+        (0 until arr.length()).map {
+            val o = arr.getJSONObject(it)
+            Vokabel(o.getString("latein"), o.getString("deutsch"))
+        }
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+fun saveWeakVokabeln(
+    prefs: android.content.SharedPreferences,
+    setCreatedAt: Long,
+    list: List<Vokabel>
+) {
+    val json = org.json.JSONArray().also { arr ->
+        list.forEach { v ->
+            arr.put(
+                org.json.JSONObject().apply { put("latein", v.latein); put("deutsch", v.deutsch) })
+        }
+    }.toString()
+    prefs.edit { putString("weak_$setCreatedAt", json) }
+}
+
+fun updateWeakVokabeln(
+    prefs: android.content.SharedPreferences,
+    setCreatedAt: Long,
+    correct: List<Vokabel>,
+    wrong: List<Vokabel>
+) {
+    val current = loadWeakVokabeln(prefs, setCreatedAt).toMutableList()
+    correct.forEach { v -> current.removeAll { it.latein == v.latein } }
+    wrong.forEach { v -> if (current.none { it.latein == v.latein }) current.add(v) }
+    saveWeakVokabeln(prefs, setCreatedAt, current)
 }
