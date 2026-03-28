@@ -7,3 +7,4 @@ keystore/
 postcommit.py
 AI/
 local.properties
+app/src/main/java/com/cloud/sm.py
