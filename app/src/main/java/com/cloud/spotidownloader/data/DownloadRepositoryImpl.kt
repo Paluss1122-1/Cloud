@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.os.Environment
 import android.provider.MediaStore
+import com.cloud.Config.RAPID_API_KEY
 import com.cloud.spotidownloader.domain.DownloadRepository
 import com.cloud.spotidownloader.domain.DownloadState
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -50,7 +51,7 @@ class DownloadRepositoryImpl @Inject constructor(
             send(DownloadState.Downloading(5))
             val response: HttpResponse = httpClient.get(apiUrl) {
                 headers {
-                    append("x-rapidapi-key", "6947ddb4f8msheeef82984a5c52ap164eb8jsnea0900d669b1")
+                    append("x-rapidapi-key", RAPID_API_KEY)
                     append("x-rapidapi-host", "spotify-downloader9.p.rapidapi.com")
                 }
             }
