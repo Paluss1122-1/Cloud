@@ -92,6 +92,7 @@ jobs:
               const val MEDIA_STATE_PORT = 8900
               const val AI_PORT = 8902
               const val GMAILPASSWORD = "${{ secrets.GMAILPASSWORD }}"
+              fun cms(): Int = System.currentTimeMillis().toInt()
               @OptIn(SupabaseInternal::class)
               val client = createSupabaseClient(supabaseUrl = SUPABASE_URL, supabaseKey = SUPABASE_PUBLISHABLE_KEY) {
                   install(Storage); install(Postgrest); install(Realtime)
