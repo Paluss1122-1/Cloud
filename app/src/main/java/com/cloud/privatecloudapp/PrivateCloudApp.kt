@@ -1038,6 +1038,8 @@ fun MainCloudScreen(storage: Storage) {
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
 
+    BackHandler(true) { }
+
     suspend fun loadFiles() {
         try {
             val files = withContext(Dispatchers.IO) {
