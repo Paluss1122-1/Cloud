@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
@@ -84,6 +85,8 @@ fun GalleryTab() {
         }
     }
 
+    val gridState = rememberLazyGridState()
+
     SharedTransitionLayout {
         AnimatedContent(targetState = showFullscreenMedia, label = "gallery_transition") { isFullscreen ->
             if (!isFullscreen) {
@@ -97,6 +100,7 @@ fun GalleryTab() {
                     } else {
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(2),
+                            state = gridState,
                             modifier = Modifier.padding(8.dp)
                         ) {
                             items(mediaItems.value) { mediaItem ->
