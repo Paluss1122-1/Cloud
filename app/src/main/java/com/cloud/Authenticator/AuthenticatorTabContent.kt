@@ -27,6 +27,9 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
 import kotlinx.coroutines.delay
@@ -242,15 +245,15 @@ private fun AuthenticatedContent(
 
 @Composable
 private fun TwoFAAppContent(db: TwoFADatabase) {
-    val navController = androidx.navigation.compose.rememberNavController()
-    androidx.navigation.compose.NavHost(navController, startDestination = "list") {
-        androidx.navigation.compose.composable("list") {
+    val navController = rememberNavController()
+    NavHost(navController, startDestination = "list") {
+        composable("list") {
             TwoFAListScreen(
-                db            = db,
+                db             = db,
                 onOpenSettings = { navController.navigate("settings") }
             )
         }
-        androidx.navigation.compose.composable("settings") {
+        composable("settings") {
             SettingsScreenWithScreenshotProtection(
                 onBackClick = { navController.popBackStack() }
             )
