@@ -51,59 +51,48 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Design tokens
-// ─────────────────────────────────────────────────────────────────────────────
-
-private val Bg          = Color(0xFF0D0D0F)
-private val Surface1    = Color(0xFF17171C)
-private val Surface2    = Color(0xFF1F1F27)
-private val Surface3    = Color(0xFF2A2A35)
-private val AccentBlue  = Color(0xFF4A90E2)
-private val AccentGreen = Color(0xFF2ECC71)
-private val AccentRed   = Color(0xFFE74C3C)
-private val TextP       = Color(0xFFEEEEF5)
-private val TextS       = Color(0xFF8A8A9F)
-private val TextT       = Color(0xFF55556A)
+private val Surface1 = Color(0xFF17171C)
+private val Surface2 = Color(0xFF1F1F27)
+private val Surface3 = Color(0xFF2A2A35)
+private val AccentBlue = Color(0xFF4A90E2)
+private val AccentRed = Color(0xFFE74C3C)
+private val TextP = Color(0xFFEEEEF5)
+private val TextS = Color(0xFF8A8A9F)
+private val TextT = Color(0xFF55556A)
 
 private val categoryColor = mapOf(
-    "Social"   to Color(0xFF4267B2),
-    "Banking"  to Color(0xFF27AE60),
-    "E-Mail"   to Color(0xFFE74C3C),
+    "Social" to Color(0xFF4267B2),
+    "Banking" to Color(0xFF27AE60),
+    "E-Mail" to Color(0xFFE74C3C),
     "Shopping" to Color(0xFFFF6B00),
-    "Arbeit"   to Color(0xFF8E44AD),
-    "Gaming"   to Color(0xFF2980B9),
-    "Andere"   to Color(0xFF5D6D7E)
+    "Arbeit" to Color(0xFF8E44AD),
+    "Gaming" to Color(0xFF2980B9),
+    "Andere" to Color(0xFF5D6D7E)
 )
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Main screen
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun PasswordManagerScreen(db: PasswordDatabase) {
-    val scope   = rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    var entries            by remember { mutableStateOf<List<PasswordEntry>>(emptyList()) }
-    var searchQuery        by remember { mutableStateOf("") }
-    var selectedCategory   by remember { mutableStateOf("Alle") }
-    var showAddDialog      by remember { mutableStateOf(false) }
-    var editEntry          by remember { mutableStateOf<PasswordEntry?>(null) }
-    var detailEntry        by remember { mutableStateOf<PasswordEntry?>(null) }
-    var isLoading          by remember { mutableStateOf(true) }
+    var entries by remember { mutableStateOf<List<PasswordEntry>>(emptyList()) }
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf("Alle") }
+    var showAddDialog by remember { mutableStateOf(false) }
+    var editEntry by remember { mutableStateOf<PasswordEntry?>(null) }
+    var detailEntry by remember { mutableStateOf<PasswordEntry?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
 
     fun reload() {
         scope.launch {
             isLoading = true
-            entries   = db.passwordDao().getAll()
+            entries = db.passwordDao().getAll()
             isLoading = false
         }
     }
 
     LaunchedEffect(Unit) { reload() }
 
-    // filter
     val visible = remember(entries, searchQuery, selectedCategory) {
         entries.filter { e ->
             val q = searchQuery.trim()
@@ -122,19 +111,17 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
             FloatingActionButton(
                 onClick = { showAddDialog = true },
                 containerColor = AccentBlue,
-                contentColor   = Color.White,
-                shape          = CircleShape,
-                modifier       = Modifier.size(56.dp)
+                contentColor = Color.White,
+                shape = CircleShape,
+                modifier = Modifier.size(56.dp)
             ) { Icon(Icons.Default.Add, "Hinzufügen") }
         }
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
                 .background(Color.Transparent)
         ) {
-            // ── Header ──────────────────────────────────────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -144,48 +131,46 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         "🔐 Passwörter",
-                        color      = TextP,
-                        fontSize   = 22.sp,
+                        color = TextP,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         "${entries.size} Einträge",
-                        color    = TextS,
+                        color = TextS,
                         fontSize = 12.sp
                     )
                 }
             }
 
-            // ── Search bar ──────────────────────────────────────────────────
             OutlinedTextField(
-                value            = searchQuery,
-                onValueChange    = { searchQuery = it },
-                modifier         = Modifier
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                placeholder      = { Text("Suche...", color = TextT) },
-                leadingIcon      = { Icon(Icons.Default.Search, null, tint = TextS) },
-                trailingIcon     = {
+                placeholder = { Text("Suche...", color = TextT) },
+                leadingIcon = { Icon(Icons.Default.Search, null, tint = TextS) },
+                trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
                         IconButton(onClick = { searchQuery = "" }) {
                             Icon(Icons.Default.Clear, null, tint = TextS)
                         }
                     }
                 },
-                singleLine       = true,
-                shape            = RoundedCornerShape(14.dp),
-                colors           = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor   = AccentBlue,
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = AccentBlue,
                     unfocusedBorderColor = Surface3,
-                    focusedTextColor     = TextP,
-                    unfocusedTextColor   = TextP,
-                    cursorColor          = AccentBlue
+                    focusedTextColor = TextP,
+                    unfocusedTextColor = TextP,
+                    cursorColor = AccentBlue
                 )
             )
 
             Spacer(Modifier.height(12.dp))
 
-            // ── Category chips ───────────────────────────────────────────────
             Row(
                 modifier = Modifier
                     .horizontalScroll(rememberScrollState())
@@ -209,8 +194,8 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
                     ) {
                         Text(
                             cat,
-                            color      = if (selected) Color.White else TextS,
-                            fontSize   = 12.sp,
+                            color = if (selected) Color.White else TextS,
+                            fontSize = 12.sp,
                             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
                         )
                     }
@@ -219,7 +204,6 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
 
             Spacer(Modifier.height(12.dp))
 
-            // ── List ────────────────────────────────────────────────────────
             if (isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -229,15 +213,15 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
                 EmptyState(hasEntries = entries.isNotEmpty())
             } else {
                 LazyColumn(
-                    contentPadding        = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                    verticalArrangement   = Arrangement.spacedBy(8.dp),
-                    modifier              = Modifier.fillMaxSize()
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     items(visible, key = { it.id }) { entry ->
                         PasswordCard(
-                            entry   = entry,
+                            entry = entry,
                             onClick = { detailEntry = entry },
-                            onEdit  = { editEntry = entry },
+                            onEdit = { editEntry = entry },
                             onDelete = {
                                 scope.launch {
                                     db.passwordDao().delete(entry)
@@ -254,7 +238,8 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
                             },
                             onToggleFavorite = {
                                 scope.launch {
-                                    db.passwordDao().update(entry.copy(isFavorite = !entry.isFavorite))
+                                    db.passwordDao()
+                                        .update(entry.copy(isFavorite = !entry.isFavorite))
                                     reload()
                                 }
                             }
@@ -266,13 +251,11 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
         }
     }
 
-    // ── Dialogs ──────────────────────────────────────────────────────────────
-
     if (showAddDialog) {
         AddEditPasswordDialog(
-            initial  = null,
+            initial = null,
             onDismiss = { showAddDialog = false },
-            onSave    = { newEntry ->
+            onSave = { newEntry ->
                 scope.launch {
                     db.passwordDao().insert(newEntry)
                     showAddDialog = false
@@ -285,9 +268,9 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
 
     editEntry?.let { entry ->
         AddEditPasswordDialog(
-            initial  = entry,
+            initial = entry,
             onDismiss = { editEntry = null },
-            onSave    = { updated ->
+            onSave = { updated ->
                 scope.launch {
                     db.passwordDao().update(updated.copy(updatedAt = System.currentTimeMillis()))
                     editEntry = null
@@ -300,10 +283,10 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
 
     detailEntry?.let { entry ->
         PasswordDetailSheet(
-            entry   = entry,
+            entry = entry,
             onDismiss = { detailEntry = null },
-            onEdit    = { detailEntry = null; editEntry = entry },
-            onDelete  = {
+            onEdit = { detailEntry = null; editEntry = entry },
+            onDelete = {
                 scope.launch {
                     db.passwordDao().delete(entry)
                     detailEntry = null
@@ -314,21 +297,17 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Password card
-// ─────────────────────────────────────────────────────────────────────────────
-
 @Composable
 private fun PasswordCard(
-    entry:            PasswordEntry,
-    onClick:          () -> Unit,
-    onEdit:           () -> Unit,
-    onDelete:         () -> Unit,
-    onCopy:           () -> Unit,
+    entry: PasswordEntry,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onCopy: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    val accent   = categoryColor[entry.category] ?: Color(0xFF5D6D7E)
+    val accent = categoryColor[entry.category] ?: Color(0xFF5D6D7E)
     val initials = entry.name.take(2).uppercase()
 
     Box(
@@ -339,12 +318,11 @@ private fun PasswordCard(
             .border(1.dp, Surface3, RoundedCornerShape(16.dp))
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onTap       = { onClick() },
+                    onTap = { onClick() },
                     onLongPress = { showMenu = true }
                 )
             }
     ) {
-        // Left accent bar
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
@@ -358,7 +336,6 @@ private fun PasswordCard(
             modifier = Modifier.padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Avatar
             Box(
                 modifier = Modifier
                     .size(42.dp)
@@ -368,28 +345,27 @@ private fun PasswordCard(
             ) {
                 Text(
                     CATEGORY_ICONS[entry.category] ?: initials,
-                    fontSize   = if (CATEGORY_ICONS.containsKey(entry.category)) 20.sp else 14.sp,
+                    fontSize = if (CATEGORY_ICONS.containsKey(entry.category)) 20.sp else 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color      = accent
+                    color = accent
                 )
             }
 
             Spacer(Modifier.width(12.dp))
 
-            // Text info
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     entry.name,
-                    color      = TextP,
-                    fontSize   = 15.sp,
+                    color = TextP,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines   = 1,
-                    overflow   = TextOverflow.Ellipsis
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 if (entry.username.isNotEmpty()) {
                     Text(
                         entry.username,
-                        color    = TextS,
+                        color = TextS,
                         fontSize = 12.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -397,57 +373,61 @@ private fun PasswordCard(
                 }
             }
 
-            // Actions
             if (entry.isFavorite) {
                 Text("⭐", fontSize = 14.sp, modifier = Modifier.padding(end = 4.dp))
             }
 
             IconButton(onClick = onCopy, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Default.ContentCopy, "Kopieren", tint = TextS, modifier = Modifier.size(18.dp))
+                Icon(
+                    Icons.Default.ContentCopy,
+                    "Kopieren",
+                    tint = TextS,
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
 
-        // Context menu
         DropdownMenu(
-            expanded         = showMenu,
+            expanded = showMenu,
             onDismissRequest = { showMenu = false },
-            modifier         = Modifier.background(Surface2)
+            modifier = Modifier.background(Surface2)
         ) {
             DropdownMenuItem(
-                text    = { Text("✏️  Bearbeiten", color = TextP) },
+                text = { Text("✏️  Bearbeiten", color = TextP) },
                 onClick = { showMenu = false; onEdit() }
             )
             DropdownMenuItem(
-                text    = { Text("📋  Passwort kopieren", color = TextP) },
+                text = { Text("📋  Passwort kopieren", color = TextP) },
                 onClick = { showMenu = false; onCopy() }
             )
             DropdownMenuItem(
-                text    = { Text(if (entry.isFavorite) "💔  Favorit entfernen" else "⭐  Favorit", color = TextP) },
+                text = {
+                    Text(
+                        if (entry.isFavorite) "💔  Favorit entfernen" else "⭐  Favorit",
+                        color = TextP
+                    )
+                },
                 onClick = { showMenu = false; onToggleFavorite() }
             )
             HorizontalDivider(color = Surface3)
             DropdownMenuItem(
-                text    = { Text("🗑️  Löschen", color = AccentRed) },
+                text = { Text("🗑️  Löschen", color = AccentRed) },
                 onClick = { showMenu = false; onDelete() }
             )
         }
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Detail bottom sheet
-// ─────────────────────────────────────────────────────────────────────────────
-
 @Composable
 private fun PasswordDetailSheet(
-    entry:     PasswordEntry,
+    entry: PasswordEntry,
     onDismiss: () -> Unit,
-    onEdit:    () -> Unit,
-    onDelete:  () -> Unit
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
 ) {
-    val context          = LocalContext.current
-    var plainPassword    by remember { mutableStateOf("") }
-    var showPassword     by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    var plainPassword by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(entry) {
@@ -460,7 +440,7 @@ private fun PasswordDetailSheet(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties       = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Column(
             modifier = Modifier
@@ -471,7 +451,6 @@ private fun PasswordDetailSheet(
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp)
         ) {
-            // Title row
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     CATEGORY_ICONS[entry.category] ?: "🔑",
@@ -487,11 +466,10 @@ private fun PasswordDetailSheet(
 
             Spacer(Modifier.height(20.dp))
 
-            // Fields
             if (entry.url.isNotEmpty()) {
                 DetailField(
-                    label  = "🌐 URL",
-                    value  = entry.url,
+                    label = "🌐 URL",
+                    value = entry.url,
                     onCopy = { copyToClipboard(context, "URL", entry.url) }
                 )
                 Spacer(Modifier.height(12.dp))
@@ -499,16 +477,20 @@ private fun PasswordDetailSheet(
 
             if (entry.username.isNotEmpty()) {
                 DetailField(
-                    label  = "👤 Benutzername",
-                    value  = entry.username,
+                    label = "👤 Benutzername",
+                    value = entry.username,
                     onCopy = { copyToClipboard(context, "Benutzername", entry.username) }
                 )
                 Spacer(Modifier.height(12.dp))
             }
 
-            // Password field
             Column {
-                Text("🔒 Passwort", color = TextS, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "🔒 Passwort",
+                    color = TextS,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
                 Spacer(Modifier.height(4.dp))
                 Row(
                     modifier = Modifier
@@ -520,27 +502,38 @@ private fun PasswordDetailSheet(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text     = if (showPassword) plainPassword else "•".repeat(plainPassword.length.coerceAtMost(20)),
-                        color    = if (showPassword) TextP else TextS,
+                        text = if (showPassword) plainPassword else "•".repeat(
+                            plainPassword.length.coerceAtMost(
+                                20
+                            )
+                        ),
+                        color = if (showPassword) TextP else TextS,
                         fontSize = 14.sp,
                         fontFamily = if (showPassword) FontFamily.Monospace else FontFamily.Default,
                         modifier = Modifier.weight(1f)
                     )
-                    IconButton(onClick = { showPassword = !showPassword }, modifier = Modifier.size(32.dp)) {
+                    IconButton(
+                        onClick = { showPassword = !showPassword },
+                        modifier = Modifier.size(32.dp)
+                    ) {
                         Icon(
                             if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                             null, tint = TextS, modifier = Modifier.size(18.dp)
                         )
                     }
                     IconButton(
-                        onClick  = { copyToClipboard(context, "Passwort", plainPassword) },
+                        onClick = { copyToClipboard(context, "Passwort", plainPassword) },
                         modifier = Modifier.size(32.dp)
                     ) {
-                        Icon(Icons.Default.ContentCopy, null, tint = AccentBlue, modifier = Modifier.size(18.dp))
+                        Icon(
+                            Icons.Default.ContentCopy,
+                            null,
+                            tint = AccentBlue,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
 
-                // Strength indicator
                 if (plainPassword.isNotEmpty()) {
                     Spacer(Modifier.height(6.dp))
                     StrengthBar(PasswordGenerator.strength(plainPassword))
@@ -550,7 +543,12 @@ private fun PasswordDetailSheet(
             if (entry.notes.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
                 Column {
-                    Text("📝 Notizen", color = TextS, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "📝 Notizen",
+                        color = TextS,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                     Spacer(Modifier.height(4.dp))
                     Box(
                         modifier = Modifier
@@ -567,21 +565,20 @@ private fun PasswordDetailSheet(
 
             Spacer(Modifier.height(24.dp))
 
-            // Action buttons
             Row(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier              = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth()
             ) {
                 OutlinedButton(
                     onClick = { showDeleteConfirm = true },
-                    colors  = ButtonDefaults.outlinedButtonColors(contentColor = AccentRed),
-                    border  = androidx.compose.foundation.BorderStroke(1.dp, AccentRed),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentRed),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentRed),
                     modifier = Modifier.weight(1f)
                 ) { Text("Löschen") }
 
                 Button(
-                    onClick  = onEdit,
-                    colors   = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                    onClick = onEdit,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
                     modifier = Modifier.weight(1f)
                 ) { Text("Bearbeiten") }
             }
@@ -591,15 +588,15 @@ private fun PasswordDetailSheet(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            containerColor   = Surface1,
-            title            = { Text("Eintrag löschen?", color = TextP) },
-            text             = { Text("\"${entry.name}\" wird dauerhaft gelöscht.", color = TextS) },
-            confirmButton    = {
+            containerColor = Surface1,
+            title = { Text("Eintrag löschen?", color = TextP) },
+            text = { Text("\"${entry.name}\" wird dauerhaft gelöscht.", color = TextS) },
+            confirmButton = {
                 TextButton(onClick = { showDeleteConfirm = false; onDelete() }) {
                     Text("Löschen", color = AccentRed, fontWeight = FontWeight.Bold)
                 }
             },
-            dismissButton    = {
+            dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
                     Text("Abbrechen", color = TextS)
                 }
@@ -624,7 +621,7 @@ private fun DetailField(label: String, value: String, onCopy: () -> Unit) {
         ) {
             Text(
                 value,
-                color    = TextP,
+                color = TextP,
                 fontSize = 14.sp,
                 modifier = Modifier.weight(1f),
                 maxLines = 1,
@@ -637,31 +634,27 @@ private fun DetailField(label: String, value: String, onCopy: () -> Unit) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Add / Edit dialog
-// ─────────────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEditPasswordDialog(
-    initial:   PasswordEntry?,
+    initial: PasswordEntry?,
     onDismiss: () -> Unit,
-    onSave:    (PasswordEntry) -> Unit
+    onSave: (PasswordEntry) -> Unit
 ) {
     val isEdit = initial != null
 
-    var name        by remember { mutableStateOf(initial?.name     ?: "") }
-    var url         by remember { mutableStateOf(initial?.url      ?: "") }
-    var username    by remember { mutableStateOf(initial?.username  ?: "") }
-    var password    by remember { mutableStateOf("") }
-    var notes       by remember { mutableStateOf(initial?.notes    ?: "") }
-    var category    by remember { mutableStateOf(initial?.category ?: "Andere") }
-    var isFavorite  by remember { mutableStateOf(initial?.isFavorite ?: false) }
-    var showPass    by remember { mutableStateOf(false) }
-    var showGen     by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf(initial?.name ?: "") }
+    var url by remember { mutableStateOf(initial?.url ?: "") }
+    var username by remember { mutableStateOf(initial?.username ?: "") }
+    var password by remember { mutableStateOf("") }
+    var notes by remember { mutableStateOf(initial?.notes ?: "") }
+    var category by remember { mutableStateOf(initial?.category ?: "Andere") }
+    var isFavorite by remember { mutableStateOf(initial?.isFavorite ?: false) }
+    var showPass by remember { mutableStateOf(false) }
+    var showGen by remember { mutableStateOf(false) }
     var catExpanded by remember { mutableStateOf(false) }
 
-    // Decrypt existing password
     LaunchedEffect(initial) {
         if (initial != null) {
             password = withContext(Dispatchers.Default) {
@@ -671,11 +664,11 @@ fun AddEditPasswordDialog(
     }
 
     val strength = remember(password) { PasswordGenerator.strength(password) }
-    val isValid  = name.isNotBlank() && password.isNotBlank()
+    val isValid = name.isNotBlank() && password.isNotBlank()
 
     if (showGen) {
         PasswordGeneratorSheet(
-            onAccept  = { generated -> password = generated; showGen = false },
+            onAccept = { generated -> password = generated; showGen = false },
             onDismiss = { showGen = false }
         )
         return
@@ -683,7 +676,7 @@ fun AddEditPasswordDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties       = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Column(
             modifier = Modifier
@@ -694,14 +687,13 @@ fun AddEditPasswordDialog(
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp)
         ) {
-            // Header
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     if (isEdit) "✏️  Bearbeiten" else "➕  Neuer Eintrag",
-                    color      = TextP,
-                    fontSize   = 18.sp,
+                    color = TextP,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier   = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f)
                 )
                 IconButton(onClick = { isFavorite = !isFavorite }) {
                     Text(if (isFavorite) "⭐" else "☆", fontSize = 20.sp)
@@ -710,23 +702,30 @@ fun AddEditPasswordDialog(
 
             Spacer(Modifier.height(20.dp))
 
-            // Name
             PwField(label = "Name *", value = name, onValueChange = { name = it })
             Spacer(Modifier.height(12.dp))
 
-            // URL
-            PwField(label = "URL / Domain", value = url, onValueChange = { url = it },
-                    keyboardType = KeyboardType.Uri)
+            PwField(
+                label = "URL / Domain", value = url, onValueChange = { url = it },
+                keyboardType = KeyboardType.Uri
+            )
             Spacer(Modifier.height(12.dp))
 
-            // Username
-            PwField(label = "Benutzername / E-Mail", value = username, onValueChange = { username = it },
-                    keyboardType = KeyboardType.Email)
+            PwField(
+                label = "Benutzername / E-Mail",
+                value = username,
+                onValueChange = { username = it },
+                keyboardType = KeyboardType.Email
+            )
             Spacer(Modifier.height(12.dp))
 
-            // Password
             Column {
-                Text("Passwort *", color = TextS, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Passwort *",
+                    color = TextS,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
                 Spacer(Modifier.height(4.dp))
                 Row(
                     modifier = Modifier
@@ -738,32 +737,39 @@ fun AddEditPasswordDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     androidx.compose.foundation.text.BasicTextField(
-                        value              = password,
-                        onValueChange      = { password = it },
-                        singleLine         = true,
+                        value = password,
+                        onValueChange = { password = it },
+                        singleLine = true,
                         visualTransformation = if (showPass) VisualTransformation.None
-                                               else PasswordVisualTransformation(),
-                        textStyle          = androidx.compose.ui.text.TextStyle(
-                            color      = TextP,
-                            fontSize   = 14.sp,
+                        else PasswordVisualTransformation(),
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = TextP,
+                            fontSize = 14.sp,
                             fontFamily = FontFamily.Monospace
                         ),
-                        modifier           = Modifier
+                        modifier = Modifier
                             .weight(1f)
                             .padding(start = 12.dp, top = 12.dp, bottom = 12.dp)
                     )
-                    IconButton(onClick = { showPass = !showPass }, modifier = Modifier.size(36.dp)) {
+                    IconButton(
+                        onClick = { showPass = !showPass },
+                        modifier = Modifier.size(36.dp)
+                    ) {
                         Icon(
                             if (showPass) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                             null, tint = TextS, modifier = Modifier.size(18.dp)
                         )
                     }
                     IconButton(onClick = { showGen = true }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.AutoFixHigh, "Generieren", tint = AccentBlue, modifier = Modifier.size(18.dp))
+                        Icon(
+                            Icons.Default.AutoFixHigh,
+                            "Generieren",
+                            tint = AccentBlue,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
 
-                // Strength bar
                 if (password.isNotEmpty()) {
                     Spacer(Modifier.height(6.dp))
                     StrengthBar(strength)
@@ -772,38 +778,45 @@ fun AddEditPasswordDialog(
 
             Spacer(Modifier.height(12.dp))
 
-            // Category
             Column {
                 Text("Kategorie", color = TextS, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(4.dp))
                 ExposedDropdownMenuBox(
-                    expanded        = catExpanded,
+                    expanded = catExpanded,
                     onExpandedChange = { catExpanded = it }
                 ) {
                     OutlinedTextField(
-                        value           = "${ CATEGORY_ICONS[category] ?: "🔑"} $category",
-                        onValueChange   = {},
-                        readOnly        = true,
-                        trailingIcon    = { ExposedDropdownMenuDefaults.TrailingIcon(catExpanded) },
-                        modifier        = Modifier
+                        value = "${CATEGORY_ICONS[category] ?: "🔑"} $category",
+                        onValueChange = {},
+                        readOnly = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(catExpanded) },
+                        modifier = Modifier
                             .fillMaxWidth()
-                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable, enabled = true),
-                        shape           = RoundedCornerShape(10.dp),
-                        colors          = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor   = AccentBlue,
+                            .menuAnchor(
+                                ExposedDropdownMenuAnchorType.PrimaryEditable,
+                                enabled = true
+                            ),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = AccentBlue,
                             unfocusedBorderColor = Surface3,
-                            focusedTextColor     = TextP,
-                            unfocusedTextColor   = TextP
+                            focusedTextColor = TextP,
+                            unfocusedTextColor = TextP
                         )
                     )
                     ExposedDropdownMenu(
-                        expanded        = catExpanded,
+                        expanded = catExpanded,
                         onDismissRequest = { catExpanded = false },
-                        modifier        = Modifier.background(Surface2)
+                        modifier = Modifier.background(Surface2)
                     ) {
                         PASSWORD_CATEGORIES.drop(1).forEach { cat ->
                             DropdownMenuItem(
-                                text    = { Text("${CATEGORY_ICONS[cat] ?: "🔑"}  $cat", color = TextP) },
+                                text = {
+                                    Text(
+                                        "${CATEGORY_ICONS[cat] ?: "🔑"}  $cat",
+                                        color = TextP
+                                    )
+                                },
                                 onClick = { category = cat; catExpanded = false }
                             )
                         }
@@ -813,63 +826,63 @@ fun AddEditPasswordDialog(
 
             Spacer(Modifier.height(12.dp))
 
-            // Notes
             Column {
                 Text("Notizen", color = TextS, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(4.dp))
                 OutlinedTextField(
-                    value         = notes,
+                    value = notes,
                     onValueChange = { notes = it },
-                    modifier      = Modifier.fillMaxWidth().heightIn(min = 80.dp),
-                    maxLines      = 4,
-                    placeholder   = { Text("Optional...", color = TextT) },
-                    shape         = RoundedCornerShape(10.dp),
-                    colors        = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor   = AccentBlue,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 80.dp),
+                    maxLines = 4,
+                    placeholder = { Text("Optional...", color = TextT) },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AccentBlue,
                         unfocusedBorderColor = Surface3,
-                        focusedTextColor     = TextP,
-                        unfocusedTextColor   = TextP
+                        focusedTextColor = TextP,
+                        unfocusedTextColor = TextP
                     )
                 )
             }
 
             Spacer(Modifier.height(24.dp))
 
-            // Buttons
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(
-                    onClick  = onDismiss,
+                    onClick = onDismiss,
                     modifier = Modifier.weight(1f)
                 ) { Text("Abbrechen", color = TextS) }
 
                 Button(
-                    onClick  = {
+                    onClick = {
                         val encrypted = PasswordCrypto.encrypt(password)
                         val entry = if (isEdit && initial != null) {
                             initial.copy(
-                                name              = name.trim(),
-                                url               = url.trim(),
-                                username          = username.trim(),
+                                name = name.trim(),
+                                url = url.trim(),
+                                username = username.trim(),
                                 encryptedPassword = encrypted,
-                                notes             = notes.trim(),
-                                category          = category,
-                                isFavorite        = isFavorite
+                                notes = notes.trim(),
+                                category = category,
+                                isFavorite = isFavorite
                             )
                         } else {
                             PasswordEntry(
-                                name              = name.trim(),
-                                url               = url.trim(),
-                                username          = username.trim(),
+                                name = name.trim(),
+                                url = url.trim(),
+                                username = username.trim(),
                                 encryptedPassword = encrypted,
-                                notes             = notes.trim(),
-                                category          = category,
-                                isFavorite        = isFavorite
+                                notes = notes.trim(),
+                                category = category,
+                                isFavorite = isFavorite
                             )
                         }
                         onSave(entry)
                     },
-                    enabled  = isValid,
-                    colors   = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                    enabled = isValid,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
                     modifier = Modifier.weight(1f)
                 ) { Text("Speichern") }
             }
@@ -877,31 +890,28 @@ fun AddEditPasswordDialog(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Password generator sheet
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun PasswordGeneratorSheet(
-    onAccept:  (String) -> Unit,
+    onAccept: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var length      by remember { mutableStateOf(20f) }
-    var useLower    by remember { mutableStateOf(true) }
-    var useUpper    by remember { mutableStateOf(true) }
-    var useDigits   by remember { mutableStateOf(true) }
-    var useSymbols  by remember { mutableStateOf(true) }
+    var length by remember { mutableStateOf(20f) }
+    var useLower by remember { mutableStateOf(true) }
+    var useUpper by remember { mutableStateOf(true) }
+    var useDigits by remember { mutableStateOf(true) }
+    var useSymbols by remember { mutableStateOf(true) }
     var noAmbiguous by remember { mutableStateOf(false) }
-    var generated   by remember { mutableStateOf("") }
-    val context     = LocalContext.current
+    var generated by remember { mutableStateOf("") }
+    val context = LocalContext.current
 
     LaunchedEffect(length, useLower, useUpper, useDigits, useSymbols, noAmbiguous) {
         generated = PasswordGenerator.generate(
-            length      = length.toInt(),
-            lower       = useLower,
-            upper       = useUpper,
-            digits      = useDigits,
-            symbols     = useSymbols,
+            length = length.toInt(),
+            lower = useLower,
+            upper = useUpper,
+            digits = useDigits,
+            symbols = useSymbols,
             noAmbiguous = noAmbiguous
         )
     }
@@ -910,7 +920,7 @@ fun PasswordGeneratorSheet(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties       = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Column(
             modifier = Modifier
@@ -920,10 +930,14 @@ fun PasswordGeneratorSheet(
                 .background(Surface1)
                 .padding(24.dp)
         ) {
-            Text("⚡ Passwort-Generator", color = TextP, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "⚡ Passwort-Generator",
+                color = TextP,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
             Spacer(Modifier.height(20.dp))
 
-            // Generated password display
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -935,26 +949,41 @@ fun PasswordGeneratorSheet(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         generated,
-                        color      = TextP,
-                        fontSize   = 15.sp,
+                        color = TextP,
+                        fontSize = 15.sp,
                         fontFamily = FontFamily.Monospace,
-                        modifier   = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f)
                     )
                     IconButton(
-                        onClick  = { copyToClipboard(context, "Passwort", generated) },
+                        onClick = { copyToClipboard(context, "Passwort", generated) },
                         modifier = Modifier.size(36.dp)
                     ) {
-                        Icon(Icons.Default.ContentCopy, null, tint = TextS, modifier = Modifier.size(18.dp))
+                        Icon(
+                            Icons.Default.ContentCopy,
+                            null,
+                            tint = TextS,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                     IconButton(
-                        onClick  = {
+                        onClick = {
                             generated = PasswordGenerator.generate(
-                                length.toInt(), useLower, useUpper, useDigits, useSymbols, noAmbiguous
+                                length.toInt(),
+                                useLower,
+                                useUpper,
+                                useDigits,
+                                useSymbols,
+                                noAmbiguous
                             )
                         },
                         modifier = Modifier.size(36.dp)
                     ) {
-                        Icon(Icons.Default.Refresh, null, tint = AccentBlue, modifier = Modifier.size(18.dp))
+                        Icon(
+                            Icons.Default.Refresh,
+                            null,
+                            tint = AccentBlue,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }
@@ -963,19 +992,21 @@ fun PasswordGeneratorSheet(
             StrengthBar(strength)
             Spacer(Modifier.height(20.dp))
 
-            // Length slider
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Länge:", color = TextS, fontSize = 13.sp, modifier = Modifier.width(60.dp))
                 Slider(
-                    value         = length,
+                    value = length,
                     onValueChange = { length = it },
-                    valueRange    = 8f..64f,
-                    modifier      = Modifier.weight(1f),
-                    colors        = SliderDefaults.colors(thumbColor = AccentBlue, activeTrackColor = AccentBlue)
+                    valueRange = 8f..64f,
+                    modifier = Modifier.weight(1f),
+                    colors = SliderDefaults.colors(
+                        thumbColor = AccentBlue,
+                        activeTrackColor = AccentBlue
+                    )
                 )
                 Text(
                     "${length.toInt()}",
-                    color    = AccentBlue,
+                    color = AccentBlue,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.width(32.dp)
@@ -984,11 +1015,10 @@ fun PasswordGeneratorSheet(
 
             Spacer(Modifier.height(12.dp))
 
-            // Toggles
-            ToggleRow("Kleinbuchstaben (a-z)",   useLower)   { useLower    = it }
-            ToggleRow("Großbuchstaben (A-Z)",     useUpper)   { useUpper    = it }
-            ToggleRow("Ziffern (0-9)",            useDigits)  { useDigits   = it }
-            ToggleRow("Sonderzeichen (!@#...)",   useSymbols) { useSymbols  = it }
+            ToggleRow("Kleinbuchstaben (a-z)", useLower) { useLower = it }
+            ToggleRow("Großbuchstaben (A-Z)", useUpper) { useUpper = it }
+            ToggleRow("Ziffern (0-9)", useDigits) { useDigits = it }
+            ToggleRow("Sonderzeichen (!@#...)", useSymbols) { useSymbols = it }
             ToggleRow("Keine ähnl. Zeichen (0Ol1)", noAmbiguous) { noAmbiguous = it }
 
             Spacer(Modifier.height(20.dp))
@@ -998,9 +1028,9 @@ fun PasswordGeneratorSheet(
                     Text("Abbrechen", color = TextS)
                 }
                 Button(
-                    onClick  = { onAccept(generated) },
-                    enabled  = generated.isNotEmpty(),
-                    colors   = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                    onClick = { onAccept(generated) },
+                    enabled = generated.isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
                     modifier = Modifier.weight(1f)
                 ) { Text("Übernehmen") }
             }
@@ -1008,16 +1038,13 @@ fun PasswordGeneratorSheet(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers / sub-composables
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun StrengthBar(strength: PasswordStrength) {
     val animFraction by animateFloatAsState(
-        targetValue    = strength.fraction,
-        animationSpec  = tween(400),
-        label          = "strength"
+        targetValue = strength.fraction,
+        animationSpec = tween(400),
+        label = "strength"
     )
     Column {
         Row(
@@ -1025,7 +1052,12 @@ fun StrengthBar(strength: PasswordStrength) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text("Stärke:", color = TextT, fontSize = 11.sp)
-            Text(strength.label, color = strength.color, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                strength.label,
+                color = strength.color,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         }
         Spacer(Modifier.height(3.dp))
         Box(
@@ -1048,27 +1080,27 @@ fun StrengthBar(strength: PasswordStrength) {
 
 @Composable
 private fun PwField(
-    label:        String,
-    value:        String,
+    label: String,
+    value: String,
     onValueChange: (String) -> Unit,
-    keyboardType:  KeyboardType = KeyboardType.Text
+    keyboardType: KeyboardType = KeyboardType.Text
 ) {
     Column {
         Text(label, color = TextS, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(4.dp))
         OutlinedTextField(
-            value         = value,
+            value = value,
             onValueChange = onValueChange,
-            singleLine    = true,
-            modifier      = Modifier.fillMaxWidth(),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-            shape         = RoundedCornerShape(10.dp),
-            colors        = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor   = AccentBlue,
+            shape = RoundedCornerShape(10.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = AccentBlue,
                 unfocusedBorderColor = Surface3,
-                focusedTextColor     = TextP,
-                unfocusedTextColor   = TextP,
-                cursorColor          = AccentBlue
+                focusedTextColor = TextP,
+                unfocusedTextColor = TextP,
+                cursorColor = AccentBlue
             )
         )
     }
@@ -1084,10 +1116,10 @@ private fun ToggleRow(label: String, checked: Boolean, onCheckedChange: (Boolean
     ) {
         Text(label, color = TextP, fontSize = 13.sp, modifier = Modifier.weight(1f))
         Switch(
-            checked         = checked,
+            checked = checked,
             onCheckedChange = onCheckedChange,
-            colors          = SwitchDefaults.colors(
-                checkedTrackColor   = AccentBlue,
+            colors = SwitchDefaults.colors(
+                checkedTrackColor = AccentBlue,
                 uncheckedTrackColor = Surface3
             )
         )
@@ -1102,8 +1134,8 @@ private fun EmptyState(hasEntries: Boolean) {
             Spacer(Modifier.height(16.dp))
             Text(
                 if (hasEntries) "Keine Treffer" else "Noch keine Passwörter",
-                color      = TextP,
-                fontSize   = 18.sp,
+                color = TextP,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
@@ -1114,9 +1146,6 @@ private fun EmptyState(hasEntries: Boolean) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Clipboard helper
-// ─────────────────────────────────────────────────────────────────────────────
 
 fun copyToClipboard(context: Context, label: String, value: String) {
     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
