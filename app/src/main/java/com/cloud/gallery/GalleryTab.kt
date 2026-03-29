@@ -14,9 +14,17 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -26,21 +34,28 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.net.toUri
-import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
@@ -49,6 +64,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
+import androidx.media3.common.MediaItem as ExoMediaItem
 
 data class GalleryMediaItem(
     val uri: String,
@@ -225,6 +241,50 @@ fun SharedTransitionScope.ImageFullscreen(
             modifier = Modifier
                 .fillMaxSize()
                 .transformable(state = state)
+
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        var swipeTotalDx = 0f
+                        var swipeTotalDy = 0f
+                        var swipeConsumed = false
+
+                        awaitFirstDown(requireUnconsumed = false)
+
+                        do {
+                            val event = awaitPointerEvent()
+                            val zoomChange = event.calculateZoom()
+                            val panChange = event.calculatePan()
+
+                            val newScale = (scale * zoomChange).coerceIn(1f, 5f)
+                            scale = newScale
+
+                            if (scale > 1f) {
+                                offset += panChange
+                                swipeConsumed = true
+                            } else {
+                                offset = Offset.Zero
+                                if (!swipeConsumed) {
+                                    swipeTotalDx += panChange.x
+                                    swipeTotalDy += panChange.y
+                                    val absDx = kotlin.math.abs(swipeTotalDx)
+                                    val absDy = kotlin.math.abs(swipeTotalDy)
+
+                                    if (absDy > absDx && absDy > 150f) {
+                                        swipeConsumed = true
+                                        onDismiss()
+                                    }/* else if (absDx > absDy && absDx > 50f) {
+                                        swipeConsumed = true
+                                        if (swipeTotalDx > 0f && currentIndex > 0) {
+                                            onIndexChanged(currentIndex - 1)
+                                        } else if (swipeTotalDx < 0f && currentIndex < allImages.size - 1) {
+                                            onIndexChanged(currentIndex + 1)
+                                        }
+                                    }*/
+                                }
+                            }
+                        } while (event.changes.any { it.pressed })
+                    }
+                }
                 .then(
                     if (scale > 1f) Modifier.graphicsLayer(
                         scaleX = scale,
