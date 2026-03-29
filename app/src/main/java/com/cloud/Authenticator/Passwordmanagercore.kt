@@ -14,17 +14,14 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Room Entity
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Entity(tableName = "passwords")
 data class PasswordEntry(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val name: String,                          // Site / App name
-    val url: String = "",                      // Used for AutoFill domain matching
+    val name: String,
+    val url: String = "",
     val username: String = "",
-    val encryptedPassword: String = "",        // AES-GCM encrypted, Base64-encoded
+    val encryptedPassword: String = "",
     val notes: String = "",
     val category: String = "Andere",
     val isFavorite: Boolean = false,
@@ -32,9 +29,6 @@ data class PasswordEntry(
     val updatedAt: Long = System.currentTimeMillis()
 )
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DAO
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Dao
 interface PasswordDao {
@@ -73,9 +67,6 @@ interface PasswordDao {
     suspend fun count(): Int
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Room Database
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Database(entities = [PasswordEntry::class], version = 1, exportSchema = false)
 abstract class PasswordDatabase : RoomDatabase() {
@@ -101,9 +92,6 @@ abstract class PasswordDatabase : RoomDatabase() {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AES-256-GCM Encryption via Android Keystore
-// ─────────────────────────────────────────────────────────────────────────────
 
 object PasswordCrypto {
 
@@ -141,7 +129,7 @@ object PasswordCrypto {
             val cipher = Cipher.getInstance(ALGORITHM)
             cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
             val encrypted = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
-            val combined = cipher.iv + encrypted          // 12 bytes IV + ciphertext + 16 byte GCM tag
+            val combined = cipher.iv + encrypted
             Base64.encodeToString(combined, Base64.NO_WRAP)
         } catch (_: Exception) {
             ""
@@ -164,9 +152,6 @@ object PasswordCrypto {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Password Generator (cryptographically secure)
-// ─────────────────────────────────────────────────────────────────────────────
 
 object PasswordGenerator {
 
@@ -174,7 +159,7 @@ object PasswordGenerator {
     private const val UPPER   = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     private const val DIGITS  = "0123456789"
     private const val SYMBOLS = "!@#\$%^&*()_+-=[]{}|;:,.<>?"
-    private const val AMBIGUOUS = "0OIl1"   // characters that look similar
+    private const val AMBIGUOUS = "0OIl1"
 
     fun generate(
         length: Int      = 20,
@@ -196,7 +181,6 @@ object PasswordGenerator {
         val rng = SecureRandom.getInstanceStrong()
         val sb  = StringBuilder(length)
 
-        // Ensure at least one char from each chosen set
         val guaranteed = buildList {
             if (lower)   add(LOWER[rng.nextInt(LOWER.length)])
             if (upper)   add(UPPER[rng.nextInt(UPPER.length)])
@@ -204,10 +188,8 @@ object PasswordGenerator {
             if (symbols) add(SYMBOLS[rng.nextInt(SYMBOLS.length)])
         }
 
-        // Fill rest
         repeat(length - guaranteed.size) { sb.append(pool[rng.nextInt(pool.length)]) }
 
-        // Shuffle guaranteed chars into the result
         val all = (sb.toString().toList() + guaranteed).toMutableList()
         for (i in all.indices.reversed()) {
             val j = rng.nextInt(i + 1)
@@ -221,13 +203,13 @@ object PasswordGenerator {
     fun score(password: String): Int {
         if (password.isEmpty()) return 0
         var s = 0
-        s += (password.length * 4).coerceAtMost(40)          // length up to 40 pts
+        s += (password.length * 4).coerceAtMost(40)
         if (password.any { it.isLowerCase() })      s += 10
         if (password.any { it.isUpperCase() })      s += 10
         if (password.any { it.isDigit() })          s += 10
         if (password.any { !it.isLetterOrDigit() }) s += 20
         val unique = password.toSet().size
-        s += (unique * 2).coerceAtMost(10)                    // unique chars up to 10 pts
+        s += (unique * 2).coerceAtMost(10)
         return s.coerceIn(0, 100)
     }
 
@@ -242,9 +224,6 @@ object PasswordGenerator {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Strength enum
-// ─────────────────────────────────────────────────────────────────────────────
 
 enum class PasswordStrength(
     val label: String,
@@ -258,9 +237,6 @@ enum class PasswordStrength(
     EXCELLENT("Ausgezeichnet", 1.00f, androidx.compose.ui.graphics.Color(0xFF1B5E20))
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Domain helper (used by Screen + AutoFill)
-// ─────────────────────────────────────────────────────────────────────────────
 
 fun extractDomain(raw: String): String {
     if (raw.isBlank()) return ""
@@ -273,9 +249,6 @@ fun extractDomain(raw: String): String {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Constants
-// ─────────────────────────────────────────────────────────────────────────────
 
 val PASSWORD_CATEGORIES = listOf(
     "Alle", "Social", "Banking", "E-Mail",
