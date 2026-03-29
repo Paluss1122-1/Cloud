@@ -2129,7 +2129,7 @@ suspend fun askServer(
 ): String {
     return withContext(Dispatchers.IO) {
         try {
-            if (laptopIp == "") throw Exception("laptopIp is null")
+            if (laptopIp == "") throw Exception("Keine laptopIp is vorhanden")
             val request = "${question}. Here is the chat history:$history "
             val sock = java.net.Socket(laptopIp, Config.AI_PORT)
             sock.getOutputStream().write(request.toByteArray(Charsets.UTF_8))
@@ -2138,7 +2138,10 @@ suspend fun askServer(
             sock.close()
             response
         } catch (e: Exception) {
-            "ERROR: ${e.message}"
+            var msg = ""
+            e.message?.let { it1 -> msg =
+                if (it1.contains("failed to connect")) "Keine Verbindung mit Server möglich" else "Fehler: ${e.message}" }
+            msg
         }
     }
 }

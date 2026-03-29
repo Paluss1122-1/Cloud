@@ -3,7 +3,6 @@
 package com.cloud.privatecloudapp
 
 import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -62,7 +61,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -74,7 +72,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.FileProvider
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -85,7 +82,6 @@ import coil.compose.rememberAsyncImagePainter
 import coil.disk.DiskCache
 import coil.memory.MemoryCache.Builder
 import com.cloud.ui.theme.gruen
-import com.cloud.ui.theme.hellgruen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -93,7 +89,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 import kotlin.time.ExperimentalTime
 
 data class LocalFileInfo(
@@ -521,41 +518,6 @@ fun OtherBucketViewer(
                                                     modifier = Modifier.weight(1f)
                                                 )
 
-                                                // Öffnen-Button (nur für Bilder)
-                                                if (!fileInfo.isVideo) {
-                                                    IconButton(
-                                                        onClick = {
-                                                            val fileUri =
-                                                                FileProvider.getUriForFile(
-                                                                    context,
-                                                                    "${context.packageName}.fileprovider",
-                                                                    fileInfo.file
-                                                                )
-                                                            val intent =
-                                                                Intent(Intent.ACTION_VIEW).apply {
-                                                                    setDataAndType(
-                                                                        fileUri,
-                                                                        "image/*"
-                                                                    )
-                                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                                }
-                                                            context.startActivity(intent)
-                                                            haptic.performHapticFeedback(
-                                                                HapticFeedbackType.LongPress
-                                                            )
-                                                        },
-                                                        modifier = Modifier.size(32.dp)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                                                            contentDescription = "Öffnen",
-                                                            tint = Color.White
-                                                        )
-                                                    }
-                                                }
-
-                                                // Löschen-Button
                                                 IconButton(
                                                     onClick = {
                                                         haptic.performHapticFeedback(
@@ -713,21 +675,6 @@ fun OtherBucketViewer(
             allImages = imageFiles,
             currentIndex = currentImageIndex,
             onDismiss = { showFullscreenImage = null },
-            onOpenInGallery = {
-                val currentFile = imageFiles[currentImageIndex]
-                val fileUri = FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.fileprovider",
-                    currentFile.file
-                )
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(fileUri, "image/*")
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(intent)
-                showFullscreenImage = null
-            },
             onIndexChanged = { newIndex ->
                 currentImageIndex = newIndex
             }
@@ -838,7 +785,6 @@ fun FullscreenImageDialogLocal(
     allImages: List<LocalFileInfo>,
     currentIndex: Int,
     onDismiss: () -> Unit,
-    onOpenInGallery: () -> Unit,
     onIndexChanged: (Int) -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -943,21 +889,6 @@ fun FullscreenImageDialogLocal(
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
-        }
-
-        // Öffnen-Button unten
-        FloatingActionButton(
-            onClick = onOpenInGallery,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp),
-            containerColor = gruen
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                contentDescription = "In Gallery öffnen",
-                tint = Color.White
-            )
         }
     }
 }
