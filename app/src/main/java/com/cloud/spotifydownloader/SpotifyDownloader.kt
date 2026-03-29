@@ -18,6 +18,8 @@ import java.io.File
 import java.net.URLEncoder
 import android.util.Base64
 import android.util.Log
+import com.cloud.Config.SPOTIFY_CLIENT_ID
+import com.cloud.Config.SPOTIFY_CLIENT_SECRET
 import okhttp3.FormBody
 import java.io.FileOutputStream
 import java.net.URLDecoder
@@ -40,9 +42,6 @@ data class TrackState(
     val status: DownloadStatus = DownloadStatus.IDLE,
     val statusMsg: String = ""
 )
-
-private const val SPOTIFY_CLIENT_ID = "ca57e99005f541f98397a9b2515313e8"
-private const val SPOTIFY_CLIENT_SECRET = "03900eb819fe47878d872d115179900a"
 private const val OUTPUT_DIR = "SpotifyDownloader"
 
 private val http = OkHttpClient()
