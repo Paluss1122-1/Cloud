@@ -22,6 +22,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -153,7 +154,7 @@ fun AITabContent() {
                                 fontSize = 15.sp,
                                 modifier = Modifier
                                     .background(
-                                        if (isUser) Color(0xFF1A73E8) else Color(0xFF444444),
+                                        if (isUser) MaterialTheme.colorScheme.primary else Color(0xFF444444),
                                         RoundedCornerShape(10.dp)
                                     )
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
