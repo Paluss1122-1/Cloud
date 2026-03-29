@@ -176,7 +176,7 @@ class CloudAutofillService : AutofillService() {
 
         for (i in 0 until structure.windowNodeCount) {
             val title = structure.getWindowNodeAt(i).title?.toString() ?: ""
-            if (title.contains(":
+            if (title.contains("://") || title.contains(".")) {
                 return extractDomain(title)
             }
         }
