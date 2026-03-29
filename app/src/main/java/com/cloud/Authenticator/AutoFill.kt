@@ -181,7 +181,7 @@ class CloudAutofillService : AutofillService() {
             }
         }
 
-        return ""
+        return null
     }
 
 
