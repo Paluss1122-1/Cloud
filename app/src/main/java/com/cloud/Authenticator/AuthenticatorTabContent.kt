@@ -2,19 +2,26 @@ package com.cloud.authenticator
 
 import android.content.Context
 import android.content.ContextWrapper
-import androidx.biometric.BiometricPrompt
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators
+import androidx.biometric.BiometricPrompt
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Password
+import androidx.compose.material.icons.outlined.Password
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
@@ -26,9 +33,22 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab definitions
+// ─────────────────────────────────────────────────────────────────────────────
+
+private enum class AuthTab(val label: String, val icon: String) {
+    PASSWORDS("Passwörter", "🔑"),
+    TWOFACTOR("2FA Codes",  "🛡️")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Root composable – handles biometric lock + tab navigation
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
 fun AuthenticatorTab() {
-    val context = LocalContext.current
+    val context       = LocalContext.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     val activity = remember {
@@ -40,95 +60,75 @@ fun AuthenticatorTab() {
         null
     }
 
+    // ── Fatal: no FragmentActivity ───────────────────────────────────────────
     if (activity == null) {
-        LaunchedEffect(activity) {
-            ERRORINSERT(
-                ERRORINSERTDATA(
-                    "Main Acivity (Authenticator)",
-                    "❌ Keine FragmentActivity gefunden!",
-                    Instant.now().toString(),
-                    "ERROR"
-                )
-            )
+        LaunchedEffect(Unit) {
+            ERRORINSERT(ERRORINSERTDATA(
+                "AuthenticatorTab", "❌ FragmentActivity fehlt", Instant.now().toString(), "ERROR"
+            ))
         }
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(32.dp)
+                modifier            = Modifier.padding(32.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Lock,
-                    contentDescription = "Fehler",
-                    modifier = Modifier.size(80.dp),
-                    tint = MaterialTheme.colorScheme.error
-                )
-                Spacer(modifier = Modifier.height(16.dp))
+                Icon(Icons.Default.Lock, null, Modifier.size(72.dp), tint = MaterialTheme.colorScheme.error)
+                Spacer(Modifier.height(16.dp))
                 Text(
-                    text = "Fehler: MainActivity muss von FragmentActivity erben",
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    "Fehler: MainActivity muss FragmentActivity erben",
+                    style     = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
+                    color     = Color.White
                 )
             }
         }
         return
     }
 
-    val prefs = remember {
-        context.getSharedPreferences("settings", Context.MODE_PRIVATE)
-    }
+    // ── State ────────────────────────────────────────────────────────────────
+    val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
 
-    var isAuthenticated by remember { mutableStateOf(false) }
-    var lockEnabled by remember {
-        mutableStateOf(prefs.getBoolean("lockEnabled", false))
-    }
-    var showError by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf("") }
-    var shouldShowPrompt by remember { mutableStateOf(false) }
-
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                if (lockEnabled && !isAuthenticated && !shouldShowPrompt) {
-                    shouldShowPrompt = true
-                }
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
+    var isAuthenticated   by remember { mutableStateOf(false) }
+    var lockEnabled       by remember { mutableStateOf(prefs.getBoolean("lockEnabled", false)) }
+    var showError         by remember { mutableStateOf(false) }
+    var errorMessage      by remember { mutableStateOf("") }
+    var shouldShowPrompt  by remember { mutableStateOf(false) }
+    var selectedTab       by remember { mutableStateOf(AuthTab.PASSWORDS) }
 
     val coroutineScope = rememberCoroutineScope()
 
+    // ── Re-lock on resume ────────────────────────────────────────────────────
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && lockEnabled && !isAuthenticated && !shouldShowPrompt) {
+                shouldShowPrompt = true
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // ── Trigger biometric prompt ─────────────────────────────────────────────
     LaunchedEffect(shouldShowPrompt) {
         if (shouldShowPrompt && lockEnabled && !isAuthenticated) {
             delay(100)
             showBiometricPrompt(
-                activity = activity,
+                activity  = activity,
                 onSuccess = {
-                    isAuthenticated = true
-                    showError = false
+                    isAuthenticated  = true
+                    showError        = false
                     shouldShowPrompt = false
                 },
-                onError = { error, isCritical ->
+                onError   = { error, isCritical ->
                     if (isCritical) {
-                        errorMessage = error
-                        showError = true
+                        errorMessage     = error
+                        showError        = true
                         shouldShowPrompt = false
-                        isAuthenticated = false
+                        isAuthenticated  = false
                         coroutineScope.launch {
-                            ERRORINSERT(
-                                ERRORINSERTDATA(
-                                    "Main Activity (Authenticator)",
-                                    "❌ AUTH ERROR: $error",
-                                    Instant.now().toString(),
-                                    "ERROR"
-                                )
-                            )
+                            ERRORINSERT(ERRORINSERTDATA(
+                                "AuthenticatorTab", "❌ AUTH: $error", Instant.now().toString(), "ERROR"
+                            ))
                         }
                     } else {
                         shouldShowPrompt = false
@@ -138,105 +138,168 @@ fun AuthenticatorTab() {
         }
     }
 
-    LaunchedEffect(showError) {
-        if (showError) {
-            ERRORINSERT(
-                ERRORINSERTDATA(
-                    "Main Activity (Authenticator)",
-                    "⚠ Zeige Error Screen",
-                    Instant.now().toString(),
-                    "Warning"
-                )
-            )
-        }
-    }
-
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = Color.Transparent
-    ) {
+    // ── Routing ──────────────────────────────────────────────────────────────
+    Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
         when {
-            !lockEnabled ->{
-                val db = TwoFADatabase.getDatabase(context)
-                MainApp(db)
+            // Unlocked or no lock required → show main app
+            !lockEnabled || isAuthenticated -> {
+                AuthenticatedContent(
+                    selectedTab    = selectedTab,
+                    onTabSelected  = { selectedTab = it },
+                    context        = context
+                )
             }
+
+            // Lock + biometric error
             !isAuthenticated && showError -> {
                 ErrorScreen(
-                    message = errorMessage,
-                    onRetry = {
-                        showError = false
-                        shouldShowPrompt = true
-                    },
-                    onUnlock = {
-                        showError = false
-                        shouldShowPrompt = true
-                    }
+                    message  = errorMessage,
+                    onRetry  = { showError = false; shouldShowPrompt = true },
+                    onUnlock = { showError = false; shouldShowPrompt = true }
                 )
             }
 
-            !isAuthenticated -> {
-                LockScreen(
-                    onRetry = {
-                        shouldShowPrompt = true
-                    }
-                )
-            }
-
+            // Lock screen (waiting for auth)
             else -> {
-                val db = TwoFADatabase.getDatabase(context)
-                MainApp(db)
+                LockScreen(onRetry = { shouldShowPrompt = true })
             }
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Authenticated content – tab navigation
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun AuthenticatedContent(
+    selectedTab:   AuthTab,
+    onTabSelected: (AuthTab) -> Unit,
+    context:       Context
+) {
+    val passwordDb = remember { PasswordDatabase.getDatabase(context) }
+    val twoFaDb    = remember { TwoFADatabase.getDatabase(context) }
+
+    Scaffold(
+        containerColor = Color.Transparent,
+        bottomBar = {
+            NavigationBar(
+                containerColor = Color(0xFF17171C),
+                tonalElevation = 0.dp
+            ) {
+                AuthTab.entries.forEach { tab ->
+                    NavigationBarItem(
+                        selected = selectedTab == tab,
+                        onClick  = { onTabSelected(tab) },
+                        icon     = {
+                            Text(tab.icon, style = MaterialTheme.typography.titleMedium)
+                        },
+                        label    = {
+                            Text(
+                                tab.label,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        },
+                        colors   = NavigationBarItemDefaults.colors(
+                            selectedIconColor   = Color.White,
+                            selectedTextColor   = Color.White,
+                            indicatorColor      = Color(0xFF4A90E2),
+                            unselectedIconColor = Color(0xFF6B6B80),
+                            unselectedTextColor = Color(0xFF6B6B80)
+                        )
+                    )
+                }
+            }
+        }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            AnimatedVisibility(
+                visible = selectedTab == AuthTab.PASSWORDS,
+                enter   = fadeIn(),
+                exit    = fadeOut()
+            ) {
+                PasswordManagerScreen(db = passwordDb)
+            }
+
+            AnimatedVisibility(
+                visible = selectedTab == AuthTab.TWOFACTOR,
+                enter   = fadeIn(),
+                exit    = fadeOut()
+            ) {
+                TwoFAAppContent(db = twoFaDb)
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2FA content – wraps the existing authenticator app
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun TwoFAAppContent(db: TwoFADatabase) {
+    val navController = androidx.navigation.compose.rememberNavController()
+    androidx.navigation.compose.NavHost(navController, startDestination = "list") {
+        androidx.navigation.compose.composable("list") {
+            TwoFAListScreen(
+                db            = db,
+                onOpenSettings = { navController.navigate("settings") }
+            )
+        }
+        androidx.navigation.compose.composable("settings") {
+            SettingsScreenWithScreenshotProtection(
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lock screen
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun LockScreen(onRetry: () -> Unit) {
     Box(
-        modifier = Modifier
+        modifier          = Modifier
             .fillMaxSize()
             .background(Color.Transparent),
-        contentAlignment = Alignment.Center
+        contentAlignment  = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(32.dp)
+            modifier            = Modifier.padding(32.dp)
         ) {
             Icon(
-                imageVector = Icons.Default.Lock,
+                imageVector  = Icons.Default.Lock,
                 contentDescription = "Gesperrt",
-                modifier = Modifier.size(80.dp),
-                tint = MaterialTheme.colorScheme.primary
+                modifier     = Modifier.size(80.dp),
+                tint         = MaterialTheme.colorScheme.primary
             )
-            Spacer(modifier = Modifier.height(24.dp))
-            Text(
-                text = "App gesperrt",
-                style = MaterialTheme.typography.headlineMedium,
-                color = Color.White
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Authentifizierung erforderlich",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-            Button(onClick = onRetry) {
-                Text("Authentifizieren")
-            }
+            Spacer(Modifier.height(24.dp))
+            Text("App gesperrt", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+            Spacer(Modifier.height(8.dp))
+            Text("Biometrische Authentifizierung erforderlich",
+                style = MaterialTheme.typography.bodyMedium, color = Color.White)
+            Spacer(Modifier.height(24.dp))
+            Button(onClick = onRetry) { Text("Entsperren") }
         }
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Error screen
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
-private fun ErrorScreen(
-    message: String,
-    onRetry: () -> Unit,
-    onUnlock: () -> Unit
-) {
+private fun ErrorScreen(message: String, onRetry: () -> Unit, onUnlock: () -> Unit) {
     Box(
-        modifier = Modifier
+        modifier         = Modifier
             .fillMaxSize()
             .background(Color.Black),
         contentAlignment = Alignment.Center
@@ -244,136 +307,99 @@ private fun ErrorScreen(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(32.dp)
+            modifier            = Modifier.padding(32.dp)
         ) {
             Icon(
-                imageVector = Icons.Default.Lock,
+                imageVector  = Icons.Default.Lock,
                 contentDescription = "Fehler",
-                modifier = Modifier.size(80.dp),
-                tint = MaterialTheme.colorScheme.error
+                modifier     = Modifier.size(80.dp),
+                tint         = MaterialTheme.colorScheme.error
             )
-            Spacer(modifier = Modifier.height(24.dp))
-            Text(
-                text = "Authentifizierungsfehler",
-                style = MaterialTheme.typography.headlineMedium,
-                color = Color.White
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-            Button(onClick = onRetry) {
-                Text("Erneut versuchen")
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            TextButton(onClick = onUnlock) {
-                Text("Ohne Authentifizierung fortfahren")
-            }
+            Spacer(Modifier.height(24.dp))
+            Text("Authentifizierungsfehler", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+            Spacer(Modifier.height(16.dp))
+            Text(message, style = MaterialTheme.typography.bodyMedium, color = Color.White, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(24.dp))
+            Button(onClick = onRetry) { Text("Erneut versuchen") }
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = onUnlock) { Text("Ohne Authentifizierung fortfahren") }
         }
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Biometric prompt (unchanged from original)
+// ─────────────────────────────────────────────────────────────────────────────
+
 private fun showBiometricPrompt(
-    activity: FragmentActivity,
+    activity:  FragmentActivity,
     onSuccess: () -> Unit,
-    onError: (error: String, isCritical: Boolean) -> Unit
+    onError:   (error: String, isCritical: Boolean) -> Unit
 ) {
     if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-        onError("Activity nicht bereit", true)
-        return
+        onError("Activity nicht bereit", true); return
     }
 
-    val biometricManager = BiometricManager.from(activity)
-    val canAuth = biometricManager.canAuthenticate(
-        Authenticators.BIOMETRIC_STRONG or Authenticators.DEVICE_CREDENTIAL
-    )
+    val bm      = BiometricManager.from(activity)
+    val canAuth = bm.canAuthenticate(Authenticators.BIOMETRIC_STRONG or Authenticators.DEVICE_CREDENTIAL)
 
     when (canAuth) {
-        BiometricManager.BIOMETRIC_SUCCESS -> {
-        }
-
+        BiometricManager.BIOMETRIC_SUCCESS -> { /* proceed */ }
         BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
-            onError(
-                "Keine Authentifizierung eingerichtet. Bitte richte einen Fingerabdruck oder PIN ein.",
-                true
-            )
-            return
+            onError("Keine Authentifizierung eingerichtet. Bitte richte einen Fingerabdruck oder PIN ein.", true); return
         }
-
         BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> {
-            onError("Biometrische Hardware nicht verfügbar", true)
-            return
+            onError("Biometrische Hardware nicht verfügbar", true); return
         }
-
         BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> {
-            onError("Hardware temporär nicht verfügbar", true)
-            return
+            onError("Hardware temporär nicht verfügbar", true); return
         }
-
         else -> {
-            onError("Authentifizierung nicht verfügbar", true)
-            return
+            onError("Authentifizierung nicht verfügbar", true); return
         }
     }
 
     val executor = ContextCompat.getMainExecutor(activity)
 
-    val biometricPrompt = BiometricPrompt(
-        activity,
-        executor,
+    val prompt = BiometricPrompt(
+        activity, executor,
         object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 super.onAuthenticationSucceeded(result)
                 onSuccess()
             }
-
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                 super.onAuthenticationError(errorCode, errString)
                 when (errorCode) {
                     BiometricPrompt.ERROR_NO_BIOMETRICS,
                     BiometricPrompt.ERROR_HW_UNAVAILABLE,
                     BiometricPrompt.ERROR_HW_NOT_PRESENT,
-                    BiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL -> {
+                    BiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL ->
                         onError("Biometrische Authentifizierung nicht verfügbar", true)
-                    }
-
                     BiometricPrompt.ERROR_USER_CANCELED,
                     BiometricPrompt.ERROR_NEGATIVE_BUTTON,
-                    BiometricPrompt.ERROR_CANCELED -> {
+                    BiometricPrompt.ERROR_CANCELED ->
                         onError("Authentifizierung abgebrochen", false)
-                    }
-
                     BiometricPrompt.ERROR_LOCKOUT,
-                    BiometricPrompt.ERROR_LOCKOUT_PERMANENT -> {
+                    BiometricPrompt.ERROR_LOCKOUT_PERMANENT ->
                         onError("Zu viele Fehlversuche. Bitte warte einen Moment.", true)
-                    }
-
-                    BiometricPrompt.ERROR_TIMEOUT -> {
+                    BiometricPrompt.ERROR_TIMEOUT ->
                         onError("Zeitüberschreitung", false)
-                    }
-
-                    else -> {
+                    else ->
                         onError("Fehler: $errString", false)
-                    }
                 }
             }
         }
     )
 
     val promptInfo = BiometricPrompt.PromptInfo.Builder()
-        .setTitle("App-Sperre")
-        .setSubtitle("Authentifizieren, um den Tab zu öffnen")
-        .setAllowedAuthenticators(
-            Authenticators.BIOMETRIC_STRONG or Authenticators.DEVICE_CREDENTIAL
-        )
+        .setTitle("Cloud Passwort-Manager")
+        .setSubtitle("Authentifizieren um fortzufahren")
+        .setAllowedAuthenticators(Authenticators.BIOMETRIC_STRONG or Authenticators.DEVICE_CREDENTIAL)
         .build()
 
     try {
-        biometricPrompt.authenticate(promptInfo)
+        prompt.authenticate(promptInfo)
     } catch (e: Exception) {
         onError("Fehler beim Starten der Authentifizierung: ${e.message}", true)
     }
