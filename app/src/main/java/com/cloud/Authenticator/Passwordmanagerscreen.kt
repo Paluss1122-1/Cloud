@@ -641,6 +641,7 @@ private fun DetailField(label: String, value: String, onCopy: () -> Unit) {
 // Add / Edit dialog
 // ─────────────────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEditPasswordDialog(
     initial:   PasswordEntry?,
