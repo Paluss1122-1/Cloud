@@ -49,7 +49,6 @@ fun FullscreenImageDialog(
                 .systemBarsPadding()
                 .background(Color.Black)
         ) {
-            // Bild mit Zoom und Pan
             Image(
                 painter = rememberAsyncImagePainter(imageUrl),
                 contentDescription = fileName,
@@ -77,7 +76,6 @@ fun FullscreenImageDialog(
                     }
             )
 
-            // Schließen Button oben links
             IconButton(
                 onClick = onDismiss,
                 modifier = Modifier
@@ -93,9 +91,7 @@ fun FullscreenImageDialog(
                 )
             }
 
-            // Download oder Gallerie Button oben rechts
             if (!isDownloaded) {
-                // Download Button wenn noch nicht heruntergeladen
                 FloatingActionButton(
                     onClick = onDownload,
                     modifier = Modifier
@@ -110,24 +106,22 @@ fun FullscreenImageDialog(
                     )
                 }
             } else {
-                // Gallerie Button wenn bereits heruntergeladen
                 FloatingActionButton(
                     onClick = onOpenInGallery,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(16.dp),
-                    containerColor = Color.Black // Background of FAB
+                    containerColor = Color.Black
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                         contentDescription = "In Galerie öffnen",
                         tint = Color.White,
-                        modifier = Modifier.size(24.dp) // 24dp is standard; 30dp may be too large
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
 
-            // Dateiname unten
             Text(
                 text = fileName,
                 color = Color.White,

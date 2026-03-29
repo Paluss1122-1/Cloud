@@ -136,7 +136,6 @@ class ShareActivity : ComponentActivity() {
             socket.connect(java.net.InetSocketAddress(laptopIp, Config.IMAGE_SHARE_PORT), 3000)
             val out = socket.getOutputStream()
 
-            // Header: "fileName|mimeType\n" dann raw bytes
             val header = "$fileName|$mimeType\n".toByteArray(Charsets.UTF_8)
             out.write(header)
             out.write(bytes)
@@ -162,8 +161,6 @@ class ShareActivity : ComponentActivity() {
     }
 
     private fun getPrivateStorageDirectory(): File {
-        // filesDir ist der private App-Speicher, nicht für andere Apps zugänglich
-        // Alternative: getExternalFilesDir(null) für privaten externen Speicher
         val privateDir = File(filesDir, "shared_files")
         if (!privateDir.exists()) {
             privateDir.mkdirs()
@@ -189,10 +186,8 @@ class ShareActivity : ComponentActivity() {
                     try {
                         val fileName = getFileNameFromUri(uri)
 
-                        // Sicherstellen, dass der Dateiname eindeutig ist
                         val targetFile = getUniqueFile(privateDir, fileName)
 
-                        // Datei einlesen und in privaten Speicher kopieren
                         val success = withContext(Dispatchers.IO) {
                             copyUriToFile(uri, targetFile)
                         }
@@ -233,7 +228,6 @@ class ShareActivity : ComponentActivity() {
         var file = File(directory, fileName)
         var counter = 1
 
-        // Wenn Datei bereits existiert, füge Nummer hinzu
         while (file.exists()) {
             val nameWithoutExt = fileName.substringBeforeLast(".")
             val extension =

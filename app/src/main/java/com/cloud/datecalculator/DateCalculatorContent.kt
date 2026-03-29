@@ -69,7 +69,6 @@ fun DateCalculatorContent(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Ergebnis anzeigen
         if (daysDifference != null) {
             Card(
                 modifier = Modifier
@@ -96,7 +95,6 @@ fun DateCalculatorContent(modifier: Modifier = Modifier) {
                         color = Color.White
                     )
 
-                    // Zusätzliche Informationen
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "${(daysDifference!! / 7)} Wochen und ${(daysDifference!! % 7)} Tage",
@@ -109,7 +107,6 @@ fun DateCalculatorContent(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Reset Button
         Button(
             onClick = {
                 startDate = null

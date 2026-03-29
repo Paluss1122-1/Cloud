@@ -98,7 +98,6 @@ fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?, contex
                 imageName
             }
 
-            // Bild als ByteArray laden
             val inputStream = context.contentResolver.openInputStream(imageUri)
             val imageBytes = inputStream?.readBytes()
             inputStream?.close()
@@ -115,7 +114,6 @@ fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?, contex
                 return@launch
             }
 
-            // Dateiendung ermitteln
             val mimeType = context.contentResolver.getType(imageUri) ?: "image/jpeg"
             val extension = when (mimeType) {
                 "image/jpeg" -> "jpg"
@@ -258,8 +256,8 @@ fun loadGalleryImages(number: Int, context: Context) {
 
             while (it.moveToNext()) {
                 val id = it.getLong(idColumn)
-                val dateModified = it.getLong(dateColumn) * 1000 // Sekunden → Millisekunden
-                val dateCreated = it.getLong(createdColumn) * 1000 // Sekunden → Millisekunden
+                val dateModified = it.getLong(dateColumn) * 1000
+                val dateCreated = it.getLong(createdColumn) * 1000
                 val displayName = it.getString(nameColumn)
 
                 val uri = Uri.withAppendedPath(
@@ -284,7 +282,6 @@ fun loadGalleryImages(number: Int, context: Context) {
             return
         }
 
-        // WICHTIG: Bild anzeigen nach dem Laden
         currentGalleryIndex = number
         showGalleryImage(number, context)
     } catch (e: Exception) {

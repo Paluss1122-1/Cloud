@@ -486,7 +486,6 @@ class MediaPlayerService : MediaSessionService() {
         startPositionSaving()
         registerBluetoothReceiver()
 
-        // Cache permission check result to avoid repeated checks
         canPostNotifications =
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
     }
@@ -785,18 +784,14 @@ class MediaPlayerService : MediaSessionService() {
         super.onDestroy()
         isRunning = false
 
-        // 1️⃣ ZUERST: Alle Handler Callbacks ENTFERNEN
-        // Das ist KRITISCH - muss VOR isServiceDestroyed = true sein!
         try {
             positionSaveRunnable?.let { handler.removeCallbacks(it) }
-            handler.removeCallbacksAndMessages(null)  // ← ALLE Handler Msgs löschen!
+            handler.removeCallbacksAndMessages(null)
         } catch (_: Exception) {
         }
 
-        // 2️⃣ Erst DANN: Flag setzen
         isServiceDestroyed = true
 
-        // 3️⃣ Receiver unregistrieren (mit Exception Handling)
         try {
             bluetoothReceiver?.let { unregisterReceiver(it) }
         } catch (_: Exception) {
@@ -811,7 +806,6 @@ class MediaPlayerService : MediaSessionService() {
             screenReceiver = null
         }
 
-        // 4️⃣ Player Resources freigeben
         try {
             val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
             nm?.cancel(MEDIA_PLAYER)
@@ -846,7 +840,6 @@ class MediaPlayerService : MediaSessionService() {
         } catch (_: Exception) {
         }
 
-        // 5️⃣ Player Release
         try {
             musicPlayer?.release()
         } catch (_: Exception) {
@@ -924,7 +917,6 @@ class MediaPlayerService : MediaSessionService() {
             }
             switchToPodcast()
         } else {
-            // Speichere Podcast-Session BEVOR wir wechseln
             if (isPlayingPodcast) {
                 savePodcastSession()
                 podcastPlayer?.pause()
@@ -1052,7 +1044,6 @@ class MediaPlayerService : MediaSessionService() {
         musicPlayer?.release()
         musicPlayer = null
 
-        // Try to load current song, with fallback to next songs if needed
         var nextIndex = index
         var attempts = 0
         val maxAttempts = active.size
@@ -1080,7 +1071,7 @@ class MediaPlayerService : MediaSessionService() {
                 saveMusicState()
                 updateNotification()
                 musicPrefs.editAsync { putBoolean("is_playing", true) }
-                return // Successfully loaded
+                return
             } catch (_: Exception) {
                 musicPlayer?.release()
                 musicPlayer = null
@@ -1089,7 +1080,6 @@ class MediaPlayerService : MediaSessionService() {
             }
         }
 
-        // All songs failed to load
         isPlayingMusic = false
         updateNotification()
     }
@@ -1186,15 +1176,12 @@ class MediaPlayerService : MediaSessionService() {
     private fun loadFavorites() {
         favoriteSongs.clear()
 
-        // Versuche zuerst, als String zu laden (neues Format)
         val raw = try {
             musicPrefs.getString(KEY_FAVORITES, null)
         } catch (_: ClassCastException) {
-            // Falls ein HashSet gespeichert ist (altes Format), migriere es
             try {
                 val oldSet = musicPrefs.getStringSet(KEY_FAVORITES, null)
                 if (oldSet != null) {
-                    // Konvertiere altes Format zu neuem Format
                     oldSet.forEach { entry ->
                         val parts = entry.split(":::")
                         if (parts.size == 2) {
@@ -1204,12 +1191,10 @@ class MediaPlayerService : MediaSessionService() {
                             favoriteSongs[parts[0]] = System.currentTimeMillis()
                         }
                     }
-                    // Speichere im neuen Format und lösche altes Format
                     saveFavorites()
                     return
                 }
             } catch (_: Exception) {
-                // Konnte nicht migriert werden, lösche den fehlerhaften Eintrag
                 musicPrefs.edit { remove(KEY_FAVORITES) }
             }
             null

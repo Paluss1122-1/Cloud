@@ -13,8 +13,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF1DB954), // Spotify Green
-    secondary = Color(0xFF191414), // Spotify Black
+    primary = Color(0xFF1DB954),
+    secondary = Color(0xFF191414),
     tertiary = Color(0xFFFFFFFF)
 )
 
@@ -27,7 +27,6 @@ private val LightColorScheme = lightColorScheme(
 @Composable
 fun NewSpotifyDownloaderTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {

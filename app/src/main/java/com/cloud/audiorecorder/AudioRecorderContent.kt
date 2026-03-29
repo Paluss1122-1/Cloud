@@ -105,20 +105,17 @@ fun AudioRecorderContent(
     var isRecording by remember { mutableStateOf(false) }
     var audioFiles by remember { mutableStateOf<List<File>>(emptyList()) }
 
-    // Player State
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
     var currentPosition by remember { mutableFloatStateOf(0f) }
     var duration by remember { mutableFloatStateOf(0f) }
 
-    // Sharing State
     var showShareDialog by remember { mutableStateOf(false) }
     var shareFile by remember { mutableStateOf<File?>(null) }
     var shareRange by remember { mutableStateOf(0f..0f) }
     var isProcessing by remember { mutableStateOf(false) }
 
-    // Hilfsfunktion zum Aktualisieren der Liste
     fun refreshFiles() {
         val dir = context.getExternalFilesDir(null)
         audioFiles = dir?.listFiles()
@@ -127,12 +124,10 @@ fun AudioRecorderContent(
             ?: emptyList()
     }
 
-    // Initiale Liste laden
     LaunchedEffect(Unit) {
         refreshFiles()
     }
 
-    // Player Update Loop
     LaunchedEffect(isPlaying) {
         while (isPlaying) {
             mediaPlayer?.let {
@@ -144,14 +139,12 @@ fun AudioRecorderContent(
         }
     }
 
-    // Cleanup beim Verlassen
     DisposableEffect(Unit) {
         onDispose {
             mediaPlayer?.release()
         }
     }
 
-    // UI
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -159,7 +152,6 @@ fun AudioRecorderContent(
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Titel
         Text(
             text = if (isRecording) "🎙️ Aufnahme läuft..." else "🎤 Audio Recorder",
             fontSize = 24.sp,
@@ -168,20 +160,16 @@ fun AudioRecorderContent(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Aufnahme Button
         Button(
             onClick = {
                 if (isRecording) {
-                    // STOP
                     stopAudioService(context)
                     isRecording = false
-                    // Kurz warten bis Datei geschrieben ist
                     scope.launch {
                         delay(500)
                         refreshFiles()
                     }
                 } else {
-                    // START
                     val file = createAudioFile(context)
                     startAudioService(context, file.absolutePath)
                     isRecording = true
@@ -199,7 +187,6 @@ fun AudioRecorderContent(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Player Bereich
         selectedFile?.let { file ->
             PlayerSection(
                 file = file,
@@ -287,7 +274,6 @@ fun AudioRecorderContent(
             )
         }
 
-        // Dateiliste
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = "📁 Aufnahmen (${audioFiles.size})",
@@ -305,7 +291,6 @@ fun AudioRecorderContent(
                     isSelected = selectedFile == file,
                     onClick = {
                         try {
-                            // Reset Player
                             mediaPlayer?.release()
                             mediaPlayer = null
                             isPlaying = false
@@ -322,7 +307,6 @@ fun AudioRecorderContent(
                     },
                     onShareDirect = {
                         try {
-                            // Quick Share Setup
                             val mp = MediaPlayer()
                             mp.setDataSource(file.absolutePath)
                             mp.prepare()
@@ -346,7 +330,6 @@ fun AudioRecorderContent(
         }
     }
 
-    // Share Dialog
     if (showShareDialog && shareFile != null) {
         ShareDialog(
             initialRange = shareRange,
@@ -383,7 +366,6 @@ fun AudioRecorderContent(
     }
 }
 
-// --- Composable Sub-Components ---
 
 @Composable
 fun PlayerSection(
@@ -542,7 +524,6 @@ fun ShareDialog(
     )
 }
 
-// --- Helpers & Service ---
 
 fun createAudioFile(context: Context): File {
     val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
@@ -596,7 +577,6 @@ fun shareAudioToWhatsApp(
         val outputFile = File(context.cacheDir, "share_${System.currentTimeMillis()}.m4a")
         trimAudioFile(sourceFile, outputFile, startMs, endMs)
 
-        // Log for debugging
         android.util.Log.d("AudioShare", "Output file: ${outputFile.absolutePath}")
         android.util.Log.d("AudioShare", "File exists: ${outputFile.exists()}")
         android.util.Log.d("AudioShare", "Authority: ${context.packageName}.provider")
@@ -608,7 +588,7 @@ fun shareAudioToWhatsApp(
         )
 
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "audio/mp4"  // Changed from audio/ogg since we're now using .m4a
+            type = "audio/mp4"
             putExtra(Intent.EXTRA_STREAM, uri)
             setPackage("com.whatsapp")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -624,7 +604,6 @@ fun shareAudioToWhatsApp(
                 e
             )
             android.util.Log.e("AudioShare", "WhatsApp not found", e)
-            // Fallback
             val chooser = Intent.createChooser(shareIntent.apply { setPackage(null) }, "Teilen")
             context.startActivity(chooser)
             onComplete()
@@ -754,14 +733,13 @@ class AudioForegroundService : Service() {
     private fun startRecording(path: String) {
         try {
             recorder = (MediaRecorder(this)).apply {
-                setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION) // Bessere Voice-Optimierung
+                setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
 
-                // ✅ Qualitäts-Einstellungen wie WhatsApp
-                setAudioEncodingBitRate(128000) // 128 kbps
-                setAudioSamplingRate(48000)      // 48 kHz
-                setAudioChannels(2)              // Mono (für Voice ausreichend)
+                setAudioEncodingBitRate(128000)
+                setAudioSamplingRate(48000)
+                setAudioChannels(2)
 
                 setOutputFile(path)
                 prepare()

@@ -162,7 +162,6 @@ class ChatService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    // ============ SharedPreferences Functions ============
 
     private fun loadSeenMessageIds() {
         val json = sharedPreferences.getString(KEY_SEEN_MESSAGES, "[]")
@@ -182,7 +181,6 @@ class ChatService : Service() {
         }
     }
 
-    // ============ Notification Channel ============
 
     private fun createNotificationChannel() {
         val serviceChannel = NotificationChannel(
@@ -213,7 +211,6 @@ class ChatService : Service() {
         notificationManager.createNotificationChannel(messageChannel)
     }
 
-    // ============ Service Notification ============
 
     fun createServiceNotification(): Notification {
         val replyRemoteInput = RemoteInput.Builder(KEY_REPLY_TEXT)
@@ -292,7 +289,6 @@ class ChatService : Service() {
         }
     }
 
-    // ============ Message History Notification ============
 
     private fun showHistoryNotification() {
         try {
@@ -346,7 +342,6 @@ class ChatService : Service() {
         }
     }
 
-    // ============ Message Realtime Listener ============
 
     private suspend fun setupRealtimeListener() {
         try {
@@ -367,7 +362,6 @@ class ChatService : Service() {
 
                     val channel = supabase.channel("chat:messages")
 
-                    // Setup INSERT listener
                     val insertFlow = channel
                         .postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
                             table = "messages"
@@ -399,11 +393,10 @@ class ChatService : Service() {
                         }
                     }.launchIn(serviceScope)
 
-                    // FIX 2: Subscribe with timeout
                     channel.subscribe(blockUntilSubscribed = true)
                     Log.i("ChatService", "✅ Realtime channel subscribed")
 
-                    true // Indicate success
+                    true
                 } catch (e: Exception) {
                     false
                 }
@@ -421,7 +414,6 @@ class ChatService : Service() {
         }
     }
 
-    // ============ New Message Notification ============
 
     private fun showMessageNotification(message: Message) {
         try {
@@ -478,7 +470,6 @@ class ChatService : Service() {
         }
     }
 
-    // ============ Send Message ============
 
     private suspend fun sendMessage(content: String) {
         try {
@@ -496,12 +487,10 @@ class ChatService : Service() {
         }
     }
 
-    // ============ Lifecycle ============
 
     override fun onDestroy() {
         super.onDestroy()
 
-        // FIX 3: Unregister receiver first, then cancel scope
         try {
             unregisterReceiver(replyReceiver)
             Log.d("ChatService", "Receiver unregistered")
@@ -509,7 +498,6 @@ class ChatService : Service() {
             Log.e("ChatService", "Error unregistering receiver", e)
         }
 
-        // FIX 4: Cancel scope immediately and forcefully
         serviceScope.cancel()
         Log.d("ChatService", "Service destroyed - scope cancelled")
     }

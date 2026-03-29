@@ -1,6 +1,5 @@
 package com.cloud.vocabtab
 
-// Speichern welche man richtig / falsch hat -> falsche nochmal extra lernbar machen
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -74,9 +73,6 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
-// ──────────────────────────────────────────────
-// Data
-// ──────────────────────────────────────────────
 
 data class Vokabel(val latein: String, val deutsch: String)
 data class VokabelSet(
@@ -996,10 +992,9 @@ fun LearnScreen(
                                 color = TextPrimary,
                                 modifier = Modifier.padding(horizontal = 24.dp)
                             )
-                            // ← gleiche Höhe wie Vorderseite durch Platzhalter
                             Spacer(Modifier.height(20.dp))
                             Text(
-                                " ", // unsichtbarer Platzhalter statt "Tippe zum Aufdecken"
+                                " ",
                                 fontSize = 12.sp
                             )
                         }
@@ -1058,7 +1053,6 @@ fun LearnScreen(
                                 .weight(1f)
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(MaterialTheme.colorScheme.primary)
-                                // Richtig-Button:
                                 .clickable {
                                     correct++
                                     correctVokabeln = correctVokabeln + shuffled[currentIndex]
@@ -1352,7 +1346,6 @@ suspend fun extractVokabelnFromBitmap(bitmap: Bitmap): List<Vokabel> {
 
     val w = bitmap.width.toFloat()
 
-    // 3-Spalten-Zonen: Latein <45%, Deutsch 45–82%, Wortfamilien >82% (ignorieren)
     val zoneLatinMax = (w * 0.45f).toInt()
     val zoneDeutschMin = (w * 0.44f).toInt()
     val zoneDeutschMax = (w * 0.82f).toInt()
@@ -1364,7 +1357,6 @@ suspend fun extractVokabelnFromBitmap(bitmap: Bitmap): List<Vokabel> {
             OcrLine(line.text.trim(), b.left, b.right, b.top, b.bottom)
         }
 
-    // Kopfzeilen / kurze Artefakte herausfiltern (z.B. "Lernwörter", Seitenzahlen)
     val headerKeywords = setOf("lernwörter", "lernwörter", "lernwort")
     fun OcrLine.isNoise() =
         text.length < 2 || headerKeywords.any { text.lowercase().contains(it) }

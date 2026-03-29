@@ -38,7 +38,6 @@ fun JsonEditorContent(
             .background(Color(0xFF2A2A2A))
             .padding(16.dp)
     ) {
-        // Header
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -58,7 +57,6 @@ fun JsonEditorContent(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Dateipfad
         Text(
             text = filePath,
             color = Color.Gray,
@@ -68,7 +66,6 @@ fun JsonEditorContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Aktionsbuttons
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
@@ -76,7 +73,6 @@ fun JsonEditorContent(
             Button(
                 onClick = {
                     if (isEditing) {
-                        // Validierung und Speichern
                         if (validateJson(editedContent)) {
                             saveJsonFile(context, filePath, fileUri, editedContent)
                             jsonContent = editedContent
@@ -113,7 +109,6 @@ fun JsonEditorContent(
 
             Button(
                 onClick = {
-                    // JSON formatieren
                     val formatted = formatJson(if (isEditing) editedContent else jsonContent)
                     if (isEditing) {
                         editedContent = formatted
@@ -131,7 +126,6 @@ fun JsonEditorContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // JSON Anzeige/Editor
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -177,7 +171,6 @@ fun JsonEditorContent(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Info-Zeile
         Text(
             text = if (isEditing) "⚠️ Im Bearbeitungsmodus" else "👁️ Anzeigemodus",
             color = if (isEditing) Color(0xFFFFA500) else Color.Gray,
@@ -187,16 +180,13 @@ fun JsonEditorContent(
     }
 }
 
-// JSON-Datei laden
 private fun loadJsonFile(context: Context, filePath: String, fileUri: Uri?): String {
     return try {
         if (fileUri != null && fileUri.scheme == "content") {
-            // Aus Content URI lesen
             context.contentResolver.openInputStream(fileUri)?.use { inputStream ->
                 inputStream.bufferedReader().use { it.readText() }
             } ?: throw Exception("Konnte Datei nicht öffnen")
         } else {
-            // Aus lokalem Pfad lesen
             File(filePath).readText()
         }
     } catch (e: Exception) {
@@ -204,16 +194,13 @@ private fun loadJsonFile(context: Context, filePath: String, fileUri: Uri?): Str
     }
 }
 
-// JSON-Datei speichern
 private fun saveJsonFile(context: Context, filePath: String, fileUri: Uri?, content: String) {
     try {
         if (fileUri != null && fileUri.scheme == "content") {
-            // In Content URI schreiben
             context.contentResolver.openOutputStream(fileUri)?.use { outputStream ->
                 outputStream.write(content.toByteArray())
             } ?: throw Exception("Konnte nicht in Datei schreiben")
         } else {
-            // In lokalen Pfad schreiben
             File(filePath).writeText(content)
         }
     } catch (e: Exception) {
@@ -221,15 +208,12 @@ private fun saveJsonFile(context: Context, filePath: String, fileUri: Uri?, cont
     }
 }
 
-// JSON validieren
 private fun validateJson(content: String): Boolean {
     return try {
-        // Versuche als JSONObject zu parsen
         JSONObject(content)
         true
     } catch (e1: Exception) {
         try {
-            // Versuche als JSONArray zu parsen
             JSONArray(content)
             true
         } catch (e2: Exception) {
@@ -238,19 +222,16 @@ private fun validateJson(content: String): Boolean {
     }
 }
 
-// JSON formatieren
 private fun formatJson(content: String): String {
     return try {
-        // Versuche als JSONObject
         val jsonObject = JSONObject(content)
-        jsonObject.toString(2) // 2 = Einrückung
+        jsonObject.toString(2)
     } catch (e1: Exception) {
         try {
-            // Versuche als JSONArray
             val jsonArray = JSONArray(content)
             jsonArray.toString(2)
         } catch (e2: Exception) {
-            content // Bei Fehler Original zurückgeben
+            content
         }
     }
 }

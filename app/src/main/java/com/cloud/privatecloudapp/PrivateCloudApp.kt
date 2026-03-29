@@ -465,7 +465,6 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
                     /*ShizukuManager.suspendApp("com.google.android.gms.supervision", true)
 
 
-                    // In einer Activity oder einem ViewModel:
                     getForegroundTimePerApp(context, days = 1).forEach { (pkg, ms) ->
                         val minutes = ms / 1000 / 60
                         if (minutes.toInt() != 0) {
@@ -474,12 +473,10 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
                     }*/
 
                     /*try {
-                        // Methode 1: Reflection über WifiManager (funktioniert mit Shizuku/Root)
                         val wifiManager = context.applicationContext.getSystemService(WIFI_SERVICE) as android.net.wifi.WifiManager
                         val method = wifiManager.javaClass.getDeclaredMethod(
                             "startLocalOnlyHotspot", /* kein Param nötig für force-enable */
                         )
-                        // Für echtes Einschalten ohne Shizuku-IPC nutzen wir setWifiApEnabled via Reflection:
                         val setHotspot = wifiManager.javaClass.getDeclaredMethod(
                             "setWifiApEnabled",
                             android.net.wifi.WifiConfiguration::class.java,
@@ -774,7 +771,6 @@ fun PrivateCloudApp(
                     .fillMaxSize()
                     .background(Cloud.copy(0.8f))
             ) {
-                // Hintergrundbild über alles inkl. TopAppBar
                 val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
                 val bgpicture = remember {
                     when (currentHour) {

@@ -21,9 +21,6 @@ class CloudAutofillService : AutofillService() {
         private const val TAG = "CLOUD_AUTOFILL"
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // onFillRequest – main entry point
-    // ─────────────────────────────────────────────────────────────────────────
 
     override fun onFillRequest(
         request:            FillRequest,
@@ -32,24 +29,21 @@ class CloudAutofillService : AutofillService() {
     ) {
         val structure = request.fillContexts.last().structure
 
-        // 1. Find login field IDs in the view hierarchy
         val loginFields = findLoginFields(structure)
         if (loginFields.usernameId == null && loginFields.passwordId == null) {
             callback.onSuccess(null)
             return
         }
 
-        // 2. Determine which app / domain is asking
         val domain = extractRequestDomain(structure)
         Log.d(TAG, "AutoFill request – domain: $domain  pkg: ${structure.activityComponent.packageName}")
 
-        // 3. Query the password database (blocking – autofill runs on a background thread)
         val db      = PasswordDatabase.getDatabase(applicationContext)
         val entries = runBlocking {
             val pkg = structure.activityComponent.packageName
             when {
                 domain.isNotEmpty() -> db.passwordDao().findByDomain(domain)
-                    .ifEmpty { db.passwordDao().getAll() }  // fallback to all if no domain match
+                    .ifEmpty { db.passwordDao().getAll() }
                 else -> db.passwordDao().search(pkg)
                     .ifEmpty { db.passwordDao().getAll() }
             }
@@ -67,7 +61,6 @@ class CloudAutofillService : AutofillService() {
         entries.take(5).forEachIndexed { index, entry ->
             val plainPassword = PasswordCrypto.decrypt(entry.encryptedPassword)
 
-            // RemoteViews presentation (dropdown / save dialog)
             val presentation = RemoteViews(packageName, android.R.layout.simple_list_item_2).apply {
                 setTextViewText(android.R.id.text1, "☁️ ${entry.name}")
                 setTextViewText(android.R.id.text2, entry.username.ifEmpty { "(kein Benutzername)" })
@@ -75,7 +68,6 @@ class CloudAutofillService : AutofillService() {
 
             val datasetBuilder = Dataset.Builder()
 
-            // Fill username field if found
             loginFields.usernameId?.let { id ->
                 datasetBuilder.setValue(
                     id,
@@ -84,7 +76,6 @@ class CloudAutofillService : AutofillService() {
                 )
             }
 
-            // Fill password field if found
             loginFields.passwordId?.let { id ->
                 datasetBuilder.setValue(
                     id,
@@ -93,7 +84,6 @@ class CloudAutofillService : AutofillService() {
                 )
             }
 
-            // Inline suggestion (keyboard IME strip)
             if (inlineRequest != null) {
                 createInlinePresentation(inlineRequest, index, entry)?.let {
                     datasetBuilder.setInlinePresentation(it)
@@ -106,17 +96,11 @@ class CloudAutofillService : AutofillService() {
         callback.onSuccess(responseBuilder.build())
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // onSaveRequest – not implemented (we use manual entry only)
-    // ─────────────────────────────────────────────────────────────────────────
 
     override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
         callback.onSuccess()
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Field detection
-    // ─────────────────────────────────────────────────────────────────────────
 
     data class LoginFields(
         val usernameId: AutofillId? = null,
@@ -134,7 +118,6 @@ class CloudAutofillService : AutofillService() {
             val idEntry   = node.idEntry?.lowercase() ?: ""
             val className = node.className?.lowercase() ?: ""
 
-            // --- Password detection (highest priority) ---
             val isPassword = (
                     hints?.any { h -> h.contains("password", true) || h == "current-password" || h == "new-password" } == true
                  || (inputType and android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -148,7 +131,6 @@ class CloudAutofillService : AutofillService() {
                 passwordId = node.autofillId
             }
 
-            // --- Username / email detection ---
             val isUsername = (
                     hints?.any { h ->
                         h.contains("username", true) || h.contains("email", true)
@@ -175,12 +157,8 @@ class CloudAutofillService : AutofillService() {
         return LoginFields(usernameId, passwordId)
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Domain extraction from AssistStructure
-    // ─────────────────────────────────────────────────────────────────────────
 
     private fun extractRequestDomain(structure: AssistStructure): String {
-        // 1. Walk nodes for webDomain
         fun searchWebDomain(node: AssistStructure.ViewNode): String? {
             node.webDomain?.takeIf { it.isNotBlank() }?.let { return it }
             for (i in 0 until node.childCount) {
@@ -192,14 +170,13 @@ class CloudAutofillService : AutofillService() {
         for (i in 0 until structure.windowNodeCount) {
             val domain = searchWebDomain(structure.getWindowNodeAt(i).rootViewNode)
             if (!domain.isNullOrBlank()) {
-                return extractDomain(domain)   // from PasswordManagerCore
+                return extractDomain(domain)
             }
         }
 
-        // 2. Fall back to window title (often contains URL in browsers)
         for (i in 0 until structure.windowNodeCount) {
             val title = structure.getWindowNodeAt(i).title?.toString() ?: ""
-            if (title.contains("://") || title.contains(".")) {
+            if (title.contains(":
                 return extractDomain(title)
             }
         }
@@ -207,9 +184,6 @@ class CloudAutofillService : AutofillService() {
         return ""
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Inline presentation (keyboard IME chip)
-    // ─────────────────────────────────────────────────────────────────────────
 
     private fun createInlinePresentation(
         inlineRequest: InlineSuggestionsRequest,

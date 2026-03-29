@@ -616,7 +616,7 @@ fun writePcmToWav(
 
         fos.write("fmt ".toByteArray())
         fos.write(intToLittleEndian(16))
-        fos.write(shortToLittleEndian(1)) // PCM
+        fos.write(shortToLittleEndian(1))
         fos.write(shortToLittleEndian(channels.toShort()))
         fos.write(intToLittleEndian(sampleRate))
         fos.write(intToLittleEndian(sampleRate * channels * bitsPerSample / 8))

@@ -11,8 +11,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import java.util.Calendar
 
-val hellgruen = Color(0xFF4C8000) // Dunklere Chartreuse / Olive
-val gruen = Color(0xFF228B22) // ForestGreen (Waldgrün)
+val hellgruen = Color(0xFF4C8000)
+val gruen = Color(0xFF228B22)
 
 private val DarkColorScheme = darkColorScheme(
     primary = Purple80,
@@ -39,7 +39,6 @@ private val LightColorScheme = lightColorScheme(
 @Composable
 fun CloudTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {

@@ -36,22 +36,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tab definitions
-// ─────────────────────────────────────────────────────────────────────────────
 
 private enum class AuthTab(val label: String, val icon: String) {
     PASSWORDS("Passwörter", "🔑"),
-    TWOFACTOR("2FA Codes",  "🛡️")
+    TWOFACTOR("2FA Codes", "🛡️")
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Root composable – handles biometric lock + tab navigation
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun AuthenticatorTab() {
-    val context       = LocalContext.current
+    val context = LocalContext.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     val activity = remember {
@@ -63,44 +57,51 @@ fun AuthenticatorTab() {
         null
     }
 
-    // ── Fatal: no FragmentActivity ───────────────────────────────────────────
     if (activity == null) {
         LaunchedEffect(Unit) {
-            ERRORINSERT(ERRORINSERTDATA(
-                "AuthenticatorTab", "❌ FragmentActivity fehlt", Instant.now().toString(), "ERROR"
-            ))
+            ERRORINSERT(
+                ERRORINSERTDATA(
+                    "AuthenticatorTab",
+                    "❌ FragmentActivity fehlt",
+                    Instant.now().toString(),
+                    "ERROR"
+                )
+            )
         }
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier            = Modifier.padding(32.dp)
+                modifier = Modifier.padding(32.dp)
             ) {
-                Icon(Icons.Default.Lock, null, Modifier.size(72.dp), tint = MaterialTheme.colorScheme.error)
+                Icon(
+                    Icons.Default.Lock,
+                    null,
+                    Modifier.size(72.dp),
+                    tint = MaterialTheme.colorScheme.error
+                )
                 Spacer(Modifier.height(16.dp))
                 Text(
                     "Fehler: MainActivity muss FragmentActivity erben",
-                    style     = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
-                    color     = Color.White
+                    color = Color.White
                 )
             }
         }
         return
     }
 
-    // ── State ────────────────────────────────────────────────────────────────
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
 
-    var isAuthenticated   by remember { mutableStateOf(false) }
-    var lockEnabled       by remember { mutableStateOf(prefs.getBoolean("lockEnabled", false)) }
-    var showError         by remember { mutableStateOf(false) }
-    var errorMessage      by remember { mutableStateOf("") }
-    var shouldShowPrompt  by remember { mutableStateOf(false) }
-    var selectedTab       by remember { mutableStateOf(AuthTab.PASSWORDS) }
+    var isAuthenticated by remember { mutableStateOf(false) }
+    var lockEnabled by remember { mutableStateOf(prefs.getBoolean("lockEnabled", false)) }
+    var showError by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
+    var shouldShowPrompt by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableStateOf(AuthTab.PASSWORDS) }
 
     val coroutineScope = rememberCoroutineScope()
 
-    // ── Re-lock on resume ────────────────────────────────────────────────────
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME && lockEnabled && !isAuthenticated && !shouldShowPrompt) {
@@ -111,27 +112,31 @@ fun AuthenticatorTab() {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // ── Trigger biometric prompt ─────────────────────────────────────────────
     LaunchedEffect(shouldShowPrompt) {
         if (shouldShowPrompt && lockEnabled && !isAuthenticated) {
             delay(100)
             showBiometricPrompt(
-                activity  = activity,
+                activity = activity,
                 onSuccess = {
-                    isAuthenticated  = true
-                    showError        = false
+                    isAuthenticated = true
+                    showError = false
                     shouldShowPrompt = false
                 },
-                onError   = { error, isCritical ->
+                onError = { error, isCritical ->
                     if (isCritical) {
-                        errorMessage     = error
-                        showError        = true
+                        errorMessage = error
+                        showError = true
                         shouldShowPrompt = false
-                        isAuthenticated  = false
+                        isAuthenticated = false
                         coroutineScope.launch {
-                            ERRORINSERT(ERRORINSERTDATA(
-                                "AuthenticatorTab", "❌ AUTH: $error", Instant.now().toString(), "ERROR"
-                            ))
+                            ERRORINSERT(
+                                ERRORINSERTDATA(
+                                    "AuthenticatorTab",
+                                    "❌ AUTH: $error",
+                                    Instant.now().toString(),
+                                    "ERROR"
+                                )
+                            )
                         }
                     } else {
                         shouldShowPrompt = false
@@ -141,28 +146,24 @@ fun AuthenticatorTab() {
         }
     }
 
-    // ── Routing ──────────────────────────────────────────────────────────────
     Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
         when {
-            // Unlocked or no lock required → show main app
             !lockEnabled || isAuthenticated -> {
                 AuthenticatedContent(
-                    selectedTab    = selectedTab,
-                    onTabSelected  = { selectedTab = it },
-                    context        = context
+                    selectedTab = selectedTab,
+                    onTabSelected = { selectedTab = it },
+                    context = context
                 )
             }
 
-            // Lock + biometric error
             !isAuthenticated && showError -> {
                 ErrorScreen(
-                    message  = errorMessage,
-                    onRetry  = { showError = false; shouldShowPrompt = true },
+                    message = errorMessage,
+                    onRetry = { showError = false; shouldShowPrompt = true },
                     onUnlock = { showError = false; shouldShowPrompt = true }
                 )
             }
 
-            // Lock screen (waiting for auth)
             else -> {
                 LockScreen(onRetry = { shouldShowPrompt = true })
             }
@@ -170,18 +171,15 @@ fun AuthenticatorTab() {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Authenticated content – tab navigation
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun AuthenticatedContent(
-    selectedTab:   AuthTab,
+    selectedTab: AuthTab,
     onTabSelected: (AuthTab) -> Unit,
-    context:       Context
+    context: Context
 ) {
     val passwordDb = remember { PasswordDatabase.getDatabase(context) }
-    val twoFaDb    = remember { TwoFADatabase.getDatabase(context) }
+    val twoFaDb = remember { TwoFADatabase.getDatabase(context) }
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -193,20 +191,20 @@ private fun AuthenticatedContent(
                 AuthTab.entries.forEach { tab ->
                     NavigationBarItem(
                         selected = selectedTab == tab,
-                        onClick  = { onTabSelected(tab) },
-                        icon     = {
+                        onClick = { onTabSelected(tab) },
+                        icon = {
                             Text(tab.icon, style = MaterialTheme.typography.titleMedium)
                         },
-                        label    = {
+                        label = {
                             Text(
                                 tab.label,
                                 style = MaterialTheme.typography.labelSmall
                             )
                         },
-                        colors   = NavigationBarItemDefaults.colors(
-                            selectedIconColor   = Color.White,
-                            selectedTextColor   = Color.White,
-                            indicatorColor      = Color(0xFF4A90E2),
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color.White,
+                            selectedTextColor = Color.White,
+                            indicatorColor = Color(0xFF4A90E2),
                             unselectedIconColor = Color(0xFF6B6B80),
                             unselectedTextColor = Color(0xFF6B6B80)
                         )
@@ -218,20 +216,19 @@ private fun AuthenticatedContent(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
         ) {
             AnimatedVisibility(
                 visible = selectedTab == AuthTab.PASSWORDS,
-                enter   = fadeIn(),
-                exit    = fadeOut()
+                enter = fadeIn(),
+                exit = fadeOut()
             ) {
                 PasswordManagerScreen(db = passwordDb)
             }
 
             AnimatedVisibility(
                 visible = selectedTab == AuthTab.TWOFACTOR,
-                enter   = fadeIn(),
-                exit    = fadeOut()
+                enter = fadeIn(),
+                exit = fadeOut()
             ) {
                 TwoFAAppContent(db = twoFaDb)
             }
@@ -239,9 +236,6 @@ private fun AuthenticatedContent(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 2FA content – wraps the existing authenticator app
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun TwoFAAppContent(db: TwoFADatabase) {
@@ -249,7 +243,7 @@ private fun TwoFAAppContent(db: TwoFADatabase) {
     NavHost(navController, startDestination = "list") {
         composable("list") {
             TwoFAListScreen(
-                db             = db,
+                db = db,
                 onOpenSettings = { navController.navigate("settings") }
             )
         }
@@ -261,48 +255,48 @@ private fun TwoFAAppContent(db: TwoFADatabase) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Lock screen
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun LockScreen(onRetry: () -> Unit) {
     Box(
-        modifier          = Modifier
+        modifier = Modifier
             .fillMaxSize()
             .background(Color.Transparent),
-        contentAlignment  = Alignment.Center
+        contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier            = Modifier.padding(32.dp)
+            modifier = Modifier.padding(32.dp)
         ) {
             Icon(
-                imageVector  = Icons.Default.Lock,
+                imageVector = Icons.Default.Lock,
                 contentDescription = "Gesperrt",
-                modifier     = Modifier.size(80.dp),
-                tint         = MaterialTheme.colorScheme.primary
+                modifier = Modifier.size(80.dp),
+                tint = MaterialTheme.colorScheme.primary
             )
             Spacer(Modifier.height(24.dp))
-            Text("App gesperrt", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+            Text(
+                "App gesperrt",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White
+            )
             Spacer(Modifier.height(8.dp))
-            Text("Biometrische Authentifizierung erforderlich",
-                style = MaterialTheme.typography.bodyMedium, color = Color.White)
+            Text(
+                "Biometrische Authentifizierung erforderlich",
+                style = MaterialTheme.typography.bodyMedium, color = Color.White
+            )
             Spacer(Modifier.height(24.dp))
             Button(onClick = onRetry) { Text("Entsperren") }
         }
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Error screen
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun ErrorScreen(message: String, onRetry: () -> Unit, onUnlock: () -> Unit) {
     Box(
-        modifier         = Modifier
+        modifier = Modifier
             .fillMaxSize()
             .background(Color.Black),
         contentAlignment = Alignment.Center
@@ -310,18 +304,27 @@ private fun ErrorScreen(message: String, onRetry: () -> Unit, onUnlock: () -> Un
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier            = Modifier.padding(32.dp)
+            modifier = Modifier.padding(32.dp)
         ) {
             Icon(
-                imageVector  = Icons.Default.Lock,
+                imageVector = Icons.Default.Lock,
                 contentDescription = "Fehler",
-                modifier     = Modifier.size(80.dp),
-                tint         = MaterialTheme.colorScheme.error
+                modifier = Modifier.size(80.dp),
+                tint = MaterialTheme.colorScheme.error
             )
             Spacer(Modifier.height(24.dp))
-            Text("Authentifizierungsfehler", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+            Text(
+                "Authentifizierungsfehler",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White
+            )
             Spacer(Modifier.height(16.dp))
-            Text(message, style = MaterialTheme.typography.bodyMedium, color = Color.White, textAlign = TextAlign.Center)
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+                textAlign = TextAlign.Center
+            )
             Spacer(Modifier.height(24.dp))
             Button(onClick = onRetry) { Text("Erneut versuchen") }
             Spacer(Modifier.height(8.dp))
@@ -330,33 +333,39 @@ private fun ErrorScreen(message: String, onRetry: () -> Unit, onUnlock: () -> Un
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Biometric prompt (unchanged from original)
-// ─────────────────────────────────────────────────────────────────────────────
 
 private fun showBiometricPrompt(
-    activity:  FragmentActivity,
+    activity: FragmentActivity,
     onSuccess: () -> Unit,
-    onError:   (error: String, isCritical: Boolean) -> Unit
+    onError: (error: String, isCritical: Boolean) -> Unit
 ) {
     if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
         onError("Activity nicht bereit", true); return
     }
 
-    val bm      = BiometricManager.from(activity)
-    val canAuth = bm.canAuthenticate(Authenticators.BIOMETRIC_STRONG or Authenticators.DEVICE_CREDENTIAL)
+    val bm = BiometricManager.from(activity)
+    val canAuth =
+        bm.canAuthenticate(Authenticators.BIOMETRIC_STRONG or Authenticators.DEVICE_CREDENTIAL)
 
     when (canAuth) {
-        BiometricManager.BIOMETRIC_SUCCESS -> { /* proceed */ }
-        BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
-            onError("Keine Authentifizierung eingerichtet. Bitte richte einen Fingerabdruck oder PIN ein.", true); return
+        BiometricManager.BIOMETRIC_SUCCESS -> { /* proceed */
         }
+
+        BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
+            onError(
+                "Keine Authentifizierung eingerichtet. Bitte richte einen Fingerabdruck oder PIN ein.",
+                true
+            ); return
+        }
+
         BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> {
             onError("Biometrische Hardware nicht verfügbar", true); return
         }
+
         BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> {
             onError("Hardware temporär nicht verfügbar", true); return
         }
+
         else -> {
             onError("Authentifizierung nicht verfügbar", true); return
         }
@@ -371,6 +380,7 @@ private fun showBiometricPrompt(
                 super.onAuthenticationSucceeded(result)
                 onSuccess()
             }
+
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                 super.onAuthenticationError(errorCode, errString)
                 when (errorCode) {
@@ -379,15 +389,19 @@ private fun showBiometricPrompt(
                     BiometricPrompt.ERROR_HW_NOT_PRESENT,
                     BiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL ->
                         onError("Biometrische Authentifizierung nicht verfügbar", true)
+
                     BiometricPrompt.ERROR_USER_CANCELED,
                     BiometricPrompt.ERROR_NEGATIVE_BUTTON,
                     BiometricPrompt.ERROR_CANCELED ->
                         onError("Authentifizierung abgebrochen", false)
+
                     BiometricPrompt.ERROR_LOCKOUT,
                     BiometricPrompt.ERROR_LOCKOUT_PERMANENT ->
                         onError("Zu viele Fehlversuche. Bitte warte einen Moment.", true)
+
                     BiometricPrompt.ERROR_TIMEOUT ->
                         onError("Zeitüberschreitung", false)
+
                     else ->
                         onError("Fehler: $errString", false)
                 }

@@ -504,7 +504,7 @@ fun EditNoteDialog(
                         focusedTextColor = titleColor,
                         unfocusedTextColor = titleColor,
                         focusedLabelColor = titleColor,
-                        unfocusedLabelColor = titleColor.copy(alpha = 0.6f) // leicht transparent im unfocused-Zustand, optional
+                        unfocusedLabelColor = titleColor.copy(alpha = 0.6f)
                     )
                 )
 
@@ -523,7 +523,7 @@ fun EditNoteDialog(
                                 focusedTextColor = titleColor,
                                 unfocusedTextColor = titleColor,
                                 focusedLabelColor = titleColor,
-                                unfocusedLabelColor = titleColor.copy(alpha = 0.6f) // leicht transparent im unfocused-Zustand, optional
+                                unfocusedLabelColor = titleColor.copy(alpha = 0.6f)
                             )
                         )
                     }

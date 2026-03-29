@@ -405,7 +405,7 @@ suspend fun deleteTwoFaEntryFromSupabase(entry: TwoFAEntry): Boolean {
         try {
             if (entry.supabaseId == null) {
                 Log.d("TwoFARepository", "entry.supabaseId == null"); return@withContext true
-            } // nichts zu löschen
+            }
             Log.d("TwoFARepository", "$entry")
             SupabaseConfigALT.client.postgrest
                 .from("two_fa_entries")

@@ -24,7 +24,6 @@ import okhttp3.FormBody
 import java.io.FileOutputStream
 import java.net.URLDecoder
 
-// ─── Data ────────────────────────────────────────────────────────────────────
 
 data class Track(
     val id: String,
@@ -161,7 +160,6 @@ fun getYouTubeAudioUrl(videoId: String): String? {
 }
 
 fun decodeCipher(cipher: String): String? {
-    // Einfaches URL-Decode für signatureCipher
     if (cipher.isBlank()) return null
     val params = cipher.split("&").associate {
         val (k, v) = it.split("=", limit = 2)
@@ -185,7 +183,6 @@ fun downloadAndTag(track: Track, outputDir: File, onStatus: (DownloadStatus, Str
         return
     }
 
-    // Stream direkt als .m4a speichern (kein ffmpeg nötig)
     val outFile = File(outputDir, "${track.artist} - ${track.title}.m4a")
     try {
         val req = Request.Builder().url(audioUrl)
@@ -201,11 +198,10 @@ fun downloadAndTag(track: Track, outputDir: File, onStatus: (DownloadStatus, Str
     onStatus(DownloadStatus.DONE, "✅ Fertig (${outFile.name})")
 }
 
-// ─── Zentrale Auslösefunktion ─────────────────────────────────────────────────
 
 suspend fun startDownload(
     spotifyUrl: String,
-    selectedIndices: Set<Int>,          // leeres Set = alle
+    selectedIndices: Set<Int>,
     onTracksLoaded: (List<Track>) -> Unit,
     onTrackStatus: (Int, DownloadStatus, String) -> Unit
 ) = withContext(Dispatchers.IO) {
@@ -252,7 +248,6 @@ fun SpotifyDownloaderApp() {
             )
             Spacer(Modifier.height(8.dp))
 
-            // Alle auswählen / abwählen
             if (trackStates.isNotEmpty()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val allSelected = trackStates.all { it.selected }

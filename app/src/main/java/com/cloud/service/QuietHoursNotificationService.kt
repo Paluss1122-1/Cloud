@@ -144,7 +144,6 @@ class QuietHoursNotificationService : Service() {
                     )
                 )
             } catch (_: Exception) {
-                // Nothing: Fehlerreporting darf selbst keinen Crash auslösen.
             }
         }
     }
@@ -251,7 +250,6 @@ class QuietHoursNotificationService : Service() {
                 scheduleNextCheck(context)
             } catch (e: Exception) {
                 Log.e("QuietHoursService", "checkRunnable failed", e)
-                // Nachts ohne Logcat: zumindest via Error-Backend melden.
                 CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
                     try {
                         ERRORINSERT(
@@ -412,8 +410,7 @@ class QuietHoursNotificationService : Service() {
                 } catch (e: Exception) {
                     reportServiceError("schedulePeriodicCleanup", e)
                 } finally {
-                    // Egal ob Crash-Fall: nächstes Cleanup wieder planen.
-                    workerHandler.postDelayed(this, 6 * 60 * 60 * 1000) // 6h
+                    workerHandler.postDelayed(this, 6 * 60 * 60 * 1000)
                 }
             }
         }, 6 * 60 * 60 * 1000)
@@ -817,7 +814,6 @@ class QuietHoursNotificationService : Service() {
             }
         }
 
-        // MediaPlayer
         voiceNotePlayer?.apply {
             try {
                 if (isPlaying) stop()
@@ -829,7 +825,6 @@ class QuietHoursNotificationService : Service() {
         }
         voiceNotePlayer = null
 
-        // AudioRecorder
         try {
             audioRecorder?.stopRecording()
         } catch (e: Exception) {
@@ -837,13 +832,11 @@ class QuietHoursNotificationService : Service() {
         }
         audioRecorder = null
 
-        // Collections leeren
         readMessageIds.clear()
         voiceNoteFiles = emptyList()
         galleryImages = emptyList()
         commandHistory.clear()
 
-        // Receivers
         try {
             unregisterReceiver(messageSentReceiver)
             unregisterReceiver(notificationDismissReceiver)
@@ -854,7 +847,6 @@ class QuietHoursNotificationService : Service() {
             Log.e("QuietHoursService", "Error unregistering receivers", e)
         }
 
-        // SharedPreferences Listener
         try {
             sharedPreferences.unregisterOnSharedPreferenceChangeListener(prefChangeListener)
         } catch (e: Exception) {
@@ -941,7 +933,7 @@ class QuietHoursNotificationService : Service() {
     }
 
     private fun cleanupReadMessages() {
-        val cutoffTime = System.currentTimeMillis() - (24 * 60 * 60 * 1000) // 24h
+        val cutoffTime = System.currentTimeMillis() - (24 * 60 * 60 * 1000)
 
         readMessageIds.removeAll { messageId ->
             val timestamp = messageId.substringAfterLast("_").toLongOrNull() ?: 0

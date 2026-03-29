@@ -200,7 +200,6 @@ private fun postChatNotification(key: String, context: Context, sourceLabel: Str
     }
 }
 
-// Neue eingehende Nachricht – nur diese eine Notification aktualisieren
 fun updateSingleSenderNotification(sender: String, context: Context) {
     val key = resolveKey(sender) ?: run {
         Log.w("Messages", "No key for sender: $sender")
@@ -213,12 +212,10 @@ fun updateSingleSenderNotification(sender: String, context: Context) {
     postChatNotification(key, context, "📨 Neu")
 }
 
-// Eigene Antwort abgeschickt – Spinner-Fix: sofort notify() mit gleichem notifId
 fun updateChatNotification(key: String, context: Context) {
     postChatNotification(key, context, "💬 Chat")
 }
 
-// Alle ungelesenen anzeigen (manueller Aufruf)
 fun showUnreadMessages(context: Context) {
     val msgs = WhatsAppNotificationListener.messagesByContact
     if (msgs.isEmpty()) {
@@ -230,7 +227,6 @@ fun showUnreadMessages(context: Context) {
         )
         return
     }
-// Nur je eine Notification pro Kontakt – kein Massenupdate aller
     msgs.keys.forEach { key -> postChatNotification(key, context, "📋 Ungelesen") }
 }
 
@@ -330,7 +326,6 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
             )
         }
 
-// Sofort Notification updaten → beendet den Spinner
         updateChatNotification(key, context)
 
         if (list.size > MAX_MESSAGES_PER_CONTACT)

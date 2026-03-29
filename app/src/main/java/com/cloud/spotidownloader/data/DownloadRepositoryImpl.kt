@@ -136,9 +136,9 @@ class DownloadRepositoryImpl @Inject constructor(
 
                         if (!id3Skipped) {
                             if (id3SkipBytes == 0 && read >= 10 &&
-                                buffer[0] == 0x49.toByte() && // 'I'
-                                buffer[1] == 0x44.toByte() && // 'D'
-                                buffer[2] == 0x33.toByte()    // '3'
+                                buffer[0] == 0x49.toByte() &&
+                                buffer[1] == 0x44.toByte() &&
+                                buffer[2] == 0x33.toByte()
                             ) {
                                 val tagSize = ((buffer[6].toInt() and 0x7F) shl 21) or
                                         ((buffer[7].toInt() and 0x7F) shl 14) or
