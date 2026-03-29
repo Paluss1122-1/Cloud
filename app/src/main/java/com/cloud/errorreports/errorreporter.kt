@@ -72,9 +72,11 @@ class ErrorNotificationManager(private val context: Context) {
                 "ℹ️"
             }
 
+            val uri = if (errorReport.service_name == "SB -> Cloud") "https://dashboard.gitguardian.com" else "https://supabase.com/dashboard/project/oulgglfvobyjmfongnil/editor/94945?schema=public"
+
             val intent = Intent(
                 Intent.ACTION_VIEW,
-                "https://supabase.com/dashboard/project/oulgglfvobyjmfongnil/editor/94945?schema=public".toUri()
+                uri.toUri()
             )
 
             val pendingIntent = PendingIntent.getActivity(
