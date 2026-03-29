@@ -28,14 +28,13 @@ fun showSensorsInfo(context: Context) {
     val info = StringBuilder()
     info.append("📱 **Gefundene Sensoren**: ${sensorList.size}\n\n")
 
-    // Gruppiert nach Typ für bessere Lesbarkeit
     sensorList.forEachIndexed { index, sensor ->
         val typeStr = getSensorTypeString(sensor.type)
         val vendor = sensor.vendor.ifEmpty { "N/A" }
         val version = sensor.version
         val resolution = sensor.resolution
         val maxRange = sensor.maximumRange
-        val power = sensor.power // mA
+        val power = sensor.power
         val minDelay =
             if (sensor.minDelay > 0) "${sensor.minDelay / 1000} ms" else "kein Livestream"
 
@@ -54,7 +53,6 @@ fun showSensorsInfo(context: Context) {
     showSensorNotification(context, info.toString())
 }
 
-// Hilfsfunktion: Typ in lesbaren String umwandeln
 private fun getSensorTypeString(type: Int): String {
     return when (type) {
         Sensor.TYPE_ACCELEROMETER -> "Beschleunigungssensor"
@@ -88,7 +86,6 @@ private fun getSensorTypeString(type: Int): String {
     }
 }
 
-// Einheitliche Benachrichtigung
 private fun showSensorNotification(context: Context, content: String) {
     val channelId = "sensors_info_channel"
     val notificationId = 1040
@@ -117,7 +114,6 @@ private fun showSensorNotification(context: Context, content: String) {
     ) {
         NotificationManagerCompat.from(context).notify(cms(), builder.build())
     } else {
-        // Fallback: Anzahl + erstes Beispiel
         val lines = content.lines()
         val preview = lines.take(4).joinToString("\n")
         Toast.makeText(context, "Sensoren:\n$preview", Toast.LENGTH_LONG).show()

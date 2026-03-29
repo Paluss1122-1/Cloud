@@ -49,7 +49,7 @@ fun MovieDiscoveryTabContent(
 
     var movies by remember { mutableStateOf<List<Movie>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
-    var selectedGenre by remember { mutableStateOf<Int?>(null) } // null = Alle Genres
+    var selectedGenre by remember { mutableStateOf<Int?>(null) }
     var savedMovieIds by remember { mutableStateOf(loadSavedMovies(context)) }
     var selectedMovie by remember { mutableStateOf<Movie?>(null) }
     var showSavedOnly by remember { mutableStateOf(false) }
@@ -90,7 +90,6 @@ fun MovieDiscoveryTabContent(
             .background(Color.Transparent)
             .padding(16.dp)
     ) {
-        // Genre Auswahl
         Text(
             "Genre wählen",
             color = Color.White,
@@ -125,7 +124,6 @@ fun MovieDiscoveryTabContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Buttons
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -151,7 +149,6 @@ fun MovieDiscoveryTabContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Film Liste
         if (isLoading) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -203,7 +200,6 @@ fun MovieDiscoveryTabContent(
         }
     }
 
-    // Detail Dialog
     selectedMovie?.let { movie ->
         MovieDetailDialog(
             movie = movie,
@@ -238,7 +234,6 @@ fun MovieCard(
         onClick = onClick
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
-            // Poster
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data("https://image.tmdb.org/t/p/w200${movie.posterPath}")
@@ -252,7 +247,6 @@ fun MovieCard(
                 contentScale = ContentScale.Crop
             )
 
-            // Info
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -375,7 +369,6 @@ fun MovieDetailDialog(
         },
         text = {
             Column {
-                // Poster
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data("https://image.tmdb.org/t/p/w500${movie.posterPath}")
@@ -391,7 +384,6 @@ fun MovieDetailDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Rating und Datum
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -411,7 +403,6 @@ fun MovieDetailDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Beschreibung
                 Text(
                     text = "Beschreibung:",
                     color = Color.White,

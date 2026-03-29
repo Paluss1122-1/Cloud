@@ -46,7 +46,6 @@ class MainActivity : FragmentActivity() {
     private lateinit var policyManager: PolicyManager
     val supabase: SupabaseClient = SupabaseConfigALT.client
 
-    // JSON Editor State
     private var jsonFilePath by mutableStateOf<String?>(null)
     private var jsonFileUri by mutableStateOf<Uri?>(null)
     private var showJsonEditor by mutableStateOf(false)
@@ -99,11 +98,9 @@ class MainActivity : FragmentActivity() {
 
         policyManager = PolicyManager(this)
 
-        // ✅ Systemleisten transparent machen
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.isNavigationBarContrastEnforced = false
 
-        // Admin-Rechte prüfen und ggf. anfordern
         policyManager.checkAndRequestAdminRights()
         BatteryDataRepository.init(this)
 
@@ -127,12 +124,10 @@ class MainActivity : FragmentActivity() {
             )
         )
 
-        // JSON Intent prüfen
         checkPermissionsAndHandleIntent(intent)
 
         val startTarget = intent.getStringExtra("target")
 
-        // Content setzen
         setContent {
             MaterialTheme(
                 colorScheme = MaterialTheme.colorScheme.copy(
@@ -170,7 +165,6 @@ class MainActivity : FragmentActivity() {
             e.printStackTrace()
         }
 
-        // Permissions für Notifications prüfen (Android 13+)
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) {
@@ -186,16 +180,13 @@ class MainActivity : FragmentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
 
-        // Wichtig: Activity neu starten wenn im Hintergrund
         if (!showJsonEditor) {
             checkPermissionsAndHandleIntent(intent)
         } else {
-            // Wenn bereits ein JSON-Editor offen ist, erst schließen
             showJsonEditor = false
             jsonFilePath = null
             jsonFileUri = null
 
-            // Dann neuen Intent verarbeiten
             checkPermissionsAndHandleIntent(intent)
         }
     }
@@ -223,12 +214,10 @@ class MainActivity : FragmentActivity() {
         try {
             val filePath = when (uri.scheme) {
                 "file" -> {
-                    // Direkter Dateipfad
                     uri.path ?: throw Exception("Ungültiger Dateipfad")
                 }
 
                 "content" -> {
-                    // Content URI (z.B. von Dateimanager)
                     copyContentToTempFile(uri)
                 }
 
@@ -236,7 +225,7 @@ class MainActivity : FragmentActivity() {
             }
 
             jsonFilePath = filePath
-            jsonFileUri = uri  // URI speichern für späteres Speichern
+            jsonFileUri = uri
             showJsonEditor = true
 
         } catch (e: Exception) {
@@ -250,11 +239,9 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun copyContentToTempFile(uri: Uri): String {
-        // Content URI in temporäre Datei kopieren
         val inputStream = contentResolver.openInputStream(uri)
             ?: throw Exception("Datei konnte nicht geöffnet werden")
 
-        // Dateiname aus URI extrahieren (optional)
         val fileName = try {
             contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                 val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
@@ -265,7 +252,6 @@ class MainActivity : FragmentActivity() {
             "temp_${System.currentTimeMillis()}.json"
         }
 
-        // Temporäre Datei erstellen
         val tempFile = File(cacheDir, fileName)
         val outputStream = FileOutputStream(tempFile)
 

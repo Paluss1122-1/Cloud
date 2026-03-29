@@ -33,13 +33,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.seconds
 
-// Optional: Define this as a top-level function or inside the composable if preferred
 
 @OptIn(SupabaseExperimental::class)
 @Composable
 fun FileIcon(
     fileName: String,
-    storage: Storage, // ⬅️ Nimm Storage direkt
+    storage: Storage,
     modifier: Modifier = Modifier
 ) {
     val isImage = isImageFile(fileName)

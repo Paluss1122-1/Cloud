@@ -21,7 +21,6 @@ class AutoClickerService : Service() {
     private var clickJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    // Click Point Markers
     private val pointMarkers = mutableListOf<View>()
 
     companion object {
@@ -55,7 +54,6 @@ class AutoClickerService : Service() {
             setPadding(30, 30, 30, 30)
             setBackgroundColor(Color.parseColor("#EE1A1A1A"))
 
-            // Titel
             addView(TextView(this@AutoClickerService).apply {
                 text = "🎯 Auto Clicker"
                 textSize = 18f
@@ -64,7 +62,6 @@ class AutoClickerService : Service() {
                 setPadding(0, 0, 0, 20)
             })
 
-            // Status
             val statusText = TextView(this@AutoClickerService).apply {
                 text = "Status: Inaktiv"
                 textSize = 14f
@@ -74,7 +71,6 @@ class AutoClickerService : Service() {
             }
             addView(statusText)
 
-            // Punkte Anzahl
             val pointsText = TextView(this@AutoClickerService).apply {
                 text = "Punkte: ${clickPoints.size}"
                 textSize = 14f
@@ -84,7 +80,6 @@ class AutoClickerService : Service() {
             }
             addView(pointsText)
 
-            // Add Point Button
             addView(Button(this@AutoClickerService).apply {
                 text = "+ Punkt hinzufügen"
                 setBackgroundColor(Color.parseColor("#FF9800"))
@@ -94,7 +89,6 @@ class AutoClickerService : Service() {
                 }
             })
 
-            // Play Button
             addView(Button(this@AutoClickerService).apply {
                 text = "▶ Start"
                 setBackgroundColor(Color.parseColor("#4CAF50"))
@@ -106,7 +100,6 @@ class AutoClickerService : Service() {
                 }
             })
 
-            // Stop Button
             addView(Button(this@AutoClickerService).apply {
                 text = "■ Stop"
                 setBackgroundColor(Color.parseColor("#F44336"))
@@ -118,7 +111,6 @@ class AutoClickerService : Service() {
                 }
             })
 
-            // Clear All Button
             addView(Button(this@AutoClickerService).apply {
                 text = "🗑 Alle löschen"
                 setBackgroundColor(Color.parseColor("#666666"))
@@ -130,7 +122,6 @@ class AutoClickerService : Service() {
                 }
             })
 
-            // Close Button
             addView(Button(this@AutoClickerService).apply {
                 text = "✕ Schließen"
                 setBackgroundColor(Color.parseColor("#555555"))
@@ -204,7 +195,6 @@ class AutoClickerService : Service() {
                 updatePointMarkers()
                 windowManager?.removeView(dialogLayout)
 
-                // Update Punkte Text im Overlay
                 (overlayView as? LinearLayout)?.getChildAt(2)?.let {
                     (it as? TextView)?.text = "Punkte: ${clickPoints.size}"
                 }
@@ -237,11 +227,9 @@ class AutoClickerService : Service() {
     }
 
     private fun updatePointMarkers() {
-        // Entferne alte Marker
         pointMarkers.forEach { windowManager?.removeView(it) }
         pointMarkers.clear()
 
-        // Erstelle neue Marker für jeden Punkt
         clickPoints.forEachIndexed { index, point ->
             val marker = createMarker(point, index)
             pointMarkers.add(marker)
@@ -284,7 +272,6 @@ class AutoClickerService : Service() {
             y = point.y - markerSize / 2
         }
 
-        // Touch Listener für Drag & Drop + Löschen
         var initialX = 0
         var initialY = 0
         var initialTouchX = 0f
@@ -294,7 +281,6 @@ class AutoClickerService : Service() {
         markerView.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    // Marker fokussierbar machen
                     params.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                     windowManager?.updateViewLayout(markerView, params)
 
@@ -312,7 +298,6 @@ class AutoClickerService : Service() {
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    // Marker wieder unfokussierbar machen
                     params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                     windowManager?.updateViewLayout(markerView, params)
 
@@ -320,18 +305,15 @@ class AutoClickerService : Service() {
                     val moved = Math.abs(event.rawX - initialTouchX) > 10 ||
                             Math.abs(event.rawY - initialTouchY) > 10
 
-                    // Long Press = Löschen
                     if (touchDuration > 1000 && !moved) {
                         clickPoints.removeAt(index)
                         updatePointMarkers()
                         Toast.makeText(this, "Punkt gelöscht", Toast.LENGTH_SHORT).show()
 
-                        // Update Punkte Text
                         (overlayView as? LinearLayout)?.getChildAt(2)?.let {
                             (it as? TextView)?.text = "Punkte: ${clickPoints.size}"
                         }
                     } else if (moved) {
-                        // Position aktualisieren
                         val centerX = params.x + markerSize / 2
                         val centerY = params.y + markerSize / 2
                         clickPoints[index] = clickPoints[index].copy(x = centerX, y = centerY)

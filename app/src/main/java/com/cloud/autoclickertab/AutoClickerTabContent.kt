@@ -57,7 +57,6 @@ fun AutoClickerTabContent(
             modifier = Modifier.padding(bottom = 24.dp)
         )
 
-        // Status Anzeige
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -93,7 +92,6 @@ fun AutoClickerTabContent(
             }
         }
 
-        // Overlay Permission Button
         Button(
             onClick = {
                 if (!Settings.canDrawOverlays(context)) {
@@ -103,11 +101,9 @@ fun AutoClickerTabContent(
                     )
                     context.startActivity(intent)
                 } else if (!AutoClickAccessibilityService.isServiceEnabled()) {
-                    // Öffne Accessibility Settings
                     val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                     context.startActivity(intent)
                 } else {
-                    // Starte Service mit Click Points
                     val serviceIntent = Intent(context, AutoClickerService::class.java).apply {
                         putParcelableArrayListExtra("clickPoints", ArrayList(clickPoints))
                     }
@@ -136,7 +132,6 @@ fun AutoClickerTabContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Click Points Liste
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,

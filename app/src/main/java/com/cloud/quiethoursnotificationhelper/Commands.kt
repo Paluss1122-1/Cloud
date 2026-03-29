@@ -620,7 +620,6 @@ private fun getAvailableCommands(context: Context): List<Command> {
                                 input: I,
                                 options: androidx.core.app.ActivityOptionsCompat?
                             ) {
-                                // Overlay kann keine Activity starten → no-op
                             }
                         }
                     }
@@ -738,7 +737,6 @@ fun executeCommand(commandText: String, context: Context) {
         }
 
         "nvchat", "ai", "aichat", "nv" -> {
-            // Alles hinter dem ersten Leerzeichen als Chat-Namen verwenden (inkl. ggf. Spaces/Quotes)
             val name = if (parts.size > 1) {
                 commandText.substringAfter(" ", "").trim().ifEmpty { null }
             } else {

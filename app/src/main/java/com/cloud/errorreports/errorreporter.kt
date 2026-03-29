@@ -184,7 +184,7 @@ class ErrorMonitorService : Service() {
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     private fun startRealtimeListener() {
         if (isListenerActive) {
-            return // ✅ Verhindere doppeltes Starten
+            return
         }
         isListenerActive = true
         serviceScope.launch {
@@ -226,11 +226,11 @@ class ErrorMonitorService : Service() {
         try {
             val errorReport = ErrorReport(
                 service_name = errorData["service_name"]?.toString()
-                    ?: "Unknown",  // ✅ toString() statt as String
+                    ?: "Unknown",
                 error_message = errorData["error_message"]?.toString()
-                    ?: "Unknown",  // ✅ toString() statt as String
+                    ?: "Unknown",
                 created_at = errorData["created_at"]?.toString()
-                    ?: "Unknown",  // ✅ toString() statt as String
+                    ?: "Unknown",
                 severity = errorData["severity"]?.toString()?.removeSurrounding("\"") ?: "Unknown"
             )
 

@@ -64,7 +64,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
         private var instance: WhatsAppNotificationListener? = null
 
-        private val BLOCKED_SENDERS = setOf("N", "Nico", "E") // beliebig erweiterbar
+        private val BLOCKED_SENDERS = setOf("N", "Nico", "E")
         private const val PREFS_BLOCKED = "blocked_notifications_prefs"
 
         private fun keyFor(packageName: String, title: String): String {
@@ -185,7 +185,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
         if (handleBlockedSender(sbn, title, text)) return
 
-        // System-Nachrichten filtern
         if (title.contains("Backup", ignoreCase = true) ||
             title.contains("Du", ignoreCase = true) ||
             title.contains("WhatsApp", ignoreCase = true) ||
@@ -194,7 +193,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             return
         }
 
-        // Duplikate vermeiden
         val existingMessages = messagesByContact[keyFor(sbn.packageName, title)] ?: mutableListOf()
         val lastMessage = existingMessages.lastOrNull()
 
@@ -209,7 +207,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
         Log.d("MessageListener", "Received message from $title")
 
-        // Reply-Action extrahieren
         notification.actions?.forEach { action ->
             action.remoteInputs?.firstOrNull()?.let { systemRemoteInput ->
                 val remoteInput = RemoteInput.Builder(systemRemoteInput.resultKey)
@@ -235,7 +232,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             ChatMessage(text, isOwnMessage = false)
         )
 
-        // In Datenbank speichern
         CoroutineScope(Dispatchers.IO).launch {
             val exists = repository.getAll().any {
                 it.sender == title && it.text == text
@@ -320,7 +316,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             return false
         }
 
-        // Nur Mo-Fr zwischen 7 und 14 Uhr blocken
         val cal = java.util.Calendar.getInstance()
         val hour = cal.get(java.util.Calendar.HOUR_OF_DAY)
         val dow  = cal.get(java.util.Calendar.DAY_OF_WEEK)
@@ -359,7 +354,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             set(java.util.Calendar.MINUTE, 0)
             set(java.util.Calendar.SECOND, 0)
             set(java.util.Calendar.MILLISECOND, 0)
-            // Falls 14 Uhr heute schon vorbei → morgen
             if (timeInMillis <= System.currentTimeMillis()) {
                 add(java.util.Calendar.DAY_OF_YEAR, 1)
             }
@@ -393,7 +387,6 @@ class BlockedNotificationReceiver : android.content.BroadcastReceiver() {
 
         val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
 
-        // Channel sicherstellen
         val channel = android.app.NotificationChannel(
             "blocked_summary_channel",
             "Zurückgehaltene Nachrichten",
@@ -401,7 +394,6 @@ class BlockedNotificationReceiver : android.content.BroadcastReceiver() {
         )
         notificationManager.createNotificationChannel(channel)
 
-        // Alle gespeicherten Nachrichten posten
         keys.forEachIndexed { index, key ->
             val sender    = prefs.getString("${key}_sender", null) ?: return@forEachIndexed
             val text      = prefs.getString("${key}_text",   null) ?: return@forEachIndexed
@@ -422,7 +414,6 @@ class BlockedNotificationReceiver : android.content.BroadcastReceiver() {
             notificationManager.notify(BLOCKED_MESSAGES + index, notification)
         }
 
-        // Prefs leeren nach dem Posten
         prefs.edit().apply {
             keys.forEach { key ->
                 remove("${key}_sender")
@@ -434,7 +425,6 @@ class BlockedNotificationReceiver : android.content.BroadcastReceiver() {
             apply()
         }
 
-        // Alarm für nächsten Tag neu setzen
         rescheduleAlarm(context)
     }
 

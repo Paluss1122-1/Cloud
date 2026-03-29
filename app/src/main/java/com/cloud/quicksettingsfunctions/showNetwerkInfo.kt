@@ -19,7 +19,7 @@ import java.net.URL
 import java.util.concurrent.Executors
 
 
-@SuppressLint("MissingPermission") // Berechtigungen werden zur Laufzeit geprüft
+@SuppressLint("MissingPermission")
 fun showNetworkInfo(context: Context) {
     val connectivityManager =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -28,7 +28,6 @@ fun showNetworkInfo(context: Context) {
 
     val info = StringBuilder()
 
-    // === 1. Aktives Netzwerk ===
     val activeNetwork = connectivityManager.activeNetwork
     val networkCapabilities = if (activeNetwork != null) {
         connectivityManager.getNetworkCapabilities(activeNetwork)
@@ -53,7 +52,6 @@ fun showNetworkInfo(context: Context) {
         info.append("📡 Aktive Verbindung: $transport\n")
         info.append("✅ Internet verfügbar: ${if (isInternet && isValidated) "Ja" else "Nein (kein Zugriff)"}\n\n")
 
-        // === 2. WLAN-Details (wenn WLAN) ===
         if (transport == "WLAN") {
             var ssid: String
             if (ActivityCompat.checkSelfPermission(
@@ -79,7 +77,6 @@ fun showNetworkInfo(context: Context) {
             info.append("📡 Signalstärke: $rssi dBm ($bars)\n\n")
         }
 
-        // === 3. Mobilfunk-Details (wenn Mobil) ===
         if (transport == "Mobilfunk") {
             try {
                 val telephonyManager =
@@ -92,7 +89,6 @@ fun showNetworkInfo(context: Context) {
                     else -> "Mobil (${telephonyManager.dataNetworkType})"
                 }
                 info.append("📶 Mobilfunktyp: $networkType\n")
-                // Signalstärke bei Mobil ist komplex → optional, hier weggelassen für Stabilität
             } catch (_: Exception) {
                 info.append("📶 Mobilfunktyp: N/A\n")
             }
@@ -100,7 +96,6 @@ fun showNetworkInfo(context: Context) {
         }
     }
 
-    // === 4. Lokale IP-Adresse ===
     try {
         var localIp = "N/A"
         val en = NetworkInterface.getNetworkInterfaces()
@@ -121,13 +116,10 @@ fun showNetworkInfo(context: Context) {
         info.append("🏠 Lokale IP: N/A\n")
     }
 
-    // === 5. Öffentliche IP (asynchron, da Netzwerkaufruf) ===
     info.append("🌍 Öffentliche IP: Wird abgerufen…\n")
 
-    // Benachrichtigung VOR async-IP-Abruf anzeigen
     showNetworkNotificationNow(context, info.toString())
 
-    // Öffentliche IP im Hintergrund laden
     Executors.newSingleThreadExecutor().execute {
         var publicIp: String
         try {
@@ -143,7 +135,6 @@ fun showNetworkInfo(context: Context) {
             publicIp = "Offline / Timeout"
         }
 
-        // Benachrichtigung mit aktualisierter öffentlicher IP
         val updatedInfo = info.toString()
             .replace("🌍 Öffentliche IP: Wird abgerufen…", "🌍 Öffentliche IP: $publicIp")
         showNetworkNotificationNow(context, updatedInfo, final = true)

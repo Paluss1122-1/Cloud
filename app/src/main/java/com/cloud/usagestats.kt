@@ -9,9 +9,9 @@ import java.util.Calendar
 
 data class AppUsageInfo(
     val packageName: String,
-    val totalTimeInForeground: Long, // in Millisekunden
-    val lastTimeUsed: Long,          // Unix-Timestamp
-    val firstTimeStamp: Long         // Unix-Timestamp
+    val totalTimeInForeground: Long,
+    val lastTimeUsed: Long,
+    val firstTimeStamp: Long
 )
 
 /**
@@ -25,25 +25,20 @@ data class AppUsageInfo(
  */
 fun getAppUsageStats(context: Context, days: Int = 7): List<AppUsageInfo>? {
 
-    // 1. Berechtigung prüfen
     if (!hasUsageStatsPermission(context)) {
-        // Nutzer zur Berechtigungsseite weiterleiten
         val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
         context.startActivity(intent)
         return null
     }
 
-    // 2. Zeitraum berechnen
     val calendar = Calendar.getInstance()
     val endTime = calendar.timeInMillis
     calendar.add(Calendar.DAY_OF_YEAR, -days)
     val startTime = calendar.timeInMillis
 
-    // 3. UsageStatsManager abrufen
     val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
 
-    // 4. Statistiken abfragen (INTERVAL_DAILY für tägliche Aggregation)
     val usageStatsList: List<UsageStats> = usageStatsManager.queryUsageStats(
         UsageStatsManager.INTERVAL_DAILY,
         startTime,
@@ -52,11 +47,10 @@ fun getAppUsageStats(context: Context, days: Int = 7): List<AppUsageInfo>? {
 
     if (usageStatsList.isEmpty()) return emptyList()
 
-    // 5. Daten zusammenfassen (mehrere Einträge pro App möglich → gruppieren)
     val aggregatedMap = mutableMapOf<String, AppUsageInfo>()
 
     for (stats in usageStatsList) {
-        if (stats.totalTimeInForeground <= 0) continue // Apps ohne Nutzung überspringen
+        if (stats.totalTimeInForeground <= 0) continue
 
         val existing = aggregatedMap[stats.packageName]
         if (existing != null) {
@@ -75,7 +69,6 @@ fun getAppUsageStats(context: Context, days: Int = 7): List<AppUsageInfo>? {
         }
     }
 
-    // 6. Sortiert zurückgeben (meistgenutzt zuerst)
     return aggregatedMap.values.sortedByDescending { it.totalTimeInForeground }
 }
 

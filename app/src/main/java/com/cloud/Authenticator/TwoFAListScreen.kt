@@ -334,7 +334,6 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                         ) {
                             if (iconUrl.isNotBlank()) {
                                 if (iconUrl.startsWith("data:image")) {
-                                    // Base64 Image
                                     val base64String = iconUrl.substringAfter("base64,")
                                     val imageBytes = Base64.decode(base64String, Base64.DEFAULT)
                                     val bitmap = BitmapFactory.decodeByteArray(

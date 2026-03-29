@@ -1,4 +1,3 @@
-// File: WeatherScreenFull.kt
 package com.cloud.weathertab
 
 import android.Manifest
@@ -60,13 +59,10 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.URL
 
-// -----------------------------
-// Models
-// -----------------------------
 data class HourData(
-    val dateFull: String, // "yyyy-MM-dd HH:mm"
-    val date: String, // "yyyy-MM-dd"
-    val time: String, // "HH:mm"
+    val dateFull: String,
+    val date: String,
+    val time: String,
     val temp: Double,
     val icon: String,
     val condition: String,
@@ -77,7 +73,7 @@ data class HourData(
 )
 
 data class DayData(
-    val date: String, // "yyyy-MM-dd"
+    val date: String,
     val avgTemp: Double,
     val icon: String,
     val hours: List<HourData>
@@ -92,9 +88,6 @@ data class WeatherData(
     val days: List<DayData>
 )
 
-// -----------------------------
-// Utilities
-// -----------------------------
 fun iconToEmoji(icon: String): String {
     val low = icon.lowercase()
     return when {
@@ -109,9 +102,6 @@ fun iconToEmoji(icon: String): String {
     }
 }
 
-// -----------------------------
-// Network + Parser (WeatherAPI forecast.json)
-// -----------------------------
 suspend fun fetchWeatherForecast(lat: Double, lon: Double, days: Int = 7): WeatherData =
     withContext(Dispatchers.IO) {
         val url =
@@ -128,12 +118,12 @@ suspend fun fetchWeatherForecast(lat: Double, lon: Double, days: Int = 7): Weath
 
         for (i in 0 until forecastDays.length()) {
             val dayObj = forecastDays.getJSONObject(i)
-            val date = dayObj.getString("date") // yyyy-MM-dd
+            val date = dayObj.getString("date")
             val hourArr = dayObj.getJSONArray("hour")
             val hours = mutableListOf<HourData>()
             for (j in 0 until hourArr.length()) {
                 val h = hourArr.getJSONObject(j)
-                val dt = h.getString("time") // "yyyy-MM-dd HH:mm"
+                val dt = h.getString("time")
                 val datePart = dt.substring(0, 10)
                 val timePart = dt.substring(11, 16)
                 val condition = h.getJSONObject("condition")
@@ -167,9 +157,6 @@ suspend fun fetchWeatherForecast(lat: Double, lon: Double, days: Int = 7): Weath
         )
     }
 
-// -----------------------------
-// Location helper (simple)
-// -----------------------------
 suspend fun getLastKnownLocation(context: Context): Location? {
     return withContext(Dispatchers.IO) {
         try {
@@ -186,7 +173,6 @@ suspend fun getLastKnownLocation(context: Context): Location? {
             }
             var loc: Location? = null
             val task = fused.lastLocation
-            // We can't await here nicely without additional libs; do quick blocking-ish wait
             val latch = java.util.concurrent.CountDownLatch(1)
             task.addOnSuccessListener {
                 loc = it
@@ -202,9 +188,6 @@ suspend fun getLastKnownLocation(context: Context): Location? {
     }
 }
 
-// -----------------------------
-// Compose UI: full screen with tabs + animations
-// -----------------------------
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun WeatherTabContent() {
@@ -237,7 +220,6 @@ fun WeatherTabContent() {
         }
     }
 
-    // Automatisch beim Start laden
     LaunchedEffect(Unit) {
         refreshWeather()
     }
@@ -292,18 +274,15 @@ fun WeatherTabContent() {
                 } else {
                     when {
                         selHour != null -> {
-                            // Detail-Ansicht einer Stunde
                             SelectedHourView(selHour)
                         }
                         selDayIdx != null -> {
-                            // Stunden-Ansicht eines Tages
                             val days = data.days
                             if (selDayIdx in days.indices) {
                                 DayHoursView(days[selDayIdx], onHourSelected = { selectedHour = it })
                             }
                         }
                         else -> {
-                            // Haupt-Ansicht: Heute groß + alle Tage untereinander
                             MainView(
                                 data = data,
                                 onDaySelected = { selectedDayIndex = it }
@@ -316,13 +295,9 @@ fun WeatherTabContent() {
     }
 }
 
-// -----------------------------
-// Main View: Heute groß + alle Tage untereinander
-// -----------------------------
 @Composable
 fun MainView(data: WeatherData, onDaySelected: (Int) -> Unit) {
     Column {
-        // Heute - groß dargestellt
         data.days.firstOrNull()?.let { today ->
             Card(
                 modifier = Modifier
@@ -367,7 +342,6 @@ fun MainView(data: WeatherData, onDaySelected: (Int) -> Unit) {
                     )
                     Spacer(Modifier.height(16.dp))
 
-                    // Quick Info Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly
@@ -381,7 +355,6 @@ fun MainView(data: WeatherData, onDaySelected: (Int) -> Unit) {
 
         Spacer(Modifier.height(24.dp))
 
-        // Alle anderen Tage untereinander
         Text(
             "Vorschau",
             color = Color.White,
@@ -435,7 +408,6 @@ fun DayCard(day: DayData, dayIndex: Int, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Datum
             Column {
                 Text(
                     getDayName(dayIndex),
@@ -450,7 +422,6 @@ fun DayCard(day: DayData, dayIndex: Int, onClick: () -> Unit) {
                 )
             }
 
-            // Icon & Temperatur
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -478,9 +449,6 @@ fun getDayName(index: Int): String {
     }
 }
 
-// -----------------------------
-// Day Hours View: Stunden eines Tages
-// -----------------------------
 @Composable
 fun DayHoursView(day: DayData, onHourSelected: (HourData) -> Unit) {
     Column {
@@ -515,7 +483,6 @@ fun HourCard(hour: HourData, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Zeit
             Text(
                 hour.time,
                 color = Color.White,
@@ -523,7 +490,6 @@ fun HourCard(hour: HourData, onClick: () -> Unit) {
                 fontWeight = FontWeight.SemiBold
             )
 
-            // Bedingung
             Text(
                 hour.condition,
                 color = Color(0xFF8B8B9F),
@@ -531,7 +497,6 @@ fun HourCard(hour: HourData, onClick: () -> Unit) {
                 modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
             )
 
-            // Icon & Temperatur
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -551,9 +516,6 @@ fun HourCard(hour: HourData, onClick: () -> Unit) {
     }
 }
 
-// -----------------------------
-// Selected Hour View: Detailansicht
-// -----------------------------
 @Composable
 fun SelectedHourView(hour: HourData) {
     Card(
@@ -591,7 +553,6 @@ fun SelectedHourView(hour: HourData) {
 
             Spacer(Modifier.height(32.dp))
 
-            // Detaillierte Informationen in Grid
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -649,9 +610,6 @@ fun WeatherDetailBox(icon: String, label: String, value: String) {
     }
 }
 
-// -----------------------------
-// Alte Funktionen bleiben erhalten für Kompatibilität
-// -----------------------------
 @Composable
 fun TodayView(data: WeatherData, onDaySelected: (Int) -> Unit, onHourSelected: (HourData) -> Unit) {
     val today = data.days.firstOrNull()
@@ -737,9 +695,6 @@ fun WeatherDetailSmall(icon: String, value: String) {
     }
 }
 
-// -----------------------------
-// Small 'widget' preview composable
-// -----------------------------
 @Composable
 fun WeatherWidgetPreview(data: WeatherData) {
     Card(modifier = Modifier.width(200.dp).height(120.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A3A)), shape = RoundedCornerShape(12.dp)) {
@@ -753,16 +708,12 @@ fun WeatherWidgetPreview(data: WeatherData) {
     }
 }
 
-// Erweiterte Weathernot-Funktion mit Notification-Support
-// Füge diese Funktion am Ende deiner WeatherScreenFull.kt-Datei hinzu
 
-// Diese Funktion sollte die bestehende leere Weathernot-Funktion ersetzen
 suspend fun weathernot(context: Context, day: String, hour: String, weatherData: WeatherData?) {
     if (weatherData == null) {
         return
     }
 
-    // Konvertiere day String zu Index
     val dayIndex = when (day.lowercase()) {
         "heute" -> 0
         "morgen" -> 1
@@ -770,20 +721,17 @@ suspend fun weathernot(context: Context, day: String, hour: String, weatherData:
         else -> day.toIntOrNull()?.minus(1) ?: return
     }
 
-    // Validiere Tag-Index
     if (dayIndex < 0 || dayIndex >= weatherData.days.size) {
         return
     }
 
-    // Konvertiere Stunde zu Int (1-24)
     val hourInt = hour.toIntOrNull() ?: return
     if (hourInt < 1 || hourInt > 24) {
         return
     }
 
-    // Finde die entsprechende Stunde (0-23 für Array-Index)
     val selectedDay = weatherData.days[dayIndex]
-    val hourIndex = hourInt // Konvertiere 1-24 zu 0-23
+    val hourIndex = hourInt
 
     if (hourIndex >= selectedDay.hours.size) {
         return
@@ -791,7 +739,6 @@ suspend fun weathernot(context: Context, day: String, hour: String, weatherData:
 
     val selectedHour = selectedDay.hours[hourIndex]
 
-    // Erstelle Notification
     withContext(Dispatchers.Main) {
         createWeatherNotification(context, day, selectedHour)
     }
@@ -810,9 +757,8 @@ private fun createWeatherNotification(context: Context, dayName: String, hourDat
     }
     notificationManager.createNotificationChannel(channel)
 
-    // Erstelle die Notification
     val notification = androidx.core.app.NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(android.R.drawable.ic_dialog_info) // Ersetze mit deinem eigenen Icon
+        .setSmallIcon(android.R.drawable.ic_dialog_info)
         .setContentTitle("☁️ Wetter für $dayName um ${hourData.time} Uhr")
         .setContentText("${hourData.temp.toInt()}°C - ${hourData.condition}")
         .setStyle(

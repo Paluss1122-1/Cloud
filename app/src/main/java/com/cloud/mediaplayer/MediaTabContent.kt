@@ -2973,7 +2973,6 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.value = _uiState.value.copy(currentTab = tab)
     }
 
-    // ── MediaStore Loaders ────────────────────────────────────────────────────
 
     private fun loadSongsFromMediaStore(): List<MediaPlayerService.Song> {
         val songs = mutableListOf<MediaPlayerService.Song>()
@@ -3217,9 +3216,6 @@ interface PlaylistSource {
     ): List<MediaPlayerService.Song>
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Built-in Algorithmic Playlists
-// ─────────────────────────────────────────────────────────────────────────────
 
 object RecentlyPlayedPlaylist : PlaylistSource {
     override val id = "recently_played"
@@ -3368,9 +3364,6 @@ object FavoritesPlaylist : PlaylistSource {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Registry
-// ─────────────────────────────────────────────────────────────────────────────
 
 object AlgorithmicPlaylistRegistry {
     val all: List<PlaylistSource> = listOf(
@@ -3436,8 +3429,7 @@ object PodcastShowManager {
     private var prefs: SharedPreferences? = null
     private val shows = mutableListOf<PodcastShow>()
 
-    // Extra pattern → showId mappings added via commands
-    private val extraPatterns = mutableMapOf<String, String>() // pattern → showId
+    private val extraPatterns = mutableMapOf<String, String>()
 
     fun init(context: Context) {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -3445,7 +3437,6 @@ object PodcastShowManager {
         loadPatternMappings()
     }
 
-    // ── Shows CRUD ────────────────────────────────────────────────────────────
 
     fun getShows(): List<PodcastShow> = shows.toList()
 
@@ -3475,7 +3466,6 @@ object PodcastShowManager {
         return removed
     }
 
-    // ── Pattern Assignment ────────────────────────────────────────────────────
 
     /**
      * Assigns a pattern to a show by name. Creates the show if it doesn't exist.
@@ -3485,7 +3475,6 @@ object PodcastShowManager {
         val show = shows.find { it.name.equals(showName, ignoreCase = true) }
             ?: createShow(showName)
         extraPatterns[pattern.lowercase()] = show.id
-        // Also add pattern to the show's matchPatterns list
         val idx = shows.indexOf(show)
         if (idx >= 0) {
             val updated =
@@ -3508,15 +3497,12 @@ object PodcastShowManager {
         savePatternMappings()
     }
 
-    // ── Episode → Show Assignment ─────────────────────────────────────────────
 
     fun resolveShowForEpisode(path: String, title: String): String {
         val combined = (path + " " + title).lowercase()
-        // Check extra patterns first (user-defined take priority)
         extraPatterns.forEach { (pattern, showId) ->
             if (combined.contains(pattern)) return showId
         }
-        // Check built-in patterns
         for (show in shows) {
             if (show.id == "unassigned") continue
             for (pattern in show.matchPatterns) {
@@ -3528,18 +3514,15 @@ object PodcastShowManager {
 
     fun groupEpisodesIntoShows(episodes: List<PodcastEpisode>): Map<PodcastShow, List<PodcastEpisode>> {
         val result = mutableMapOf<PodcastShow, MutableList<PodcastEpisode>>()
-        // Initialize all shows
         shows.forEach { show -> result[show] = mutableListOf() }
         episodes.forEach { ep ->
             val show = shows.find { it.id == ep.showId } ?: shows.find { it.id == "unassigned" }
             ?: return@forEach
             result[show]?.add(ep)
         }
-        // Remove empty shows (except "Sonstige")
         return result.filter { (show, eps) -> eps.isNotEmpty() || show.id == "unassigned" }
     }
 
-    // ── Show Stats ────────────────────────────────────────────────────────────
 
     data class ShowStats(
         val totalEpisodes: Int,
@@ -3564,7 +3547,6 @@ object PodcastShowManager {
         return ShowStats(showEps.size, completed, unheard, totalDur, 0L, fraction)
     }
 
-    // ── Persistence ───────────────────────────────────────────────────────────
 
     private fun saveShows() {
         val sb = StringBuilder()
@@ -3608,7 +3590,6 @@ object PodcastShowManager {
             shows.clear()
             shows.addAll(defaultShows)
         }
-        // Ensure "unassigned" always exists
         if (shows.none { it.id == "unassigned" }) {
             shows.add(defaultShows.last())
         }
@@ -3679,7 +3660,6 @@ fun AiResponseCard(
     }
 }
 
-// ── History Bottom Sheet ──────────────────────────────────────────────────────
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AiResponseHistorySheet(

@@ -39,11 +39,9 @@ class AutoClickAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Nicht benötigt für Auto-Klick
     }
 
     override fun onInterrupt() {
-        // Service wurde unterbrochen
     }
 
     /**

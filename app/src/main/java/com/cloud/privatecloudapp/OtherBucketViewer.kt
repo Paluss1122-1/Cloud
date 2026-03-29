@@ -112,7 +112,7 @@ fun OtherBucketViewer(
     var uploadProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var showFullscreenImage by rememberSaveable { mutableStateOf<LocalFileInfo?>(null) }
     var showVideoPlayer by rememberSaveable { mutableStateOf<LocalFileInfo?>(null) }
-    var selectedFilter by remember { mutableStateOf("all") } // "all", "videos", "images"
+    var selectedFilter by remember { mutableStateOf("all") }
     val context = LocalContext.current
     var currentVideoIndex by rememberSaveable { mutableIntStateOf(0) }
     var currentImageIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -123,13 +123,13 @@ fun OtherBucketViewer(
             .crossfade(true)
             .memoryCache {
                 Builder(context)
-                    .maxSizePercent(0.4) // Erhöht von 0.25
+                    .maxSizePercent(0.4)
                     .build()
             }
             .diskCache {
                 DiskCache.Builder()
                     .directory(context.cacheDir.resolve("image_cache"))
-                    .maxSizePercent(0.1) // Erhöht von 0.02
+                    .maxSizePercent(0.1)
                     .build()
             }
             .build()
@@ -147,7 +147,6 @@ fun OtherBucketViewer(
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
 
-    // Funktion zum Laden der Dateien aus dem privaten Speicher
     suspend fun loadFilesFromPrivateStorage() {
         withContext(Dispatchers.IO) {
             try {
@@ -407,7 +406,6 @@ fun OtherBucketViewer(
                                             var isLoading by remember { mutableStateOf(true) }
 
                                             LaunchedEffect(fileInfo.file.absolutePath) {
-                                                // Zuerst im Memory-Cache prüfen
                                                 val cachedInMemory = thumbnailCache[fileInfo.file.absolutePath]
                                                 if (cachedInMemory != null) {
                                                     thumbnail = cachedInMemory
@@ -415,7 +413,6 @@ fun OtherBucketViewer(
                                                     return@LaunchedEffect
                                                 }
 
-                                                // Dann im Disk-Cache prüfen
                                                 val cachedThumbnail = loadThumbnailFromCache(context, fileInfo.file.absolutePath)
                                                 if (cachedThumbnail != null) {
                                                     thumbnail = cachedThumbnail
@@ -424,13 +421,10 @@ fun OtherBucketViewer(
                                                     return@LaunchedEffect
                                                 }
 
-                                                // Wenn nicht gecached, neu generieren
                                                 withContext(Dispatchers.IO) {
                                                     val loadedThumbnail = getVideoFirstFrame(fileInfo.file)
                                                     if (loadedThumbnail != null) {
-                                                        // Im Disk-Cache speichern
                                                         saveThumbnailToCache(context, fileInfo.file.absolutePath, loadedThumbnail)
-                                                        // Im Memory-Cache speichern
                                                         thumbnailCache[fileInfo.file.absolutePath] = loadedThumbnail
                                                     }
                                                     thumbnail = loadedThumbnail
@@ -472,7 +466,6 @@ fun OtherBucketViewer(
                                                 }
                                             }
                                         } else {
-                                            // Existing image code bleibt gleich
                                             Image(
                                                 painter = rememberAsyncImagePainter(
                                                     model = fileInfo.file,
@@ -484,7 +477,6 @@ fun OtherBucketViewer(
                                             )
                                         }
 
-                                        // Datei-Informationen
                                         Column(
                                             modifier = Modifier
                                                 .align(Alignment.BottomCenter)
@@ -580,7 +572,6 @@ fun OtherBucketViewer(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.End
         ) {
-            // Export-Button
             if (fileList.isNotEmpty()) {
                 FloatingActionButton(
                     onClick = {
@@ -620,7 +611,6 @@ fun OtherBucketViewer(
             }
         }
 
-        // Upload-Fortschritt
         uploadProgress?.let { (current, total) ->
             Box(
                 modifier = Modifier
@@ -666,7 +656,7 @@ fun OtherBucketViewer(
         val imageFiles = when (selectedFilter) {
             "videos" -> emptyList()
             "images" -> fileList.filter { !it.isVideo }
-            "favorites" -> emptyList() // Favoriten zeigt nur Videos
+            "favorites" -> emptyList()
             else -> fileList.filter { !it.isVideo }
         }
 
@@ -681,7 +671,6 @@ fun OtherBucketViewer(
         )
     }
 
-    // Video Player Dialog
     showVideoPlayer?.let { _ ->
         val videoFiles = when (selectedFilter) {
             "videos" -> fileList.filter { it.isVideo }
@@ -699,7 +688,6 @@ fun OtherBucketViewer(
     }
 }
 
-// Funktion zum Speichern von Dateien im privaten Speicher
 suspend fun saveFileToPrivateStorage(context: Context, uri: Uri) {
     withContext(Dispatchers.IO) {
         try {
@@ -708,7 +696,6 @@ suspend fun saveFileToPrivateStorage(context: Context, uri: Uri) {
             inputStream?.close()
 
             if (bytes != null) {
-                // Dateinamen extrahieren
                 var fileName = "file_${System.currentTimeMillis()}"
                 context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                     if (cursor.moveToFirst()) {
@@ -867,7 +854,6 @@ fun FullscreenImageDialogLocal(
                 )
         )
 
-        // Dateiname und Counter oben
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -1006,7 +992,6 @@ fun VideoPlayerDialogLocal(
             modifier = Modifier.fillMaxSize()
         )
 
-        // In VideoPlayerDialogLocal - Box mit Video-Info erweitern
         if (videoFiles.size > 1 || videoFiles.getOrNull(currentIndex)?.isFavorite == true) {
             Box(
                 modifier = Modifier

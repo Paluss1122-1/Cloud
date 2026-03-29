@@ -154,7 +154,6 @@ private object ConnectionGuard {
     private fun calculateBackoffDelay(): Long {
         if (consecutiveFailures == 0) return 0L
 
-        // Exponential Backoff: 5s, 10s, 20s, 40s, 80s, ... bis max 5min
         val delay = MIN_RETRY_DELAY_MS * (1 shl (consecutiveFailures - 1))
         return delay.coerceIn(MIN_RETRY_DELAY_MS, MAX_RETRY_DELAY_MS)
     }
@@ -181,13 +180,12 @@ private object ConnectionGuard {
         }
     }
 
-    // Schneller Ping-Test BEVOR vollständiger Socket-Connect
     suspend fun quickPingTest(ip: String, port: Int): Boolean = withContext(Dispatchers.IO) {
         try {
             val socket = java.net.Socket()
             socket.connect(
                 java.net.InetSocketAddress(ip, port),
-                QUICK_PING_TIMEOUT_MS  // Nur 500ms!
+                QUICK_PING_TIMEOUT_MS
             )
             socket.close()
             true
@@ -225,7 +223,6 @@ fun startTriggerListenerIfHomeWifi(context: Context) {
     startTriggerListener(context)
     registerWifiReconnectReceiver(context)
 
-    // Initiale Location-Prüfung
     checkIfNearLocation(context) { atHome ->
         ConnectionGuard.updateLocationStatus(atHome)
 
@@ -250,7 +247,6 @@ fun startTriggerListenerIfHomeWifi(context: Context) {
 fun registerWifiReconnectReceiver(context: Context) {
     val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
-    // Alten Callback sauber entfernen
     networkCallback?.let {
         try {
             cm.unregisterNetworkCallback(it)
@@ -260,7 +256,6 @@ fun registerWifiReconnectReceiver(context: Context) {
 
     val callback = object : ConnectivityManager.NetworkCallback() {
 
-        // Wird nur einmal aufgerufen wenn das Netz wirklich nutzbar ist
         override fun onAvailable(network: Network) {
             ConnectionGuard.updateWifiStatus(true)
             val now = System.currentTimeMillis()
@@ -309,7 +304,6 @@ fun registerWifiReconnectReceiver(context: Context) {
 
     networkCallback = callback
 
-    // Nur auf WiFi reagieren
     val request = NetworkRequest.Builder()
         .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
         .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
@@ -394,7 +388,6 @@ fun startTriggerListener(context: Context) {
                     }
                 }
             } catch (e: Exception) {
-                // Nur echte Fehler loggen, nicht normale Socket-Closes
                 if (e !is java.net.SocketException) {
                     syncScope.launch {
                         ERRORINSERT(
@@ -482,7 +475,6 @@ fun syncTodosWithLaptop(context: Context) {
 
     syncScope.launch {
         try {
-            // 🔥 PRE-CHECK 3: Quick Ping Test (nur 500ms!)
             val pingSuccess = ConnectionGuard.quickPingTest(laptopIp, SYNC_PORT)
             if (!pingSuccess) {
                 Log.d("SYNC", "❌ Ping fehlgeschlagen (500ms timeout)")
@@ -500,7 +492,6 @@ fun syncTodosWithLaptop(context: Context) {
 
             Log.d("SYNC", "✅ Ping erfolgreich, starte Datenübertragung")
 
-            // Jetzt erst die eigentliche Sync-Logik
             val todos = getTodos(context)
             val todosJson = JSONArray()
 
@@ -514,7 +505,6 @@ fun syncTodosWithLaptop(context: Context) {
                 todosJson.put(obj)
             }
 
-            // Socket mit kurzem Timeout
             val socket = java.net.Socket()
             socket.connect(java.net.InetSocketAddress(laptopIp, SYNC_PORT), 3000)
 
@@ -523,11 +513,9 @@ fun syncTodosWithLaptop(context: Context) {
             writer.flush()
             socket.close()
 
-            // 🔥 ERFOLG!
             ConnectionGuard.recordSuccess()
             isLaptopConnected = true
 
-            // Nur bei ERFOLG die Server starten
             startMediaCommandListener(context)
             startMediaStateServer(context)
 
@@ -549,11 +537,9 @@ fun syncTodosWithLaptop(context: Context) {
             pushMediaStateToLaptop(context)
 
         } catch (e: ConnectException) {
-            // Normale Connection-Fehler (Laptop aus/nicht erreichbar)
             ConnectionGuard.recordFailure()
             Log.d("SYNC", "❌ Connection failed: ${e.message}")
 
-            // NICHT mehr loggen bei normalem ConnectException!
             withContext(Dispatchers.Main) {
                 showSimpleNotificationExtern(
                     "❌ Sync fehlgeschlagen",
@@ -563,7 +549,6 @@ fun syncTodosWithLaptop(context: Context) {
                 )
             }
         } catch (_: java.net.SocketTimeoutException) {
-            // Timeout-Fehler
             ConnectionGuard.recordFailure()
             withContext(Dispatchers.Main) {
                 showSimpleNotificationExtern(
@@ -574,7 +559,6 @@ fun syncTodosWithLaptop(context: Context) {
                 )
             }
         } catch (e: Exception) {
-            // Nur ECHTE Fehler loggen
             ConnectionGuard.recordFailure()
             syncScope.launch {
                 ERRORINSERT(
@@ -582,7 +566,7 @@ fun syncTodosWithLaptop(context: Context) {
                         service_name = "syncTodosWithLaptop",
                         error_message = e.stackTraceToString(),
                         created_at = Instant.now().toString(),
-                        severity = "WARNING"  // Nicht ERROR!
+                        severity = "WARNING"
                     )
                 )
             }
@@ -663,7 +647,7 @@ fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
                         }
                     }
                 } catch (_: java.net.SocketException) {
-                    break  // normal bei stopUpdateListener()
+                    break
                 } catch (e: Exception) {
                     syncScope.launch {
                         ERRORINSERT(
@@ -1358,7 +1342,6 @@ private fun parseVokabelnFromJson(json: String): List<Vokabel> = try {
     emptyList()
 }
 
-// Media
 
 fun startMediaCommandListener(context: Context) {
     if (mediaCommandJob?.isActive == true && mediaCommandSocket?.isClosed == false) return
@@ -1681,7 +1664,7 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
 }
 
 fun startMediaStateServer(context: Context) {
-    if (mediaStateJob?.isActive == true) return  // Already running
+    if (mediaStateJob?.isActive == true) return
     mediaStateSocket?.close()
 
     mediaStateJob = mediaScope.launch {
@@ -1835,7 +1818,6 @@ private fun buildMediaStateJson(context: Context): String {
 
     return JSONObject().apply {
         put("mode", mode)
-        // Keep camelCase keys for the laptop/Python server UI compatibility.
         put("isPlaying", isPlaying)
         put("currentSong", songName)
         put("currentPlaylist", playlistName)
@@ -1846,7 +1828,6 @@ private fun buildMediaStateJson(context: Context): String {
         put("activePlaylistId", activePlaylistId)
         put("activeAlgoPlaylistId", activeAlgoPlaylistId)
 
-        // Keep legacy snake_case keys (may be used by other clients).
         put("is_playing", isPlaying)
         put("song_name", songName)
         put("title", songName)
@@ -1863,7 +1844,6 @@ private fun buildMediaStateJson(context: Context): String {
 private fun buildPlaylistsJson(context: Context): String {
     val musicPrefs = context.getSharedPreferences("music_player_prefs", MODE_PRIVATE)
 
-    // Normal Playlists
     val playlistsJson = JSONArray()
     try {
         val raw = musicPrefs.getString("playlists_json", null)
@@ -1893,7 +1873,6 @@ private fun buildPlaylistsJson(context: Context): String {
         }
     }
 
-    // Algorithmic Playlists
     val algoJson = JSONArray()
     AlgorithmicPlaylistRegistry.all.forEach { source ->
         algoJson.put(JSONObject().apply {
@@ -1904,7 +1883,6 @@ private fun buildPlaylistsJson(context: Context): String {
         })
     }
 
-    // All Songs (only names + index)
     val songsJson = JSONArray()
     try {
         val cr = context.contentResolver
@@ -2098,7 +2076,7 @@ fun checkIfNearLocation(
             } else {
                 callback(false)
             }
-            fusedLocationClient.removeLocationUpdates(this) // nur einmal prüfen
+            fusedLocationClient.removeLocationUpdates(this)
         }
     }
 
@@ -2110,9 +2088,8 @@ fun checkIfNearLocation(
     )
 }
 
-// Hilfsfunktion: Distanz zwischen zwei GPS-Koordinaten in Metern
 fun distanceBetween(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
-    val earthRadius = 6371000.0 // in meters
+    val earthRadius = 6371000.0
     val dLat = Math.toRadians(lat2 - lat1)
     val dLon = Math.toRadians(lon2 - lon1)
     val a =
@@ -2163,7 +2140,7 @@ fun triggerBuild(context: Context) {
             )
 
             sock = java.net.Socket().apply {
-                receiveBufferSize = 2 * 1024 * 1024  // 2MB
+                receiveBufferSize = 2 * 1024 * 1024
                 sendBufferSize = 64 * 1024
                 soTimeout = 180_000
             }
@@ -2172,7 +2149,6 @@ fun triggerBuild(context: Context) {
             sock.connect(java.net.InetSocketAddress(laptopIp, Config.BUILD_PORT), 5000)
             Log.d("BUILD", "Socket connected: ${System.currentTimeMillis()}")
 
-            // ✅ Sende BUILD Command
             sock.getOutputStream().write("BUILD\n".toByteArray())
             sock.getOutputStream().flush()
 
@@ -2204,20 +2180,17 @@ fun triggerBuild(context: Context) {
                 return@launch
             }
 
-            // ✅ Parse APK size für Progress
             val apkSize = headerLine.substringAfter("OK:").toLongOrNull() ?: 0L
             Log.d("BUILD", "Erwarte APK: ${apkSize / 1024 / 1024}MB")
 
-            // ✅ Direkt APK-Daten lesen (kein Header-Hack mehr!)
             var bytesRead = 0L
             apkFile.outputStream().buffered(1024 * 1024).use { fileOut ->
-                val buffer = ByteArray(1024 * 1024)  // 1MB Buffer
+                val buffer = ByteArray(1024 * 1024)
                 var read: Int
                 while (sock.inputStream.read(buffer).also { read = it } != -1) {
                     fileOut.write(buffer, 0, read)
                     bytesRead += read
 
-                    // ✅ Progress-Logging (optional: Notification updaten)
                     if (apkSize > 0) {
                         val progress = (bytesRead * 100 / apkSize).toInt()
                         if (progress % 10 == 0) {
@@ -2243,7 +2216,6 @@ fun triggerBuild(context: Context) {
                 return@launch
             }
 
-            // ✅ Installation
             withContext(Dispatchers.Main) {
                 showSimpleNotificationExtern(
                     "✅ Build fertig",

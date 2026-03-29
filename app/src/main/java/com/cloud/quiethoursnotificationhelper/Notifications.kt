@@ -104,10 +104,8 @@ private fun scheduleWithAlarmManager(triggerAtMillis: Long, context: Context, ch
     try {
         val alarmManager = context.getSystemService(ALARM_SERVICE) as AlarmManager
 
-        // Handler stoppen
         handler.removeCallbacks(checkRunnable)
 
-        // AlarmManager Intent
         val intent = Intent(context, QuietHoursAlarmReceiver::class.java)
         val pendingIntent = PendingIntent.getBroadcast(
             context,
@@ -132,14 +130,12 @@ private fun scheduleWithAlarmManager(triggerAtMillis: Long, context: Context, ch
 
     } catch (e: Exception) {
         Log.e("QuietHoursService", "AlarmManager failed, falling back to Handler", e)
-        // Fallback: Handler nutzen
         val delayMillis = triggerAtMillis - System.currentTimeMillis()
         scheduleWithHandler(delayMillis, checkRunnable)
     }
 }
 
 private fun scheduleWithHandler(delayMillis: Long, checkRunnable: Runnable) {
-    // Sicherheitscheck: Mindestens 30 Sekunden
     val finalDelay = maxOf(delayMillis, 30_000L)
 
     handler.removeCallbacks(checkRunnable)
