@@ -72,9 +72,9 @@ jobs:
               const val DBKEY1 = "${{ secrets.DBKEY1 }}"
               const val NVIDIA = "${{ secrets.NVIDIA }}"
               const val WEATHERAPI_KEY = "${{ secrets.WEATHERAPI_KEY }}"
-              const cal RAPID_API_KEY = "${{ secrets.RAPID_API_KEY }}"
-              const cal SPOTIFY_CLIENT_ID = "${{ secrets.SPOTIFY_CLIENT_ID }}"
-              const cal SPOTIFY_CLIENT_SECRET = "${{ secrets.SPOTIFY_CLIENT_SECRET }}"
+              const val RAPID_API_KEY = "${{ secrets.RAPID_API_KEY }}"
+              const val SPOTIFY_CLIENT_ID = "${{ secrets.SPOTIFY_CLIENT_ID }}"
+              const val SPOTIFY_CLIENT_SECRET = "${{ secrets.SPOTIFY_CLIENT_SECRET }}"
               const val LAT = ${{ secrets.LAT }}
               const val LON = ${{ secrets.LON }}
               val LAPTOP_IPS = listOf("192.168.178.20", "192.168.178.72")
