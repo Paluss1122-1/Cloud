@@ -61,6 +61,11 @@ object BiometricKeyHelper {
         return keyGen.generateKey()
     }
 
+    fun deleteKey() {
+    val ks = KeyStore.getInstance("AndroidKeyStore").also { it.load(null) }
+    if (ks.containsAlias(KEY_NAME)) ks.deleteEntry(KEY_NAME)
+    }
+
     fun getCipher(): Cipher =
         Cipher.getInstance("${KeyProperties.KEY_ALGORITHM_AES}/${KeyProperties.BLOCK_MODE_CBC}/${KeyProperties.ENCRYPTION_PADDING_PKCS7}")
 }
@@ -450,6 +455,10 @@ private fun showBiometricPrompt(
 
     try {
         prompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
+    } catch (e: KeyPermanentlyInvalidatedException) {
+    BiometricKeyHelper.deleteKey()
+    onError("Biometriedaten haben sich geändert. Bitte erneut einrichten.", true)
+    return
     } catch (e: Exception) {
         onError("Fehler beim Starten: ${e.message}", true)
     }
