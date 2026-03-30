@@ -139,12 +139,12 @@ fun AuthenticatorTab() {
         if (shouldShowPrompt && lockEnabled && !isAuthenticated) {
             delay(100)
             showBiometricPrompt(
-                activity = activity,
-                onSuccess = {
-                    isAuthenticated = true
-                    showError = false
-                    shouldShowPrompt = false
-                },
+    activity = activity,
+    onSuccess = { cipher ->
+        isAuthenticated = true
+        showError = false
+        shouldShowPrompt = false
+    },
                 onError = { error, isCritical ->
                     if (isCritical) {
                         errorMessage = error
@@ -359,7 +359,7 @@ private fun ErrorScreen(message: String, onRetry: () -> Unit, onUnlock: () -> Un
 
 private fun showBiometricPrompt(
     activity: FragmentActivity,
-    onSuccess: () -> Unit,
+    onSuccess: (Cipher) -> Unit,
     onError: (error: String, isCritical: Boolean) -> Unit
 ) {
     if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
@@ -368,8 +368,7 @@ private fun showBiometricPrompt(
 
     val bm = BiometricManager.from(activity)
     val canAuth =
-        bm.canAuthenticate(Authenticators.BIOMETRIC_STRONG or Authenticators.DEVICE_CREDENTIAL)
-
+        bm.canAuthenticate(Authenticators.BIOMETRIC_STRONG)
     when (canAuth) {
         BiometricManager.BIOMETRIC_SUCCESS -> { /* proceed */
         }
@@ -445,7 +444,8 @@ private fun showBiometricPrompt(
     val promptInfo = BiometricPrompt.PromptInfo.Builder()
         .setTitle("Cloud Passwort-Manager")
         .setSubtitle("Authentifizieren um fortzufahren")
-        .setAllowedAuthenticators(Authenticators.BIOMETRIC_STRONG or Authenticators.DEVICE_CREDENTIAL)
+        .setAllowedAuthenticators(Authenticators.BIOMETRIC_STRONG)
+        .setNegativeButtonText("Abbrechen")
         .build()
 
     try {
