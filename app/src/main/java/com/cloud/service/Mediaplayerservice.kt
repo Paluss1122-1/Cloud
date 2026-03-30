@@ -110,6 +110,7 @@ class MediaPlayerService : MediaSessionService() {
         private const val KEY_PREFIX_COMPLETED = "podcast_completed_"
         private const val KEY_PODCAST_QUEUE = "podcast_queue"
         private const val KEY_PLAYBACK_SPEED = "podcast_playback_speed"
+        private const val GET_ACTIVE_PLALIST = "get_active_plalist"
 
         private const val SKIP_TIME_MS = 15000
         private const val SERVICE_SWITCH_TIMEOUT = 20000L
@@ -152,6 +153,13 @@ class MediaPlayerService : MediaSessionService() {
                     if (number != null && number > 0) putExtra(EXTRA_SONG_INDEX, number)
                 }
             )
+
+        fun searchAndPlaySong(context: Context, name: String){
+            Intent(context, MediaPlayerService::class.java).apply {
+                action = GET_ACTIVE_PLALIST
+                putExtra("SearchQuery", name)
+            }
+        }
 
         fun sendMusicPlayAction(context: Context) = context.startService(
             Intent(context, MediaPlayerService::class.java).apply { action = ACTION_MUSIC_PLAY }
@@ -502,6 +510,15 @@ class MediaPlayerService : MediaSessionService() {
 
             ACTION_SWITCH_TO_MUSIC -> switchToMusic()
             ACTION_SWITCH_TO_PODCAST -> switchToPodcast()
+
+            GET_ACTIVE_PLALIST -> {
+                val songs = getActivePlaylist()
+                val query = intent?.getStringExtra("SearchQuery")
+                val result = songs.find(query)
+                if (result != null) {
+                    // hier muss result weiterverarbeitet werden
+                }
+            }
 
             ACTION_MUSIC_PLAY -> {
                 ensureMusicMode(); playMusic()
