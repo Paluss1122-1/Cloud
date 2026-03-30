@@ -35,7 +35,13 @@ import com.cloud.ERRORINSERTDATA
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
-
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyPermanentlyInvalidatedException
+import android.security.keystore.KeyProperties
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
 
 private enum class AuthTab(val label: String, val icon: String) {
     PASSWORDS("Passwörter", "🔑"),
