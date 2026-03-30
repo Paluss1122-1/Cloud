@@ -42,6 +42,29 @@ private enum class AuthTab(val label: String, val icon: String) {
     TWOFACTOR("2FA Codes", "🛡️")
 }
 
+object BiometricKeyHelper {
+    private const val KEY_NAME = "cloud_auth_key"
+
+    fun getOrCreateKey(): SecretKey {
+        val ks = KeyStore.getInstance("AndroidKeyStore").also { it.load(null) }
+        ks.getKey(KEY_NAME, null)?.let { return it as SecretKey }
+
+        val keyGen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+        keyGen.init(
+            KeyGenParameterSpec.Builder(KEY_NAME, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_CBC)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_PKCS7)
+                .setUserAuthenticationRequired(true)
+                .setInvalidatedByBiometricEnrollment(true)
+                .build()
+        )
+        return keyGen.generateKey()
+    }
+
+    fun getCipher(): Cipher =
+        Cipher.getInstance("${KeyProperties.KEY_ALGORITHM_AES}/${KeyProperties.BLOCK_MODE_CBC}/${KeyProperties.ENCRYPTION_PADDING_PKCS7}")
+}
+
 
 @Composable
 fun AuthenticatorTab() {
@@ -373,12 +396,22 @@ private fun showBiometricPrompt(
 
     val executor = ContextCompat.getMainExecutor(activity)
 
-    val prompt = BiometricPrompt(
-        activity, executor,
+    val cipher = BiometricKeyHelper.getCipher()
+    try {
+        cipher.init(Cipher.ENCRYPT_MODE, BiometricKeyHelper.getOrCreateKey())
+    } catch (e: KeyPermanentlyInvalidatedException) {
+        onError("Biometriedaten haben sich geändert. Bitte erneut einrichten.", true)
+        return
+    }
+
+    val prompt = BiometricPrompt(activity, executor,
         object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 super.onAuthenticationSucceeded(result)
-                onSuccess()
+                val unlockedCipher = result.cryptoObject?.cipher ?: run {
+                    onError("Kryptografisches Objekt fehlt", true); return
+                }
+                onSuccess(unlockedCipher)
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
@@ -416,8 +449,8 @@ private fun showBiometricPrompt(
         .build()
 
     try {
-        prompt.authenticate(promptInfo)
+        prompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
     } catch (e: Exception) {
-        onError("Fehler beim Starten der Authentifizierung: ${e.message}", true)
+        onError("Fehler beim Starten: ${e.message}", true)
     }
 }
