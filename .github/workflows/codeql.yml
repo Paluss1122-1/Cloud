@@ -166,6 +166,20 @@ jobs:
         if: matrix.build-mode == 'manual'
         run: ./gradlew assembleDebug --build-cache --parallel --no-daemon
 
+      - name: Save APK
+        if: matrix.build-mode == 'manual'
+        run: |
+          BUILD_DIR="Builds/$(date +'%Y-%m-%d_%H-%M-%S')"
+          mkdir -p "$BUILD_DIR"
+          cp app/build/outputs/apk/debug/app-debug.apk "$BUILD_DIR/"
+
+      - name: Upload APK artifact
+        if: matrix.build-mode == 'manual'
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-${{ github.run_number }}
+          path: Builds/
+
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
         with:
