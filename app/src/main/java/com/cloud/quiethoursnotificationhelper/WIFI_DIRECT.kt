@@ -772,6 +772,13 @@ fun getTodos(context: Context): List<TodoItem> {
     return parseTodosFromJson(json)
 }
 
+fun getOpenTodos(context: Context): List<TodoItem> {
+    val json = context.getSharedPreferences("todos_prefs", MODE_PRIVATE)
+        .getString("todos", "[]") ?: "[]"
+    val result = parseTodosFromJson(json)
+    return result.filter {it.completed == false}
+}
+
 fun saveTodos(context: Context, todos: List<TodoItem>) {
     val prefs = context.getSharedPreferences("todos_prefs", MODE_PRIVATE)
 
