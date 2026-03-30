@@ -205,34 +205,6 @@ private fun getAvailableCommands(context: Context): List<Command> {
             }
         },
         Command(
-            name = "save",
-            aliases = listOf("s", "speichern", "store"),
-            description = "Speichert Reply-Daten für Kontakt"
-        ) {
-            val contacts = WhatsAppNotificationListener.replyActions.keys.toList()
-            if (contacts.isEmpty()) {
-                showSimpleNotificationExtern(
-                    "❌ Keine Kontakte",
-                    "Keine Reply-Daten verfügbar. Warte auf WhatsApp-Nachricht.",
-                    20.seconds,
-                    context
-                )
-            } else {
-                showSimpleNotificationExtern(
-                    "📋 Verfügbare Kontakte",
-                    "Verwende 'save [kontakt]': ${contacts.joinToString(", ")}",
-                    context = context
-                )
-            }
-        },
-        Command(
-            name = "saved",
-            aliases = listOf("info", "gespeichert", "data"),
-            description = "Zeigt gespeicherte Reply-Daten"
-        ) {
-            showSavedReplyInfo(context)
-        },
-        Command(
             name = "message",
             aliases = listOf("send", "senden", "write", "schreiben"),
             description = "Sendet Nachricht an gespeicherten Kontakt"
@@ -699,43 +671,6 @@ fun executeCommand(commandText: String, context: Context) {
     val argument = if (parts.size > 1) parts[1] else null
 
     when (commandInput) {
-        "save", "s", "speichern", "store" -> {
-            if (argument != null) {
-                val parts = commandText.split(" ", limit = 2)
-                val parsed = if (parts.size >= 2) parseCommandWithQuotes(parts[1]) else emptyList()
-                val contactName = parsed.firstOrNull()
-                if (contactName != null) {
-                    saveReplyDataPermanently(contactName, context)
-                } else {
-                    showSimpleNotificationExtern(
-                        "❌ Fehler",
-                        "Syntax: save [kontakt] oder save \"kontakt mit leerzeichen\"",
-                        20.seconds,
-                        context,
-                        silent = false
-                    )
-                }
-            } else {
-                val contacts = WhatsAppNotificationListener.replyActions.keys.toList()
-                if (contacts.isEmpty()) {
-                    showSimpleNotificationExtern(
-                        "❌ Keine Kontakte",
-                        "Keine Reply-Daten verfügbar",
-                        20.seconds,
-                        context,
-                        silent = false
-                    )
-                } else {
-                    showSimpleNotificationExtern(
-                        "📋 Kontakte",
-                        contacts.joinToString(", "),
-                        context = context
-                    )
-                }
-            }
-            return
-        }
-
         "nvchat", "ai", "aichat", "nv" -> {
             val name = if (parts.size > 1) {
                 commandText.substringAfter(" ", "").trim().ifEmpty { null }
@@ -744,21 +679,6 @@ fun executeCommand(commandText: String, context: Context) {
             }
 
             createNvidiaChat(name, context)
-            return
-        }
-
-        "message", "send", "senden", "write", "schreiben" -> {
-            if (argument != null) {
-                sendMessageViaSavedReplyData(argument, context)
-            } else {
-                showSimpleNotificationExtern(
-                    "❌ Fehler",
-                    "Syntax: message [deine nachricht]",
-                    20.seconds,
-                    context,
-                    silent = false
-                )
-            }
             return
         }
 
@@ -783,11 +703,6 @@ fun executeCommand(commandText: String, context: Context) {
                     context
                 )
             }
-            return
-        }
-
-        "saved", "info", "gespeichert", "data" -> {
-            showSavedReplyInfo(context)
             return
         }
 
