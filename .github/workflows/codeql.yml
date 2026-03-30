@@ -162,6 +162,10 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts', '**/*.gradle', '**/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
+
+      - name: Setup Debug Keystore
+        run: |
+          echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > ~/.android/debug.keystore
       - name: Build project
         if: matrix.build-mode == 'manual'
         run: ./gradlew assembleDebug --build-cache --parallel --no-daemon
