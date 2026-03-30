@@ -379,9 +379,9 @@ fun isQuietHoursNow(context: Context): Boolean {
     val prefs = context.getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
     val quietEnd = prefs.getString("saved_number", null)?.toIntOrNull() ?: 7
     val quietStart = prefs.getString("saved_number_start", null)?.toIntOrNull() ?: 21
-    return if (quietStart < quietEnd) {
+    return if (quietStart <= quietEnd) {
         hour !in quietStart..<quietEnd
     } else {
-        hour in quietEnd..<quietStart
+        hour >= quietStart || hour < quietEnd
     }
 }
