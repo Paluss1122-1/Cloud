@@ -165,7 +165,7 @@ jobs:
 
       - name: Setup Debug Keystore
         run: |
-          echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > ~/.android/debug.keystore
+          echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}"
       - name: Build project
         if: matrix.build-mode == 'manual'
         run: ./gradlew assembleDebug --build-cache --parallel --no-daemon
