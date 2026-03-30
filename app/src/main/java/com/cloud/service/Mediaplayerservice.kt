@@ -512,8 +512,8 @@ class MediaPlayerService : MediaSessionService() {
 
             GET_ACTIVE_PLALIST -> {
                 val songs = getActivePlaylist()
-                val query = intent?.getStringExtra("SearchQuery")
-                val result = songs.indexOfFirst { it.name.equals(name, ignoreCase = true)}.takeIf { it >= 0 } ?: songs.indexOfFirst { it.name.contains(query, ignoreCase = true) } ?: return@let
+                val query = intent?.getStringExtra("SearchQuery") ?: return START_STICKY
+                val result = songs.indexOfFirst { it.name.equals(query, ignoreCase = true)}.takeIf { it >= 0 } ?: songs.indexOfFirst { it.name.contains(query, ignoreCase = true) } ?: return@let
                 musicPlayer?.release()
                 musicPlayer = null
                 ensureMusicMode()
