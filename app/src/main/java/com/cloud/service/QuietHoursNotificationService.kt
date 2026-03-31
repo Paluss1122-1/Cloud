@@ -124,6 +124,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import androidx.core.app.ActivityCompat
 
 class QuietHoursNotificationService : Service() {
     private val errorScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
