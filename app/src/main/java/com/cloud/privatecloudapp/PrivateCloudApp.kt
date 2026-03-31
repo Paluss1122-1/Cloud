@@ -321,6 +321,11 @@ enum class MenuItem(
         "️️🏫️ ",
         { SpotifyDownloaderApp() }
     ),
+    EXPLORE(
+        "Erkunden",
+        "🗺️",
+        { com.cloud.exploretab.ExploreTabContent() }
+    )
 }
 
 fun saveRecentTab(context: Context, menuItem: MenuItem) {
