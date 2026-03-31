@@ -128,6 +128,7 @@ import kotlinx.coroutines.launch
 class QuietHoursNotificationService : Service() {
     private val errorScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val checkRunnable: Runnable by lazy { getCheckRunnable(this) }
+    private val exploreTracker get() = com.cloud.exploretab.ExploreLocationTracker
 
     private fun reportServiceError(where: String, t: Throwable) {
         Log.e("QuietHoursService", "Unhandled error in $where", t)
@@ -398,6 +399,11 @@ class QuietHoursNotificationService : Service() {
             registerReceiver(markReadReceiver, markReadFilter, RECEIVER_NOT_EXPORTED)
         } catch (e: Exception) {
             reportServiceError("onCreate:registerReceiver markReadReceiver", e)
+        }
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            == PackageManager.PERMISSION_GRANTED) {
+                 exploreTracker.start(this)
         }
     }
 
@@ -868,6 +874,7 @@ class QuietHoursNotificationService : Service() {
         }
 
         errorScope.cancel()
+        exploreTracker.stop()
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
