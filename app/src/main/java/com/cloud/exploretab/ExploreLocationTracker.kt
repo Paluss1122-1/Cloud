@@ -46,7 +46,8 @@ object ExploreLocationTracker {
 
         try {
             fusedClient?.requestLocationUpdates(request, locationCallback!!, Looper.getMainLooper())
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
     }
 
     fun stop() {

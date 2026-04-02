@@ -38,7 +38,8 @@ abstract class ExploreDatabase : RoomDatabase() {
     abstract fun dao(): ExploredTileDao
 
     companion object {
-        @Volatile private var INSTANCE: ExploreDatabase? = null
+        @Volatile
+        private var INSTANCE: ExploreDatabase? = null
 
         fun get(context: Context): ExploreDatabase =
             INSTANCE ?: synchronized(this) {
