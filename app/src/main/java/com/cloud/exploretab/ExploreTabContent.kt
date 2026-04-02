@@ -45,9 +45,15 @@ fun ExploreTabContent() {
         try {
             LocationServices.getFusedLocationProviderClient(ctx).lastLocation
                 .addOnSuccessListener { loc ->
-                    if (loc != null) mapView?.controller?.animateTo(GeoPoint(loc.latitude, loc.longitude))
+                    if (loc != null) mapView?.controller?.animateTo(
+                        GeoPoint(
+                            loc.latitude,
+                            loc.longitude
+                        )
+                    )
                 }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
     }
 
     DisposableEffect(lifecycleOwner) {
