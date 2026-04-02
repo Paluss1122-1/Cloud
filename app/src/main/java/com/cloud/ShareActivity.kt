@@ -193,13 +193,11 @@ class ShareActivity : ComponentActivity() {
                         }
 
                         if (success) {
-                            Log.d("ShareActivity", "Datei gespeichert: ${targetFile.absolutePath}")
                             successCount++
                         } else {
                             failCount++
                         }
-                    } catch (e: Exception) {
-                        Log.e("ShareActivity", "Fehler beim Speichern: ${e.message}", e)
+                    } catch (_: Exception) {
                         failCount++
                     }
                 }
@@ -340,27 +338,6 @@ fun SaveToPrivateStorageScreen(
                 }
             }
         }
-    }
-}
-
-@Composable
-fun InfoRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            fontSize = 14.sp,
-            color = Color.LightGray
-        )
-        Text(
-            text = value,
-            fontSize = 14.sp,
-            color = Color.White,
-            fontWeight = FontWeight.Medium
-        )
     }
 }
 
