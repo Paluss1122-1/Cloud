@@ -31,6 +31,7 @@ material3 = "1.4.0"
 materialIconsExtendedVersion = "1.7.8"
 media3Exoplayer = "1.9.2"
 mp3agic = "0.9.1"
+osmdroidAndroid = "6.1.20"
 postgrestKt = "3.4.1"
 provider = "13.1.5"
 realtimeKt = "3.4.1"
@@ -102,6 +103,7 @@ ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.re
 ktor-ktor-client-android = { module = "io.ktor:ktor-client-android", version.ref = "ktorClientAndroidVersion" }
 ktor-utils = { module = "io.ktor:ktor-utils", version.ref = "ktorUtils" }
 mp3agic = { module = "com.mpatric:mp3agic", version.ref = "mp3agic" }
+osmdroid-android = { module = "org.osmdroid:osmdroid-android", version.ref = "osmdroidAndroid" }
 postgrest-kt = { module = "io.github.jan-tennert.supabase:postgrest-kt", version.ref = "postgrestKt" }
 protolite-well-known-types = { group = "com.google.firebase", name = "protolite-well-known-types", version.ref = "protoliteWellKnownTypes" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workRuntimeKtx" }
