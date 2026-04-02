@@ -347,7 +347,7 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
 
         builder
             .setContentTitle("Ruhezeit-Überwachung")
-            .setContentText("Aktiv von $currentStart:00 bis $currentEnd:00 Uhr")
+            .setContentText("Aktiv von $currentEnd Uhr bis $currentStart Uhr")
             .addAction(endAction)
     }
 
