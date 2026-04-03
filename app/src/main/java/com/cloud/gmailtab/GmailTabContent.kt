@@ -1,15 +1,6 @@
 package com.cloud.gmailtab
 
 import android.content.Context
-import android.content.SharedPreferences
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -24,7 +15,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.cloud.quiethoursnotificationhelper.laptopIp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -135,11 +126,9 @@ private suspend fun fetchEmailsFromServer(
 private const val PREFS_EMAIL    = "email_prefs"
 private const val KEY_SERVER_IP  = "server_ip"
 
-private fun loadServerIp(prefs: SharedPreferences): String =
-    prefs.getString(KEY_SERVER_IP, "") ?: ""
+private fun loadServerIp(): String = laptopIp
 
-private fun saveServerIp(prefs: SharedPreferences, ip: String) =
-    prefs.edit().putString(KEY_SERVER_IP, ip).apply()
+private fun saveServerIp(ip: String) = laptopIp=ip
 
 // ─── Haupt-Composable ────────────────────────────────────────────────────────
 
@@ -149,7 +138,7 @@ fun GmailTabContent() {
     val prefs   = remember { context.getSharedPreferences(PREFS_EMAIL, Context.MODE_PRIVATE) }
     val scope   = rememberCoroutineScope()
 
-    var serverIp      by remember { mutableStateOf(loadServerIp(prefs)) }
+    var serverIp      by remember { mutableStateOf(loadServerIp()) }
     var emails        by remember { mutableStateOf<List<EmailItem>>(emptyList()) }
     var isLoading     by remember { mutableStateOf(false) }
     var cacheInfo     by remember { mutableStateOf<String?>(null) }
@@ -190,7 +179,7 @@ fun GmailTabContent() {
             current  = serverIp,
             onConfirm = { ip ->
                 serverIp = ip
-                saveServerIp(prefs, ip)
+                saveServerIp(ip)
                 showIpDialog = false
                 loadEmails()
             },
@@ -649,7 +638,6 @@ fun GmailLogoText() {
 }
 
 private fun extractDisplayName(from: String): String {
-    // "Max Mustermann <max@example.com>" → "Max Mustermann"
     val match = Regex("""^"?([^"<]+)"?\s*<""").find(from.trim())
     return match?.groupValues?.get(1)?.trim()?.takeIf { it.isNotBlank() }
         ?: from.substringBefore("<").trim().takeIf { it.isNotBlank() }
