@@ -223,22 +223,22 @@ fun VocabTab() {
                                                                 put("type", "text")
                                                                 put(
                                                                     "text", """
-Look at this vocabulary list image carefully.
-There are TWO columns: Latin on the LEFT, German on the RIGHT.
-Each row is one vocabulary entry.
-
-Rules:
-- Match each Latin entry with the German entry on the SAME vertical position
-- Latin entries are on the left half of the image
-- German entries are on the right half
-- Ignore page numbers (like "116")
-- Ignore any repeated/duplicate blocks at bottom
-
-Return ONLY a JSON array like this (one object per row):
-[{"latein":"salūtem dīcere (m. Dat.)","deutsch":"(jdn.) grüßen, begrüßen"},{"latein":"gaudium","deutsch":"die Freude"},...]
-
-No markdown, no explanation, ONLY the JSON array.
-""".trimIndent()
+                                                                        Look at this vocabulary list image carefully.
+                                                                        There are TWO columns: Latin on the LEFT, German on the RIGHT.
+                                                                        Each row is one vocabulary entry.
+                                                                        
+                                                                        Rules:
+                                                                        - Match each Latin entry with the German entry on the SAME vertical position
+                                                                        - Latin entries are on the left half of the image
+                                                                        - German entries are on the right half
+                                                                        - Ignore page numbers (like "116")
+                                                                        - Ignore any repeated/duplicate blocks at bottom
+                                                                        
+                                                                        Return ONLY a JSON array like this (one object per row):
+                                                                        [{"latein":"salūtem dīcere (m. Dat.)","deutsch":"(jdn.) grüßen, begrüßen"},{"latein":"gaudium","deutsch":"die Freude"},...]
+                                                                        
+                                                                        No markdown, no explanation, ONLY the JSON array.
+                                                                        """.trimIndent()
                                                                 )
                                                             })
                                                         })
