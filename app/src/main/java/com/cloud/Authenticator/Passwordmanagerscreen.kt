@@ -110,7 +110,6 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Transparent)
-            .padding(padding)
     ) {
         Row(
             modifier = Modifier
@@ -126,8 +125,8 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    IconButton(onClick = { showAddDialog = true }) {
-                        Icon(Icons.Default.Add, null, tint = AccentBlue)
+                    IconButton(onClick = { showAddDialog = true }, modifier = Modifier.size(22.dp)) {
+                        Icon(Icons.Default.Add, "Hinzufügen", tint = AccentBlue)
                     }
                 }
                 Text(
