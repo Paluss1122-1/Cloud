@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -159,6 +160,53 @@ fun NotizenApp() {
 }
 
 @Composable
+private fun DeleteConfirmationDialog(
+    /** Text that will be shown inside the dialog */
+    message: String = "Möchtest du diese Notiz wirklich löschen?",
+    /** Called when the user presses “Ja” (confirm) */
+    onConfirm: () -> Unit,
+    /** Called when the user presses “Abbrechen” or dismisses the dialog */
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Gray)   // keep your dark theme colour
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 24.dp, vertical = 20.dp)
+                    .widthIn(min = 280.dp, max = 360.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Abbrechen", color = Color.LightGray)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = onConfirm,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                    ) {
+                        Text("Löschen")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun NoteCard(
     note: Note,
     onClick: () -> Unit,
@@ -166,6 +214,7 @@ fun NoteCard(
     modifier: Modifier
 ) {
     val dateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMAN)
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
@@ -174,7 +223,7 @@ fun NoteCard(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (note.color == NoteColor.DEFAULT)
-                Color.White.copy(0.05f)
+                Color.White.copy(alpha = 0.05f)
             else note.color.color
         ),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
@@ -191,7 +240,10 @@ fun NoteCard(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+                IconButton(
+                    onClick = { showDeleteConfirm = true },
+                    modifier = Modifier.size(24.dp)
+                ) {
                     Icon(
                         Icons.Default.Delete,
                         contentDescription = "Löschen",
@@ -248,6 +300,15 @@ fun NoteCard(
                 color = MaterialTheme.colorScheme.outline
             )
         }
+    }
+    if (showDeleteConfirm) {
+        DeleteConfirmationDialog(
+            onConfirm = {
+                onDelete()
+                showDeleteConfirm = false
+            },
+            onDismiss = { showDeleteConfirm = false }
+        )
     }
 }
 
