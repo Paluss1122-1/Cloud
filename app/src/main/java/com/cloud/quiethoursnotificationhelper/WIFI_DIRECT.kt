@@ -1220,7 +1220,7 @@ fun loadAllAiResponses(context: Context): List<AiResponseEntry> {
     }
 }
 
-private fun getTodayKey(): String {
+fun getTodayKey(): String {
     val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.GERMANY)
     return sdf.format(java.util.Date())
 }
@@ -2250,4 +2250,33 @@ private fun installApk(context: Context, apkFile: java.io.File) {
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
     }
     context.startActivity(intent)
+}
+
+fun buildSessionStatsText(sessions: List<ListenSession>): String {
+    val totals = mutableMapOf<String, Triple<Long, String, Int>>()
+    for (s in sessions) {
+        val cur = totals[s.label] ?: Triple(0L, s.type, 0)
+        totals[s.label] = Triple(cur.first + s.listenedMs, s.type, cur.third + 1)
+    }
+
+    val sorted = totals.entries.sortedByDescending { it.value.first }.take(15)
+    val lines = mutableListOf<String>()
+
+    val allTimes = sessions.map { it.startedAt }.sorted()
+    val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.GERMANY)
+    lines += "Zeitraum: ${fmt.format(allTimes.first())} – ${fmt.format(allTimes.last())}"
+    lines += "Tracks gesamt: ${totals.size}"
+
+    for ((label, info) in sorted) {
+        val mins = info.first / 1000.0 / 60.0
+        val typ = if (info.second == "music") "Musik" else "Podcast"
+        lines += "- [$typ] $label: ${"%.1f".format(mins)} min, ${info.third}x"
+    }
+
+    val prompt = """Hör-Stats von heute (bereits berechnet):
+${lines.joinToString("\n")}
+
+Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn beides da ist. Nur fließender Text, keine Liste, kein Markdown."""
+
+    return prompt
 }
