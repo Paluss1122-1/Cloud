@@ -121,7 +121,9 @@ fun NotizenApp() {
                         modifier = Modifier.background(Color.Gray),
                         note = note,
                         onClick = { selectedNote = note },
-                        onDelete = { notes = notes.filter { it.id != note.id } }
+                        onDelete = {
+                            notes = deleteNote(context, notes, note.id)
+                        }
                     )
                 }
             }
@@ -149,7 +151,7 @@ fun NotizenApp() {
                 saveNotes(context, notes)
             },
             onDelete = {
-                notes = notes.filter { it.id != note.id }
+                notes = deleteNote(context, notes, note.id)
                 selectedNote = null
             }
         )
@@ -643,6 +645,14 @@ fun saveNotes(context: Context, notes: List<Note>) {
     }
 
     prefs.edit(commit = true) { putString("notes", serialized) }
+}
+
+fun deleteNote(context: Context, notes: List<Note>, noteId: String): List<Note> {
+    val newList = notes.filterNot { it.id == noteId }
+
+    saveNotes(context, newList)
+
+    return newList
 }
 
 fun loadNotes(context: Context): List<Note> {
