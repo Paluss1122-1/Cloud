@@ -163,12 +163,24 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Setup Debug Keystore
+      - name: Restore debug keystore
         run: |
-          echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}"
+          echo "${{ secrets.DEBUG_KEYSTORE_B64 }}" | base64 -d > debug.keystore
+
+      - name: Set signing environment
+        run: |
+          echo "DEBUG_KEYSTORE_PASSWORD=${{ secrets.DEBUG_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+          echo "DEBUG_KEY_ALIAS=${{ secrets.DEBUG_KEY_ALIAS }}" >> $GITHUB_ENV
+          echo "DEBUG_KEY_PASSWORD=${{ secrets.DEBUG_KEY_PASSWORD }}" >> $GITHUB_ENV
+
       - name: Build project
-        if: matrix.build-mode == 'manual'
-        run: ./gradlew assembleDebug --build-cache --parallel --no-daemon
+        run: |
+          ./gradlew assembleDebug \
+            -PdebugStoreFile=debug.keystore \
+            -PdebugStorePassword=$DEBUG_KEYSTORE_PASSWORD \
+            -PdebugKeyAlias=$DEBUG_KEY_ALIAS \
+            -PdebugKeyPassword=$DEBUG_KEY_PASSWORD \
+            --build-cache --parallel --no-daemon
 
       - name: Save APK
         if: matrix.build-mode == 'manual'
