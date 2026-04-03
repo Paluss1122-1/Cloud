@@ -1,12 +1,13 @@
 package com.cloud.weathertab
 
+import TabNavigationViewModel
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
-import android.os.Build
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalAnimationApi
@@ -34,6 +35,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -142,7 +144,8 @@ suspend fun fetchWeatherForecast(lat: Double, lon: Double, days: Int = 7): Weath
                     )
                 )
             }
-            val avg = hours.map { it.temp }.filter { !it.isNaN() }.let { if (it.isNotEmpty()) it.average() else Double.NaN }
+            val avg = hours.map { it.temp }.filter { !it.isNaN() }
+                .let { if (it.isNotEmpty()) it.average() else Double.NaN }
             val icon = hours.firstOrNull()?.icon ?: ""
             daysList.add(DayData(date = date, avgTemp = avg, icon = icon, hours = hours))
         }
@@ -188,17 +191,52 @@ suspend fun getLastKnownLocation(context: Context): Location? {
     }
 }
 
+data class SelectionState(val hour: HourData?, val dayIndex: Int?)
+
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
-fun WeatherTabContent() {
+fun WeatherTabContent(
+    viewModel: TabNavigationViewModel,
+) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-
+    var selectionState by remember { mutableStateOf(SelectionState(hour = null, dayIndex = null)) }
     var weather by remember { mutableStateOf<WeatherData?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var selectedHour by remember { mutableStateOf<HourData?>(null) }
-    var selectedDayIndex by remember { mutableStateOf<Int?>(null) }
+
+    LaunchedEffect(selectionState.hour, selectionState.dayIndex) {
+        val canGoBack = selectionState.hour != null || selectionState.dayIndex != null
+        Log.d("TOUCH", "--START")
+        Log.d("TOUCH", "canGoBack $canGoBack")
+        Log.d("TOUCH", "selectedHour $selectionState.hour")
+        Log.d("TOUCH", "selectedDayIndex $selectionState.dayIndex")
+        Log.d("TOUCH", "--FINISH")
+        viewModel.updateBackState(
+            canNavigateBack = canGoBack,
+            onNavigateBack = {
+                selectionState = if (selectionState.hour != null) {
+                    selectionState.copy(hour = null)
+                } else {
+                    selectionState.copy(dayIndex = null)
+                }
+            }
+        )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.reset()
+        }
+    }
+
+    BackHandler(enabled = selectionState.hour != null || selectionState.dayIndex != null) {
+        selectionState = if (selectionState.hour != null) {
+            selectionState.copy(hour = null)
+        } else {
+            selectionState.copy(dayIndex = null)
+        }
+    }
 
     val refreshWeather: () -> Unit = {
         scope.launch {
@@ -224,21 +262,12 @@ fun WeatherTabContent() {
         refreshWeather()
     }
 
-    BackHandler(enabled = selectedHour != null || selectedDayIndex != null) {
-        if (selectedHour != null) {
-            selectedHour = null
-        } else {
-            selectedDayIndex = null
-        }
-    }
-
     val swipeRefreshState = rememberSwipeRefreshState(isRefreshing = isLoading)
 
     SwipeRefresh(
         state = swipeRefreshState,
         onRefresh = {
-            selectedHour = null
-            selectedDayIndex = null
+            selectionState = SelectionState(hour = null, dayIndex = null)
             refreshWeather()
         }
     ) {
@@ -257,14 +286,16 @@ fun WeatherTabContent() {
             }
 
             AnimatedContent(
-                targetState = Triple(weather, selectedHour, selectedDayIndex),
+                targetState = Triple(weather, selectionState.hour, selectionState.dayIndex),
                 transitionSpec = {
                     fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
                 }
             ) { (data, selHour, selDayIdx) ->
                 if (data == null) {
                     Box(
-                        modifier = Modifier.fillMaxWidth().height(200.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         if (!isLoading) {
@@ -274,18 +305,25 @@ fun WeatherTabContent() {
                 } else {
                     when {
                         selHour != null -> {
-                            SelectedHourView(selHour)
+                            SelectedHourView(hour = selHour)
                         }
                         selDayIdx != null -> {
                             val days = data.days
                             if (selDayIdx in days.indices) {
-                                DayHoursView(days[selDayIdx], onHourSelected = { selectedHour = it })
+                                DayHoursView(
+                                    days[selDayIdx],
+                                    onHourSelected = { hourData ->
+                                        selectionState = selectionState.copy(hour = hourData)
+                                    }
+                                )
                             }
                         }
                         else -> {
                             MainView(
                                 data = data,
-                                onDaySelected = { selectedDayIndex = it }
+                                onDaySelected = { idx ->
+                                    selectionState = selectionState.copy(dayIndex = idx)
+                                }
                             )
                         }
                     }
@@ -494,7 +532,9 @@ fun HourCard(hour: HourData, onClick: () -> Unit) {
                 hour.condition,
                 color = Color(0xFF8B8B9F),
                 fontSize = 14.sp,
-                modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp)
             )
 
             Row(
@@ -617,15 +657,35 @@ fun TodayView(data: WeatherData, onDaySelected: (Int) -> Unit, onHourSelected: (
         Text("Keine Tagesdaten", color = Color.White)
         return
     }
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF22222A))) {
-        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("${data.city}", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF22222A))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                "${data.city}",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
             Spacer(Modifier.height(8.dp))
-            Text("${data.currentTemp.toInt()}°C  ${iconToEmojiShort(data.currentIcon())}", color = Color.White, fontSize = 40.sp)
+            Text(
+                "${data.currentTemp.toInt()}°C  ${iconToEmojiShort(data.currentIcon())}",
+                color = Color.White,
+                fontSize = 40.sp
+            )
             Text(data.currentCondition, color = Color.LightGray)
             Spacer(Modifier.height(12.dp))
 
-            Text("Stundenvorhersage", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Stundenvorhersage",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
             Spacer(Modifier.height(8.dp))
             Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
                 today.hours.forEach { hour ->
@@ -637,7 +697,10 @@ fun TodayView(data: WeatherData, onDaySelected: (Int) -> Unit, onHourSelected: (
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF2F2F3A))
                     ) {
-                        Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
                             Text(hour.time, color = Color.White)
                             Text(iconToEmojiShort(hour.icon), fontSize = 28.sp)
                             Text("${hour.temp.toInt()}°C", color = Color.White)
@@ -654,7 +717,12 @@ private fun iconToEmojiShort(icon: String) = iconToEmoji(icon)
 
 @Composable
 fun SmallHourCard(hour: HourData) {
-    Column(modifier = Modifier.padding(8.dp).width(80.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier = Modifier
+            .padding(8.dp)
+            .width(80.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Text(hour.time, color = Color.White)
         Text(iconToEmojiShort(hour.icon), fontSize = 24.sp)
         Text("${hour.temp.toInt()}°", color = Color.White)
@@ -676,10 +744,17 @@ fun DaysOverview(days: List<DayData>, onDayClick: (Int) -> Unit) {
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A3A))
                 ) {
-                    Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                         Text(d.date, color = Color.White)
                         Text(iconToEmojiShort(d.icon), fontSize = 32.sp)
-                        Text("${d.avgTemp.toInt()}°C", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text(
+                            "${d.avgTemp.toInt()}°C",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
@@ -697,10 +772,23 @@ fun WeatherDetailSmall(icon: String, value: String) {
 
 @Composable
 fun WeatherWidgetPreview(data: WeatherData) {
-    Card(modifier = Modifier.width(200.dp).height(120.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A3A)), shape = RoundedCornerShape(12.dp)) {
-        Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.SpaceBetween) {
+    Card(
+        modifier = Modifier
+            .width(200.dp)
+            .height(120.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A3A)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
             Text(data.city, color = Color.White, fontWeight = FontWeight.Bold)
-            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text("${data.currentTemp.toInt()}°C", color = Color.White, fontSize = 20.sp)
                 Text(iconToEmojiShort(data.currentIcon()), fontSize = 20.sp)
             }
@@ -731,13 +819,12 @@ suspend fun weathernot(context: Context, day: String, hour: String, weatherData:
     }
 
     val selectedDay = weatherData.days[dayIndex]
-    val hourIndex = hourInt
 
-    if (hourIndex >= selectedDay.hours.size) {
+    if (hourInt >= selectedDay.hours.size) {
         return
     }
 
-    val selectedHour = selectedDay.hours[hourIndex]
+    val selectedHour = selectedDay.hours[hourInt]
 
     withContext(Dispatchers.Main) {
         createWeatherNotification(context, day, selectedHour)
@@ -745,7 +832,8 @@ suspend fun weathernot(context: Context, day: String, hour: String, weatherData:
 }
 
 private fun createWeatherNotification(context: Context, dayName: String, hourData: HourData) {
-    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    val notificationManager =
+        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     val channelId = "weather_notifications"
 
     val channel = NotificationChannel(
