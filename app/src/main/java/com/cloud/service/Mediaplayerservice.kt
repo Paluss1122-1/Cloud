@@ -1868,7 +1868,10 @@ class MediaPlayerService : MediaSessionService() {
                 val screenOn = getSystemService(PowerManager::class.java)?.isInteractive ?: true
 
                 if (screenOn) {
-                    if (isPlayingPodcast || isPlayingMusic) updateNotification()
+                    if (isPlayingPodcast || isPlayingMusic) {
+                        val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
+                        nm?.notify(MEDIA_PLAYER, buildNotification())
+                    }
                     if (isPlayingPodcast && podcastPlayer != null && currentPodcast != null) {
                         val pos = podcastPlayer!!.currentPosition.toLong()
                         if (abs(pos - lastSaved) > 5000) {
