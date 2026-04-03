@@ -129,7 +129,7 @@ private const val KEY_SERVER_IP  = "server_ip"
 private fun loadServerIp(): String = laptopIp
 
 private fun saveServerIp(ip: String) {
-    laptopIp=ip
+    laptopIp = ip
 }
 
 // ─── Haupt-Composable ────────────────────────────────────────────────────────
