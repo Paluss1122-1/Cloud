@@ -586,15 +586,29 @@ class QuietHoursNotificationService : Service() {
                     START_STICKY
                 }
 
-                else -> {
+                ACTION_DAILY_MUSIC_SUMMARY -> {
+                    CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
                         try {
-                        startForeground(
-                            NOTIFICATION_ID,
-                            createNotification(isCurrentlyQuietHours, this)
-                        )
+                            MediaAnalyticsManager.init(this@QuietHoursNotificationService)
+                            val sessions = getSessions()
+                            if (sessions.isEmpty()) return@launch
+
+                            val stats = buildSessionStatsText(sessions)
+                            val result = sendNvidiaChatMessageAITab(emptyList(), stats) ?: return@launch
+
+                            saveAiResponse(this@QuietHoursNotificationService, result)
+                            aiResponseFlow.emit(
+                                AiResponseEntry(result, System.currentTimeMillis(), getTodayKey())
+                            )
+                            showSimpleNotification("🎵 Tages-Zusammenfassung", result.take(200), 60.seconds)
                         } catch (e: Exception) {
-                        reportServiceError("onStartCommand:else:startForeground", e)
+                            reportServiceError("ACTION_DAILY_MUSIC_SUMMARY", e)
+                        }
                     }
+                    START_STICKY
+                }
+
+                else -> {
                     START_STICKY
                 }
             }
