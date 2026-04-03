@@ -913,10 +913,11 @@ fun buildWebView(context: Context): WebView = WebView(context).apply {
                 "AppleWebKit/537.36 (KHTML, like Gecko) " +
                 "Chrome/124.0.0.0 Mobile Safari/537.36"
     }
-    CookieManager.getInstance().apply {
-        setAcceptCookie(true)
-        setAcceptThirdPartyCookies(webview, true)
-    }
+
+    val cookieManager = CookieManager.getInstance()
+    cookieManager.setAcceptCookie(true)
+    cookieManager.setAcceptThirdPartyCookies(this, true)
+    cookieManager.flush()
     setBackgroundColor("#1A1A1A".toColorInt())
     isVerticalScrollBarEnabled = false
 }
