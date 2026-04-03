@@ -67,7 +67,7 @@ private suspend fun fetchEmailsFromServer(
     serverIp: String,
     forceReload: Boolean = false
 ): EmailsResponse = withContext(Dispatchers.IO) {
-    val port = 8081 // API_SERVER port
+    val port = 8886 // API_SERVER port
     val urlStr = "http://$serverIp:$port/emails"
 
     try {
