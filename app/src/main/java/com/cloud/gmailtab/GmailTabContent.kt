@@ -153,7 +153,7 @@ private fun deleteCookiesForAccount(prefs: SharedPreferences, cookieKey: String)
 enum class GmailScreen { ACCOUNT_PICKER, WEBVIEW, ADD_ACCOUNT }
 
 @Composable
-fun GmailTab() {
+fun GmailTabContent() {
     val context = LocalContext.current
     val prefs   = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
     val scope   = rememberCoroutineScope()

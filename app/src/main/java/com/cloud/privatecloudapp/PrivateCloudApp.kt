@@ -161,7 +161,7 @@ import com.cloud.contactstab.ContactsViewModel
 import com.cloud.datecalculator.DateCalculatorContent
 import com.cloud.exploretab.ExploreTabContent
 import com.cloud.gallery.GalleryTab
-import com.cloud.gmailtab.GmailListScreen
+import com.cloud.gmailtab.GmailTabContent
 import com.cloud.mediaplayer.MediaTab
 import com.cloud.mediarecorder.MediaRecorderContent
 import com.cloud.movietab.MovieDiscoveryTabContent
@@ -318,7 +318,7 @@ enum class MenuItem(
     GMAIL(
         "Gmail",
         "️️✉️ ",
-        { GmailListScreen() }
+        { GmailTabContent() }
     ),
     Vocabs(
         "Vokabeln",
