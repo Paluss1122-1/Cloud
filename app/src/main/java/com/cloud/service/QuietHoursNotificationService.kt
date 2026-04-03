@@ -125,6 +125,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import androidx.core.app.ActivityCompat
+import com.cloud.mediaplayer.MediaAnalyticsManager
+import com.cloud.mediaplayer.MediaAnalyticsManager.getSessions
+import com.cloud.quiethoursnotificationhelper.AiResponseEntry
+import com.cloud.quiethoursnotificationhelper.aiResponseFlow
+import com.cloud.quiethoursnotificationhelper.buildSessionStatsText
+import com.cloud.quiethoursnotificationhelper.getTodayKey
+import com.cloud.quiethoursnotificationhelper.saveAiResponse
+import com.cloud.quiethoursnotificationhelper.sendNvidiaChatMessageAITab
 
 class QuietHoursNotificationService : Service() {
     private val errorScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -228,6 +236,7 @@ class QuietHoursNotificationService : Service() {
         const val ACTION_CONTENT_INTENT = "com.cloud.ACTION_CONTENT_INTENT"
         const val ACTION_SYNC_LAPTOP = "com.cloud.ACTION_SYNC_LAPTOP"
         const val SHOW_OVERLAY = "com.cloud.SHOW_OVERLAY"
+        const val ACTION_DAILY_MUSIC_SUMMARY = "com.cloud.ACTION_DAILY_MUSIC_SUMMARY"
 
         var currentSenderForVoiceNote: String? = null
         var voiceNoteFiles: List<File> = emptyList()
@@ -358,6 +367,7 @@ class QuietHoursNotificationService : Service() {
         startTriggerListenerIfHomeWifi(this)
         startAiResponseListener(this)
         startDiscoveryListener()
+        scheduleDailySummaryAlarm(this)
         try {
             registerWifiCallback()
         } catch (e: Exception) {
@@ -408,6 +418,32 @@ class QuietHoursNotificationService : Service() {
         }
     }
 
+    private fun scheduleDailySummaryAlarm(context: Context) {
+        val alarmManager = context.getSystemService(AlarmManager::class.java)
+        val intent = Intent(context, QuietHoursNotificationService::class.java).apply {
+            action = ACTION_DAILY_MUSIC_SUMMARY
+        }
+        val pending = PendingIntent.getService(
+            context, 9001, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 20)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+            if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
+        }
+
+        alarmManager.setRepeating(
+            AlarmManager.RTC_WAKEUP,
+            cal.timeInMillis,
+            AlarmManager.INTERVAL_DAY,
+            pending
+        )
+    }
+
     private fun schedulePeriodicCleanup() {
         workerHandler.postDelayed(object : Runnable {
             override fun run() {
@@ -449,7 +485,8 @@ class QuietHoursNotificationService : Service() {
 
                 ACTION_RESTORE_NOTIFICATION -> {
                     val notification = createNotification(isCurrentlyQuietHours, this)
-                    startForeground(NOTIFICATION_ID, notification)
+                    val nm = getSystemService(NotificationManager::class.java)
+                    nm.notify(NOTIFICATION_ID, notification)
                     START_STICKY
                 }
 
@@ -550,12 +587,12 @@ class QuietHoursNotificationService : Service() {
                 }
 
                 else -> {
-                    try {
+                        try {
                         startForeground(
                             NOTIFICATION_ID,
                             createNotification(isCurrentlyQuietHours, this)
                         )
-                    } catch (e: Exception) {
+                        } catch (e: Exception) {
                         reportServiceError("onStartCommand:else:startForeground", e)
                     }
                     START_STICKY
