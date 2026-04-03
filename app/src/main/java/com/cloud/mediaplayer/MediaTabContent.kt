@@ -426,12 +426,6 @@ private fun HomeTab(
                 }
             }
 
-            item {
-                Button(onClick = { Log.d("MEDIAPLAYER", "${musicPrefs.all}") }) {
-                    Text("PREFS")
-                }
-            }
-
             if (state.algorithmicPlaylists.isNotEmpty()) {
                 item {
                     SectionHeader("Für dich")
