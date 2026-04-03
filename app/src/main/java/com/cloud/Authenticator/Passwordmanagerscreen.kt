@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.zIndex
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -113,7 +114,7 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
                 containerColor = AccentBlue,
                 contentColor = Color.White,
                 shape = CircleShape,
-                modifier = Modifier.size(56.dp)
+                modifier = Modifier.size(56.dp).zIndex(1f)
             ) { Icon(Icons.Default.Add, "Hinzufügen") }
         }
     ) { padding ->
