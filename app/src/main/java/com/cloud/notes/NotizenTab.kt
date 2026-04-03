@@ -460,6 +460,7 @@ fun EditNoteDialog(
     var newItemText by remember { mutableStateOf("") }
     var selectedColor by remember { mutableStateOf(note.color) }
     var showColorPicker by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier.fillMaxSize()
@@ -512,7 +513,7 @@ fun EditNoteDialog(
                             tint = titleColor
                         )
                     }
-                    IconButton(onClick = onDelete) {
+                    IconButton(onClick = { showDeleteConfirm = true }) {
                         Icon(
                             Icons.Default.Delete,
                             contentDescription = "Löschen",
@@ -679,6 +680,17 @@ fun EditNoteDialog(
                 Text("Speichern")
             }
         }
+    }
+    if (showDeleteConfirm) {
+        DeleteConfirmationDialog(
+            message = "Willst du die Notiz \"${note.title}\" wirklich löschen?",
+            onConfirm = {
+                onDelete()
+                showDeleteConfirm = false
+                onDismiss()
+            },
+            onDismiss = { showDeleteConfirm = false }
+        )
     }
 }
 
