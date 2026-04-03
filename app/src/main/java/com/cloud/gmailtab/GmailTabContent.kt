@@ -415,74 +415,87 @@ fun AddAccountScreen(
     onLoadingChange   : (Boolean) -> Unit,
     onCanGoBackChange : (Boolean) -> Unit
 ) {
-    // Wir laden direkt Google-Login. Sobald wir auf mail.google.com landen → Account erkannt
-    var detectedEmail by remember { mutableStateOf("") }
-    var detectedName  by remember { mutableStateOf("") }
+    var currentUrl    by remember { mutableStateOf("") }
+    var webViewRef    by remember { mutableStateOf<WebView?>(null) }
+    val onGmail       = currentUrl.contains("mail.google.com") && !currentUrl.contains("accounts.google")
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(top = 56.dp)
-    ) {
+    fun extractAndAdd(wv: WebView) {
+        val js = """
+            (function(){
+                var selectors = ['[data-email]','[aria-label*="@"]','[data-hovercard-id*="@"]'];
+                for(var s of selectors){
+                    var el = document.querySelector(s);
+                    if(el){
+                        var e = el.getAttribute('data-email') || el.getAttribute('aria-label') || el.getAttribute('data-hovercard-id');
+                        if(e && e.includes('@')) return e.trim();
+                    }
+                }
+                var m = document.title.match(/[\w.+\-]+@[\w.\-]+\.[a-z]{2,}/i);
+                if(m) return m[0];
+                var all = document.body.innerText.match(/[\w.+\-]+@gmail\.com/i);
+                return all ? all[0] : '';
+            })()
+        """.trimIndent()
+        wv.evaluateJavascript(js) { result ->
+            val email = result?.trim()?.removeSurrounding("\"")?.takeIf { it.contains("@") }
+            if (email != null) {
+                val name = email.substringBefore("@")
+                    .replace(".", " ")
+                    .split(" ")
+                    .joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+                onAccountAdded(email, name)
+            } else {
+                // Fallback: ohne Email speichern, URL als Hinweis
+                onAccountAdded("unbekannt@gmail.com", "Google-Konto")
+            }
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize().padding(top = 56.dp)) {
         AndroidView(
             factory = { ctx ->
                 buildWebView(ctx).apply {
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView, url: String, fav: Bitmap?) {
+                            currentUrl = url
                             onLoadingChange(true)
                             onCanGoBackChange(view.canGoBack())
                         }
                         override fun onPageFinished(view: WebView, url: String) {
+                            currentUrl = url
                             onLoadingChange(false)
                             onCanGoBackChange(view.canGoBack())
-
-                            // Wenn wir auf Gmail-Postfach gelandet sind → Account extrahieren
                             if (url.contains("mail.google.com") && !url.contains("accounts.google")) {
-                                evaluateJavascript("""
-                                    (function(){
-                                        var m = document.querySelector('[data-email]');
-                                        if(m) return m.getAttribute('data-email');
-                                        var t = document.title;
-                                        var match = t.match(/[\w.+-]+@[\w.]+/);
-                                        return match ? match[0] : '';
-                                    })()
-                                """.trimIndent()) { result ->
-                                    val email = result?.trim()?.removeSurrounding("\"") ?: ""
-                                    if (email.isNotEmpty() && email.contains("@")) {
-                                        val name = email.substringBefore("@")
-                                            .replace(".", " ")
-                                            .split(" ")
-                                            .joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
-                                        onAccountAdded(email, name)
-                                    } else {
-                                        // Fallback: Titel als Name nehmen
-                                        val title = title ?: ""
-                                        val emailFromTitle = Regex("[\\w.+-]+@[\\w.]+").find(title)?.value
-                                        if (emailFromTitle != null) {
-                                            val name = emailFromTitle.substringBefore("@")
-                                                .replaceFirstChar { it.uppercase() }
-                                            onAccountAdded(emailFromTitle, name)
-                                        }
-                                    }
-                                }
+                                extractAndAdd(view)
                             }
                         }
                     }
                     webChromeClient = object : WebChromeClient() {
-                        override fun onReceivedTitle(view: WebView, title: String) {
-                            onPageTitleChange(title)
-                        }
-                        override fun onProgressChanged(view: WebView, p: Int) {
-                            onLoadingChange(p < 100)
-                        }
+                        override fun onReceivedTitle(view: WebView, title: String) { onPageTitleChange(title) }
+                        override fun onProgressChanged(view: WebView, p: Int) { onLoadingChange(p < 100) }
                     }
-                    // Direkt Google-Login laden
                     loadUrl("https://accounts.google.com/signin/v2/identifier?service=mail&flowName=GlifWebSignIn&flowEntry=ServiceLogin")
                     webViewCallback(this)
+                    webViewRef = this
                 }
             },
             modifier = Modifier.fillMaxSize()
         )
+
+        // Manueller Fallback-Button wenn auf mail.google.com
+        if (onGmail) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(24.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color(0xFF4285F4))
+                    .clickable { webViewRef?.let { extractAndAdd(it) } }
+                    .padding(horizontal = 28.dp, vertical = 14.dp)
+            ) {
+                Text("Konto bestätigen", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
     }
 }
 
