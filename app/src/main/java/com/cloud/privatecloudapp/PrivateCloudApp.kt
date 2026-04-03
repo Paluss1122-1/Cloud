@@ -2,6 +2,7 @@
 
 package com.cloud.privatecloudapp
 
+import TabNavigationViewModel
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -44,6 +45,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -110,6 +112,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -123,6 +126,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -140,6 +144,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
 import androidx.core.content.edit
 import androidx.core.net.toUri
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
 import com.cloud.Config
 import com.cloud.Config.cms
@@ -154,6 +159,7 @@ import com.cloud.contactstab.ContactsRepository
 import com.cloud.contactstab.ContactsTabContent
 import com.cloud.contactstab.ContactsViewModel
 import com.cloud.datecalculator.DateCalculatorContent
+import com.cloud.exploretab.ExploreTabContent
 import com.cloud.gallery.GalleryTab
 import com.cloud.gmailtab.GmailListScreen
 import com.cloud.mediaplayer.MediaTab
@@ -197,7 +203,7 @@ private const val MAX_RECENT_TABS = 5
 enum class MenuItem(
     val title: String,
     val icon: String,
-    val content: @Composable () -> Unit
+    val content: @Composable (setGesturesEnabled: (Boolean) -> Unit) -> Unit
 ) {
     PRIVATE_CLOUD(
         "Private Cloud",
@@ -222,7 +228,10 @@ enum class MenuItem(
     GALLERY(
         "Gallerie",
         "🖼️",
-        { GalleryTab() }
+        { setGesturesEnabled ->
+            LaunchedEffect(Unit) { setGesturesEnabled(true) }
+            GalleryTab()
+        }
     ),
     AUTHENTICATOR(
         "Authenticator",
@@ -232,7 +241,7 @@ enum class MenuItem(
     WEATHER(
         "Wetter",
         "🌡️",
-        { WeatherTabContent() }
+        { }
     ),
     CONTACTS(
         "Kontakte",
@@ -324,8 +333,11 @@ enum class MenuItem(
     EXPLORE(
         "Erkunden",
         "🗺️",
-        { com.cloud.exploretab.ExploreTabContent() }
-    )
+        { setGesturesEnabled ->
+            LaunchedEffect(Unit) { setGesturesEnabled(false) }  // ✅ Gestures deaktivieren
+            ExploreTabContent()
+        }
+    ),
 }
 
 fun saveRecentTab(context: Context, menuItem: MenuItem) {
@@ -620,7 +632,8 @@ fun PrivateCloudApp(
     storage: Storage,
     startTarget: String?,
     initialMenuItem: MenuItem? = null,
-    onBackToLanding: (() -> Unit)? = null
+    onBackToLanding: (() -> Unit)? = null,
+    viewModel: TabNavigationViewModel = viewModel()
 ) {
     val context = LocalContext.current
     var selectedMenuItem by rememberSaveable {
@@ -632,10 +645,24 @@ fun PrivateCloudApp(
     var currentUrl by rememberSaveable { mutableStateOf(webViewUrl) }
     var webViewState by remember { mutableStateOf<WebView?>(null) }
     var isDesktopMode by rememberSaveable { mutableStateOf(false) }
+    val navigationState by viewModel.navigationState.collectAsState()
+    var gesturesEnabled by rememberSaveable { mutableStateOf(true) }
+
+    val setGesturesEnabled: (Boolean) -> Unit = { enabled ->
+        gesturesEnabled = enabled
+    }
 
     LaunchedEffect(startTarget) {
         if (startTarget == "weather") {
             selectedMenuItem = MenuItem.WEATHER
+        }
+    }
+
+    LaunchedEffect(selectedMenuItem) {
+        gesturesEnabled = when (selectedMenuItem) {
+            MenuItem.EXPLORE -> false
+            MenuItem.GALLERY -> false
+            else -> true
         }
     }
 
@@ -657,6 +684,7 @@ fun PrivateCloudApp(
     if (isFullScreen) {
         Box(modifier = Modifier.fillMaxSize()) {
             when (selectedMenuItem) {
+                MenuItem.WEATHER -> WeatherTabContent(viewModel = viewModel)
                 MenuItem.BROWSER -> {
                     BrowserTabContent(
                         url = webViewUrl,
@@ -664,12 +692,12 @@ fun PrivateCloudApp(
                         onEnterFullScreen = { isFullScreen = true }
                     )
                 }
+
                 MenuItem.PRIVATE_CLOUD -> {
                     MainCloudScreen(storage = storage)
                 }
-                else -> {
-                    selectedMenuItem.content()
-                }
+
+                else -> selectedMenuItem.content(setGesturesEnabled)
             }
         }
 
@@ -685,7 +713,7 @@ fun PrivateCloudApp(
     } else {
         ModalNavigationDrawer(
             drawerState = drawerState,
-            gesturesEnabled = false,
+            gesturesEnabled = selectedMenuItem != MenuItem.BROWSER || gesturesEnabled,
             scrimColor = Color.Black.copy(alpha = 0.6f),
             drawerContent = {
                 ModalDrawerSheet(
@@ -775,6 +803,30 @@ fun PrivateCloudApp(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Cloud.copy(0.8f))
+                    .then(
+                        if (gesturesEnabled) {
+                            Modifier.pointerInput(navigationState.canNavigateBack, drawerState) {
+                                var gestureHandled = false
+                                detectHorizontalDragGestures(
+                                    onDragStart = { gestureHandled = false },
+                                    onHorizontalDrag = { change, dragAmount ->
+                                        if (!gestureHandled && dragAmount > 20f) {
+                                            gestureHandled = true
+                                            if (navigationState.canNavigateBack) {
+                                                viewModel.triggerBack()
+                                            } else {
+                                                scope.launch { if (!drawerState.isOpen) drawerState.open() }
+                                            }
+                                        }
+                                    },
+                                    onDragEnd = { gestureHandled = false },
+                                    onDragCancel = { gestureHandled = false }
+                                )
+                            }
+                        } else {
+                            Modifier
+                        }
+                    )
             ) {
                 val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
                 val bgpicture = remember {
@@ -828,19 +880,20 @@ fun PrivateCloudApp(
                 ) { paddingValues ->
                     Box(modifier = Modifier.padding(paddingValues)) {
                         when (selectedMenuItem) {
-                            MenuItem.BROWSER -> {
-                                BrowserTabContent(
-                                    url = webViewUrl,
-                                    onUrlChange = { webViewUrl = it },
-                                    onEnterFullScreen = { isFullScreen = true }
-                                )
-                            }
-                            MenuItem.PRIVATE_CLOUD -> {
-                                MainCloudScreen(storage = storage)
-                            }
-                            else -> {
-                                selectedMenuItem.content()
-                            }
+                            MenuItem.WEATHER -> WeatherTabContent(viewModel = viewModel)
+                            MenuItem.BROWSER -> BrowserTabContent(
+                                url = webViewUrl,
+                                onUrlChange = { webViewUrl = it },
+                                onEnterFullScreen = { isFullScreen = true },
+                                //viewModel = viewModel // optional, falls Browser auch BackState braucht
+                            )
+
+                            MenuItem.PRIVATE_CLOUD -> MainCloudScreen(
+                                storage = storage,
+                                //viewModel = viewModel
+                            )
+
+                            else -> selectedMenuItem.content(setGesturesEnabled)
                         }
                     }
                 }
@@ -905,8 +958,10 @@ fun PrivateCloudApp(
                         ): Boolean = false
 
                         override fun onPageFinished(view: WebView?, url: String?) {
-                            if (url != null) {currentUrl = url
-                            WebViewCookieBackup.saveCookies(context, url)}
+                            if (url != null) {
+                                currentUrl = url
+                                WebViewCookieBackup.saveCookies(context, url)
+                            }
                         }
                     }
 
