@@ -106,148 +106,141 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
         }
     }
 
-    Scaffold(
-        containerColor = Color.Transparent,
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddDialog = true },
-                containerColor = AccentBlue,
-                contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.size(56.dp).zIndex(1f)
-            ) { Icon(Icons.Default.Add, "Hinzufügen") }
-        }
-    ) { padding ->
-        Column(
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Transparent)
+            .padding(padding)
+    ) {
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Transparent)
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(Modifier.fillMaxWidth()) {
                     Text(
                         "🔐 Passwörter",
                         color = TextP,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold
                     )
+                    IconButton(onClick = { showAddDialog = true }) {
+                        Icon(Icons.Default.Add, null, tint = AccentBlue)
+                    }
+                }
+                Text(
+                    "${entries.size} Einträge",
+                    color = TextS,
+                    fontSize = 12.sp
+                )
+            }
+        }
+
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            placeholder = { Text("Suche...", color = TextT) },
+            leadingIcon = { Icon(Icons.Default.Search, null, tint = TextS) },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(Icons.Default.Clear, null, tint = TextS)
+                    }
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(14.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = AccentBlue,
+                unfocusedBorderColor = Surface3,
+                focusedTextColor = TextP,
+                unfocusedTextColor = TextP,
+                cursorColor = AccentBlue
+            )
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            PASSWORD_CATEGORIES.forEach { cat ->
+                val selected = cat == selectedCategory
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (selected) AccentBlue else Surface2)
+                        .border(
+                            1.dp,
+                            if (selected) AccentBlue else Surface3,
+                            RoundedCornerShape(20.dp)
+                        )
+                        .clickable { selectedCategory = cat }
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
-                        "${entries.size} Einträge",
-                        color = TextS,
-                        fontSize = 12.sp
+                        cat,
+                        color = if (selected) Color.White else TextS,
+                        fontSize = 12.sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
                     )
                 }
             }
+        }
 
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                placeholder = { Text("Suche...", color = TextT) },
-                leadingIcon = { Icon(Icons.Default.Search, null, tint = TextS) },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Clear, null, tint = TextS)
-                        }
-                    }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = AccentBlue,
-                    unfocusedBorderColor = Surface3,
-                    focusedTextColor = TextP,
-                    unfocusedTextColor = TextP,
-                    cursorColor = AccentBlue
-                )
-            )
+        Spacer(Modifier.height(12.dp))
 
-            Spacer(Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+        if (isLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) { CircularProgressIndicator(color = AccentBlue) }
+        } else if (visible.isEmpty()) {
+            EmptyState(hasEntries = entries.isNotEmpty())
+        } else {
+            LazyColumn(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxSize()
             ) {
-                PASSWORD_CATEGORIES.forEach { cat ->
-                    val selected = cat == selectedCategory
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(if (selected) AccentBlue else Surface2)
-                            .border(
-                                1.dp,
-                                if (selected) AccentBlue else Surface3,
-                                RoundedCornerShape(20.dp)
-                            )
-                            .clickable { selectedCategory = cat }
-                            .padding(horizontal = 14.dp, vertical = 7.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            cat,
-                            color = if (selected) Color.White else TextS,
-                            fontSize = 12.sp,
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            if (isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) { CircularProgressIndicator(color = AccentBlue) }
-            } else if (visible.isEmpty()) {
-                EmptyState(hasEntries = entries.isNotEmpty())
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(visible, key = { it.id }) { entry ->
-                        PasswordCard(
-                            entry = entry,
-                            onClick = { detailEntry = entry },
-                            onEdit = { editEntry = entry },
-                            onDelete = {
-                                scope.launch {
-                                    db.passwordDao().delete(entry)
-                                    reload()
-                                }
-                            },
-                            onCopy = {
-                                scope.launch {
-                                    val plain = withContext(Dispatchers.Default) {
-                                        PasswordCrypto.decrypt(entry.encryptedPassword)
-                                    }
-                                    copyToClipboard(context, "Passwort", plain)
-                                }
-                            },
-                            onToggleFavorite = {
-                                scope.launch {
-                                    db.passwordDao()
-                                        .update(entry.copy(isFavorite = !entry.isFavorite))
-                                    reload()
-                                }
+                items(visible, key = { it.id }) { entry ->
+                    PasswordCard(
+                        entry = entry,
+                        onClick = { detailEntry = entry },
+                        onEdit = { editEntry = entry },
+                        onDelete = {
+                            scope.launch {
+                                db.passwordDao().delete(entry)
+                                reload()
                             }
-                        )
-                    }
-                    item { Spacer(Modifier.height(80.dp)) }
+                        },
+                        onCopy = {
+                            scope.launch {
+                                val plain = withContext(Dispatchers.Default) {
+                                    PasswordCrypto.decrypt(entry.encryptedPassword)
+                                }
+                                copyToClipboard(context, "Passwort", plain)
+                            }
+                        },
+                        onToggleFavorite = {
+                            scope.launch {
+                                db.passwordDao()
+                                    .update(entry.copy(isFavorite = !entry.isFavorite))
+                                reload()
+                            }
+                        }
+                    )
                 }
+                item { Spacer(Modifier.height(80.dp)) }
             }
         }
     }
