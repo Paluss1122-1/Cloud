@@ -247,7 +247,7 @@ No markdown, no explanation, ONLY the JSON array.
                                                 val body = org.json.JSONObject().apply {
                                                     put(
                                                         "model",
-                                                        "nvidia/llama-3.1-nemotron-nano-vl-8b-v1"
+                                                        "nvidia/llama-3.3-nemotron-super-49b-v1"
                                                     )
                                                     put("messages", messagesJson)
                                                     put("stream", false)
