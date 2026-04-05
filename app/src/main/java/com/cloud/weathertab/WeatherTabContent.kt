@@ -278,9 +278,6 @@ fun WeatherTabContent(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            Text("☁️ Wetter", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(16.dp))
-
             if (error != null) {
                 Text(error!!, color = Color.Red, modifier = Modifier.padding(vertical = 8.dp))
             }
@@ -288,7 +285,11 @@ fun WeatherTabContent(
             AnimatedContent(
                 targetState = Triple(weather, selectionState.hour, selectionState.dayIndex),
                 transitionSpec = {
-                    fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
+                    fadeIn(animationSpec = tween(300)) togetherWith fadeOut(
+                        animationSpec = tween(
+                            300
+                        )
+                    )
                 }
             ) { (data, selHour, selDayIdx) ->
                 if (data == null) {
@@ -307,6 +308,7 @@ fun WeatherTabContent(
                         selHour != null -> {
                             SelectedHourView(hour = selHour)
                         }
+
                         selDayIdx != null -> {
                             val days = data.days
                             if (selDayIdx in days.indices) {
@@ -318,6 +320,7 @@ fun WeatherTabContent(
                                 )
                             }
                         }
+
                         else -> {
                             MainView(
                                 data = data,
