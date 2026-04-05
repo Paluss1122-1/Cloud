@@ -65,6 +65,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -78,14 +79,22 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.cloud.Config.DEL_GAL_CONF
 import com.cloud.Config.cms
+import com.cloud.ERRORINSERT
+import com.cloud.ERRORINSERTDATA
+import com.cloud.mediaplayer.MediaAnalyticsManager
+import com.cloud.mediaplayer.MediaAnalyticsManager.getSessions
 import com.cloud.mediarecorder.AudioRecorder
+import com.cloud.quiethoursnotificationhelper.AiResponseEntry
 import com.cloud.quiethoursnotificationhelper.GalleryImage
+import com.cloud.quiethoursnotificationhelper.aiResponseFlow
+import com.cloud.quiethoursnotificationhelper.buildSessionStatsText
 import com.cloud.quiethoursnotificationhelper.checkQuietHours
 import com.cloud.quiethoursnotificationhelper.cleanupOldMessages
 import com.cloud.quiethoursnotificationhelper.commandReceiver
 import com.cloud.quiethoursnotificationhelper.createNotification
 import com.cloud.quiethoursnotificationhelper.createNotificationChannel
 import com.cloud.quiethoursnotificationhelper.deleteGalleryImage
+import com.cloud.quiethoursnotificationhelper.getTodayKey
 import com.cloud.quiethoursnotificationhelper.isQuietHoursNow
 import com.cloud.quiethoursnotificationhelper.loadGalleryImages
 import com.cloud.quiethoursnotificationhelper.markReadReceiver
@@ -95,7 +104,9 @@ import com.cloud.quiethoursnotificationhelper.playLatestVoiceNote
 import com.cloud.quiethoursnotificationhelper.playNextVoiceNote
 import com.cloud.quiethoursnotificationhelper.playPreviousVoiceNote
 import com.cloud.quiethoursnotificationhelper.restoreSyncIfNeeded
+import com.cloud.quiethoursnotificationhelper.saveAiResponse
 import com.cloud.quiethoursnotificationhelper.scheduleNextCheck
+import com.cloud.quiethoursnotificationhelper.sendNvidiaChatMessageAITab
 import com.cloud.quiethoursnotificationhelper.showDeleteConfirmation
 import com.cloud.quiethoursnotificationhelper.showNextGalleryImage
 import com.cloud.quiethoursnotificationhelper.showPreviousGalleryImage
@@ -111,28 +122,17 @@ import com.cloud.quiethoursnotificationhelper.updateNotification
 import com.cloud.quiethoursnotificationhelper.updateSingleSenderNotification
 import com.cloud.service.AutoClickAccessibilityService.Companion.closeNots
 import com.cloud.showSimpleNotificationExtern
-import com.cloud.ERRORINSERT
-import com.cloud.ERRORINSERTDATA
-import rikka.shizuku.SystemServiceHelper.getSystemService
-import java.io.File
-import java.util.Calendar
-import java.time.Instant
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import androidx.core.app.ActivityCompat
-import com.cloud.mediaplayer.MediaAnalyticsManager
-import com.cloud.mediaplayer.MediaAnalyticsManager.getSessions
-import com.cloud.quiethoursnotificationhelper.AiResponseEntry
-import com.cloud.quiethoursnotificationhelper.aiResponseFlow
-import com.cloud.quiethoursnotificationhelper.buildSessionStatsText
-import com.cloud.quiethoursnotificationhelper.getTodayKey
-import com.cloud.quiethoursnotificationhelper.saveAiResponse
-import com.cloud.quiethoursnotificationhelper.sendNvidiaChatMessageAITab
+import rikka.shizuku.SystemServiceHelper.getSystemService
+import java.io.File
+import java.time.Instant
+import java.util.Calendar
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 class QuietHoursNotificationService : Service() {
     private val errorScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -413,8 +413,9 @@ class QuietHoursNotificationService : Service() {
         }
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-            == PackageManager.PERMISSION_GRANTED) {
-                 exploreTracker.start(this)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            exploreTracker.start(this)
         }
     }
 
@@ -469,7 +470,10 @@ class QuietHoursNotificationService : Service() {
 
                 ACTION_SCHEDULED_START -> {
                     isCurrentlyQuietHours = isQuietHoursNow(this)
-                    startForeground(NOTIFICATION_ID, createNotification(isCurrentlyQuietHours, this))
+                    startForeground(
+                        NOTIFICATION_ID,
+                        createNotification(isCurrentlyQuietHours, this)
+                    )
                     START_STICKY
                 }
 
@@ -500,7 +504,10 @@ class QuietHoursNotificationService : Service() {
                     val cameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
                     try {
                         val cameraId = cameraManager.cameraIdList.firstOrNull()
-                        if (cameraId != null) cameraManager.turnOnTorchWithStrengthLevel(cameraId, 1)
+                        if (cameraId != null) cameraManager.turnOnTorchWithStrengthLevel(
+                            cameraId,
+                            1
+                        )
                     } catch (e: Exception) {
                         showSimpleNotification(
                             "❌ Taschenlampe",
@@ -594,13 +601,18 @@ class QuietHoursNotificationService : Service() {
                             if (sessions.isEmpty()) return@launch
 
                             val stats = buildSessionStatsText(sessions)
-                            val result = sendNvidiaChatMessageAITab(emptyList(), stats) ?: return@launch
+                            val result =
+                                sendNvidiaChatMessageAITab(emptyList(), stats) ?: return@launch
 
                             saveAiResponse(this@QuietHoursNotificationService, result)
                             aiResponseFlow.emit(
                                 AiResponseEntry(result, System.currentTimeMillis(), getTodayKey())
                             )
-                            showSimpleNotification("🎵 Tages-Zusammenfassung", result.take(200), 60.seconds)
+                            showSimpleNotification(
+                                "🎵 Tages-Zusammenfassung",
+                                result.take(200),
+                                60.seconds
+                            )
                         } catch (e: Exception) {
                             reportServiceError("ACTION_DAILY_MUSIC_SUMMARY", e)
                         }
@@ -652,7 +664,8 @@ class QuietHoursNotificationService : Service() {
                                 callback: CustomViewCallback?
                             ) {
                                 (context as? Activity)?.let { activity ->
-                                    val decor = activity.window.decorView as? FrameLayout ?: return@let
+                                    val decor =
+                                        activity.window.decorView as? FrameLayout ?: return@let
                                     val toAdd = view ?: return@let
                                     decor.addView(
                                         toAdd,
@@ -676,7 +689,8 @@ class QuietHoursNotificationService : Service() {
 
                             override fun onHideCustomView() {
                                 (context as? Activity)?.let { activity ->
-                                    val decor = activity.window.decorView as? FrameLayout ?: return@let
+                                    val decor =
+                                        activity.window.decorView as? FrameLayout ?: return@let
                                     customView?.let { decor.removeView(it) }
                                     customView = null
                                     customViewCallback?.onCustomViewHidden()
@@ -799,7 +813,10 @@ class QuietHoursNotificationService : Service() {
                             .align(Alignment.TopEnd)
                             .padding(8.dp)
                             .size(40.dp)
-                            .background(Color.Black.copy(alpha = 0.6f), shape = RoundedCornerShape(50))
+                            .background(
+                                Color.Black.copy(alpha = 0.6f),
+                                shape = RoundedCornerShape(50)
+                            )
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
