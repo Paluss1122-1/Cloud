@@ -134,6 +134,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -149,7 +150,6 @@ import coil.compose.rememberAsyncImagePainter
 import com.cloud.Config
 import com.cloud.Config.cms
 import com.cloud.R
-import com.cloud.ShizukuManager
 import com.cloud.aitab.AITabContent
 import com.cloud.audiorecorder.AudioRecorderContent
 import com.cloud.authenticator.AuthenticatorTab
@@ -171,7 +171,6 @@ import com.cloud.quicksettingsfunctions.BatteryChartScreen
 import com.cloud.quicksettingsfunctions.BatteryDataRepository
 import com.cloud.quicksettingsfunctions.showNetworkInfo
 import com.cloud.quicksettingsfunctions.showSensorsInfo
-import com.cloud.quiethoursnotificationhelper.triggerBuild
 import com.cloud.service.ChatService
 import com.cloud.service.QuietHoursNotificationService
 import com.cloud.spotifydownloader.SpotifyDownloaderApp
@@ -474,52 +473,6 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
                     .fillMaxSize()
                     .padding(16.dp)
             ) {
-                Button(onClick = {
-                    if (ShizukuManager.isAvailable() && !ShizukuManager.hasPermission()) {
-                        ShizukuManager.requestPermission()
-                    }
-
-                    /*ShizukuManager.suspendApp("com.google.android.gms.supervision", true)
-
-
-                    getForegroundTimePerApp(context, days = 1).forEach { (pkg, ms) ->
-                        val minutes = ms / 1000 / 60
-                        if (minutes.toInt() != 0) {
-                            Log.d("Usage", "$pkg → $minutes min")
-                        }
-                    }*/
-
-                    /*try {
-                        val wifiManager = context.applicationContext.getSystemService(WIFI_SERVICE) as android.net.wifi.WifiManager
-                        val method = wifiManager.javaClass.getDeclaredMethod(
-                            "startLocalOnlyHotspot", /* kein Param nötig für force-enable */
-                        )
-                        val setHotspot = wifiManager.javaClass.getDeclaredMethod(
-                            "setWifiApEnabled",
-                            android.net.wifi.WifiConfiguration::class.java,
-                            Boolean::class.javaPrimitiveType
-                        )
-                        setHotspot.isAccessible = true
-                        val result = setHotspot.invoke(wifiManager, null, true) as Boolean
-                        if (result) {
-                            Log.d("📶 Hotspot", "Hotspot wurde aktiviert")
-                        } else {
-                            Log.d("📶 Hotspot", "Aktivierung fehlgeschlagen – versuche Settings")
-                        }
-                    } catch (e: Exception) {
-                        Log.e("Hotspot", "Hotspot via Reflection fehlgeschlagen", e)
-                    }*/
-
-                    /*val pm = context.packageManager
-                    val packages = pm.getInstalledApplications(0)
-                    for (app in packages) {
-                        Log.d("InstalledApp", app.packageName)
-                    }*/
-
-                    triggerBuild(context)
-
-                }) { Text("HI") }
-
                 Text(
                     text = "Cloud",
                     style = MaterialTheme.typography.headlineLarge,
