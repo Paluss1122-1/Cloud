@@ -112,6 +112,10 @@ private var pendingSyncJob: Job? = null
 private var lastTriggerTime = 0L
 private const val MIN_TRIGGER_INTERVAL = 15_000L
 
+private fun PowerManager.WakeLock?.safeRelease() {
+    if (this != null && isHeld) release()
+}
+
 private object ConnectionGuard {
     private var lastFailedAttempt: Long = 0L
     private var consecutiveFailures: Int = 0
@@ -296,7 +300,7 @@ fun registerWifiReconnectReceiver(context: Context) {
             ConnectionGuard.updateWifiStatus(false)
             if (!ConnectionGuard.isAtHomeLocation()) {
                 pendingSyncJob?.cancel()
-                triggerWakeLock?.release()
+                triggerWakeLock.safeRelease(); triggerWakeLock = null
                 triggerWakeLock = null
             }
         }
@@ -339,48 +343,51 @@ fun startTriggerListener(context: Context) {
                         )
                         wl.acquire(30_000L)
 
-                        val reader = BufferedReader(InputStreamReader(client.getInputStream()))
-                        val command = reader.readLine()
-                        client.close()
+                        try {
+                            val reader = BufferedReader(InputStreamReader(client.getInputStream()))
+                            val command = reader.readLine()
+                            client.close()
 
-                        when {
-                            command.startsWith("CONNECT") -> {
-                                laptopIp = command.substringAfter("CONNECT:", "")
-                                ConnectionGuard.recordSuccess()
+                            when {
+                                command.startsWith("CONNECT") -> {
+                                    laptopIp = command.substringAfter("CONNECT:", "")
+                                    ConnectionGuard.recordSuccess()
 
-                                showSimpleNotificationExtern(
-                                    "📡 CONNECT empfangen",
-                                    "Starte Sync...",
-                                    10.seconds,
-                                    context
-                                )
+                                    showSimpleNotificationExtern(
+                                        "📡 CONNECT empfangen",
+                                        "Starte Sync...",
+                                        10.seconds,
+                                        context
+                                    )
 
-                                val syncWl = pm.newWakeLock(
-                                    PowerManager.PARTIAL_WAKE_LOCK,
-                                    "TodoSync:SyncWakeLock"
-                                )
-                                syncWl.acquire(60_000L)
+                                    val syncWl = pm.newWakeLock(
+                                        PowerManager.PARTIAL_WAKE_LOCK,
+                                        "TodoSync:SyncWakeLock"
+                                    )
+                                    syncWl.acquire(60_000L)
 
-                                syncScope.launch {
-                                    try {
-                                        syncTodosWithLaptop(context)
-                                    } finally {
-                                        syncWl.release()
+                                    syncScope.launch {
+                                        try {
+                                            syncTodosWithLaptop(context)
+                                        } finally {
+                                            syncWl.release()
+                                        }
                                     }
                                 }
-                            }
 
-                            command == "REQUEST_SESSIONS" -> {
-                                syncScope.launch {
-                                    sendSessionDataToLaptop(context)
+                                command == "REQUEST_SESSIONS" -> {
+                                    syncScope.launch {
+                                        sendSessionDataToLaptop(context)
+                                    }
+                                }
+
+                                command == "DISCONNECT" -> {
+                                    stopAllSyncServices(context)
                                 }
                             }
-
-                            command == "DISCONNECT" -> {
-                                stopAllSyncServices(context)
-                            }
+                        } finally {
+                            wl.safeRelease()
                         }
-                        wl.release()
                     } catch (_: java.net.SocketException) {
                         break
                     } catch (e: Exception) {
@@ -446,8 +453,8 @@ fun stopAllSyncServices(context: Context) {
     flashcardResponseJob?.cancel(); flashcardResponseJob = null
     flashcardResponseSocket?.close(); flashcardResponseSocket = null
 
-    triggerWakeLock?.release(); triggerWakeLock = null
-    cpuWakeLock?.release(); cpuWakeLock = null
+    triggerWakeLock.safeRelease(); triggerWakeLock = null
+    cpuWakeLock.safeRelease(); cpuWakeLock = null
 
     isLaptopConnected = false
 
@@ -685,7 +692,7 @@ fun stopUpdateListener(boolean: Boolean = false) {
         }
         isLaptopConnected = boolean
         wifiLock?.release(); wifiLock = null
-        cpuWakeLock?.release(); cpuWakeLock = null
+        cpuWakeLock.safeRelease(); cpuWakeLock = null
         listenerJob?.cancel(); listenerJob = null
         updateServerSocket?.close(); updateServerSocket = null
     } catch (e: Exception) {
@@ -776,7 +783,7 @@ fun getOpenTodos(context: Context): List<TodoItem> {
     val json = context.getSharedPreferences("todos_prefs", MODE_PRIVATE)
         .getString("todos", "[]") ?: "[]"
     val result = parseTodosFromJson(json)
-    return result.filter {it.completed == false}
+    return result.filter { it.completed == false }
 }
 
 fun saveTodos(context: Context, todos: List<TodoItem>) {
@@ -1520,7 +1527,7 @@ suspend fun sendNvidiaChatMessageAITab(
     return withContext(Dispatchers.IO) {
         try {
             val apiKey = Config.NVIDIA
-            val model = "meta/llama-3.1-8b-instruct"
+            val model = "nvidia/nemotron-3-nano-30b-a3b"
 
             val messagesJson = JSONArray()
 
@@ -2123,8 +2130,10 @@ suspend fun askServer(
             response
         } catch (e: Exception) {
             var msg = ""
-            e.message?.let { it1 -> msg =
-                if (it1.contains("failed to connect")) "Keine Verbindung mit Server möglich" else "Fehler: ${e.message}" }
+            e.message?.let { it1 ->
+                msg =
+                    if (it1.contains("failed to connect")) "Keine Verbindung mit Server möglich" else "Fehler: ${e.message}"
+            }
             msg
         }
     }
