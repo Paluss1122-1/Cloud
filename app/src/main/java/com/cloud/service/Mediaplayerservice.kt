@@ -513,7 +513,13 @@ class MediaPlayerService : MediaSessionService() {
             GET_ACTIVE_PLALIST -> {
                 val songs = getActivePlaylist()
                 val query = intent?.getStringExtra("SearchQuery") ?: return START_STICKY
-                val result = songs.indexOfFirst { it.name.equals(query, ignoreCase = true)}.takeIf { it >= 0 } ?: songs.indexOfFirst { it.name.contains(query, ignoreCase = true) } ?: return START_STICKY
+                val result = songs.indexOfFirst { it.name.equals(query, ignoreCase = true) }
+                    .takeIf { it >= 0 } ?: songs.indexOfFirst {
+                    it.name.contains(
+                        query,
+                        ignoreCase = true
+                    )
+                } ?: return START_STICKY
                 musicPlayer?.release()
                 musicPlayer = null
                 ensureMusicMode()
@@ -1244,7 +1250,8 @@ class MediaPlayerService : MediaSessionService() {
     private fun toggleFavorite(songPath: String? = null) {
         val active = getActivePlaylist()
         val path = songPath ?: active.getOrNull(currentSongIndex)?.path ?: return
-        val name = active.find { it.path == path }?.name ?: playlist.find { it.path == path }?.name ?: "Unbekannt"
+        val name = active.find { it.path == path }?.name ?: playlist.find { it.path == path }?.name
+        ?: "Unbekannt"
         if (favoriteSongs.containsKey(path)) {
             favoriteSongs.remove(path)
             showSimpleNotificationExtern("💔 Favorit entfernt", name, 10.seconds, context = this)
@@ -1597,7 +1604,8 @@ class MediaPlayerService : MediaSessionService() {
     private fun buildMusicNotification(): Notification {
         val active = getActivePlaylist()
         val songName = active.getOrNull(currentSongIndex)?.name ?: "Keine Playlist"
-        val isFav = active.getOrNull(currentSongIndex)?.let { favoriteSongs.containsKey(it.path) } ?: false
+        val isFav =
+            active.getOrNull(currentSongIndex)?.let { favoriteSongs.containsKey(it.path) } ?: false
 
         fun pi(reqCode: Int, action: String) = PendingIntent.getService(
             this, reqCode,
@@ -1869,7 +1877,8 @@ class MediaPlayerService : MediaSessionService() {
 
                 if (screenOn) {
                     if (isPlayingPodcast || isPlayingMusic) {
-                        val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
+                        val nm: NotificationManager? =
+                            getSystemService(NotificationManager::class.java)
                         nm?.notify(MEDIA_PLAYER, buildNotification())
                     }
                     if (isPlayingPodcast && podcastPlayer != null && currentPodcast != null) {
@@ -1882,7 +1891,9 @@ class MediaPlayerService : MediaSessionService() {
                     if (isPlayingMusic && musicPlayer != null) {
                         musicPrefs.edit {
                             putLong("music_position_ms", musicPlayer!!.currentPosition.toLong())
-                            putLong("music_duration_ms", musicPlayer!!.duration.toLong().takeIf { it > 0 } ?: 0L)
+                            putLong(
+                                "music_duration_ms",
+                                musicPlayer!!.duration.toLong().takeIf { it > 0 } ?: 0L)
                         }
                     }
                 }
