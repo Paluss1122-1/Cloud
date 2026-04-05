@@ -247,7 +247,7 @@ fun VocabTab() {
                                                 val body = org.json.JSONObject().apply {
                                                     put(
                                                         "model",
-                                                        "nvidia/llama-3.3-nemotron-super-49b-v1"
+                                                        "meta/llama-3.2-90b-vision-instruct"
                                                     )
                                                     put("messages", messagesJson)
                                                     put("stream", false)
@@ -303,8 +303,13 @@ fun VocabTab() {
                                                     )
                                                 }
                                             }
-                                        } catch (_: Exception) {
+                                        } catch (e: Exception) {
+                                            errorMessage = "Parse-Fehler: ${e.message}\nRaw: ${
+                                                nvidiaResult?.take(300)
+                                            }"
                                         }
+                                    } else {
+                                        errorMessage = "API keine Antwort – prüfe Key & Netzwerk"
                                     }
                                     if (vokabeln.isNotEmpty()) screen = VokabelTabScreen.REVIEW
                                     else errorMessage = "Keine Vokabeln erkannt."
