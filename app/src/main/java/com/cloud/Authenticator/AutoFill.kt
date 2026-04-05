@@ -5,7 +5,14 @@ import android.app.PendingIntent
 import android.app.assist.AssistStructure
 import android.graphics.drawable.Icon
 import android.os.CancellationSignal
-import android.service.autofill.*
+import android.service.autofill.AutofillService
+import android.service.autofill.Dataset
+import android.service.autofill.FillCallback
+import android.service.autofill.FillRequest
+import android.service.autofill.FillResponse
+import android.service.autofill.InlinePresentation
+import android.service.autofill.SaveCallback
+import android.service.autofill.SaveRequest
 import android.util.Log
 import android.view.autofill.AutofillId
 import android.view.autofill.AutofillValue
@@ -13,14 +20,8 @@ import android.view.inputmethod.InlineSuggestionsRequest
 import android.widget.RemoteViews
 import android.widget.inline.InlinePresentationSpec
 import androidx.autofill.inline.v1.InlineSuggestionUi
+import androidx.core.net.toUri
 import kotlinx.coroutines.runBlocking
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyPermanentlyInvalidatedException
-import android.security.keystore.KeyProperties
-import java.security.KeyStore
-import javax.crypto.Cipher
-import javax.crypto.KeyGenerator
-import javax.crypto.SecretKey
 
 class CloudAutofillService : AutofillService() {
 
@@ -30,9 +31,9 @@ class CloudAutofillService : AutofillService() {
 
 
     override fun onFillRequest(
-        request:            FillRequest,
+        request: FillRequest,
         cancellationSignal: CancellationSignal,
-        callback:           FillCallback
+        callback: FillCallback
     ) {
         val structure = request.fillContexts.last().structure
 
@@ -43,16 +44,18 @@ class CloudAutofillService : AutofillService() {
         }
 
         val domain = extractRequestDomain(structure)
-        Log.d(TAG, "AutoFill request – domain: $domain  pkg: ${structure.activityComponent.packageName}")
+        Log.d(
+            TAG,
+            "AutoFill request – domain: $domain  pkg: ${structure.activityComponent.packageName}"
+        )
 
-        val db      = PasswordDatabase.getDatabase(applicationContext)
+        val db = PasswordDatabase.getDatabase(applicationContext)
         val entries = runBlocking {
-            val pkg = structure.activityComponent.packageName
-            when {
-                domain.isNotEmpty() -> db.passwordDao().findByDomain(domain)
-                    .ifEmpty { db.passwordDao().getAll() }
-                else -> db.passwordDao().search(pkg)
-                    .ifEmpty { db.passwordDao().getAll() }
+            if (domain.isNotEmpty()) {
+                db.passwordDao().findByDomain(domain)
+            } else {
+                val pkg = structure.activityComponent.packageName
+                db.passwordDao().search(pkg)
             }
         }
 
@@ -62,15 +65,15 @@ class CloudAutofillService : AutofillService() {
             return
         }
 
-        val inlineRequest  = request.inlineSuggestionsRequest
+        val inlineRequest = request.inlineSuggestionsRequest
         val responseBuilder = FillResponse.Builder()
 
         entries.take(5).forEachIndexed { index, entry ->
-            val plainPassword = PasswordCrypto.decrypt(entry.encryptedPassword)
-
             val presentation = RemoteViews(packageName, android.R.layout.simple_list_item_2).apply {
                 setTextViewText(android.R.id.text1, "☁️ ${entry.name}")
-                setTextViewText(android.R.id.text2, entry.username.ifEmpty { "(kein Benutzername)" })
+                setTextViewText(
+                    android.R.id.text2,
+                    entry.username.ifEmpty { "(kein Benutzername)" })
             }
 
             val datasetBuilder = Dataset.Builder()
@@ -86,7 +89,7 @@ class CloudAutofillService : AutofillService() {
             loginFields.passwordId?.let { id ->
                 datasetBuilder.setValue(
                     id,
-                    AutofillValue.forText(plainPassword),
+                    AutofillValue.forText(entry.password),
                     presentation
                 )
             }
@@ -119,20 +122,28 @@ class CloudAutofillService : AutofillService() {
         var passwordId: AutofillId? = null
 
         fun searchNode(node: AssistStructure.ViewNode) {
-            val hints     = node.autofillHints
+            val hints = node.autofillHints
             val inputType = node.inputType
-            val hint      = node.hint?.lowercase() ?: ""
-            val idEntry   = node.idEntry?.lowercase() ?: ""
-            val className = node.className?.lowercase() ?: ""
+            val hint = node.hint?.lowercase() ?: ""
+            val idEntry = node.idEntry?.lowercase() ?: ""
 
             val isPassword = (
-                    hints?.any { h -> h.contains("password", true) || h == "current-password" || h == "new-password" } == true
-                 || (inputType and android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-                 || (inputType and android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
-                 || (inputType and android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
-                 || hint.contains("passwort") || hint.contains("password") || hint.contains("pin")
-                 || idEntry.contains("password") || idEntry.contains("passwd") || idEntry.contains("pwd")
-            )
+                    hints?.any { h ->
+                        h.contains(
+                            "password",
+                            true
+                        ) || h == "current-password" || h == "new-password"
+                    } == true
+                            || (inputType and android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                            || (inputType and android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+                            || (inputType and android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                            || hint.contains("passwort") || hint.contains("password") || hint.contains(
+                        "pin"
+                    )
+                            || idEntry.contains("password") || idEntry.contains("passwd") || idEntry.contains(
+                        "pwd"
+                    )
+                    )
 
             if (isPassword && node.autofillId != null) {
                 passwordId = node.autofillId
@@ -141,14 +152,16 @@ class CloudAutofillService : AutofillService() {
             val isUsername = (
                     hints?.any { h ->
                         h.contains("username", true) || h.contains("email", true)
-                     || h == "username" || h == "email"
+                                || h == "username" || h == "email"
                     } == true
-                 || hint.contains("user") || hint.contains("email") || hint.contains("benutzername")
-                 || hint.contains("login") || hint.contains("e-mail")
-                 || idEntry.contains("user") || idEntry.contains("email") || idEntry.contains("login")
-                 || (inputType and android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
-                 || (inputType and android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS
-            )
+                            || hint.contains("user") || hint.contains("email") || hint.contains("benutzername")
+                            || hint.contains("login") || hint.contains("e-mail")
+                            || idEntry.contains("user") || idEntry.contains("email") || idEntry.contains(
+                        "login"
+                    )
+                            || (inputType and android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+                            || (inputType and android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS
+                    )
 
             if (isUsername && node.autofillId != null && !isPassword) {
                 usernameId = node.autofillId
@@ -165,6 +178,16 @@ class CloudAutofillService : AutofillService() {
     }
 
 
+    private fun extractDomain(raw: String): String {
+        return try {
+            val normalized = if (raw.contains("://")) raw else "https://$raw"
+            val host = normalized.toUri().host ?: return ""  // android.net.Uri statt toUri()
+            host.lowercase().removePrefix("www.").trim()
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
     private fun extractRequestDomain(structure: AssistStructure): String {
         fun searchWebDomain(node: AssistStructure.ViewNode): String? {
             node.webDomain?.takeIf { it.isNotBlank() }?.let { return it }
@@ -176,16 +199,14 @@ class CloudAutofillService : AutofillService() {
 
         for (i in 0 until structure.windowNodeCount) {
             val domain = searchWebDomain(structure.getWindowNodeAt(i).rootViewNode)
-            if (!domain.isNullOrBlank()) {
-                return extractDomain(domain)
-            }
+            if (!domain.isNullOrBlank()) return extractDomain(domain)
         }
 
+        // Titel-Fallback: nur wenn wirklich eine URL-artige Struktur vorliegt
         for (i in 0 until structure.windowNodeCount) {
             val title = structure.getWindowNodeAt(i).title?.toString() ?: ""
-            if (title.contains("://") || title.contains(".")) {
-                return extractDomain(title)
-            }
+            val urlRegex = Regex("""https?://[^\s/$.?#].\S*""")
+            urlRegex.find(title)?.value?.let { return extractDomain(it) }
         }
 
         return ""
@@ -194,8 +215,8 @@ class CloudAutofillService : AutofillService() {
 
     private fun createInlinePresentation(
         inlineRequest: InlineSuggestionsRequest,
-        index:         Int,
-        entry:         PasswordEntry
+        index: Int,
+        entry: PasswordEntry
     ): InlinePresentation? {
         val specs = inlineRequest.inlinePresentationSpecs
         if (specs.isEmpty()) return null
@@ -209,7 +230,10 @@ class CloudAutofillService : AutofillService() {
     }
 
     @SuppressLint("RestrictedApi")
-    private fun createInlineChip(spec: InlinePresentationSpec, entry: PasswordEntry): InlinePresentation? {
+    private fun createInlineChip(
+        spec: InlinePresentationSpec,
+        entry: PasswordEntry
+    ): InlinePresentation? {
         return try {
             val pendingIntent = PendingIntent.getActivity(
                 this, 0,

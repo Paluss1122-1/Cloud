@@ -149,6 +149,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
 import com.cloud.Config
 import com.cloud.Config.cms
+import com.cloud.PasswordStorage
 import com.cloud.R
 import com.cloud.aitab.AITabContent
 import com.cloud.audiorecorder.AudioRecorderContent
@@ -372,6 +373,18 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     val context = LocalContext.current
     var showLandingPage by rememberSaveable { mutableStateOf(startTarget == null) }
     var selectedMenuItem by remember { mutableStateOf<MenuItem?>(null) }
+    var masterPw by remember { mutableStateOf(PasswordStorage.loadPassword(context)) }
+
+    if (masterPw == null) {
+        MasterPasswordSetupScreen { pw ->
+            PasswordStorage.savePassword(context, pw)
+            Config.masterPassword = pw
+            masterPw = pw
+        }
+        return
+    }
+
+    Config.masterPassword = masterPw!!
 
     LaunchedEffect(Unit) {
         QuietHoursNotificationService.startService(context)
@@ -404,6 +417,66 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
             )
         } else {
             PrivateCloudApp(storage = storage, startTarget = startTarget, initialMenuItem = null)
+        }
+    }
+}
+
+@Composable
+fun MasterPasswordSetupScreen(onPasswordSaved: (String) -> Unit) {
+    var input by remember { mutableStateOf("") }
+    var confirmed by remember { mutableStateOf("") }
+    val isValid = input.length >= 20 && input == confirmed
+
+    Box(Modifier
+        .fillMaxSize()
+        .background(Color(0xFF17171C)), contentAlignment = Alignment.Center) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                "🔑 Master-Passwort einrichten",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                "Wird einmalig gesetzt. Mindestens 20 Zeichen.",
+                color = Color(0xFF8A8A9F),
+                fontSize = 13.sp
+            )
+
+            OutlinedTextField(
+                value = input,
+                onValueChange = { input = it },
+                label = { Text("Passwort") },
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = confirmed,
+                onValueChange = { confirmed = it },
+                label = { Text("Wiederholen") },
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            if (input.isNotEmpty() && input != confirmed)
+                Text(
+                    "Passwörter stimmen nicht überein",
+                    color = Color(0xFFE74C3C),
+                    fontSize = 12.sp
+                )
+            if (input.isNotEmpty() && input.length < 20)
+                Text("Mindestens 20 Zeichen", color = Color(0xFFE74C3C), fontSize = 12.sp)
+
+            Button(
+                onClick = { onPasswordSaved(input) },
+                enabled = isValid,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Speichern & Starten") }
         }
     }
 }
