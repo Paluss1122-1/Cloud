@@ -7,7 +7,6 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.provider.MediaStore
-import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
@@ -37,6 +36,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -71,6 +71,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -101,6 +102,7 @@ import com.cloud.quiethoursnotificationhelper.aiResponseFlow
 import com.cloud.quiethoursnotificationhelper.deleteAiResponse
 import com.cloud.quiethoursnotificationhelper.loadAllAiResponses
 import com.cloud.quiethoursnotificationhelper.loadTodayOrYesterdayEntry
+import com.cloud.quiethoursnotificationhelper.saveAiResponse
 import com.cloud.service.MediaPlayerService
 import com.google.gson.GsonBuilder
 import kotlinx.coroutines.Dispatchers
@@ -125,8 +127,8 @@ private val AccentVioletDim = Color(0xFF4A148C)
 private val TextPrimary = Color(0xFFFFFFFF)
 private val TextSecondary = Color(0xFFB0B0B0)
 private val TextTertiary = Color(0xFF757575)
-private val NeonGreen  = Color(0xFF39FF14)
-private val NeonBlue   = Color(0xFF00CFFF)
+private val NeonGreen = Color(0xFF39FF14)
+private val NeonBlue = Color(0xFF00CFFF)
 
 data class NowPlayingState(
     val isActive: Boolean = false,
@@ -357,8 +359,6 @@ private fun HomeTab(
         )
     }
 
-    val aiResponse by aiResponseFlow.collectAsState()
-
     val activePodcasts = remember(state.episodes) {
         state.episodes.filter { !it.isCompleted && it.savedPositionMs > 0 }
     }
@@ -425,7 +425,7 @@ private fun HomeTab(
                     )
                 }
             }
-
+            
             if (state.algorithmicPlaylists.isNotEmpty()) {
                 item {
                     SectionHeader("Für dich")
@@ -593,17 +593,17 @@ private fun AllStatsBottomSheet(onDismiss: () -> Unit) {
     val maxMusicMs = remember(musicGroups) { musicGroups.firstOrNull()?.second ?: 1L }
     val maxPodcastMs = remember(podcastGroups) { podcastGroups.firstOrNull()?.second ?: 1L }
 
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(0) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = BgSurface
+        containerColor = BgSurface,
+        contentWindowInsets = { WindowInsets(0) }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
         ) {
             Row(
                 modifier = Modifier
@@ -1636,8 +1636,10 @@ private fun GlobalStatsStrip(
         ) {
             StatItem("⏰", formatDuration(stats.totalListenedMs), "Gesamt")
             StatDivider()
-            StatItem("🔥", "${stats.listeningStreakDays}d", "Streak",
-                dimmed = !stats.playedToday)
+            StatItem(
+                "🔥", "${stats.listeningStreakDays}d", "Streak",
+                dimmed = !stats.playedToday
+            )
             StatDivider()
             StatItem("🎵", "${stats.totalSongsPlayed}", "Songs gespielt")
         }
@@ -2053,10 +2055,20 @@ private fun SongAnalyticsContent(song: MediaPlayerService.Song) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("🔁 Längste Dauerschleife", color = NeonGreen.copy(alpha = 0.85f), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        "🔁 Längste Dauerschleife",
+                        color = NeonGreen.copy(alpha = 0.85f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                     Text("${it.repeatCount}× am Stück", color = TextTertiary, fontSize = 11.sp)
                 }
-                Text(formatDuration(it.listenedMs), color = NeonGreen, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    formatDuration(it.listenedMs),
+                    color = NeonGreen,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
             Spacer(Modifier.height(12.dp))
         }
@@ -3717,7 +3729,11 @@ fun AiResponseHistorySheet(
                                 onDismissRequest = { showDeleteConfirm = false },
                                 containerColor = BgSurface,
                                 title = {
-                                    Text("Eintrag löschen?", color = TextPrimary, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        "Eintrag löschen?",
+                                        color = TextPrimary,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 },
                                 text = {
                                     Text(
@@ -3738,7 +3754,11 @@ fun AiResponseHistorySheet(
                                             }
                                             .padding(horizontal = 16.dp, vertical = 8.dp)
                                     ) {
-                                        Text("Löschen", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                                        Text(
+                                            "Löschen",
+                                            color = TextPrimary,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
                                     }
                                 },
                                 dismissButton = {
