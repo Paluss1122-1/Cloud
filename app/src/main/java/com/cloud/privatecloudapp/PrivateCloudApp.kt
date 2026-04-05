@@ -10,6 +10,8 @@ import android.app.Activity.RESULT_OK
 import android.app.ActivityManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -374,6 +376,10 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     var showLandingPage by rememberSaveable { mutableStateOf(startTarget == null) }
     var selectedMenuItem by remember { mutableStateOf<MenuItem?>(null) }
     var masterPw by remember { mutableStateOf(PasswordStorage.loadPassword(context)) }
+
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val clip = ClipData.newPlainText("BWMP", masterPw)
+    clipboard.setPrimaryClip(clip)
 
     if (masterPw == null) {
         MasterPasswordSetupScreen { pw ->
