@@ -6,7 +6,6 @@ import android.content.Intent
 import android.graphics.Path
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
-import io.ktor.network.selector.SelectInterest.Companion.flags
 
 class AutoClickAccessibilityService : AccessibilityService() {
 

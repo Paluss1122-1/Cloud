@@ -66,13 +66,14 @@ class ErrorNotificationManager(private val context: Context) {
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     fun showErrorNotification(errorReport: ErrorReport) {
         try {
-             val severityEmoji = if (errorReport.severity == "ERROR") {
+            val severityEmoji = if (errorReport.severity == "ERROR") {
                 "🔴"
             } else {
                 "ℹ️"
             }
 
-            val uri = if (errorReport.service_name == "SB -> Cloud") "https://dashboard.gitguardian.com" else "https://supabase.com/dashboard/project/oulgglfvobyjmfongnil/editor/94945?schema=public"
+            val uri =
+                if (errorReport.service_name == "SB -> Cloud") "https://dashboard.gitguardian.com" else "https://supabase.com/dashboard/project/oulgglfvobyjmfongnil/editor/94945?schema=public"
 
             val intent = Intent(
                 Intent.ACTION_VIEW,

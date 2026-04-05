@@ -10,9 +10,20 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.*
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
 import com.cloud.autoclickertab.ClickPoint
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class AutoClickerService : Service() {
     private var windowManager: WindowManager? = null
@@ -291,12 +302,14 @@ class AutoClickerService : Service() {
                     touchStartTime = System.currentTimeMillis()
                     true
                 }
+
                 MotionEvent.ACTION_MOVE -> {
                     params.x = initialX + (event.rawX - initialTouchX).toInt()
                     params.y = initialY + (event.rawY - initialTouchY).toInt()
                     windowManager?.updateViewLayout(markerView, params)
                     true
                 }
+
                 MotionEvent.ACTION_UP -> {
                     params.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                     windowManager?.updateViewLayout(markerView, params)
@@ -321,6 +334,7 @@ class AutoClickerService : Service() {
                     }
                     true
                 }
+
                 else -> false
             }
         }

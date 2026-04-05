@@ -7,8 +7,6 @@ import android.content.Context.MODE_PRIVATE
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
-import android.widget.Toast
 import androidx.core.app.RemoteInput
 import androidx.core.content.edit
 import com.cloud.service.QuietHoursNotificationService
@@ -94,9 +92,10 @@ val notificationDismissReceiver = object : BroadcastReceiver() {
 
             if (notificationId == NOTIFICATION_ID) {
                 Handler(Looper.getMainLooper()).postDelayed({
-                    val serviceIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-                        action = ACTION_RESTORE_NOTIFICATION
-                    }
+                    val serviceIntent =
+                        Intent(context, QuietHoursNotificationService::class.java).apply {
+                            action = ACTION_RESTORE_NOTIFICATION
+                        }
                     context.startForegroundService(serviceIntent)
                 }, 100)
             }

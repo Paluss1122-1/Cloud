@@ -22,7 +22,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.Instant
-import kotlin.text.split
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -189,7 +188,12 @@ fun showPodcastQueue(context: Context) {
         }, 300)
 
     } catch (e: Exception) {
-        showSimpleNotificationExtern("❌ Fehler", "Queue konnte nicht angezeigt werden", Duration.ZERO, context)
+        showSimpleNotificationExtern(
+            "❌ Fehler",
+            "Queue konnte nicht angezeigt werden",
+            Duration.ZERO,
+            context
+        )
     }
 }
 
@@ -219,7 +223,12 @@ fun addPodcastToQueue(index: Int, context: Context) {
 
     } catch (e: Exception) {
         Log.e("QuietHoursService", "Error adding to queue", e)
-        showSimpleNotificationExtern("❌ Fehler", "Konnte nicht zur Queue hinzufügen", Duration.ZERO, context)
+        showSimpleNotificationExtern(
+            "❌ Fehler",
+            "Konnte nicht zur Queue hinzufügen",
+            Duration.ZERO,
+            context
+        )
     }
 }
 
@@ -250,7 +259,12 @@ fun removePodcastFromQueue(position: Int, context: Context) {
 
     } catch (e: Exception) {
         Log.e("QuietHoursService", "Error removing from queue", e)
-        showSimpleNotificationExtern("❌ Fehler", "Konnte nicht aus Queue entfernen", Duration.ZERO, context)
+        showSimpleNotificationExtern(
+            "❌ Fehler",
+            "Konnte nicht aus Queue entfernen",
+            Duration.ZERO,
+            context
+        )
     }
 }
 
@@ -270,7 +284,12 @@ fun clearPodcastQueue(context: Context) {
 
     } catch (e: Exception) {
         Log.e("QuietHoursService", "Error clearing queue", e)
-        showSimpleNotificationExtern("❌ Fehler", "Queue konnte nicht geleert werden", Duration.ZERO, context)
+        showSimpleNotificationExtern(
+            "❌ Fehler",
+            "Queue konnte nicht geleert werden",
+            Duration.ZERO,
+            context
+        )
     }
 }
 

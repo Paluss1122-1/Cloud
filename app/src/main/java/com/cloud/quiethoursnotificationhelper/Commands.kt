@@ -56,7 +56,6 @@ import com.cloud.service.PodcastPlayerServiceCompat
 import com.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.cloud.service.QuietHoursNotificationService.Companion.commandHistory
 import com.cloud.service.QuietHoursNotificationService.Companion.showtestOverlay
-import com.cloud.service.WhatsAppNotificationListener
 import com.cloud.service.restartMusicPlayer
 import com.cloud.showSimpleNotificationExtern
 import com.cloud.weathertab.fetchWeatherForecast
@@ -1666,7 +1665,7 @@ private fun showAvailableCommands(context: Context) {
         .setAutoCancel(true)
         .build()
 
-    notificationManager.notify(SHOWCOMMANDS+50, summary)
+    notificationManager.notify(SHOWCOMMANDS + 50, summary)
 }
 
 private fun parseCommandWithQuotes(input: String): List<String> {
