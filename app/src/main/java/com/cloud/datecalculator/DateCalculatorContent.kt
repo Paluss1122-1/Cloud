@@ -3,13 +3,23 @@ package com.cloud.datecalculator
 import android.annotation.SuppressLint
 import android.app.DatePickerDialog
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
-import java.util.*
+import java.util.Calendar
 
 @Composable
 fun DateCalculatorContent(modifier: Modifier = Modifier) {
@@ -154,7 +164,11 @@ fun DateSelectionCard(
                 onClick = {
                     val calendar = Calendar.getInstance()
                     if (selectedDate != null) {
-                        calendar.set(selectedDate.year, selectedDate.monthValue - 1, selectedDate.dayOfMonth)
+                        calendar.set(
+                            selectedDate.year,
+                            selectedDate.monthValue - 1,
+                            selectedDate.dayOfMonth
+                        )
                     }
 
                     DatePickerDialog(
@@ -171,10 +185,12 @@ fun DateSelectionCard(
             ) {
                 Text(
                     text = if (selectedDate != null) {
-                        String.format("%02d.%02d.%d",
+                        String.format(
+                            "%02d.%02d.%d",
                             selectedDate.dayOfMonth,
                             selectedDate.monthValue,
-                            selectedDate.year)
+                            selectedDate.year
+                        )
                     } else {
                         "Datum auswählen"
                     },

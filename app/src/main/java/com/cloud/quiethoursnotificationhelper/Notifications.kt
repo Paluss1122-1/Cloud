@@ -81,7 +81,7 @@ fun scheduleNextCheck(context: Context) {
     val now = Calendar.getInstance()
     val quietStart = getQuietStartHour(context)
     val quietEnd = getQuietEndHour(context)
-    val nextChange = calculateNextStatusChange(now,quietStart, quietEnd)
+    val nextChange = calculateNextStatusChange(now, quietStart, quietEnd)
     val delayMillis = nextChange.timeInMillis - now.timeInMillis
     val delayMinutes = delayMillis / 1000 / 60
 
@@ -100,7 +100,11 @@ fun scheduleNextCheck(context: Context) {
 }
 
 @RequiresPermission(Manifest.permission.SCHEDULE_EXACT_ALARM)
-private fun scheduleWithAlarmManager(triggerAtMillis: Long, context: Context, checkRunnable: Runnable) {
+private fun scheduleWithAlarmManager(
+    triggerAtMillis: Long,
+    context: Context,
+    checkRunnable: Runnable
+) {
     try {
         val alarmManager = context.getSystemService(ALARM_SERVICE) as AlarmManager
 
@@ -256,7 +260,7 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
         .build()
 
     val commandIntent = Intent(ACTION_EXECUTE_COMMAND).apply {
-        `package` =  context.packageName
+        `package` = context.packageName
     }
 
     val commandPendingIntent = PendingIntent.getBroadcast(

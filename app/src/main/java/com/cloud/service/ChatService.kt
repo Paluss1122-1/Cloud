@@ -403,7 +403,10 @@ class ChatService : Service() {
             }
 
             if (setupSuccess == null) {
-                Log.w("ChatService", "⚠️ Realtime setup timed out after ${REALTIME_SETUP_TIMEOUT_MS}ms")
+                Log.w(
+                    "ChatService",
+                    "⚠️ Realtime setup timed out after ${REALTIME_SETUP_TIMEOUT_MS}ms"
+                )
             } else if (!setupSuccess) {
                 Log.e("ChatService", "❌ Realtime setup failed")
             }

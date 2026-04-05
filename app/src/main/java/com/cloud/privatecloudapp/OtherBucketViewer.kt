@@ -406,26 +406,37 @@ fun OtherBucketViewer(
                                             var isLoading by remember { mutableStateOf(true) }
 
                                             LaunchedEffect(fileInfo.file.absolutePath) {
-                                                val cachedInMemory = thumbnailCache[fileInfo.file.absolutePath]
+                                                val cachedInMemory =
+                                                    thumbnailCache[fileInfo.file.absolutePath]
                                                 if (cachedInMemory != null) {
                                                     thumbnail = cachedInMemory
                                                     isLoading = false
                                                     return@LaunchedEffect
                                                 }
 
-                                                val cachedThumbnail = loadThumbnailFromCache(context, fileInfo.file.absolutePath)
+                                                val cachedThumbnail = loadThumbnailFromCache(
+                                                    context,
+                                                    fileInfo.file.absolutePath
+                                                )
                                                 if (cachedThumbnail != null) {
                                                     thumbnail = cachedThumbnail
-                                                    thumbnailCache[fileInfo.file.absolutePath] = cachedThumbnail
+                                                    thumbnailCache[fileInfo.file.absolutePath] =
+                                                        cachedThumbnail
                                                     isLoading = false
                                                     return@LaunchedEffect
                                                 }
 
                                                 withContext(Dispatchers.IO) {
-                                                    val loadedThumbnail = getVideoFirstFrame(fileInfo.file)
+                                                    val loadedThumbnail =
+                                                        getVideoFirstFrame(fileInfo.file)
                                                     if (loadedThumbnail != null) {
-                                                        saveThumbnailToCache(context, fileInfo.file.absolutePath, loadedThumbnail)
-                                                        thumbnailCache[fileInfo.file.absolutePath] = loadedThumbnail
+                                                        saveThumbnailToCache(
+                                                            context,
+                                                            fileInfo.file.absolutePath,
+                                                            loadedThumbnail
+                                                        )
+                                                        thumbnailCache[fileInfo.file.absolutePath] =
+                                                            loadedThumbnail
                                                     }
                                                     thumbnail = loadedThumbnail
                                                     isLoading = false
@@ -618,9 +629,11 @@ fun OtherBucketViewer(
                     .background(Color.Black.copy(alpha = 0.7f)),
                 contentAlignment = Alignment.Center
             ) {
-                Card(modifier = Modifier
-                    .padding(32.dp)
-                    .fillMaxWidth(0.8f)) {
+                Card(
+                    modifier = Modifier
+                        .padding(32.dp)
+                        .fillMaxWidth(0.8f)
+                ) {
                     Column(
                         modifier = Modifier.padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -750,7 +763,9 @@ suspend fun exportAllFiles(fileList: List<LocalFileInfo>): Pair<Int, Int> {
                 var counter = 1
                 while (targetFile.exists()) {
                     val nameWithoutExt = fileInfo.fileName.substringBeforeLast(".")
-                    val ext = if (fileInfo.fileName.contains(".")) ".${fileInfo.fileName.substringAfterLast(".")}" else ""
+                    val ext = if (fileInfo.fileName.contains(".")) ".${
+                        fileInfo.fileName.substringAfterLast(".")
+                    }" else ""
                     targetFile = File(targetDir, "${nameWithoutExt}_$counter$ext")
                     counter++
                 }

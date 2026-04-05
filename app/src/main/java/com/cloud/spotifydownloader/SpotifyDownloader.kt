@@ -1,28 +1,48 @@
 package com.cloud.spotifydownloader
 
 import android.os.Environment
-import androidx.compose.foundation.layout.*
+import android.util.Base64
+import android.util.Log
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.*
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONObject
-import org.json.JSONArray
-import java.io.File
-import java.net.URLEncoder
-import android.util.Base64
-import android.util.Log
 import com.cloud.Config.SPOTIFY_CLIENT_ID
 import com.cloud.Config.SPOTIFY_CLIENT_SECRET
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import okhttp3.FormBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 import java.io.FileOutputStream
 import java.net.URLDecoder
+import java.net.URLEncoder
 
 
 data class Track(
@@ -41,6 +61,7 @@ data class TrackState(
     val status: DownloadStatus = DownloadStatus.IDLE,
     val statusMsg: String = ""
 )
+
 private const val OUTPUT_DIR = "SpotifyDownloader"
 
 private val http = OkHttpClient()
@@ -127,7 +148,10 @@ fun getYouTubeAudioUrl(videoId: String): String? {
             val response = http.newCall(req).execute()
             val bodyStr = response.body!!.string()
 
-            Log.d("YT_DEBUG", "Instance: $instance, Code: ${response.code}, Body: ${bodyStr.take(500)}")
+            Log.d(
+                "YT_DEBUG",
+                "Instance: $instance, Code: ${response.code}, Body: ${bodyStr.take(500)}"
+            )
 
             if (!response.isSuccessful) continue
 
@@ -141,7 +165,10 @@ fun getYouTubeAudioUrl(videoId: String): String? {
                 val s = streams.getJSONObject(i)
                 val bitrate = s.optInt("bitrate", 0)
                 val mimeType = s.optString("mimeType", "")
-                Log.d("YT_DEBUG", "Stream: mimeType=$mimeType bitrate=$bitrate url=${s.optString("url").take(80)}")
+                Log.d(
+                    "YT_DEBUG",
+                    "Stream: mimeType=$mimeType bitrate=$bitrate url=${s.optString("url").take(80)}"
+                )
                 if (bitrate > bestBitrate) {
                     val url = s.optString("url").takeIf { it.isNotEmpty() }
                     if (url != null) {
@@ -232,9 +259,11 @@ fun SpotifyDownloaderApp() {
     var phase by remember { mutableStateOf("") }
 
     MaterialTheme {
-        Column(Modifier
-            .fillMaxSize()
-            .padding(16.dp)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
 
             Text("Spotify Downloader", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(12.dp))

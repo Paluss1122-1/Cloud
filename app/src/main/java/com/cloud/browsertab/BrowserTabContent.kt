@@ -2,10 +2,21 @@ package com.cloud.browsertab
 
 import android.content.Context
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -34,7 +45,7 @@ fun BrowserTabContent(
         } else {
             "https://$targetUrl"
         }
-        
+
         onUrlChange(finalUrl)
         keyboardController?.hide()
         onEnterFullScreen()
@@ -81,16 +92,16 @@ fun BrowserTabContent(
         }
 
         Spacer(modifier = Modifier.height(32.dp))
-        
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            QuickLinkButton("YouTube", Color.Red) { 
-                loadAndOpenUrl("https://www.youtube.com") 
+            QuickLinkButton("YouTube", Color.Red) {
+                loadAndOpenUrl("https://www.youtube.com")
             }
-            QuickLinkButton("Gmail", Color(0xFFFFA500)) { 
-                loadAndOpenUrl("https://www.gmail.com") 
+            QuickLinkButton("Gmail", Color(0xFFFFA500)) {
+                loadAndOpenUrl("https://www.gmail.com")
             }
         }
 
@@ -104,9 +115,9 @@ fun BrowserTabContent(
 
 @Composable
 fun QuickLinkButton(
-    text: String, 
-    bgColor: Color, 
-    textColor: Color = Color.White, 
+    text: String,
+    bgColor: Color,
+    textColor: Color = Color.White,
     onClick: () -> Unit
 ) {
     Button(

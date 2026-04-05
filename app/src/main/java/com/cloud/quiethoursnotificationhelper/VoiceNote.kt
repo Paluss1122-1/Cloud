@@ -64,10 +64,13 @@ fun playLatestVoiceNote(sender: String, context: Context) {
             }
         }
     } catch (e: Exception) {
-        showSimpleNotificationExtern("Fehler", "Sprachnachricht konnte nicht abgespielt werden", context = context)
+        showSimpleNotificationExtern(
+            "Fehler",
+            "Sprachnachricht konnte nicht abgespielt werden",
+            context = context
+        )
     }
 }
-
 
 
 fun playVoiceNoteAtIndex(index: Int, context: Context) {
