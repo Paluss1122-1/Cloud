@@ -13,7 +13,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.cloud.Config.cms
 import java.util.Locale
-import kotlin.text.ifEmpty
 
 
 fun showSensorsInfo(context: Context) {
