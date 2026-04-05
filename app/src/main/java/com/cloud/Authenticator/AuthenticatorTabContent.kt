@@ -1,7 +1,11 @@
 package com.cloud.authenticator
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.ContextWrapper
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyPermanentlyInvalidatedException
+import android.security.keystore.KeyProperties
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators
 import androidx.biometric.BiometricPrompt
@@ -9,14 +13,34 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Password
-import androidx.compose.material.icons.outlined.Password
-import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -34,11 +58,8 @@ import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.time.Instant
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyPermanentlyInvalidatedException
-import android.security.keystore.KeyProperties
 import java.security.KeyStore
+import java.time.Instant
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -57,7 +78,10 @@ object BiometricKeyHelper {
 
         val keyGen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         keyGen.init(
-            KeyGenParameterSpec.Builder(KEY_NAME, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+            KeyGenParameterSpec.Builder(
+                KEY_NAME,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+            )
                 .setBlockModes(KeyProperties.BLOCK_MODE_CBC)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_PKCS7)
                 .setUserAuthenticationRequired(true)
@@ -68,8 +92,8 @@ object BiometricKeyHelper {
     }
 
     fun deleteKey() {
-    val ks = KeyStore.getInstance("AndroidKeyStore").also { it.load(null) }
-    if (ks.containsAlias(KEY_NAME)) ks.deleteEntry(KEY_NAME)
+        val ks = KeyStore.getInstance("AndroidKeyStore").also { it.load(null) }
+        if (ks.containsAlias(KEY_NAME)) ks.deleteEntry(KEY_NAME)
     }
 
     fun getCipher(): Cipher =
@@ -150,12 +174,12 @@ fun AuthenticatorTab() {
         if (shouldShowPrompt && lockEnabled && !isAuthenticated) {
             delay(100)
             showBiometricPrompt(
-    activity = activity,
-    onSuccess = { cipher ->
-        isAuthenticated = true
-        showError = false
-        shouldShowPrompt = false
-    },
+                activity = activity,
+                onSuccess = { _ ->
+                    isAuthenticated = true
+                    showError = false
+                    shouldShowPrompt = false
+                },
                 onError = { error, isCritical ->
                     if (isCritical) {
                         errorMessage = error
@@ -190,7 +214,7 @@ fun AuthenticatorTab() {
                 )
             }
 
-            !isAuthenticated && showError -> {
+            showError -> {
                 ErrorScreen(
                     message = errorMessage,
                     onRetry = { showError = false; shouldShowPrompt = true },
@@ -215,6 +239,7 @@ private fun AuthenticatedContent(
     val passwordDb = remember { PasswordDatabase.getDatabase(context) }
     val twoFaDb = remember { TwoFADatabase.getDatabase(context) }
 
+    @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     Scaffold(
         containerColor = Color.Transparent,
         bottomBar = {
@@ -246,7 +271,7 @@ private fun AuthenticatedContent(
                 }
             }
         }
-    ) { padding ->
+    ) { _ ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -256,7 +281,7 @@ private fun AuthenticatedContent(
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
-                PasswordManagerScreen(db = passwordDb)
+                PasswordManagerScreen(db = passwordDb, twoFaDb)
             }
 
             AnimatedVisibility(
@@ -409,12 +434,13 @@ private fun showBiometricPrompt(
     val cipher = BiometricKeyHelper.getCipher()
     try {
         cipher.init(Cipher.ENCRYPT_MODE, BiometricKeyHelper.getOrCreateKey())
-    } catch (e: KeyPermanentlyInvalidatedException) {
+    } catch (_: KeyPermanentlyInvalidatedException) {
         onError("Biometriedaten haben sich geändert. Bitte erneut einrichten.", true)
         return
     }
 
-    val prompt = BiometricPrompt(activity, executor,
+    val prompt = BiometricPrompt(
+        activity, executor,
         object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 super.onAuthenticationSucceeded(result)
@@ -461,10 +487,10 @@ private fun showBiometricPrompt(
 
     try {
         prompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
-    } catch (e: KeyPermanentlyInvalidatedException) {
-    BiometricKeyHelper.deleteKey()
-    onError("Biometriedaten haben sich geändert. Bitte erneut einrichten.", true)
-    return
+    } catch (_: KeyPermanentlyInvalidatedException) {
+        BiometricKeyHelper.deleteKey()
+        onError("Biometriedaten haben sich geändert. Bitte erneut einrichten.", true)
+        return
     } catch (e: Exception) {
         onError("Fehler beim Starten: ${e.message}", true)
     }
