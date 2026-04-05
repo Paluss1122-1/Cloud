@@ -1,19 +1,29 @@
 package com.cloud.authenticator
 
 import android.content.Context
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
-import android.util.Base64
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Database
+import androidx.room.Delete
+import androidx.room.Entity
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.PrimaryKey
+import androidx.room.Query
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.room.Update
+import com.cloud.Config
+import com.cloud.ERRORINSERT
+import com.cloud.ERRORINSERTDATA
+import com.cloud.SupabaseConfigALT
+import io.github.jan.supabase.postgrest.postgrest
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.security.KeyStore
+import kotlinx.serialization.Serializable
 import java.security.SecureRandom
-import javax.crypto.Cipher
-import javax.crypto.KeyGenerator
-import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
-
+import java.time.Instant
 
 @Entity(tableName = "passwords")
 data class PasswordEntry(
@@ -21,10 +31,8 @@ data class PasswordEntry(
     val name: String,
     val url: String = "",
     val username: String = "",
-    val encryptedPassword: String = "",
+    val password: String = "",
     val notes: String = "",
-    val category: String = "Andere",
-    val isFavorite: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
@@ -36,23 +44,19 @@ interface PasswordDao {
     @Query("SELECT * FROM passwords ORDER BY name ASC")
     suspend fun getAll(): List<PasswordEntry>
 
-    @Query("""
+    @Query(
+        """
         SELECT * FROM passwords
         WHERE name LIKE '%' || :q || '%'
            OR username LIKE '%' || :q || '%'
            OR url LIKE '%' || :q || '%'
         ORDER BY name ASC
-    """)
+    """
+    )
     suspend fun search(q: String): List<PasswordEntry>
 
-    @Query("SELECT * FROM passwords WHERE url LIKE '%' || :domain || '%' ORDER BY name ASC")
+    @Query("SELECT * FROM passwords WHERE :domain != '' AND url LIKE '%' || :domain || '%'")
     suspend fun findByDomain(domain: String): List<PasswordEntry>
-
-    @Query("SELECT * FROM passwords WHERE category = :category ORDER BY name ASC")
-    suspend fun getByCategory(category: String): List<PasswordEntry>
-
-    @Query("SELECT * FROM passwords WHERE isFavorite = 1 ORDER BY name ASC")
-    suspend fun getFavorites(): List<PasswordEntry>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entry: PasswordEntry): Long
@@ -65,10 +69,13 @@ interface PasswordDao {
 
     @Query("SELECT COUNT(*) FROM passwords")
     suspend fun count(): Int
+
+    @Query("DELETE FROM passwords")
+    suspend fun deleteAll()
 }
 
 
-@Database(entities = [PasswordEntry::class], version = 1, exportSchema = false)
+@Database(entities = [PasswordEntry::class], version = 4, exportSchema = false)
 abstract class PasswordDatabase : RoomDatabase() {
 
     abstract fun passwordDao(): PasswordDao
@@ -93,61 +100,32 @@ abstract class PasswordDatabase : RoomDatabase() {
 }
 
 
-object PasswordCrypto {
+object CloudCrypto {
 
-    private const val KEY_ALIAS   = "cloud_pwm_master_v1"
-    private const val KEY_SIZE    = 256
-    private const val IV_SIZE     = 12
-    private const val TAG_SIZE    = 128
-    private const val ALGORITHM   = "AES/GCM/NoPadding"
-
-    private fun getOrCreateKey(): SecretKey {
-        val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        if (!ks.containsAlias(KEY_ALIAS)) {
-            KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply {
-                init(
-                    KeyGenParameterSpec.Builder(
-                        KEY_ALIAS,
-                        KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-                    )
-                        .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                        .setKeySize(KEY_SIZE)
-                        .setRandomizedEncryptionRequired(true)
-                        .build()
-                )
-                generateKey()
-            }
-        }
-        return (ks.getEntry(KEY_ALIAS, null) as KeyStore.SecretKeyEntry).secretKey
-    }
-
-    /** Encrypts plaintext → Base64(IV || ciphertext). Returns "" on error. */
-    fun encrypt(plaintext: String): String {
+    fun encryptForCloud(plaintext: String): String {
         if (plaintext.isEmpty()) return ""
-        return try {
-            val cipher = Cipher.getInstance(ALGORITHM)
-            cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
-            val encrypted = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
-            val combined = cipher.iv + encrypted
-            Base64.encodeToString(combined, Base64.NO_WRAP)
-        } catch (_: Exception) {
-            ""
-        }
+        val encrypted = Config.encrypt(plaintext, Config.masterPassword)
+        val verified = runCatching { Config.decrypt(encrypted, Config.masterPassword) }.getOrNull()
+        check(verified == plaintext) { "Encrypt-Verify fehlgeschlagen – Passwort falsch?" }
+        return encrypted
     }
 
-    /** Decrypts Base64(IV || ciphertext) → plaintext. Returns "" on error. */
-    fun decrypt(ciphertext: String): String {
+    fun decryptFromCloud(ciphertext: String): String? {
         if (ciphertext.isEmpty()) return ""
         return try {
-            val combined  = Base64.decode(ciphertext, Base64.NO_WRAP)
-            val iv        = combined.copyOfRange(0, IV_SIZE)
-            val encrypted = combined.copyOfRange(IV_SIZE, combined.size)
-            val cipher    = Cipher.getInstance(ALGORITHM)
-            cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(TAG_SIZE, iv))
-            String(cipher.doFinal(encrypted), Charsets.UTF_8)
-        } catch (_: Exception) {
-            ""
+            Config.decrypt(ciphertext, Config.masterPassword)
+        } catch (e: Exception) {
+            CoroutineScope(Dispatchers.IO).launch {
+                ERRORINSERT(
+                    ERRORINSERTDATA(
+                        "CloudCrypto",
+                        "Decrypt fehlgeschlagen: ${e.message}",
+                        Instant.now().toString(),
+                        "ERROR"
+                    )
+                )
+            }
+            null
         }
     }
 }
@@ -155,36 +133,36 @@ object PasswordCrypto {
 
 object PasswordGenerator {
 
-    private const val LOWER   = "abcdefghijklmnopqrstuvwxyz"
-    private const val UPPER   = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    private const val DIGITS  = "0123456789"
-    private const val SYMBOLS = "!@#\$%^&*()_+-=[]{}|;:,.<>?"
+    private const val LOWER = "abcdefghijklmnopqrstuvwxyz"
+    private const val UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    private const val DIGITS = "0123456789"
+    private const val SYMBOLS = "!@#$%^&*()_+-=[]{}|;:,.<>?"
     private const val AMBIGUOUS = "0OIl1"
 
     fun generate(
-        length: Int      = 20,
-        lower:   Boolean = true,
-        upper:   Boolean = true,
-        digits:  Boolean = true,
+        length: Int = 20,
+        lower: Boolean = true,
+        upper: Boolean = true,
+        digits: Boolean = true,
         symbols: Boolean = true,
         noAmbiguous: Boolean = false
     ): String {
         val pool = buildString {
-            if (lower)   append(LOWER)
-            if (upper)   append(UPPER)
-            if (digits)  append(DIGITS)
+            if (lower) append(LOWER)
+            if (upper) append(UPPER)
+            if (digits) append(DIGITS)
             if (symbols) append(SYMBOLS)
         }.let { if (noAmbiguous) it.filter { c -> c.toString() !in AMBIGUOUS } else it }
 
         if (pool.isEmpty()) return ""
 
         val rng = SecureRandom.getInstanceStrong()
-        val sb  = StringBuilder(length)
+        val sb = StringBuilder(length)
 
         val guaranteed = buildList {
-            if (lower)   add(LOWER[rng.nextInt(LOWER.length)])
-            if (upper)   add(UPPER[rng.nextInt(UPPER.length)])
-            if (digits)  add(DIGITS[rng.nextInt(DIGITS.length)])
+            if (lower) add(LOWER[rng.nextInt(LOWER.length)])
+            if (upper) add(UPPER[rng.nextInt(UPPER.length)])
+            if (digits) add(DIGITS[rng.nextInt(DIGITS.length)])
             if (symbols) add(SYMBOLS[rng.nextInt(SYMBOLS.length)])
         }
 
@@ -204,9 +182,9 @@ object PasswordGenerator {
         if (password.isEmpty()) return 0
         var s = 0
         s += (password.length * 4).coerceAtMost(40)
-        if (password.any { it.isLowerCase() })      s += 10
-        if (password.any { it.isUpperCase() })      s += 10
-        if (password.any { it.isDigit() })          s += 10
+        if (password.any { it.isLowerCase() }) s += 10
+        if (password.any { it.isUpperCase() }) s += 10
+        if (password.any { it.isDigit() }) s += 10
         if (password.any { !it.isLetterOrDigit() }) s += 20
         val unique = password.toSet().size
         s += (unique * 2).coerceAtMost(10)
@@ -215,11 +193,11 @@ object PasswordGenerator {
 
     fun strength(password: String): PasswordStrength {
         return when (score(password)) {
-            in 0..25  -> PasswordStrength.WEAK
+            in 0..25 -> PasswordStrength.WEAK
             in 26..49 -> PasswordStrength.FAIR
             in 50..74 -> PasswordStrength.GOOD
             in 75..89 -> PasswordStrength.STRONG
-            else      -> PasswordStrength.EXCELLENT
+            else -> PasswordStrength.EXCELLENT
         }
     }
 }
@@ -230,42 +208,106 @@ enum class PasswordStrength(
     val fraction: Float,
     val color: androidx.compose.ui.graphics.Color
 ) {
-    WEAK     ("Schwach",       0.20f, androidx.compose.ui.graphics.Color(0xFFD32F2F)),
-    FAIR     ("Ausreichend",   0.40f, androidx.compose.ui.graphics.Color(0xFFE64A19)),
-    GOOD     ("Gut",           0.60f, androidx.compose.ui.graphics.Color(0xFFFBC02D)),
-    STRONG   ("Stark",         0.80f, androidx.compose.ui.graphics.Color(0xFF388E3C)),
+    WEAK("Schwach", 0.20f, androidx.compose.ui.graphics.Color(0xFFD32F2F)),
+    FAIR("Ausreichend", 0.40f, androidx.compose.ui.graphics.Color(0xFFE64A19)),
+    GOOD("Gut", 0.60f, androidx.compose.ui.graphics.Color(0xFFFBC02D)),
+    STRONG("Stark", 0.80f, androidx.compose.ui.graphics.Color(0xFF388E3C)),
     EXCELLENT("Ausgezeichnet", 1.00f, androidx.compose.ui.graphics.Color(0xFF1B5E20))
 }
 
 
-fun extractDomain(raw: String): String {
-    if (raw.isBlank()) return ""
-    val withScheme = if (raw.startsWith("http://") || raw.startsWith("https://")) raw
-                     else "https://$raw"
-    return try {
-        java.net.URL(withScheme).host.removePrefix("www.").lowercase()
-    } catch (_: Exception) {
-        raw.lowercase()
+@Serializable
+data class PasswordEntrySupabase(
+    val id: String? = null,
+    val name: String,
+    val url: String = "",
+    val username: String = "",
+    val encrypted_password: String = "",
+    val notes: String = "",
+    val totp_secret: String? = null
+)
+
+suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: TwoFADatabase) {
+    withContext(Dispatchers.IO) {
+        try {
+            val localPasswords = passwordDb.passwordDao().getAll()
+            val localTwoFa = twoFaDb.twoFADao().getAll()
+            val cloudEntries = try {
+                SupabaseConfigALT.client.postgrest.from("password_entries")
+                    .select().decodeList<PasswordEntrySupabase>()
+            } catch (e: Exception) {
+                ERRORINSERT(
+                    ERRORINSERTDATA(
+                        "PasswordRepository",
+                        "Cloud-Laden fehlgeschlagen: ${e.message}",
+                        Instant.now().toString(),
+                        "ERROR"
+                    )
+                )
+                return@withContext
+            }
+
+            // Cloud → Lokal: decrypt, skip bei Fehler
+            val cloudNames = mutableSetOf<String>()
+            cloudEntries.forEach { cloud ->
+                cloudNames.add(cloud.name.trim().lowercase())
+                val decryptedPw =
+                    CloudCrypto.decryptFromCloud(cloud.encrypted_password) ?: return@forEach
+                val existing =
+                    localPasswords.find { it.name == cloud.name && it.username == cloud.username }
+                if (existing == null) {
+                    passwordDb.passwordDao().insert(
+                        PasswordEntry(
+                            name = cloud.name,
+                            url = cloud.url,
+                            username = cloud.username,
+                            password = decryptedPw
+                        )
+                    )
+                }
+            }
+
+            // Lokal → Cloud: encrypt mit verify, skip bei Fehler
+            val missingInCloud = localPasswords.filter { it.name.trim().lowercase() !in cloudNames }
+            missingInCloud.forEach { local ->
+                try {
+                    val encryptedPw = CloudCrypto.encryptForCloud(local.password)
+                    val matchedSecret = localTwoFa.firstOrNull { fa ->
+                        val n = fa.name.lowercase();
+                        val ln = local.name.lowercase();
+                        val lu = local.url.lowercase()
+                        n.contains(ln) || ln.contains(n) || (lu.isNotEmpty() && n.split(" ")
+                            .any { lu.contains(it) })
+                    }?.secret
+
+                    SupabaseConfigALT.client.postgrest.from("password_entries").insert(
+                        PasswordEntrySupabase(
+                            name = local.name, url = local.url, username = local.username,
+                            encrypted_password = encryptedPw,
+                            notes = local.notes,
+                            totp_secret = matchedSecret?.let { CloudCrypto.encryptForCloud(it) }
+                        )
+                    )
+                } catch (e: Exception) {
+                    ERRORINSERT(
+                        ERRORINSERTDATA(
+                            "PasswordRepository",
+                            "Upload fehlgeschlagen: ${local.name} (${e.message})",
+                            Instant.now().toString(),
+                            "ERROR"
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            ERRORINSERT(
+                ERRORINSERTDATA(
+                    "PasswordRepository",
+                    "Sync-Exception: ${e.message}",
+                    Instant.now().toString(),
+                    "ERROR"
+                )
+            )
+        }
     }
 }
-
-
-val PASSWORD_CATEGORIES = listOf(
-    "Alle", "Social", "Banking", "E-Mail",
-    "Shopping", "Arbeit", "Gaming", "Andere"
-)
-
-val CATEGORY_ICONS = mapOf(
-    "Social"   to "👥",
-    "Banking"  to "🏦",
-    "E-Mail"   to "✉️",
-    "Shopping" to "🛒",
-    "Arbeit"   to "💼",
-    "Gaming"   to "🎮",
-    "Andere"   to "🔑"
-)
-
-suspend fun PasswordDatabase.decryptedPassword(entry: PasswordEntry): String =
-    withContext(Dispatchers.Default) {
-        PasswordCrypto.decrypt(entry.encryptedPassword)
-    }

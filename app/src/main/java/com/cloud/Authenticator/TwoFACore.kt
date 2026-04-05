@@ -93,7 +93,12 @@ object TotpGenerator {
         return baos.toByteArray()
     }
 
-    fun generateTOTP(secretBase32: String, timeMillis: Long = System.currentTimeMillis(), digits: Int = 6, periodSeconds: Long = 30): String {
+    fun generateTOTP(
+        secretBase32: String,
+        timeMillis: Long = System.currentTimeMillis(),
+        digits: Int = 6,
+        periodSeconds: Long = 30
+    ): String {
         try {
             val key = base32Decode(secretBase32)
             val counter = timeMillis / 1000L / periodSeconds

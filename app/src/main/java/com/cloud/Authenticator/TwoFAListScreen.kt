@@ -1,20 +1,18 @@
 package com.cloud.authenticator
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
-import android.net.Uri
 import android.provider.Settings
 import android.util.Base64
 import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -24,6 +22,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,23 +36,29 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -76,16 +81,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
+import androidx.compose.ui.window.Dialog
 import androidx.core.content.edit
 import androidx.core.net.toUri
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
-import com.cloud.ui.theme.c
 import com.google.zxing.ResultPoint
 import com.journeyapps.barcodescanner.BarcodeCallback
 import com.journeyapps.barcodescanner.BarcodeResult
@@ -97,23 +98,14 @@ import kotlinx.coroutines.withContext
 import java.net.URLDecoder
 import java.time.Instant
 
-/*@Composable
-@Preview
-fun Start() {
-    val navController = rememberNavController()
-    val context = LocalContext.current
-    NavHost(navController, startDestination = "list") {
-        composable("list") {
-            TwoFAListScreen(
-                db = TwoFADatabase.getDatabase(context),
-                onOpenSettings = { navController.navigate("settings") }
-            )
-        }
-        composable("settings") {
-            SettingsScreenWithScreenshotProtection(onBackClick = { navController.popBackStack() })
-        }
-    }
-}*/
+private val Surface1 = Color(0xFF17171C)
+private val Surface2 = Color(0xFF1F1F27)
+private val Surface3 = Color(0xFF2A2A35)
+private val AccentBlue = Color(0xFF4A90E2)
+private val AccentRed = Color(0xFFE74C3C)
+private val TextP = Color(0xFFEEEEF5)
+private val TextS = Color(0xFF8A8A9F)
+private val TextT = Color(0xFF55556A)
 
 @SuppressLint("UseKtx")
 @Composable
@@ -133,6 +125,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
     var showSyncDialog by remember { mutableStateOf(false) }
     var isSyncing by remember { mutableStateOf(false) }
     var showScanner by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(true) }
 
     val context = LocalContext.current
 
@@ -140,18 +133,17 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
         if (isSyncing) return@LaunchedEffect
 
         entries = db.twoFADao().getAll()
+        isLoading = false
 
         val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
         val lastSyncTime = prefs.getLong("last_sync_timestamp", 0L)
         val currentTime = System.currentTimeMillis()
-        val fiveMinutesInMillis = 1 * 20 * 1000L
 
-        if (currentTime - lastSyncTime > fiveMinutesInMillis) {
+        if (currentTime - lastSyncTime > 20_000L) {
             isSyncing = true
             scope.launch {
                 try {
                     val result = syncTwoFaEntriesWithConfirmation(db)
-
                     entries = db.twoFADao().getAll()
 
                     if (result.pendingDecisions.isNotEmpty()) {
@@ -160,11 +152,8 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                     }
 
                     if (result.error != null) {
-                        Toast.makeText(
-                            context,
-                            "Offline: ${result.error}",
-                            Toast.LENGTH_LONG
-                        ).show()
+                        Toast.makeText(context, "Offline: ${result.error}", Toast.LENGTH_LONG)
+                            .show()
                         ERRORINSERT(
                             ERRORINSERTDATA(
                                 "TwoFAListScreen",
@@ -180,7 +169,6 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                 System.currentTimeMillis()
                             )
                         }
-
                         if (result.uploaded > 0 || result.downloaded > 0) {
                             Toast.makeText(
                                 context,
@@ -190,11 +178,8 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                         }
                     }
                 } catch (e: Exception) {
-                    Toast.makeText(
-                        context,
-                        "Synchronisation fehlgeschlagen: Keine Internetverbindung",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    Toast.makeText(context, "Synchronisation fehlgeschlagen", Toast.LENGTH_LONG)
+                        .show()
                     ERRORINSERT(
                         ERRORINSERTDATA(
                             "TwoFAListScreen",
@@ -211,765 +196,232 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
     }
 
     LaunchedEffect(selectedEntry, isEditingEntry) {
-        val step = 30L
-        val displayPeriod = 30L
         while (selectedEntry != null && !isEditingEntry) {
             val now = System.currentTimeMillis()
             generatedCode =
-                TotpGenerator.generateTOTP(selectedEntry!!.secret, now, periodSeconds = step)
-            val elapsed = (now / 1000) % displayPeriod
-            secondsLeft = (displayPeriod - elapsed).toInt()
+                TotpGenerator.generateTOTP(selectedEntry!!.secret, now, periodSeconds = 30L)
+            secondsLeft = (30 - (now / 1000) % 30).toInt()
             delay(1000)
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Transparent)
-    ) {
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .background(Color.Transparent)) {
         Column(
-            Modifier
+            modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .background(Color.Transparent)
         ) {
-            Text(
-                "Deine 2FA-Token",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    color = Color.White, fontWeight = FontWeight.Bold
-                )
-            )
-
-            Button(
-                onClick = {
-                    scope.launch {
-                        entries = db.twoFADao().getAll()
-                        Toast.makeText(context, "Liste aktualisiert!", Toast.LENGTH_SHORT)
-                            .show()
-                    }
-                },
-                modifier = Modifier.padding(vertical = 8.dp)
-            ) {
-                Text("Aktualisieren", color = Color.White)
-            }
-
-            val groupedEntries = entries
-            LazyColumn(
+            Row(
                 modifier = Modifier
-                    .weight(1f)
                     .fillMaxWidth()
-            ) Composable@{
-                if (groupedEntries.isEmpty()) {
-                    item {
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(
-                            "Keine Einträge vorhanden",
-                            color = Color.White,
-                            modifier = Modifier.padding(16.dp)
+                            "🛡️ 2FA Codes",
+                            color = TextP,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold
                         )
-                    }
-                }
-
-                val duplicateNames = groupedEntries
-                    .groupBy { it.name }
-                    .filter { it.value.size > 1 }
-                    .keys
-
-                if (duplicateNames.isNotEmpty()) {
-                    item {
-                        Text(
-                            "⚠️ Doppelte Einträge gefunden: ${duplicateNames.joinToString()}",
-                            color = Color(0xFFFFCC00),
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-                }
-
-                items(groupedEntries, key = { it.id }) { entry ->
-                    val iconPrefs =
-                        context.getSharedPreferences("entry_icons", Context.MODE_PRIVATE)
-                    var iconUrl by remember {
-                        mutableStateOf(
-                            iconPrefs.getString(
-                                entry.secret,
-                                null
-                            ) ?: ""
-                        )
-                    }
-                    var showIconDialog by remember { mutableStateOf(false) }
-                    var inputUrl by remember { mutableStateOf(iconUrl) }
-
-                    Card(
-                        shape = RoundedCornerShape(8.dp),
-                        colors = CardDefaults.cardColors(containerColor = c()),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
-                            .pointerInput(entry) {
-                                detectTapGestures(
-                                    onTap = { selectedEntry = entry },
-                                    onLongPress = {
-                                        val now = System.currentTimeMillis()
-                                        val code = TotpGenerator.generateTOTP(entry.secret, now)
-                                        val clipboard =
-                                            context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(
-                                            ClipData.newPlainText(
-                                                "Generated Code",
-                                                code
-                                            )
-                                        )
-                                        Toast.makeText(
-                                            context,
-                                            "Code für ${entry.name} kopiert!",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
-                                )
+                        Row {
+                            IconButton(
+                                onClick = { showAddDialog = true },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(Icons.Default.Add, null, tint = AccentBlue)
                             }
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(16.dp)
-                        ) {
-                            if (iconUrl.isNotBlank()) {
-                                if (iconUrl.startsWith("data:image")) {
-                                    val base64String = iconUrl.substringAfter("base64,")
-                                    val imageBytes = Base64.decode(base64String, Base64.DEFAULT)
-                                    val bitmap = BitmapFactory.decodeByteArray(
-                                        imageBytes,
-                                        0,
-                                        imageBytes.size
-                                    )
-
-                                    IconButton(onClick = {
-                                        inputUrl = iconUrl
-                                        showIconDialog = true
-                                    }) {
-                                        Image(
-                                            bitmap = bitmap.asImageBitmap(),
-                                            contentDescription = "Icon für ${entry.name}",
-                                            modifier = Modifier
-                                                .size(60.dp)
-                                                .clip(RoundedCornerShape(16.dp))
-                                        )
-                                    }
-                                } else {
-                                    IconButton(onClick = {
-                                        inputUrl = iconUrl
-                                        showIconDialog = true
-                                    }) {
-                                        AsyncImage(
-                                            model = iconUrl,
-                                            contentDescription = "Icon für ${entry.name}",
-                                            modifier = Modifier.size(60.dp)
-                                        )
-                                    }
-                                }
-                            } else {
-                                IconButton(onClick = {
-                                    inputUrl = iconUrl
-                                    showIconDialog = true
-                                }) {
-                                    Icon(
-                                        Icons.Default.Info,
-                                        contentDescription = "Icon ändern",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(60.dp)
-                                    )
-                                }
+                            IconButton(
+                                onClick = { showScanner = true },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(Icons.Default.QrCodeScanner, null, tint = AccentBlue)
                             }
-
-                            Spacer(Modifier.width(12.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    entry.name,
-                                    color = Color.White,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    textAlign = TextAlign.Center
-                                )
+                            IconButton(onClick = onOpenSettings, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.Settings, null, tint = TextS)
                             }
                         }
                     }
-
-                    if (showIconDialog) {
-                        AlertDialog(
-                            onDismissRequest = { showIconDialog = false },
-                            title = { Text("Icon-URL ändern") },
-                            text = {
-                                OutlinedTextField(
-                                    value = inputUrl,
-                                    onValueChange = { inputUrl = it },
-                                    label = { Text("URL eingeben") },
-                                    singleLine = true
-                                )
-                            },
-                            confirmButton = {
-                                TextButton(onClick = {
-                                    iconPrefs.edit(commit = true) {
-                                        putString(entry.secret, inputUrl)
-                                        apply()
-                                    }
-                                    iconUrl = inputUrl
-                                    showIconDialog = false
-                                }) { Text("Speichern") }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = {
-                                    showIconDialog = false
-                                }) { Text("Abbrechen") }
-                            }
-                        )
-                    }
+                    Text("${entries.size} Einträge", color = TextS, fontSize = 12.sp)
                 }
-
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                IconButton(onClick = onOpenSettings) {
-                    Icon(
-                        imageVector = Icons.Filled.Settings,
-                        contentDescription = "Open settings",
-                        tint = Color.White
+            val duplicateNames = entries.groupBy { it.name }.filter { it.value.size > 1 }.keys
+            if (duplicateNames.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFFFCC00).copy(alpha = 0.15f))
+                        .border(
+                            1.dp,
+                            Color(0xFFFFCC00).copy(alpha = 0.4f),
+                            RoundedCornerShape(10.dp)
+                        )
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "⚠️ Doppelte Einträge: ${duplicateNames.joinToString()}",
+                        color = Color(0xFFFFCC00),
+                        fontSize = 13.sp
                     )
                 }
+                Spacer(Modifier.height(8.dp))
+            }
 
-                Button(
-                    onClick = { showAddDialog = true }
-                ) {
-                    Text("Hinzufügen", fontSize = 15.sp, color = Color.White)
+            if (isLoading) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = AccentBlue)
                 }
-
-                Button(
-                    onClick = {
-                        val permissionCheck =
-                            ContextCompat.checkSelfPermission(
-                                context,
-                                Manifest.permission.CAMERA
-                            )
-                        if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
-                            showScanner = true
-                        } else {
-                            try {
-                                val intent =
-                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                        data =
-                                            Uri.fromParts("package", context.packageName, null)
-                                        if (context !is Activity) {
-                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                        }
-                                    }
-                                context.startActivity(intent)
-                            } catch (_: Exception) {
-                                try {
-                                    val fallbackIntent =
-                                        Intent(Settings.ACTION_SETTINGS).apply {
-                                            if (context !is Activity) {
-                                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                            }
-                                        }
-                                    context.startActivity(fallbackIntent)
-                                } catch (e: Exception) {
-                                    Toast.makeText(
-                                        context,
-                                        "Bitte Einstellungen manuell öffnen",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                    scope.launch {
-                                        ERRORINSERT(
-                                            ERRORINSERTDATA(
-                                                "TwoFAListScreen",
-                                                "Konnte Einstellungen nicht öffnen: ${e.message}",
-                                                Instant.now().toString(),
-                                                "ERROR"
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-                            Toast.makeText(
-                                context,
-                                "Erlaube Kamera Zugriff in den Einstellungen",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
+            } else if (entries.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("🛡️", fontSize = 56.sp)
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            "Noch keine 2FA-Einträge",
+                            color = TextP,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Tippe auf + oder scanne einen QR-Code",
+                            color = TextS,
+                            fontSize = 14.sp
+                        )
                     }
+                }
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    Text("QR-Code scannen", fontSize = 15.sp, color = Color.White)
+                    items(entries, key = { it.id }) { entry ->
+                        TwoFACard(
+                            entry = entry,
+                            context = context,
+                            onClick = { selectedEntry = entry },
+                            onEdit = {
+                                isEditingEntry = true
+                                editedName = entry.name
+                                selectedEntry = entry
+                            },
+                            onDelete = {
+                                scope.launch {
+                                    db.twoFADao().delete(entry)
+                                    deleteTwoFaEntryFromSupabase(entry)
+                                    entries = db.twoFADao().getAll()
+                                }
+                            },
+                            onCopy = {
+                                val code = TotpGenerator.generateTOTP(
+                                    entry.secret,
+                                    System.currentTimeMillis()
+                                )
+                                val clipboard =
+                                    context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("2FA Code", code))
+                                Toast.makeText(
+                                    context,
+                                    "📋 Code für ${entry.name} kopiert",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
+                    }
+                    item { Spacer(Modifier.height(80.dp)) }
                 }
             }
         }
 
         selectedEntry?.let { entry ->
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .clickable {
-                        isEditingEntry = false
-                    }
-                    .pointerInput(Unit) {
-                        detectTapGestures {
-                            selectedEntry = null
+            TwoFADetailOverlay(
+                entry = entry,
+                generatedCode = generatedCode,
+                secondsLeft = secondsLeft,
+                isEditing = isEditingEntry,
+                editedName = editedName,
+                onEditedNameChange = { editedName = it },
+                onDismiss = { selectedEntry = null; isEditingEntry = false },
+                onSaveEdit = {
+                    scope.launch {
+                        if (editedName.isNotBlank()) {
+                            val updated = entry.copy(name = editedName)
+                            db.twoFADao().update(updated)
+                            updateTwoFaEntryInSupabase(updated)
+                            entries = db.twoFADao().getAll()
+                            selectedEntry = updated
                             isEditingEntry = false
                         }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
-                    Modifier
-                        .padding(32.dp)
-                        .fillMaxWidth()
-                        .clickable(enabled = false) {},
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF4F4F4F))
-                ) {
-                    Column(
-                        Modifier
-                            .padding(24.dp)
-                            .fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        if (isEditingEntry) {
-                            OutlinedTextField(
-                                value = editedName,
-                                onValueChange = { editedName = it },
-                                label = { Text("Name bearbeiten", color = Color.Gray) },
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedBorderColor = Color(0xFFB388FF),
-                                    unfocusedBorderColor = Color.Gray
-                                ),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            var editedUrl by remember { mutableStateOf(entry.url) }
-
-                            OutlinedTextField(
-                                value = editedUrl,
-                                onValueChange = { editedUrl = it },
-                                label = {
-                                    Text(
-                                        "Website-URL (z.B. github.com)",
-                                        color = Color.Gray
-                                    )
-                                },
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedBorderColor = Color(0xFFB388FF),
-                                    unfocusedBorderColor = Color.Gray
-                                ),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            Spacer(Modifier.height(8.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly
-                            ) {
-                                Button(
-                                    onClick = {
-                                        scope.launch {
-                                            if (editedName.isNotBlank()) {
-                                                val updatedEntry = entry.copy(
-                                                    name = editedName,
-                                                    url = editedUrl
-                                                )
-                                                db.twoFADao().update(updatedEntry)
-
-                                                val supabaseSuccess =
-                                                    updateTwoFaEntryInSupabase(updatedEntry)
-
-                                                if (!supabaseSuccess) {
-                                                    scope.launch {
-                                                        ERRORINSERT(
-                                                            ERRORINSERTDATA(
-                                                                "TwoFAListScreen",
-                                                                "Supabase-Update fehlgeschlagen, aber lokal gespeichert",
-                                                                Instant.now().toString(),
-                                                                "Warning"
-                                                            )
-                                                        )
-                                                    }
-                                                }
-
-                                                entries = db.twoFADao().getAll()
-                                                selectedEntry = updatedEntry
-                                                isEditingEntry = false
-                                                Toast.makeText(
-                                                    context,
-                                                    "Eintrag aktualisiert!",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
-                                            }
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(
-                                            0xFF4CAF50
-                                        )
-                                    )
-                                ) {
-                                    Text("Speichern", color = Color.White)
-                                }
-
-                                Button(
-                                    onClick = {
-                                        isEditingEntry = false
-                                        editedName = entry.name
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
-                                ) {
-                                    Text("Abbrechen", color = Color.White)
-                                }
-                            }
-                        } else {
-                            Text(
-                                entry.name,
-                                fontSize = 18.sp,
-                                color = Color.White,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier
-                                    .clickable {
-                                        isEditingEntry = true
-                                        editedName = entry.name
-                                    }
-                                    .fillMaxWidth()
-                            )
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Code: $generatedCode",
-                            fontSize = 30.sp,
-                            textAlign = TextAlign.Center,
-                            color = Color(0xFFB388FF),
-                            modifier = Modifier.clickable {
-                                val clipboard =
-                                    context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(
-                                    ClipData.newPlainText(
-                                        "Generated Code",
-                                        generatedCode
-                                    )
-                                )
-                                Toast.makeText(context, "Code kopiert!", Toast.LENGTH_SHORT)
-                                    .show()
-                            }
-                        )
-
-                        Spacer(Modifier.height(8.dp))
-                        Text("Gültig noch: ${secondsLeft}s", color = Color.White)
-                        Spacer(Modifier.height(4.dp))
-                        Row {
-                            Icon(
-                                imageVector = Icons.Filled.Info,
-                                contentDescription = "Information",
-                                tint = Color.Gray
-                            )
-                            Text(
-                                "Codes die hier abgelaufen sind, sind generell noch bis zu 10sek gültig",
-                                color = Color.Gray,
-                                textAlign = TextAlign.Center,
-                            )
-                        }
-                        Spacer(Modifier.height(4.dp))
-
-                        Button(
-                            onClick = {
-                                val clipboard =
-                                    context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(
-                                    ClipData.newPlainText(
-                                        "Generated Code",
-                                        generatedCode
-                                    )
-                                )
-                                Toast.makeText(context, "Code kopiert!", Toast.LENGTH_SHORT)
-                                    .show()
-                                selectedEntry = null
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(
-                                    0xFF9B4DCA
-                                )
-                            ),
-                            modifier = Modifier.padding(10.dp)
-                        ) {
-                            Text("Code kopieren", color = Color.White)
-                        }
-
-                        var showDeleteDialog by remember { mutableStateOf(false) }
-
-                        Button(
-                            onClick = { showDeleteDialog = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-                        ) {
-                            Text("Eintrag löschen", color = Color.White)
-                        }
-
-                        val favPrefs =
-                            context.getSharedPreferences("favorites", Context.MODE_PRIVATE)
-                        val favIndex = when (entry.secret) {
-                            favPrefs.getString("fav1_secret", null) -> 1
-                            favPrefs.getString("fav2_secret", null) -> 2
-                            favPrefs.getString("fav3_secret", null) -> 3
-                            else -> null
-                        }
-
-                        if (favIndex != null) {
-                            Button(
-                                onClick = {
-                                    favPrefs.edit(commit = true) {
-                                        remove("fav${favIndex}_name")
-                                        remove("fav${favIndex}_secret")
-                                        apply()
-                                    }
-                                    Toast.makeText(
-                                        context,
-                                        "Favorit $favIndex entfernt!",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
-                                modifier = Modifier.padding(8.dp)
-                            ) {
-                                Text("Favorit $favIndex entfernen")
-                            }
-                        } else {
-                            val favCount = listOf(
-                                favPrefs.getString("fav1_secret", null),
-                                favPrefs.getString("fav2_secret", null),
-                                favPrefs.getString("fav3_secret", null)
-                            ).count { it != null }
-
-                            if (favCount < 3) {
-                                Button(
-                                    onClick = {
-                                        val slot = when {
-                                            favPrefs.getString("fav1_secret", null) == null -> 1
-                                            favPrefs.getString("fav2_secret", null) == null -> 2
-                                            favPrefs.getString("fav3_secret", null) == null -> 3
-                                            else -> null
-                                        }
-                                        slot?.let {
-                                            favPrefs.edit(commit = true) {
-                                                putString("fav${it}_name", entry.name)
-                                                putString("fav${it}_secret", entry.secret)
-                                                apply()
-                                            }
-                                            Toast.makeText(
-                                                context,
-                                                "Als Favorit $it gespeichert!",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                    },
-                                    modifier = Modifier.padding(8.dp)
-                                ) {
-                                    Text("Als Favorit speichern")
-                                }
-                            } else {
-                                Text("Max. 3 Favoriten erreicht", color = Color.Gray)
-                            }
-                        }
-
-                        if (showDeleteDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showDeleteDialog = false },
-                                title = { Text("Eintrag löschen?") },
-                                text = { Text("Bist du sicher, dass du diesen 2FA-Eintrag löschen willst?") },
-                                confirmButton = {
-                                    TextButton(
-                                        onClick = {
-                                            scope.launch {
-                                                val favPrefs = context.getSharedPreferences(
-                                                    "favorites",
-                                                    Context.MODE_PRIVATE
-                                                )
-                                                favPrefs.edit(commit = true) {
-                                                    if (favPrefs.getString(
-                                                            "fav1_secret",
-                                                            null
-                                                        ) == entry.secret
-                                                    ) {
-                                                        remove("fav1_name")
-                                                        remove("fav1_secret")
-                                                    }
-                                                    if (favPrefs.getString(
-                                                            "fav2_secret",
-                                                            null
-                                                        ) == entry.secret
-                                                    ) {
-                                                        remove("fav2_name")
-                                                        remove("fav2_secret")
-                                                    }
-                                                    if (favPrefs.getString(
-                                                            "fav3_secret",
-                                                            null
-                                                        ) == entry.secret
-                                                    ) {
-                                                        remove("fav3_name")
-                                                        remove("fav3_secret")
-                                                    }
-                                                    apply()
-                                                }
-                                                db.twoFADao().delete(entry)
-                                                deleteTwoFaEntryFromSupabase(entry)
-                                                entries = db.twoFADao().getAll()
-                                                selectedEntry = null
-                                                showDeleteDialog = false
-                                            }
-                                        }
-                                    ) { Text("Ja, löschen") }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = {
-                                        showDeleteDialog = false
-                                    }) { Text("Abbrechen") }
-                                }
-                            )
-                        }
                     }
-                }
-            }
+                },
+                onCancelEdit = { isEditingEntry = false; editedName = entry.name },
+                onStartEdit = { isEditingEntry = true; editedName = entry.name },
+                onDelete = {
+                    scope.launch {
+                        db.twoFADao().delete(entry)
+                        deleteTwoFaEntryFromSupabase(entry)
+                        entries = db.twoFADao().getAll()
+                        selectedEntry = null
+                    }
+                },
+                context = context
+            )
         }
 
         if (showAddDialog) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .clickable { showAddDialog = false },
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
-                    Modifier
-                        .padding(32.dp)
-                        .clickable(enabled = false) {}
-                ) {
-                    Column(
-                        Modifier
-                            .padding(24.dp)
-                            .fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            "Neuen Code hinzufügen",
-                            style = MaterialTheme.typography.titleLarge
-                        )
-                        Spacer(Modifier.height(16.dp))
-
-                        TextField(
-                            value = name,
-                            onValueChange = { name = it },
-                            label = { Text("Name (nur für dich)") }
-                        )
-                        TextField(
-                            value = secret,
-                            onValueChange = { secret = it },
-                            label = { Text("Schlüssel") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
-                        )
-
-                        Spacer(Modifier.height(16.dp))
-                        Button(
-                            onClick = {
-                                if (name.isNotBlank() && secret.isNotBlank()) {
-                                    scope.launch {
-                                        val existingEntries = db.twoFADao().getAll()
-                                        val secretExists =
-                                            existingEntries.any { it.secret == secret }
-
-                                        if (secretExists) {
-                                            Toast.makeText(
-                                                context,
-                                                "Eintrag mit diesem Secret existiert bereits!",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        } else {
-                                            val normalizedSecret =
-                                                secret.trim().replace(" ", "")
-                                                    .uppercase(java.util.Locale.US)
-                                            val isValidBase32 =
-                                                normalizedSecret.all { it in "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567=" }
-
-                                            if (!isValidBase32 || normalizedSecret.isEmpty()) {
-                                                Toast.makeText(
-                                                    context,
-                                                    "❌ Ungültiger Schlüssel (kein gültiges Base32)",
-                                                    Toast.LENGTH_LONG
-                                                ).show()
-                                                return@launch
-                                            }
-
-                                            val newEntry = TwoFAEntry(
-                                                name = name.trim(),
-                                                secret = normalizedSecret
-                                            )
-
-                                            try {
-                                                db.twoFADao().insert(newEntry)
-
-                                                val supabaseSuccess =
-                                                    saveTwoFaEntryToSupabase(newEntry, db)
-
-                                                withContext(Dispatchers.Main) {
-                                                    if (supabaseSuccess) {
-                                                        Toast.makeText(
-                                                            context,
-                                                            "Gespeichert (lokal & Cloud)",
-                                                            Toast.LENGTH_SHORT
-                                                        ).show()
-                                                    } else {
-                                                        Toast.makeText(
-                                                            context,
-                                                            "Lokal gespeichert (Cloud-Sync fehlgeschlagen)",
-                                                            Toast.LENGTH_LONG
-                                                        ).show()
-                                                    }
-                                                }
-                                            } catch (e: Exception) {
-                                                withContext(Dispatchers.Main) {
-                                                    Toast.makeText(
-                                                        context,
-                                                        "Fehler beim Speichern: ${e.message}",
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
-                                                }
-                                                scope.launch {
-                                                    ERRORINSERT(
-                                                        ERRORINSERTDATA(
-                                                            "TwoFAListScreen",
-                                                            "Fehler beim Speichern: ${e.message}",
-                                                            Instant.now().toString(),
-                                                            "ERROR"
-                                                        )
-                                                    )
-                                                }
-                                            }
-
-                                            entries = db.twoFADao().getAll()
-                                            name = ""
-                                            secret = ""
-                                            showAddDialog = false
-                                        }
-                                    }
-                                }
-                            }
-                        ) {
-                            Text("Hinzufügen")
+            TwoFAAddDialog(
+                name = name,
+                secret = secret,
+                onNameChange = { name = it },
+                onSecretChange = { secret = it },
+                onDismiss = { showAddDialog = false },
+                onSave = {
+                    scope.launch {
+                        val existing = db.twoFADao().getAll()
+                        if (existing.any { it.secret == secret }) {
+                            Toast.makeText(
+                                context,
+                                "Eintrag mit diesem Secret existiert bereits!",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            return@launch
                         }
+                        val normalized =
+                            secret.trim().replace(" ", "").uppercase(java.util.Locale.US)
+                        if (!normalized.all { it in "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567=" } || normalized.isEmpty()) {
+                            Toast.makeText(
+                                context,
+                                "❌ Ungültiger Schlüssel (kein gültiges Base32)",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            return@launch
+                        }
+                        val newEntry = TwoFAEntry(name = name.trim(), secret = normalized)
+                        try {
+                            db.twoFADao().insert(newEntry)
+                            val ok = saveTwoFaEntryToSupabase(newEntry, db)
+                            Toast.makeText(
+                                context,
+                                if (ok) "Gespeichert (lokal & Cloud)" else "Lokal gespeichert (Cloud-Sync fehlgeschlagen)",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_LONG)
+                                .show()
+                        }
+                        entries = db.twoFADao().getAll()
+                        name = ""; secret = ""
+                        showAddDialog = false
                     }
                 }
-            }
+            )
         }
 
         if (showSyncDialog && pendingEntries.isNotEmpty()) {
@@ -978,20 +430,438 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                 onDecision = { entry, decision ->
                     scope.launch {
                         val success = processSyncDecision(db, entry, decision)
-                        if (success) {
-                            entries = db.twoFADao().getAll()
-                        }
+                        if (success) entries = db.twoFADao().getAll()
                     }
                 },
-                onDismiss = {
-                    showSyncDialog = false
-                    pendingEntries = emptyList()
-                }
+                onDismiss = { showSyncDialog = false; pendingEntries = emptyList() }
             )
         }
 
         if (showScanner) {
             SilentCaptureScreen(onDismiss = { showScanner = false })
+        }
+    }
+}
+
+@Composable
+private fun TwoFACard(
+    entry: TwoFAEntry,
+    context: Context,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onCopy: () -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+    val iconPrefs = context.getSharedPreferences("entry_icons", Context.MODE_PRIVATE)
+    var iconUrl by remember { mutableStateOf(iconPrefs.getString(entry.secret, null) ?: "") }
+    var showIconDialog by remember { mutableStateOf(false) }
+    var inputUrl by remember { mutableStateOf(iconUrl) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Surface1)
+            .border(1.dp, Surface3, RoundedCornerShape(16.dp))
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { onClick() },
+                    onLongPress = { showMenu = true }
+                )
+            }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(AccentBlue.copy(alpha = 0.15f))
+                    .clickable { inputUrl = iconUrl; showIconDialog = true },
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    iconUrl.startsWith("data:image") -> {
+                        val bytes = Base64.decode(iconUrl.substringAfter("base64,"), Base64.DEFAULT)
+                        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        Image(
+                            bitmap.asImageBitmap(),
+                            null,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        )
+                    }
+
+                    iconUrl.isNotBlank() -> {
+                        AsyncImage(
+                            model = iconUrl,
+                            contentDescription = null,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+
+                    else -> {
+                        Text("🛡️", fontSize = 20.sp)
+                    }
+                }
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Text(
+                entry.name,
+                color = TextP,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+                maxLines = 1
+            )
+
+            IconButton(onClick = onCopy, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Default.ContentCopy, null, tint = TextS, modifier = Modifier.size(18.dp))
+            }
+        }
+
+        DropdownMenu(
+            expanded = showMenu,
+            onDismissRequest = { showMenu = false },
+            modifier = Modifier.background(Surface2)
+        ) {
+            DropdownMenuItem(
+                text = { Text("✏️  Bearbeiten", color = TextP) },
+                onClick = { showMenu = false; onEdit() })
+            DropdownMenuItem(
+                text = { Text("📋  Code kopieren", color = TextP) },
+                onClick = { showMenu = false; onCopy() })
+            DropdownMenuItem(
+                text = { Text("🖼️  Icon ändern", color = TextP) },
+                onClick = { showMenu = false; inputUrl = iconUrl; showIconDialog = true })
+            HorizontalDivider(color = Surface3)
+            DropdownMenuItem(
+                text = { Text("🗑️  Löschen", color = AccentRed) },
+                onClick = { showMenu = false; onDelete() })
+        }
+    }
+
+    if (showIconDialog) {
+        AlertDialog(
+            onDismissRequest = { showIconDialog = false },
+            containerColor = Surface1,
+            title = { Text("Icon-URL ändern", color = TextP) },
+            text = {
+                OutlinedTextField(
+                    value = inputUrl,
+                    onValueChange = { inputUrl = it },
+                    label = { Text("URL eingeben", color = TextT) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AccentBlue,
+                        unfocusedBorderColor = Surface3,
+                        focusedTextColor = TextP,
+                        unfocusedTextColor = TextP
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    iconPrefs.edit(commit = true) { putString(entry.secret, inputUrl) }
+                    iconUrl = inputUrl
+                    showIconDialog = false
+                }) { Text("Speichern", color = AccentBlue) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showIconDialog = false }) {
+                    Text(
+                        "Abbrechen",
+                        color = TextS
+                    )
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun TwoFADetailOverlay(
+    entry: TwoFAEntry,
+    generatedCode: String,
+    secondsLeft: Int,
+    isEditing: Boolean,
+    editedName: String,
+    onEditedNameChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onSaveEdit: () -> Unit,
+    onCancelEdit: () -> Unit,
+    onStartEdit: () -> Unit,
+    onDelete: () -> Unit,
+    context: Context
+) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var editedUrl by remember { mutableStateOf(entry.url) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.6f))
+            .pointerInput(Unit) { detectTapGestures { onDismiss() } },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Surface1)
+                .border(1.dp, Surface3, RoundedCornerShape(24.dp))
+                .pointerInput(Unit) { detectTapGestures { } }
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            if (isEditing) {
+                Text("✏️ Bearbeiten", color = TextP, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = editedName,
+                    onValueChange = onEditedNameChange,
+                    label = { Text("Name", color = TextT) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AccentBlue,
+                        unfocusedBorderColor = Surface3,
+                        focusedTextColor = TextP,
+                        unfocusedTextColor = TextP
+                    )
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                OutlinedTextField(
+                    value = editedUrl,
+                    onValueChange = { editedUrl = it },
+                    label = { Text("Website-URL", color = TextT) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AccentBlue,
+                        unfocusedBorderColor = Surface3,
+                        focusedTextColor = TextP,
+                        unfocusedTextColor = TextP
+                    )
+                )
+
+                Spacer(Modifier.height(20.dp))
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedButton(
+                        onClick = onCancelEdit,
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Abbrechen", color = TextS) }
+                    Button(
+                        onClick = onSaveEdit,
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Speichern") }
+                }
+            } else {
+                Text(
+                    entry.name,
+                    color = TextP,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(20.dp))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Surface2)
+                        .border(1.dp, Surface3, RoundedCornerShape(14.dp))
+                        .clickable {
+                            val cb =
+                                context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            cb.setPrimaryClip(ClipData.newPlainText("2FA Code", generatedCode))
+                            Toast.makeText(context, "Code kopiert!", Toast.LENGTH_SHORT).show()
+                        }
+                        .padding(vertical = 20.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            generatedCode,
+                            fontSize = 36.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AccentBlue,
+                            letterSpacing = 6.sp
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text("Gültig noch: ${secondsLeft}s", color = TextS, fontSize = 12.sp)
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(AccentBlue.copy(alpha = 0.08f))
+                        .padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Info, null, tint = TextS, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Abgelaufene Codes sind noch ~10s gültig", color = TextS, fontSize = 11.sp)
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { showDeleteConfirm = true },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentRed),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AccentRed),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Löschen") }
+
+                    Button(
+                        onClick = onStartEdit,
+                        colors = ButtonDefaults.buttonColors(containerColor = Surface3),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Edit, null, modifier = Modifier.size(16.dp)); Spacer(
+                        Modifier.width(6.dp)
+                    ); Text("Bearbeiten")
+                    }
+                }
+            }
+        }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            containerColor = Surface1,
+            title = { Text("Eintrag löschen?", color = TextP) },
+            text = { Text("\"${entry.name}\" wird dauerhaft gelöscht.", color = TextS) },
+            confirmButton = {
+                TextButton(onClick = { showDeleteConfirm = false; onDelete() }) {
+                    Text("Löschen", color = AccentRed, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text(
+                        "Abbrechen",
+                        color = TextS
+                    )
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun TwoFAAddDialog(
+    name: String,
+    secret: String,
+    onNameChange: (String) -> Unit,
+    onSecretChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onSave: () -> Unit
+) {
+    val isValid = name.isNotBlank() && secret.isNotBlank()
+
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(Surface1)
+                .border(1.dp, Surface3, RoundedCornerShape(24.dp))
+                .padding(24.dp)
+        ) {
+            Text(
+                "➕ Neuer 2FA-Eintrag",
+                color = TextP,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(20.dp))
+
+            Column {
+                Text("Name", color = TextS, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = onNameChange,
+                    singleLine = true,
+                    placeholder = { Text("z.B. GitHub", color = TextT) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AccentBlue,
+                        unfocusedBorderColor = Surface3,
+                        focusedTextColor = TextP,
+                        unfocusedTextColor = TextP,
+                        cursorColor = AccentBlue
+                    )
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Column {
+                Text(
+                    "Secret-Schlüssel",
+                    color = TextS,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = secret,
+                    onValueChange = onSecretChange,
+                    singleLine = true,
+                    placeholder = { Text("Base32-Schlüssel", color = TextT) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AccentBlue,
+                        unfocusedBorderColor = Surface3,
+                        focusedTextColor = TextP,
+                        unfocusedTextColor = TextP,
+                        cursorColor = AccentBlue
+                    )
+                )
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                    Text("Abbrechen", color = TextS)
+                }
+                Button(
+                    onClick = onSave,
+                    enabled = isValid,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                    modifier = Modifier.weight(1f)
+                ) { Text("Hinzufügen") }
+            }
         }
     }
 }
@@ -1019,138 +889,149 @@ fun SettingsScreenWithScreenshotProtection(onBackClick: () -> Unit) {
 
     var lockEnabled by remember { mutableStateOf(prefs.getBoolean("lockEnabled", false)) }
     var screenshotProtectionEnabled by remember {
-        mutableStateOf(prefs.getBoolean("screenshotProtectionEnabled", true))
+        mutableStateOf(
+            prefs.getBoolean(
+                "screenshotProtectionEnabled",
+                true
+            )
+        )
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Transparent)
-    ) {
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .background(Color.Transparent)) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
-            Spacer(Modifier.height(16.dp))
-            Text(
-                "Einstellungen",
-                fontSize = 26.sp,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
-            ) {
-                Switch(
-                    checked = lockEnabled,
-                    onCheckedChange = { enabled ->
-                        lockEnabled = enabled
-                        prefs.edit(commit = true) {
-                            putBoolean("lockEnabled", enabled)
-                            putBoolean("authenticated", !enabled)
-                            apply()
-                        }
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedIconColor = c(),
-                        checkedTrackColor = c(),
-                        checkedBorderColor = c(),
-                    )
-                )
-                Text(
-                    text = if (lockEnabled) "App-Sperre aktiviert" else "App-Sperre deaktiviert",
-                    color = Color.White,
-                    modifier = Modifier.padding(start = 8.dp)
-                )
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
-            ) {
-                Switch(
-                    checked = screenshotProtectionEnabled,
-                    onCheckedChange = { enabled ->
-                        screenshotProtectionEnabled = enabled
-                        prefs.edit(commit = true) {
-                            putBoolean("screenshotProtectionEnabled", enabled)
-                            apply()
-                        }
-                        ScreenshotProtectionManager.setScreenshotProtection(activity, enabled)
-
-                        Toast.makeText(
-                            context,
-                            if (enabled) "Screenshots jetzt gesperrt" else "Screenshots jetzt erlaubt",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                )
-                Text(
-                    text = if (screenshotProtectionEnabled) "Screenshots gesperrt" else "Screenshots erlaubt",
-                    color = Color.White,
-                    modifier = Modifier.padding(start = 8.dp)
-                )
-            }
-
+            Text("⚙️ Einstellungen", color = TextP, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(24.dp))
-            Button(
-                onClick = onBackClick
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Surface1)
+                    .border(1.dp, Surface3, RoundedCornerShape(16.dp))
+                    .padding(16.dp)
             ) {
-                Text("Zurück", color = Color.White)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "App-Sperre",
+                                color = TextP,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text("Biometrische Authentifizierung", color = TextS, fontSize = 12.sp)
+                        }
+                        Switch(
+                            checked = lockEnabled,
+                            onCheckedChange = { enabled ->
+                                lockEnabled = enabled
+                                prefs.edit(commit = true) {
+                                    putBoolean("lockEnabled", enabled)
+                                    putBoolean("authenticated", !enabled)
+                                }
+                            },
+                            colors = SwitchDefaults.colors(checkedTrackColor = AccentBlue)
+                        )
+                    }
+
+                    HorizontalDivider(color = Surface3)
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Screenshot-Schutz",
+                                color = TextP,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                "Screenshots und Screen-Recording blockieren",
+                                color = TextS,
+                                fontSize = 12.sp
+                            )
+                        }
+                        Switch(
+                            checked = screenshotProtectionEnabled,
+                            onCheckedChange = { enabled ->
+                                screenshotProtectionEnabled = enabled
+                                prefs.edit(commit = true) {
+                                    putBoolean(
+                                        "screenshotProtectionEnabled",
+                                        enabled
+                                    )
+                                }
+                                ScreenshotProtectionManager.setScreenshotProtection(
+                                    activity,
+                                    enabled
+                                )
+                                Toast.makeText(
+                                    context,
+                                    if (enabled) "Screenshots gesperrt" else "Screenshots erlaubt",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            colors = SwitchDefaults.colors(checkedTrackColor = AccentBlue)
+                        )
+                    }
+                }
             }
 
-            val autofillIntent = Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE).apply {
-                data = "package:${context.packageName}".toUri()
-            }
+            Spacer(Modifier.height(16.dp))
+
             Button(
-                onClick = { context.startActivity(autofillIntent) }
+                onClick = {
+                    val intent = Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE).apply {
+                        data = "package:${context.packageName}".toUri()
+                    }
+                    context.startActivity(intent)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Surface2),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Autofill aktivieren", color = Color.White)
+                Text("🔑 Autofill aktivieren", color = TextP)
             }
+
+            Spacer(Modifier.height(8.dp))
+
+            Button(
+                onClick = onBackClick,
+                colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("Zurück") }
         }
     }
 }
 
 @Composable
-fun MainApp(db: TwoFADatabase) {
-    val navController = rememberNavController()
-    NavHost(navController, startDestination = "list") {
-        composable("list") {
-            TwoFAListScreen(
-                db = db,
-                onOpenSettings = { navController.navigate("settings") }
-            )
-        }
-        composable("settings") {
-            SettingsScreenWithScreenshotProtection(onBackClick = { navController.popBackStack() })
-        }
-    }
-}
-
-@Composable
-fun SilentCaptureScreen(onDismiss: () -> Unit) {
+fun SilentCaptureScreen(
+    onDismiss: () -> Unit,
+    onSecretScanned: ((secret: String) -> Unit)? = null
+) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var isProcessing by remember { mutableStateOf(false) }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
+    BackHandler {
+        onDismiss()
+    }
+
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .background(Color.Black)) {
         AndroidView(
             factory = { ctx ->
                 DecoratedBarcodeView(ctx).apply {
@@ -1161,7 +1042,6 @@ fun SilentCaptureScreen(onDismiss: () -> Unit) {
                             if (!isProcessing && result?.text != null) {
                                 isProcessing = true
                                 pause()
-
                                 scope.launch {
                                     try {
                                         val decodedText = withContext(Dispatchers.IO) {
@@ -1179,13 +1059,12 @@ fun SilentCaptureScreen(onDismiss: () -> Unit) {
                                                 ERRORINSERT(
                                                     ERRORINSERTDATA(
                                                         "Capture Activity",
-                                                        "❌ Ungültiges Format! (${uri})",
+                                                        "❌ Ungültiges Format! ($uri)",
                                                         Instant.now().toString(),
                                                         "ERROR"
                                                     )
                                                 )
-                                                isProcessing = false
-                                                onDismiss()
+                                                isProcessing = false; onDismiss()
                                             }
                                             return@launch
                                         }
@@ -1205,50 +1084,44 @@ fun SilentCaptureScreen(onDismiss: () -> Unit) {
                                             ERRORINSERT(
                                                 ERRORINSERTDATA(
                                                     "Capture Activity",
-                                                    "❌ Kein Secret gefunden! (uri: $uri, secret: $secretParam)",
+                                                    "❌ Kein Secret! ($uri)",
                                                     Instant.now().toString(),
                                                     "ERROR"
                                                 )
                                             )
-                                            isProcessing = false
-                                            onDismiss()
+                                            isProcessing = false; onDismiss()
                                             return@launch
                                         }
 
-                                        val db = TwoFADatabase.getDatabase(context)
-
-                                        val existingEntries = db.twoFADao().getAll()
-                                        val alreadyExists = existingEntries.any {
-                                            it.secret == secretParam || it.name.equals(
-                                                displayName,
-                                                ignoreCase = true
-                                            )
+                                        // NEU: wenn Callback gesetzt → nur Secret zurückgeben, nicht speichern
+                                        if (onSecretScanned != null) {
+                                            withContext(Dispatchers.Main) {
+                                                onSecretScanned(secretParam)
+                                                // onDismiss wird vom Aufrufer durch den Callback ausgelöst
+                                            }
+                                            return@launch
                                         }
 
-                                        if (alreadyExists) {
+                                        // Altverhalten: direkt in DB speichern
+                                        val db = TwoFADatabase.getDatabase(context)
+                                        val existing = db.twoFADao().getAll()
+                                        if (existing.any {
+                                                it.secret == secretParam || it.name.equals(
+                                                    displayName,
+                                                    ignoreCase = true
+                                                )
+                                            }) {
                                             Toast.makeText(
                                                 context,
                                                 "⚠️ Eintrag existiert bereits!",
                                                 Toast.LENGTH_LONG
                                             ).show()
-                                            isProcessing = false
-                                            onDismiss()
-                                            ERRORINSERT(
-                                                ERRORINSERTDATA(
-                                                    "Capture Activity",
-                                                    "⚠️ Eintrag existiert bereits! (secret: ${secretParam}, name: $displayName)",
-                                                    Instant.now().toString(),
-                                                    "Warning"
-                                                )
-                                            )
+                                            isProcessing = false; onDismiss()
                                             return@launch
                                         }
 
-                                        val newEntry = TwoFAEntry(
-                                            name = displayName,
-                                            secret = secretParam
-                                        )
-
+                                        val newEntry =
+                                            TwoFAEntry(name = displayName, secret = secretParam)
                                         val inserted = db.twoFADao().insertOrIgnore(newEntry)
                                         if (inserted == -1L) {
                                             Toast.makeText(
@@ -1256,42 +1129,34 @@ fun SilentCaptureScreen(onDismiss: () -> Unit) {
                                                 "⚠️ Eintrag existiert bereits!",
                                                 Toast.LENGTH_LONG
                                             ).show()
-                                            isProcessing = false
-                                            onDismiss()
+                                            isProcessing = false; onDismiss()
                                             return@launch
                                         }
 
-                                        val supabaseSuccess = saveTwoFaEntryToSupabase(newEntry, db)
-
+                                        val ok = saveTwoFaEntryToSupabase(newEntry, db)
                                         withContext(Dispatchers.Main) {
-                                            val message = if (supabaseSuccess) {
-                                                "✅ Token für $displayName hinzugefügt (lokal & Cloud)!"
-                                            } else {
-                                                "✅ Token für $displayName hinzugefügt (Cloud-Sync fehlgeschlagen)"
-                                            }
-                                            Toast.makeText(context, message, Toast.LENGTH_LONG)
-                                                .show()
-
-                                            isProcessing = false
-                                            onDismiss()
+                                            Toast.makeText(
+                                                context,
+                                                if (ok) "✅ $displayName hinzugefügt (lokal & Cloud)!" else "✅ $displayName hinzugefügt (Cloud fehlgeschlagen)",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                            isProcessing = false; onDismiss()
                                         }
-
                                     } catch (e: Exception) {
                                         Toast.makeText(
                                             context,
                                             "❌ Fehler: ${e.message}",
                                             Toast.LENGTH_LONG
                                         ).show()
-                                        isProcessing = false
-                                        onDismiss()
                                         ERRORINSERT(
                                             ERRORINSERTDATA(
                                                 "Capture Activity",
-                                                "❌ Fehler: ${e.message}",
+                                                "❌ ${e.message}",
                                                 Instant.now().toString(),
                                                 "ERROR"
                                             )
                                         )
+                                        isProcessing = false; onDismiss()
                                     }
                                 }
                             }
@@ -1313,12 +1178,12 @@ fun SilentCaptureScreen(onDismiss: () -> Unit) {
             Box(
                 modifier = Modifier
                     .size(250.dp)
-                    .border(4.dp, Color(0xFF9B4DCA), RoundedCornerShape(16.dp))
+                    .border(3.dp, AccentBlue, RoundedCornerShape(16.dp))
                     .background(Color.Transparent)
             )
             Spacer(Modifier.height(40.dp))
             Text(
-                text = "Halte den QR-Code in den Rahmen",
+                "Halte den QR-Code in den Rahmen",
                 color = Color.White,
                 style = MaterialTheme.typography.titleMedium
             )

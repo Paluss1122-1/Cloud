@@ -1,40 +1,84 @@
+@file:Suppress("AssignedValueIsNeverRead")
+
 package com.cloud.authenticator
 
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -43,13 +87,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.zIndex
+import androidx.core.content.edit
+import androidx.core.net.toUri
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -62,18 +109,8 @@ private val TextP = Color(0xFFEEEEF5)
 private val TextS = Color(0xFF8A8A9F)
 private val TextT = Color(0xFF55556A)
 
-private val categoryColor = mapOf(
-    "Social" to Color(0xFF4267B2),
-    "Banking" to Color(0xFF27AE60),
-    "E-Mail" to Color(0xFFE74C3C),
-    "Shopping" to Color(0xFFFF6B00),
-    "Arbeit" to Color(0xFF8E44AD),
-    "Gaming" to Color(0xFF2980B9),
-    "Andere" to Color(0xFF5D6D7E)
-)
-
 @Composable
-fun PasswordManagerScreen(db: PasswordDatabase) {
+fun PasswordManagerScreen(db: PasswordDatabase, twoFaDb: TwoFADatabase) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -81,9 +118,11 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Alle") }
     var showAddDialog by remember { mutableStateOf(false) }
+    var showImportDialog by remember { mutableStateOf(false) }
     var editEntry by remember { mutableStateOf<PasswordEntry?>(null) }
     var detailEntry by remember { mutableStateOf<PasswordEntry?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var isSyncing by remember { mutableStateOf(false) }
 
     fun reload() {
         scope.launch {
@@ -93,7 +132,36 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
         }
     }
 
-    LaunchedEffect(Unit) { reload() }
+    LaunchedEffect(Unit) {
+        reload()
+
+        if (!isSyncing) {
+            val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
+            val lastSyncTime = prefs.getLong("last_sync_pw_timestamp", 0L)
+            val currentTime = System.currentTimeMillis()
+
+            if (currentTime - lastSyncTime > 20_000L) {
+                isSyncing = true
+                scope.launch {
+                    try {
+                        syncPasswordEntriesWithCloud(db, twoFaDb)
+                        entries = db.passwordDao().getAll()
+                        prefs.edit(commit = true) {
+                            putLong("last_sync_pw_timestamp", System.currentTimeMillis())
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(
+                            context,
+                            "Sync fehlgeschlagen: ${e.message}",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    } finally {
+                        isSyncing = false
+                    }
+                }
+            }
+        }
+    }
 
     val visible = remember(entries, searchQuery, selectedCategory) {
         entries.filter { e ->
@@ -102,8 +170,7 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
                     e.name.contains(q, true) ||
                     e.username.contains(q, true) ||
                     e.url.contains(q, true)
-            val matchCat = selectedCategory == "Alle" || e.category == selectedCategory
-            matchSearch && matchCat
+            matchSearch
         }
     }
 
@@ -126,8 +193,25 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    IconButton(onClick = { showAddDialog = true }, modifier = Modifier.size(22.dp)) {
-                        Icon(Icons.Default.Add, "Hinzufügen", tint = AccentBlue)
+                    Row {
+                        IconButton(
+                            onClick = { showAddDialog = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.Add, "Hinzufügen", tint = AccentBlue)
+                        }
+                        IconButton(
+                            onClick = { showImportDialog = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.FileUpload, "Import", tint = AccentBlue)
+                        }
+                        IconButton(
+                            onClick = { scope.launch { db.passwordDao().deleteAll(); reload() } },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.Delete, "Import", tint = AccentBlue)
+                        }
                     }
                 }
                 Text(
@@ -166,38 +250,28 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
 
         Spacer(Modifier.height(12.dp))
 
-        Row(
-            modifier = Modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            PASSWORD_CATEGORIES.forEach { cat ->
-                val selected = cat == selectedCategory
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(if (selected) AccentBlue else Surface2)
-                        .border(
-                            1.dp,
-                            if (selected) AccentBlue else Surface3,
-                            RoundedCornerShape(20.dp)
-                        )
-                        .clickable { selectedCategory = cat }
-                        .padding(horizontal = 14.dp, vertical = 7.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        cat,
-                        color = if (selected) Color.White else TextS,
-                        fontSize = 12.sp,
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
-                    )
-                }
-            }
+        val duplicateNames = remember(entries) {
+            entries.groupBy { it.name.trim().lowercase() }.filter { it.value.size > 1 }.keys
         }
-
-        Spacer(Modifier.height(12.dp))
+        if (duplicateNames.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFFFFCC00).copy(alpha = 0.15f))
+                    .border(1.dp, Color(0xFFFFCC00).copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "⚠️ Doppelte Einträge: ${duplicateNames.joinToString()}",
+                    color = Color(0xFFFFCC00),
+                    fontSize = 13.sp
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+        }
 
         if (isLoading) {
             Box(
@@ -217,6 +291,27 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
                         entry = entry,
                         onClick = { detailEntry = entry },
                         onEdit = { editEntry = entry },
+                        onLongPress = {
+                            scope.launch {
+                                val clipboard =
+                                    context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(
+                                    ClipData.newPlainText(
+                                        "2FA Code",
+                                        TotpGenerator.generateTOTP(
+                                            twoFaDb.twoFADao().getAll().firstOrNull { twoFaEntry ->
+                                                val n = twoFaEntry.name.lowercase()
+                                                val entryName = entry.name.lowercase()
+                                                val entryUrl = entry.url.lowercase()
+                                                n.contains(entryName) || entryName.contains(n) ||
+                                                        (entryUrl.isNotEmpty() && n.split(" ")
+                                                            .any { entryUrl.contains(it) })
+                                            }?.secret ?: "", System.currentTimeMillis()
+                                        )
+                                    )
+                                )
+                            }
+                        },
                         onDelete = {
                             scope.launch {
                                 db.passwordDao().delete(entry)
@@ -225,17 +320,7 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
                         },
                         onCopy = {
                             scope.launch {
-                                val plain = withContext(Dispatchers.Default) {
-                                    PasswordCrypto.decrypt(entry.encryptedPassword)
-                                }
-                                copyToClipboard(context, "Passwort", plain)
-                            }
-                        },
-                        onToggleFavorite = {
-                            scope.launch {
-                                db.passwordDao()
-                                    .update(entry.copy(isFavorite = !entry.isFavorite))
-                                reload()
+                                copyToClipboard(context, "Passwort", entry.password)
                             }
                         }
                     )
@@ -249,6 +334,7 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
         AddEditPasswordDialog(
             initial = null,
             onDismiss = { showAddDialog = false },
+            twoFaDb = twoFaDb,
             onSave = { newEntry ->
                 scope.launch {
                     db.passwordDao().insert(newEntry)
@@ -264,6 +350,7 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
         AddEditPasswordDialog(
             initial = entry,
             onDismiss = { editEntry = null },
+            twoFaDb = twoFaDb,
             onSave = { updated ->
                 scope.launch {
                     db.passwordDao().update(updated.copy(updatedAt = System.currentTimeMillis()))
@@ -278,6 +365,7 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
     detailEntry?.let { entry ->
         PasswordDetailSheet(
             entry = entry,
+            twoFaDb = twoFaDb,
             onDismiss = { detailEntry = null },
             onEdit = { detailEntry = null; editEntry = entry },
             onDelete = {
@@ -289,6 +377,15 @@ fun PasswordManagerScreen(db: PasswordDatabase) {
             }
         )
     }
+
+    if (showImportDialog) {
+        ImportPasswordsDialog(
+            passwordDb = db,
+            twoFaDb = twoFaDb,
+            onDismiss = { showImportDialog = false },
+            onImportDone = { reload() }
+        )
+    }
 }
 
 @Composable
@@ -296,13 +393,13 @@ private fun PasswordCard(
     entry: PasswordEntry,
     onClick: () -> Unit,
     onEdit: () -> Unit,
+    onLongPress: () -> Unit,
     onDelete: () -> Unit,
-    onCopy: () -> Unit,
-    onToggleFavorite: () -> Unit
+    onCopy: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    val accent = categoryColor[entry.category] ?: Color(0xFF5D6D7E)
-    val initials = entry.name.take(2).uppercase()
+    val accent = MaterialTheme.colorScheme.primary
+    entry.name.take(2).uppercase()
 
     Box(
         modifier = Modifier
@@ -313,7 +410,7 @@ private fun PasswordCard(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { onClick() },
-                    onLongPress = { showMenu = true }
+                    onLongPress = { onLongPress() }
                 )
             }
     ) {
@@ -330,23 +427,6 @@ private fun PasswordCard(
             modifier = Modifier.padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(accent.copy(alpha = 0.18f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    CATEGORY_ICONS[entry.category] ?: initials,
-                    fontSize = if (CATEGORY_ICONS.containsKey(entry.category)) 20.sp else 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = accent
-                )
-            }
-
-            Spacer(Modifier.width(12.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     entry.name,
@@ -365,10 +445,6 @@ private fun PasswordCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-            }
-
-            if (entry.isFavorite) {
-                Text("⭐", fontSize = 14.sp, modifier = Modifier.padding(end = 4.dp))
             }
 
             IconButton(onClick = onCopy, modifier = Modifier.size(36.dp)) {
@@ -394,15 +470,6 @@ private fun PasswordCard(
                 text = { Text("📋  Passwort kopieren", color = TextP) },
                 onClick = { showMenu = false; onCopy() }
             )
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        if (entry.isFavorite) "💔  Favorit entfernen" else "⭐  Favorit",
-                        color = TextP
-                    )
-                },
-                onClick = { showMenu = false; onToggleFavorite() }
-            )
             HorizontalDivider(color = Surface3)
             DropdownMenuItem(
                 text = { Text("🗑️  Löschen", color = AccentRed) },
@@ -415,6 +482,7 @@ private fun PasswordCard(
 @Composable
 private fun PasswordDetailSheet(
     entry: PasswordEntry,
+    twoFaDb: TwoFADatabase,
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
@@ -424,9 +492,27 @@ private fun PasswordDetailSheet(
     var showPassword by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
+    var matchedTwoFa by remember { mutableStateOf<TwoFAEntry?>(null) }
+    var totpCode by remember { mutableStateOf("------") }
+    var totpSecondsLeft by remember { mutableIntStateOf(30) }
+
     LaunchedEffect(entry) {
-        plainPassword = withContext(Dispatchers.Default) {
-            PasswordCrypto.decrypt(entry.encryptedPassword)
+        val allTwoFa = withContext(Dispatchers.IO) { twoFaDb.twoFADao().getAll() }
+        matchedTwoFa = allTwoFa.firstOrNull { twoFaEntry ->
+            val n = twoFaEntry.name.lowercase()
+            val entryName = entry.name.lowercase()
+            val entryUrl = entry.url.lowercase()
+            n.contains(entryName) || entryName.contains(n) ||
+                    (entryUrl.isNotEmpty() && n.split(" ").any { entryUrl.contains(it) })
+        }
+    }
+
+    LaunchedEffect(matchedTwoFa) {
+        while (matchedTwoFa != null) {
+            val now = System.currentTimeMillis()
+            totpCode = TotpGenerator.generateTOTP(matchedTwoFa!!.secret, now)
+            totpSecondsLeft = (30 - (now / 1000) % 30).toInt()
+            delay(1000)
         }
     }
 
@@ -436,145 +522,209 @@ private fun PasswordDetailSheet(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .fillMaxHeight(0.5f)
                 .padding(horizontal = 16.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(Surface1)
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    CATEGORY_ICONS[entry.category] ?: "🔑",
-                    fontSize = 28.sp,
-                    modifier = Modifier.padding(end = 12.dp)
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(entry.name, color = TextP, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text(entry.category, color = TextS, fontSize = 12.sp)
-                }
-                if (entry.isFavorite) Text("⭐", fontSize = 18.sp)
-            }
-
-            Spacer(Modifier.height(20.dp))
-
-            if (entry.url.isNotEmpty()) {
-                DetailField(
-                    label = "🌐 URL",
-                    value = entry.url,
-                    onCopy = { copyToClipboard(context, "URL", entry.url) }
-                )
-                Spacer(Modifier.height(12.dp))
-            }
-
-            if (entry.username.isNotEmpty()) {
-                DetailField(
-                    label = "👤 Benutzername",
-                    value = entry.username,
-                    onCopy = { copyToClipboard(context, "Benutzername", entry.username) }
-                )
-                Spacer(Modifier.height(12.dp))
-            }
-
-            Column {
-                Text(
-                    "🔒 Passwort",
-                    color = TextS,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Surface2)
-                        .border(1.dp, Surface3, RoundedCornerShape(10.dp))
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = if (showPassword) plainPassword else "•".repeat(
-                            plainPassword.length.coerceAtMost(
-                                20
-                            )
-                        ),
-                        color = if (showPassword) TextP else TextS,
-                        fontSize = 14.sp,
-                        fontFamily = if (showPassword) FontFamily.Monospace else FontFamily.Default,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(
-                        onClick = { showPassword = !showPassword },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            null, tint = TextS, modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = { copyToClipboard(context, "Passwort", plainPassword) },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ContentCopy,
-                            null,
-                            tint = AccentBlue,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-
-                if (plainPassword.isNotEmpty()) {
-                    Spacer(Modifier.height(6.dp))
-                    StrengthBar(PasswordGenerator.strength(plainPassword))
-                }
-            }
-
-            if (entry.notes.isNotEmpty()) {
-                Spacer(Modifier.height(12.dp))
-                Column {
-                    Text(
-                        "📝 Notizen",
-                        color = TextS,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Surface2)
-                            .border(1.dp, Surface3, RoundedCornerShape(10.dp))
-                            .padding(12.dp)
-                    ) {
-                        Text(entry.notes, color = TextP, fontSize = 13.sp)
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(24.dp))
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.fillMaxWidth()
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Surface1)
+                    .padding(24.dp)
             ) {
-                OutlinedButton(
-                    onClick = { showDeleteConfirm = true },
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentRed),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentRed),
-                    modifier = Modifier.weight(1f)
-                ) { Text("Löschen") }
+                // ── Titel (fix) ──────────────────────────────────────
+                Text(
+                    entry.name,
+                    color = TextP,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
 
-                Button(
-                    onClick = onEdit,
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
-                    modifier = Modifier.weight(1f)
-                ) { Text("Bearbeiten") }
+                Spacer(Modifier.height(20.dp))
+
+                // ── Scrollbarer Content ──────────────────────────────
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    if (entry.username.isNotEmpty()) {
+                        DetailField(
+                            label = "👤 Benutzername",
+                            value = entry.username,
+                            onCopy = { copyToClipboard(context, "Benutzername", entry.username) }
+                        )
+                        Spacer(Modifier.height(12.dp))
+                    }
+
+                    Column {
+                        Text(
+                            "🔒 Passwort",
+                            color = TextS,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Surface2)
+                                .border(1.dp, Surface3, RoundedCornerShape(10.dp))
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (showPassword) plainPassword
+                                else "•".repeat(plainPassword.length.coerceAtMost(20)),
+                                color = if (showPassword) TextP else TextS,
+                                fontSize = 14.sp,
+                                fontFamily = if (showPassword) FontFamily.Monospace else FontFamily.Default,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = { showPassword = !showPassword },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    null, tint = TextS, modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = { copyToClipboard(context, "Passwort", plainPassword) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.ContentCopy,
+                                    null,
+                                    tint = AccentBlue,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                        if (plainPassword.isNotEmpty()) {
+                            Spacer(Modifier.height(6.dp))
+                            StrengthBar(PasswordGenerator.strength(plainPassword))
+                        }
+                    }
+
+                    matchedTwoFa?.let {
+                        Spacer(Modifier.height(12.dp))
+                        Column {
+                            Text(
+                                "🛡️ 2FA-Code",
+                                color = TextS,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Surface2)
+                                    .border(1.dp, Surface3, RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        totpCode,
+                                        color = AccentBlue,
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 4.sp,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                    Text(
+                                        "Gültig noch: ${totpSecondsLeft}s",
+                                        color = TextT,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { copyToClipboard(context, "2FA-Code", totpCode) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.ContentCopy,
+                                        null,
+                                        tint = AccentBlue,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (entry.url.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        DetailField(
+                            label = "🌐 URL",
+                            value = entry.url,
+                            onCopy = { copyToClipboard(context, "URL", entry.url) },
+                            onOpen = {
+                                val uri =
+                                    if (entry.url.startsWith("http://") || entry.url.startsWith("https://"))
+                                        entry.url.toUri()
+                                    else
+                                        "https://${entry.url}".toUri()
+                                context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                            }
+                        )
+                    }
+
+                    if (entry.notes.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        Column {
+                            Text(
+                                "📝 Notizen",
+                                color = TextS,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Surface2)
+                                    .border(1.dp, Surface3, RoundedCornerShape(10.dp))
+                                    .padding(12.dp)
+                            ) {
+                                Text(entry.notes, color = TextP, fontSize = 13.sp)
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                } // Ende scrollbarer Content
+
+                // ── Buttons (fix) ────────────────────────────────────
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedButton(
+                        onClick = { showDeleteConfirm = true },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentRed),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AccentRed),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Löschen") }
+
+                    Button(
+                        onClick = onEdit,
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Bearbeiten") }
+                }
             }
         }
     }
@@ -600,7 +750,10 @@ private fun PasswordDetailSheet(
 }
 
 @Composable
-private fun DetailField(label: String, value: String, onCopy: () -> Unit) {
+private fun DetailField(
+    label: String, value: String, onCopy: () -> Unit,
+    onOpen: (() -> Unit)? = null
+) {
     Column {
         Text(label, color = TextS, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(4.dp))
@@ -624,6 +777,16 @@ private fun DetailField(label: String, value: String, onCopy: () -> Unit) {
             IconButton(onClick = onCopy, modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Default.ContentCopy, null, tint = TextS, modifier = Modifier.size(16.dp))
             }
+            onOpen?.let {
+                IconButton(onClick = it, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Default.OpenInBrowser,
+                        null,
+                        tint = AccentBlue,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -633,32 +796,57 @@ private fun DetailField(label: String, value: String, onCopy: () -> Unit) {
 @Composable
 fun AddEditPasswordDialog(
     initial: PasswordEntry?,
+    twoFaDb: TwoFADatabase,
     onDismiss: () -> Unit,
     onSave: (PasswordEntry) -> Unit
 ) {
     val isEdit = initial != null
+    val scope = rememberCoroutineScope()
 
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var url by remember { mutableStateOf(initial?.url ?: "") }
     var username by remember { mutableStateOf(initial?.username ?: "") }
     var password by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf(initial?.notes ?: "") }
-    var category by remember { mutableStateOf(initial?.category ?: "Andere") }
-    var isFavorite by remember { mutableStateOf(initial?.isFavorite ?: false) }
     var showPass by remember { mutableStateOf(false) }
     var showGen by remember { mutableStateOf(false) }
-    var catExpanded by remember { mutableStateOf(false) }
+
+    var twoFaSecret by remember { mutableStateOf("") }
+    var showScanner by remember { mutableStateOf(false) }
+    var existingTwoFaEntry by remember { mutableStateOf<TwoFAEntry?>(null) }
 
     LaunchedEffect(initial) {
         if (initial != null) {
-            password = withContext(Dispatchers.Default) {
-                PasswordCrypto.decrypt(initial.encryptedPassword)
+            val all = withContext(Dispatchers.IO) { twoFaDb.twoFADao().getAll() }
+            existingTwoFaEntry = all.firstOrNull { twoFaEntry ->
+                val n = twoFaEntry.name.lowercase()
+                val entryName = initial.name.lowercase()
+                val entryUrl = initial.url.lowercase()
+                n.contains(entryName) || entryName.contains(n) ||
+                        (entryUrl.isNotEmpty() && n.split(" ").any { entryUrl.contains(it) })
             }
+            val raw = existingTwoFaEntry?.secret ?: ""
+            twoFaSecret = if (raw == "null" || raw.isBlank()) "" else raw
         }
+    }
+
+    LaunchedEffect(existingTwoFaEntry) {
+        Log.d("SASA", "$existingTwoFaEntry")
     }
 
     val strength = remember(password) { PasswordGenerator.strength(password) }
     val isValid = name.isNotBlank() && password.isNotBlank()
+
+    if (showScanner) {
+        SilentCaptureScreen(
+            onDismiss = { showScanner = false },
+            onSecretScanned = { scannedSecret ->
+                twoFaSecret = scannedSecret
+                showScanner = false
+            }
+        )
+        return
+    }
 
     if (showGen) {
         PasswordGeneratorSheet(
@@ -681,30 +869,22 @@ fun AddEditPasswordDialog(
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    if (isEdit) "✏️  Bearbeiten" else "➕  Neuer Eintrag",
-                    color = TextP,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = { isFavorite = !isFavorite }) {
-                    Text(if (isFavorite) "⭐" else "☆", fontSize = 20.sp)
-                }
-            }
+            Text(
+                if (isEdit) "✏️  Bearbeiten" else "➕  Neuer Eintrag",
+                color = TextP, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
+            )
 
             Spacer(Modifier.height(20.dp))
-
             PwField(label = "Name *", value = name, onValueChange = { name = it })
             Spacer(Modifier.height(12.dp))
-
             PwField(
-                label = "URL / Domain", value = url, onValueChange = { url = it },
+                label = "URL / Domain",
+                value = url,
+                onValueChange = { url = it },
                 keyboardType = KeyboardType.Uri
             )
             Spacer(Modifier.height(12.dp))
-
             PwField(
                 label = "Benutzername / E-Mail",
                 value = username,
@@ -734,8 +914,7 @@ fun AddEditPasswordDialog(
                         value = password,
                         onValueChange = { password = it },
                         singleLine = true,
-                        visualTransformation = if (showPass) VisualTransformation.None
-                        else PasswordVisualTransformation(),
+                        visualTransformation = if (showPass) VisualTransformation.None else PasswordVisualTransformation(),
                         textStyle = androidx.compose.ui.text.TextStyle(
                             color = TextP,
                             fontSize = 14.sp,
@@ -751,7 +930,9 @@ fun AddEditPasswordDialog(
                     ) {
                         Icon(
                             if (showPass) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            null, tint = TextS, modifier = Modifier.size(18.dp)
+                            null,
+                            tint = TextS,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                     IconButton(onClick = { showGen = true }, modifier = Modifier.size(36.dp)) {
@@ -763,7 +944,6 @@ fun AddEditPasswordDialog(
                         )
                     }
                 }
-
                 if (password.isNotEmpty()) {
                     Spacer(Modifier.height(6.dp))
                     StrengthBar(strength)
@@ -772,49 +952,88 @@ fun AddEditPasswordDialog(
 
             Spacer(Modifier.height(12.dp))
 
+            HorizontalDivider(color = Surface3)
+            Spacer(Modifier.height(12.dp))
+
             Column {
-                Text("Kategorie", color = TextS, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "🛡️ 2FA-Secret (optional)",
+                    color = TextS,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
                 Spacer(Modifier.height(4.dp))
-                ExposedDropdownMenuBox(
-                    expanded = catExpanded,
-                    onExpandedChange = { catExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        value = "${CATEGORY_ICONS[category] ?: "🔑"} $category",
-                        onValueChange = {},
-                        readOnly = true,
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(catExpanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(
-                                ExposedDropdownMenuAnchorType.PrimaryEditable,
-                                enabled = true
-                            ),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AccentBlue,
-                            unfocusedBorderColor = Surface3,
-                            focusedTextColor = TextP,
-                            unfocusedTextColor = TextP
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Surface2)
+                        .border(
+                            1.dp,
+                            if (twoFaSecret.isNotEmpty()) AccentBlue.copy(alpha = 0.5f) else Surface3,
+                            RoundedCornerShape(10.dp)
                         )
-                    )
-                    ExposedDropdownMenu(
-                        expanded = catExpanded,
-                        onDismissRequest = { catExpanded = false },
-                        modifier = Modifier.background(Surface2)
-                    ) {
-                        PASSWORD_CATEGORIES.drop(1).forEach { cat ->
-                            DropdownMenuItem(
-                                text = {
+                        .padding(end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    androidx.compose.foundation.text.BasicTextField(
+                        value = twoFaSecret,
+                        onValueChange = {
+                            val v = it.trim().uppercase()
+                            twoFaSecret = if (v == "NULL") "" else v
+                        },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = if (twoFaSecret.isNotEmpty()) AccentBlue else TextS,
+                            fontSize = 13.sp,
+                            fontFamily = FontFamily.Monospace
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 12.dp, top = 12.dp, bottom = 12.dp),
+                        decorationBox = { inner ->
+                            Box {
+                                if (twoFaSecret.isEmpty()) {
                                     Text(
-                                        "${CATEGORY_ICONS[cat] ?: "🔑"}  $cat",
-                                        color = TextP
+                                        "Base32-Schlüssel oder QR scannen",
+                                        color = TextT,
+                                        fontSize = 13.sp,
+                                        fontFamily = FontFamily.Monospace
                                     )
-                                },
-                                onClick = { category = cat; catExpanded = false }
+                                }
+                                inner()
+                            }
+                        }
+                    )
+                    if (twoFaSecret.isNotEmpty()) {
+                        IconButton(
+                            onClick = { twoFaSecret = "" },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Clear,
+                                null,
+                                tint = TextS,
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
+                    IconButton(onClick = { showScanner = true }, modifier = Modifier.size(36.dp)) {
+                        Icon(
+                            Icons.Default.QrCodeScanner,
+                            "QR scannen",
+                            tint = AccentBlue,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+                if (twoFaSecret.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (existingTwoFaEntry != null) "✅ Vorhandener 2FA-Eintrag wird aktualisiert"
+                        else "✨ Neuer 2FA-Eintrag wird verknüpft",
+                        color = AccentBlue, fontSize = 11.sp
+                    )
                 }
             }
 
@@ -833,10 +1052,8 @@ fun AddEditPasswordDialog(
                     placeholder = { Text("Optional...", color = TextT) },
                     shape = RoundedCornerShape(10.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AccentBlue,
-                        unfocusedBorderColor = Surface3,
-                        focusedTextColor = TextP,
-                        unfocusedTextColor = TextP
+                        focusedBorderColor = AccentBlue, unfocusedBorderColor = Surface3,
+                        focusedTextColor = TextP, unfocusedTextColor = TextP
                     )
                 )
             }
@@ -844,34 +1061,49 @@ fun AddEditPasswordDialog(
             Spacer(Modifier.height(24.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f)
-                ) { Text("Abbrechen", color = TextS) }
-
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                    Text("Abbrechen", color = TextS)
+                }
                 Button(
                     onClick = {
-                        val encrypted = PasswordCrypto.encrypt(password)
-                        val entry = if (isEdit && initial != null) {
+                        val entry = if (isEdit) {
                             initial.copy(
-                                name = name.trim(),
-                                url = url.trim(),
-                                username = username.trim(),
-                                encryptedPassword = encrypted,
-                                notes = notes.trim(),
-                                category = category,
-                                isFavorite = isFavorite
+                                name = name.trim(), url = url.trim(),
+                                username = username.trim(), password = password,
+                                notes = notes.trim()
                             )
                         } else {
                             PasswordEntry(
-                                name = name.trim(),
-                                url = url.trim(),
-                                username = username.trim(),
-                                encryptedPassword = encrypted,
-                                notes = notes.trim(),
-                                category = category,
-                                isFavorite = isFavorite
+                                name = name.trim(), url = url.trim(),
+                                username = username.trim(), password = password,
+                                notes = notes.trim()
                             )
+                        }
+                        if (twoFaSecret.isNotEmpty()) {
+                            scope.launch {
+                                val normalized = twoFaSecret.replace(" ", "").uppercase()
+                                val existing2fa = existingTwoFaEntry
+                                if (existing2fa != null) {
+                                    twoFaDb.twoFADao().update(
+                                        existing2fa.copy(
+                                            secret = normalized,
+                                            name = name.trim()
+                                        )
+                                    )
+                                } else {
+                                    val fa = TwoFAEntry(name = name.trim(), secret = normalized)
+                                    twoFaDb.twoFADao().insertOrIgnore(fa)
+                                    saveTwoFaEntryToSupabase(fa, twoFaDb)
+                                }
+                            }
+                        } else {
+                            existingTwoFaEntry?.let {
+                                scope.launch {
+                                    twoFaDb.twoFADao().delete(
+                                        existingTwoFaEntry!!
+                                    )
+                                }
+                            }
                         }
                         onSave(entry)
                     },
@@ -890,7 +1122,7 @@ fun PasswordGeneratorSheet(
     onAccept: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var length by remember { mutableStateOf(20f) }
+    var length by remember { mutableFloatStateOf(20f) }
     var useLower by remember { mutableStateOf(true) }
     var useUpper by remember { mutableStateOf(true) }
     var useDigits by remember { mutableStateOf(true) }

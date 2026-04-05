@@ -26,7 +26,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.cloud.Config
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
 import com.cloud.SupabaseConfigALT
@@ -48,18 +47,15 @@ data class TwoFaEntrySupabase(
     val secret: String
 )
 
-fun TwoFaEntrySupabase.toLocal(): TwoFAEntry {
-    return TwoFAEntry(
-        supabaseId = this.id,
-        name = this.account_name,
-        secret = Config.decrypt(this.secret)
-    )
+fun TwoFaEntrySupabase.toLocal(): TwoFAEntry? {
+    val decryptedSecret = CloudCrypto.decryptFromCloud(this.secret) ?: return null
+    return TwoFAEntry(supabaseId = this.id, name = this.account_name, secret = decryptedSecret)
 }
 
 fun TwoFAEntry.toSupabase(): TwoFaEntrySupabase {
     return TwoFaEntrySupabase(
         account_name = this.name,
-        secret = Config.encrypt(this.secret)
+        secret = CloudCrypto.encryptForCloud(this.secret)
     )
 }
 
@@ -70,7 +66,7 @@ suspend fun loadTwoFaEntriesFromSupabase(): List<TwoFAEntry> {
                 .from("two_fa_entries")
                 .select()
                 .decodeList<TwoFaEntrySupabase>()
-            supabaseEntries.map { it.toLocal() }
+            supabaseEntries.mapNotNull { it.toLocal() }
         } catch (e: Exception) {
             ERRORINSERT(
                 ERRORINSERTDATA(
@@ -181,8 +177,10 @@ suspend fun syncTwoFaEntriesWithConfirmation(db: TwoFADatabase): SyncResult {
             val supabaseSecrets = supabaseEntries.map { normalizeSecret(it.secret) }.toSet()
             val localSecrets = localEntries.map { normalizeSecret(it.secret) }.toSet()
 
-            val missingInSupabase = localEntries.filter { normalizeSecret(it.secret) !in supabaseSecrets }
-            val missingLocally = supabaseEntries.filter { normalizeSecret(it.secret) !in localSecrets }
+            val missingInSupabase =
+                localEntries.filter { normalizeSecret(it.secret) !in supabaseSecrets }
+            val missingLocally =
+                supabaseEntries.filter { normalizeSecret(it.secret) !in localSecrets }
 
             var downloadedCount = 0
             missingLocally.forEach { entry ->
