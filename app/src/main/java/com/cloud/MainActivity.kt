@@ -17,7 +17,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.core.animation.doOnEnd
@@ -198,9 +200,6 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun handleIncomingIntent(intent: Intent) {
-        android.util.Log.d("MainActivity", "Intent Action: ${intent.action}")
-        android.util.Log.d("MainActivity", "Intent Data: ${intent.data}")
-        android.util.Log.d("MainActivity", "Intent Type: ${intent.type}")
         when (intent.action) {
             Intent.ACTION_VIEW, Intent.ACTION_EDIT -> {
                 intent.data?.let { uri ->
