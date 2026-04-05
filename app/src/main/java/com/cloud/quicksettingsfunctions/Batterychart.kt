@@ -9,7 +9,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -18,7 +27,14 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -34,7 +50,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.edit
-import androidx.work.*
+import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,7 +64,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.math.absoluteValue
 
@@ -157,7 +179,14 @@ fun BatteryChartScreen(onDismiss: () -> Unit) {
 
 @Composable
 fun BatteryChartScreenContent(onClose: () -> Unit) {
-    var selectedDay by remember { mutableStateOf(SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date())) }
+    var selectedDay by remember {
+        mutableStateOf(
+            SimpleDateFormat(
+                "dd.MM.yyyy",
+                Locale.getDefault()
+            ).format(Date())
+        )
+    }
     var selectedHour by remember { mutableStateOf<Int?>(null) }
 
     Box(Modifier.fillMaxSize()) {
@@ -165,9 +194,11 @@ fun BatteryChartScreenContent(onClose: () -> Unit) {
         BatteryChartFilters(
             selectedDay,
             selectedHour,
-            { if (it != null) {
-                selectedDay = it
-            }; selectedHour = null },
+            {
+                if (it != null) {
+                    selectedDay = it
+                }; selectedHour = null
+            },
             { selectedHour = it })
         IconButton(
             onClick = onClose,
@@ -218,10 +249,11 @@ fun BatteryChartFilters(
 
 @Composable
 fun DropdownButton(text: String, onClick: () -> Unit) =
-    Box(Modifier
-        .background(Color(0xFF1E1E1E), RoundedCornerShape(8.dp))
-        .clickable { onClick() }
-        .padding(12.dp)) { Text(text, color = Color.White) }
+    Box(
+        Modifier
+            .background(Color(0xFF1E1E1E), RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(12.dp)) { Text(text, color = Color.White) }
 
 @Composable
 fun <T> SimpleDropdown(
@@ -239,15 +271,17 @@ fun <T> SimpleDropdown(
                 .padding(8.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            Box(Modifier
-                .fillMaxWidth()
-                .clickable { onSelect(null) }
-                .padding(12.dp)) { Text(allLabel, color = Color.White) }
-            items.forEach {
-                Box(Modifier
+            Box(
+                Modifier
                     .fillMaxWidth()
-                    .clickable { onSelect(it) }
-                    .padding(12.dp)) {
+                    .clickable { onSelect(null) }
+                    .padding(12.dp)) { Text(allLabel, color = Color.White) }
+            items.forEach {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(it) }
+                        .padding(12.dp)) {
                     Text(
                         labelMapper(it),
                         color = Color.White
