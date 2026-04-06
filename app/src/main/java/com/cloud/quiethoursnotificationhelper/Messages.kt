@@ -131,7 +131,7 @@ private fun postChatNotification(key: String, context: Context, sourceLabel: Str
                                 .setAutoCancel(false)
                                 .addAction(
                                     android.R.drawable.ic_menu_close_clear_cancel,
-                                    "Als gelesen",
+                                    "Als gelesen markieren",
                                     markPi
                                 )
                                 .build()
@@ -339,20 +339,14 @@ fun markMessageAsRead(messageId: String, readMessageIds: MutableSet<String>, con
     try {
         readMessageIds.add(messageId)
         val key = messageId.substringBeforeLast("_")
-        val hash = key.hashCode()
+        val notifId = key.hashCode() and 0x0FFFFFFF
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        for (i in 0 until 100) nm.cancel(hash + i)
-        nm.cancel(hash)
+        for (i in 0 until 100) nm.cancel(notifId + i)
+        nm.cancel(notifId + 1000000)
+        nm.cancel(notifId + 2000000)
     } catch (e: Exception) {
         CoroutineScope(Dispatchers.IO).launch {
-            ERRORINSERT(
-                ERRORINSERTDATA(
-                    "markMessageAsRead",
-                    "ERROR: ${e.message}",
-                    Instant.now().toString(),
-                    "ERROR"
-                )
-            )
+            ERRORINSERT(ERRORINSERTDATA("markMessageAsRead", "ERROR: ${e.message}", Instant.now().toString(), "ERROR"))
         }
     }
 }
