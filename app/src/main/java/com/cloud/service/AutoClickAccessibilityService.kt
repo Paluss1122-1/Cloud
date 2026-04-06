@@ -23,7 +23,7 @@ class AutoClickAccessibilityService : AccessibilityService() {
 
     fun closeNotificationShade() {
         if (instance != null) {
-            instance?.closeNotificationShade()
+            performGlobalAction(GLOBAL_ACTION_BACK)
         } else {
             val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
