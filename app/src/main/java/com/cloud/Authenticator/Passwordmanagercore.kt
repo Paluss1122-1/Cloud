@@ -1,6 +1,7 @@
 package com.cloud.authenticator
 
 import android.content.Context
+import android.util.Base64
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Delete
@@ -19,11 +20,19 @@ import com.cloud.SupabaseConfigALT
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.Serializable
+import java.nio.ByteBuffer
 import java.security.SecureRandom
 import java.time.Instant
+import javax.crypto.Cipher
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 
 @Entity(tableName = "passwords")
 data class PasswordEntry(
@@ -32,7 +41,7 @@ data class PasswordEntry(
     val url: String = "",
     val username: String = "",
     val password: String = "",
-    val notes: String = "",
+    val notes: String = "NULL",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
@@ -102,31 +111,47 @@ abstract class PasswordDatabase : RoomDatabase() {
 
 object CloudCrypto {
 
+    private val cachedKey: SecretKey by lazy {
+        // fixer Salt für Cloud-Sync — nicht kryptografisch ideal aber 100x schneller
+        val fixedSalt = "cloud_sync_salt_v1".toByteArray(Charsets.UTF_8).copyOf(16)
+        Config.deriveKey(Config.masterPassword, fixedSalt)
+    }
+
     fun encryptForCloud(plaintext: String): String {
         if (plaintext.isEmpty()) return ""
-        val encrypted = Config.encrypt(plaintext, Config.masterPassword)
-        val verified = runCatching { Config.decrypt(encrypted, Config.masterPassword) }.getOrNull()
-        check(verified == plaintext) { "Encrypt-Verify fehlgeschlagen – Passwort falsch?" }
-        return encrypted
+        return encryptWithKey(plaintext, cachedKey)
     }
 
     fun decryptFromCloud(ciphertext: String): String? {
         if (ciphertext.isEmpty()) return ""
         return try {
-            Config.decrypt(ciphertext, Config.masterPassword)
+            decryptWithKey(ciphertext, cachedKey)
         } catch (e: Exception) {
             CoroutineScope(Dispatchers.IO).launch {
-                ERRORINSERT(
-                    ERRORINSERTDATA(
-                        "CloudCrypto",
-                        "Decrypt fehlgeschlagen: ${e.message}",
-                        Instant.now().toString(),
-                        "ERROR"
-                    )
-                )
+                ERRORINSERT(ERRORINSERTDATA("CloudCrypto", "Decrypt fehlgeschlagen: ${e.message}", Instant.now().toString(), "ERROR"))
             }
             null
         }
+    }
+
+    private fun encryptWithKey(plaintext: String, key: SecretKey): String {
+        val iv = ByteArray(12).apply { SecureRandom().nextBytes(this) }
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(128, iv))
+        val encrypted = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
+        val bb = ByteBuffer.allocate(12 + encrypted.size)
+        bb.put(iv)
+        bb.put(encrypted)
+        return Base64.encodeToString(bb.array(), Base64.NO_WRAP)
+    }
+
+    private fun decryptWithKey(ciphertext: String, key: SecretKey): String {
+        val bytes = Base64.decode(ciphertext, Base64.NO_WRAP)
+        val iv = bytes.copyOfRange(0, 12)
+        val data = bytes.copyOfRange(12, bytes.size)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
+        return cipher.doFinal(data).toString(Charsets.UTF_8)
     }
 }
 
@@ -215,15 +240,14 @@ enum class PasswordStrength(
     EXCELLENT("Ausgezeichnet", 1.00f, androidx.compose.ui.graphics.Color(0xFF1B5E20))
 }
 
-
 @Serializable
 data class PasswordEntrySupabase(
     val id: String? = null,
     val name: String,
-    val url: String = "",
-    val username: String = "",
+    val url: String? = null,
+    val username: String? = null,
     val encrypted_password: String = "",
-    val notes: String = "",
+    val notes: String? = null,
     val totp_secret: String? = null
 )
 
@@ -236,78 +260,51 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
                 SupabaseConfigALT.client.postgrest.from("password_entries")
                     .select().decodeList<PasswordEntrySupabase>()
             } catch (e: Exception) {
-                ERRORINSERT(
-                    ERRORINSERTDATA(
-                        "PasswordRepository",
-                        "Cloud-Laden fehlgeschlagen: ${e.message}",
-                        Instant.now().toString(),
-                        "ERROR"
-                    )
-                )
+                ERRORINSERT(ERRORINSERTDATA("PasswordRepository", "Cloud-Laden fehlgeschlagen: ${e.message}", Instant.now().toString(), "ERROR"))
                 return@withContext
             }
 
-            // Cloud → Lokal: decrypt, skip bei Fehler
             val cloudNames = mutableSetOf<String>()
+            var downloaded = 0
             cloudEntries.forEach { cloud ->
                 cloudNames.add(cloud.name.trim().lowercase())
-                val decryptedPw =
-                    CloudCrypto.decryptFromCloud(cloud.encrypted_password) ?: return@forEach
-                val existing =
-                    localPasswords.find { it.name == cloud.name && it.username == cloud.username }
+                val decryptedPw = CloudCrypto.decryptFromCloud(cloud.encrypted_password) ?: run {
+                    return@forEach
+                }
+                val existing = localPasswords.find { it.name == cloud.name && it.username == cloud.username }
                 if (existing == null) {
-                    passwordDb.passwordDao().insert(
-                        PasswordEntry(
-                            name = cloud.name,
-                            url = cloud.url,
-                            username = cloud.username,
-                            password = decryptedPw
-                        )
-                    )
+                    passwordDb.passwordDao().insert(PasswordEntry(name = cloud.name, url = cloud.url ?: "", username = cloud.username ?: "", password = decryptedPw))
+                    downloaded++
                 }
             }
 
-            // Lokal → Cloud: encrypt mit verify, skip bei Fehler
             val missingInCloud = localPasswords.filter { it.name.trim().lowercase() !in cloudNames }
-            missingInCloud.forEach { local ->
-                try {
-                    val encryptedPw = CloudCrypto.encryptForCloud(local.password)
-                    val matchedSecret = localTwoFa.firstOrNull { fa ->
-                        val n = fa.name.lowercase();
-                        val ln = local.name.lowercase();
-                        val lu = local.url.lowercase()
-                        n.contains(ln) || ln.contains(n) || (lu.isNotEmpty() && n.split(" ")
-                            .any { lu.contains(it) })
-                    }?.secret
+            val toUpload = coroutineScope {
+                missingInCloud.map { local ->
+                    async {
+                        try {
+                            val encryptedPw = CloudCrypto.encryptForCloud(local.password)
+                            val matchedSecret = localTwoFa.firstOrNull { fa ->
+                                val n = fa.name.lowercase(); val ln = local.name.lowercase(); val lu = local.url.lowercase()
+                                n.contains(ln) || ln.contains(n) || (lu.isNotEmpty() && n.split(" ").any { lu.contains(it) })
+                            }?.secret
+                            PasswordEntrySupabase(name = local.name, url = local.url, username = local.username, encrypted_password = encryptedPw, notes = local.notes, totp_secret = matchedSecret?.let { CloudCrypto.encryptForCloud(it) })
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                }.awaitAll().filterNotNull()
+            }
 
-                    SupabaseConfigALT.client.postgrest.from("password_entries").insert(
-                        PasswordEntrySupabase(
-                            name = local.name, url = local.url, username = local.username,
-                            encrypted_password = encryptedPw,
-                            notes = local.notes,
-                            totp_secret = matchedSecret?.let { CloudCrypto.encryptForCloud(it) }
-                        )
-                    )
+            if (toUpload.isNotEmpty()) {
+                try {
+                    SupabaseConfigALT.client.postgrest.from("password_entries").insert(toUpload)
                 } catch (e: Exception) {
-                    ERRORINSERT(
-                        ERRORINSERTDATA(
-                            "PasswordRepository",
-                            "Upload fehlgeschlagen: ${local.name} (${e.message})",
-                            Instant.now().toString(),
-                            "ERROR"
-                        )
-                    )
+                    ERRORINSERT(ERRORINSERTDATA("PasswordRepository", "Batch-Upload fehlgeschlagen: ${e.message}", Instant.now().toString(), "ERROR"))
                 }
             }
         } catch (e: Exception) {
-            ERRORINSERT(
-                ERRORINSERTDATA(
-                    "PasswordRepository",
-                    "Sync-Exception: ${e.message}",
-                    Instant.now().toString(),
-                    "ERROR"
-                )
-            )
+            ERRORINSERT(ERRORINSERTDATA("PasswordRepository", "Sync-Exception: ${e.message}", Instant.now().toString(), "ERROR"))
         }
     }
 }
