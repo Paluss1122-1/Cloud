@@ -1,5 +1,6 @@
 package com.cloud.authenticator
 
+import android.content.Context
 import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -29,6 +30,7 @@ import androidx.compose.ui.window.Dialog
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
 import com.cloud.SupabaseConfigALT
+import com.cloud.privatecloudapp.isOnline
 import com.cloud.ui.theme.c
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
@@ -155,9 +157,12 @@ suspend fun updateTwoFaEntryInSupabase(entry: TwoFAEntry): Boolean {
     }
 }
 
-suspend fun syncTwoFaEntriesWithConfirmation(db: TwoFADatabase): SyncResult {
+suspend fun syncTwoFaEntriesWithConfirmation(context: Context, db: TwoFADatabase): SyncResult {
     return withContext(Dispatchers.IO) {
         try {
+            if (!isOnline(context)) {
+                return@withContext SyncResult(uploaded = 0, downloaded = 0, total = 0, error = "Kein Internet")
+            }
             val localEntries = db.twoFADao().getAll()
 
             val supabaseEntries = loadTwoFaEntriesFromSupabase()
