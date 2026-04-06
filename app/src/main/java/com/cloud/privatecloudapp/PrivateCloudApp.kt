@@ -2074,49 +2074,6 @@ fun MainCloudScreen(storage: Storage) {
                         }) {
                             Text("🔄 Aktualisieren", fontSize = 12.sp)
                         }
-
-                        IconButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                try {
-                                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                                        setDataAndType(
-                                            "content://downloads/my_downloads".toUri(),
-                                            "vnd.android.document/directory"
-                                        )
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    }
-                                    context.startActivity(intent)
-                                } catch (_: Exception) {
-                                    try {
-                                        val downloadsUri =
-                                            "content://com.android.externalstorage.documents/document/primary:Download".toUri()
-                                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                                            setDataAndType(
-                                                downloadsUri,
-                                                "vnd.android.document/directory"
-                                            )
-                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        }
-                                        context.startActivity(intent)
-                                    } catch (_: Exception) {
-                                        Toast.makeText(
-                                            context,
-                                            "Downloads-Ordner konnte nicht geöffnet werden",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
-                                }
-                            },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Settings,
-                                contentDescription = "Settings",
-                                tint = Color.White,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
                     }
                 }
             }
