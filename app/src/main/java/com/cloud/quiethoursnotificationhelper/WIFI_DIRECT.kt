@@ -1956,7 +1956,7 @@ private fun buildPlaylistsJson(context: Context): String {
     }.toString()
 }
 
-var lastMediaPush = 0L
+var lastPushTime: Long = 0L
 
 fun pushMediaStateToLaptop(context: Context) {
     if (!isLaptopConnected) return
