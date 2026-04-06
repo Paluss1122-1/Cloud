@@ -10,8 +10,6 @@ import android.app.Activity.RESULT_OK
 import android.app.ActivityManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -377,10 +375,6 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     var selectedMenuItem by remember { mutableStateOf<MenuItem?>(null) }
     var masterPw by remember { mutableStateOf(PasswordStorage.loadPassword(context)) }
 
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    val clip = ClipData.newPlainText("BWMP", masterPw)
-    clipboard.setPrimaryClip(clip)
-
     if (masterPw == null) {
         MasterPasswordSetupScreen { pw ->
             PasswordStorage.savePassword(context, pw)
@@ -433,9 +427,11 @@ fun MasterPasswordSetupScreen(onPasswordSaved: (String) -> Unit) {
     var confirmed by remember { mutableStateOf("") }
     val isValid = input.length >= 20 && input == confirmed
 
-    Box(Modifier
-        .fillMaxSize()
-        .background(Color(0xFF17171C)), contentAlignment = Alignment.Center) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xFF17171C)), contentAlignment = Alignment.Center
+    ) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -841,7 +837,7 @@ fun PrivateCloudApp(
                                 var gestureHandled = false
                                 detectHorizontalDragGestures(
                                     onDragStart = { gestureHandled = false },
-                                    onHorizontalDrag = { change, dragAmount ->
+                                    onHorizontalDrag = { _, dragAmount ->
                                         if (!gestureHandled && dragAmount > 20f) {
                                             gestureHandled = true
                                             if (navigationState.canNavigateBack) {
