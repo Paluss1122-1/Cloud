@@ -57,7 +57,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomAppBar
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ModalBottomSheet
@@ -102,7 +101,6 @@ import com.cloud.quiethoursnotificationhelper.aiResponseFlow
 import com.cloud.quiethoursnotificationhelper.deleteAiResponse
 import com.cloud.quiethoursnotificationhelper.loadAllAiResponses
 import com.cloud.quiethoursnotificationhelper.loadTodayOrYesterdayEntry
-import com.cloud.quiethoursnotificationhelper.saveAiResponse
 import com.cloud.service.MediaPlayerService
 import com.google.gson.GsonBuilder
 import kotlinx.coroutines.Dispatchers

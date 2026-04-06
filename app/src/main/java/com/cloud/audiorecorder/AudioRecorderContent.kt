@@ -1,3 +1,5 @@
+@file:Suppress("AssignedValueIsNeverRead")
+
 package com.cloud.audiorecorder
 
 import android.Manifest
