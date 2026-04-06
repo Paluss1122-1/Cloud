@@ -14,7 +14,7 @@ val localProps = Properties().apply {
 }
 
 kotlin {
-    jvmToolchain(11)
+    jvmToolchain(17)
 }
 
 android {
@@ -38,12 +38,6 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    }
-
-    buildFeatures {
-        buildConfig = true
-        compose = true
-        aidl = true
     }
 
     buildTypes {
@@ -94,6 +88,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
     buildFeatures {
+        buildConfig = true
         compose = true
     }
     packaging {
@@ -124,7 +119,6 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.work.runtime.ktx)
-    implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.compose.runtime.saved.instance.state)
     implementation(libs.androidx.navigation.compose)
@@ -175,7 +169,6 @@ dependencies {
     implementation(libs.mp3agic)
 
     implementation(libs.api)
-    implementation(libs.shizuku.provider)
 
     implementation("dev.rikka.shizuku:api:13.1.5") { isTransitive = true }
 

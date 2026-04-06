@@ -17,6 +17,7 @@ import com.cloud.Config
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
 import com.cloud.SupabaseConfigALT
+import com.cloud.privatecloudapp.isOnline
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -251,8 +252,11 @@ data class PasswordEntrySupabase(
     val totp_secret: String? = null
 )
 
-suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: TwoFADatabase) {
-    withContext(Dispatchers.IO) {
+suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: TwoFADatabase, context: Context): SyncResult {
+    if (!isOnline(context)) {
+        return SyncResult(uploaded = 0, downloaded = 0, total = 0, error = "Kein Internet")
+    }
+    return withContext(Dispatchers.IO) {
         try {
             val localPasswords = passwordDb.passwordDao().getAll()
             val localTwoFa = twoFaDb.twoFADao().getAll()
@@ -260,8 +264,15 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
                 SupabaseConfigALT.client.postgrest.from("password_entries")
                     .select().decodeList<PasswordEntrySupabase>()
             } catch (e: Exception) {
-                ERRORINSERT(ERRORINSERTDATA("PasswordRepository", "Cloud-Laden fehlgeschlagen: ${e.message}", Instant.now().toString(), "ERROR"))
-                return@withContext
+                ERRORINSERT(
+                    ERRORINSERTDATA(
+                        "PasswordRepository",
+                        "Cloud-Laden fehlgeschlagen: ${e.message}",
+                        Instant.now().toString(),
+                        "ERROR"
+                    )
+                )
+                return@withContext SyncResult(uploaded = 0, downloaded = 0, total = 0, error = e.message)
             }
 
             val cloudNames = mutableSetOf<String>()
@@ -303,8 +314,17 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
                     ERRORINSERT(ERRORINSERTDATA("PasswordRepository", "Batch-Upload fehlgeschlagen: ${e.message}", Instant.now().toString(), "ERROR"))
                 }
             }
+            SyncResult(uploaded = missingInCloud.size, downloaded = 0, total = localPasswords.size)
         } catch (e: Exception) {
-            ERRORINSERT(ERRORINSERTDATA("PasswordRepository", "Sync-Exception: ${e.message}", Instant.now().toString(), "ERROR"))
+            ERRORINSERT(
+                ERRORINSERTDATA(
+                    "PasswordRepository",
+                    "Sync-Exception: ${e.message}",
+                    Instant.now().toString(),
+                    "ERROR"
+                )
+            )
+            SyncResult(uploaded = 0, downloaded = 0, total = 0, error = e.message)
         }
     }
 }

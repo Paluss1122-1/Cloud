@@ -1956,11 +1956,17 @@ private fun buildPlaylistsJson(context: Context): String {
     }.toString()
 }
 
+var lastMediaPush = 0L
+
 fun pushMediaStateToLaptop(context: Context) {
     if (!isLaptopConnected) return
+    val now = System.currentTimeMillis()
+    if (now - lastPushTime < 5000L) return
     val state = buildMediaStateJson(context)
     if (state == lastPushedState) return
     lastPushedState = state
+    lastPushedState = state
+    lastPushTime = now
     syncScope.launch(Dispatchers.IO) {
         try {
             if (laptopIp == "") return@launch

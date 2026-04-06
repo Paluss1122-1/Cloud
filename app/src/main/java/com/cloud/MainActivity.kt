@@ -116,6 +116,8 @@ class MainActivity : FragmentActivity() {
             ActivityResultContracts.RequestMultiplePermissions()
         ) { _ -> }
 
+        Config.init(this)
+
         launcher.launch(
             arrayOf(
                 audioPermission,
