@@ -1979,29 +1979,6 @@ fun startDiscoveryListener() {
     }
 }
 
-/*suspend fun trySendOcrToLaptop(context: Context, ocrRawText: String): Boolean {
-    return withContext(Dispatchers.IO) {
-        val socket = bindFlashcardResponseSocket() ?: return@withContext false
-
-        startFlashcardResponseListener(socket)
-
-        for (ip in LAPTOP_IPS) {
-            try {
-                val s = java.net.Socket()
-                s.connect(java.net.InetSocketAddress(ip, FLASHCARD_SEND_PORT), 3000)
-                s.getOutputStream().write(ocrRawText.toByteArray(Charsets.UTF_8))
-                s.shutdownOutput()
-                s.close()
-                return@withContext true
-            } catch (_: Exception) {}
-        }
-
-        socket.close()
-        flashcardResponseSocket = null
-        false
-    }
-}*/
-
 fun checkIfNearLocation(
     context: Context,
     targetLat: Double = Config.LAT,
