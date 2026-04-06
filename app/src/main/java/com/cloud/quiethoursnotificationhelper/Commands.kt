@@ -56,7 +56,6 @@ import com.cloud.service.PodcastPlayerServiceCompat
 import com.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.cloud.service.QuietHoursNotificationService.Companion.commandHistory
 import com.cloud.service.QuietHoursNotificationService.Companion.showtestOverlay
-import com.cloud.service.restartMusicPlayer
 import com.cloud.showSimpleNotificationExtern
 import com.cloud.weathertab.fetchWeatherForecast
 import com.cloud.weathertab.getLastKnownLocation
@@ -110,15 +109,13 @@ private fun getAvailableCommands(context: Context): List<Command> {
             aliases = listOf("m", "play", "player", "musik"),
             description = "Startet Musik Player"
         ) {
-            PodcastPlayerServiceCompat.stopService(context)
-            restartMusicPlayer(null, context)
+            MediaPlayerService.startAndPlayMusic(context, null)
         },
         Command(
             name = "podcast",
             aliases = listOf("pd", "pc", "Podcast", "py"),
             description = "Startet PodcastPlayerServiceCompat"
         ) {
-            MusicPlayerServiceCompat.stopService(context)
             PodcastPlayerServiceCompat.startService(context)
             PodcastPlayerServiceCompat.sendPlayAction(context)
         },
@@ -965,9 +962,8 @@ fun executeCommand(commandText: String, context: Context) {
         }
 
         "music", "m", "play", "player", "musik" -> {
-            PodcastPlayerServiceCompat.stopService(context)
             val songNumber = argument?.toIntOrNull()
-            restartMusicPlayer(songNumber, context)
+            MediaPlayerService.startAndPlayMusic(context, songNumber)
             return
         }
 
@@ -975,7 +971,6 @@ fun executeCommand(commandText: String, context: Context) {
             if (argument != null) {
                 PodcastPlayerServiceCompat.sendForwardAction(context, argument.toInt() * 1000)
             } else {
-                MusicPlayerServiceCompat.stopService(context)
                 PodcastPlayerServiceCompat.startService(context)
                 PodcastPlayerServiceCompat.sendPlayAction(context)
             }
