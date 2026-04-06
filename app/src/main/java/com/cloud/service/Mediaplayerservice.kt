@@ -2414,7 +2414,6 @@ class MediaPlayerService : MediaSessionService() {
 
 object MusicPlayerServiceCompat {
     fun startService(context: Context) = MediaPlayerService.startMusicService(context)
-    fun stopService(context: Context) = MediaPlayerService.stopService(context)
     fun startAndPlay(context: Context, number: Int? = null) =
         MediaPlayerService.startAndPlayMusic(context, number)
 
@@ -2424,7 +2423,6 @@ object MusicPlayerServiceCompat {
 
 object PodcastPlayerServiceCompat {
     fun startService(context: Context) = MediaPlayerService.startPodcastService(context)
-    fun stopService(context: Context) = MediaPlayerService.stopService(context)
     fun sendPlayAction(context: Context) = MediaPlayerService.sendPodcastPlayAction(context)
     fun sendForwardAction(context: Context, ms: Int) =
         MediaPlayerService.sendPodcastForwardAction(context, ms)
@@ -2432,19 +2430,6 @@ object PodcastPlayerServiceCompat {
     fun managePodcast(context: Context) = MediaPlayerService.managePodcast(context)
     fun setPlaybackSpeed(context: Context, speed: Float) =
         MediaPlayerService.setPlaybackSpeed(context, speed)
-}
-
-fun restartMusicPlayer(number: Int? = null, context: Context) {
-    try {
-        MediaPlayerService.startAndPlayMusic(context, number)
-    } catch (_: Exception) {
-        showSimpleNotificationExtern(
-            "❌ Fehler",
-            "Musik Player konnte nicht neu gestartet werden",
-            10.seconds,
-            context = context
-        )
-    }
 }
 
 private fun SharedPreferences.editAsync(block: SharedPreferences.Editor.() -> Unit) {
