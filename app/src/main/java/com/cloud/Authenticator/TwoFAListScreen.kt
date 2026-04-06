@@ -143,7 +143,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
             isSyncing = true
             scope.launch {
                 try {
-                    val result = syncTwoFaEntriesWithConfirmation(db)
+                    val result = syncTwoFaEntriesWithConfirmation(context, db)
                     entries = db.twoFADao().getAll()
 
                     if (result.pendingDecisions.isNotEmpty()) {
