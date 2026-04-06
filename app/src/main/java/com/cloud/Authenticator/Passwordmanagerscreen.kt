@@ -134,33 +134,6 @@ fun PasswordManagerScreen(db: PasswordDatabase, twoFaDb: TwoFADatabase) {
 
     LaunchedEffect(Unit) {
         reload()
-
-        if (!isSyncing) {
-            val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
-            val lastSyncTime = prefs.getLong("last_sync_pw_timestamp", 0L)
-            val currentTime = System.currentTimeMillis()
-
-            if (currentTime - lastSyncTime > 20_000L) {
-                isSyncing = true
-                scope.launch {
-                    try {
-                        syncPasswordEntriesWithCloud(db, twoFaDb)
-                        entries = db.passwordDao().getAll()
-                        prefs.edit(commit = true) {
-                            putLong("last_sync_pw_timestamp", System.currentTimeMillis())
-                        }
-                    } catch (e: Exception) {
-                        Toast.makeText(
-                            context,
-                            "Sync fehlgeschlagen: ${e.message}",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    } finally {
-                        isSyncing = false
-                    }
-                }
-            }
-        }
     }
 
     val visible = remember(entries, searchQuery, selectedCategory) {
@@ -211,6 +184,48 @@ fun PasswordManagerScreen(db: PasswordDatabase, twoFaDb: TwoFADatabase) {
                             modifier = Modifier.size(32.dp)
                         ) {
                             Icon(Icons.Default.Delete, "Import", tint = AccentBlue)
+                        }
+                        IconButton(
+                            onClick = {
+                                if (!isSyncing) {
+                                    val prefs = context.getSharedPreferences(
+                                        "sync_prefs",
+                                        Context.MODE_PRIVATE
+                                    )
+                                    val lastSyncTime = prefs.getLong("last_sync_pw_timestamp", 0L)
+                                    val currentTime = System.currentTimeMillis()
+
+                                    if (currentTime - lastSyncTime > 20_000L) {
+                                        isSyncing = true
+                                        scope.launch {
+                                            try {
+                                                if (syncPasswordEntriesWithCloud(db, twoFaDb, context).error != null){
+                                                    Toast.makeText(context, "Kein Netzwerk verfügbar", Toast.LENGTH_LONG).show()
+                                                    return@launch
+                                                }
+                                                entries = db.passwordDao().getAll()
+                                                prefs.edit(commit = true) {
+                                                    putLong(
+                                                        "last_sync_pw_timestamp",
+                                                        System.currentTimeMillis()
+                                                    )
+                                                }
+                                            } catch (e: Exception) {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Sync fehlgeschlagen: ${e.message}",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            } finally {
+                                                isSyncing = false
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.Refresh, "Import", tint = AccentBlue)
                         }
                     }
                 }
