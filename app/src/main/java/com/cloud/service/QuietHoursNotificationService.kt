@@ -523,7 +523,7 @@ class QuietHoursNotificationService : Service() {
                 }
 
                 ACTION_RESTART_MUSIC_PLAYER -> {
-                    restartMusicPlayer(context = this)
+                    MediaPlayerService.startAndPlayMusic(this)
                     START_STICKY
                 }
 
@@ -597,14 +597,28 @@ class QuietHoursNotificationService : Service() {
                             val stats = buildSessionStatsText(sessions)
                             val result =
                                 sendNvidiaChatMessageAITab(emptyList(), stats) ?: return@launch
+                            val musicMs = sessions.filter { it.type == "music" }.sumOf { it.listenedMs }
+                            val podcastMs = sessions.filter { it.type == "podcast" }.sumOf { it.listenedMs }
 
-                            saveAiResponse(this@QuietHoursNotificationService, result)
+                            fun fmt(ms: Long): String {
+                                val mins = ms / 1000.0 / 60.0
+                                return if (mins < 1) "${(ms / 1000).toInt()}s" else "${"%.1f".format(mins)} min"
+                            }
+
+                            val parts = mutableListOf<String>()
+                            if (musicMs > 0) parts += "🎵${fmt(musicMs)}"
+                            if (podcastMs > 0) parts += "🎙️${fmt(podcastMs)}"
+                            val suffix = parts.joinToString(" · ")
+
+                            val finalResult = if (suffix.isNotEmpty()) "$result\n\n$suffix" else result
+
+                            saveAiResponse(this@QuietHoursNotificationService, finalResult)
                             aiResponseFlow.emit(
-                                AiResponseEntry(result, System.currentTimeMillis(), getTodayKey())
+                                AiResponseEntry(finalResult, System.currentTimeMillis(), getTodayKey())
                             )
                             showSimpleNotification(
                                 "🎵 Tages-Zusammenfassung",
-                                result.take(200),
+                                finalResult,
                                 60.seconds
                             )
                         } catch (e: Exception) {
