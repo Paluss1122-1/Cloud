@@ -81,6 +81,9 @@ private var updateServerSocket: ServerSocket? = null
 private var triggerJob: Job? = null
 private var triggerServerSocket: ServerSocket? = null
 
+private var clipboardJob: Job? = null
+private var clipboardSocket: ServerSocket? = null
+
 private var aiResponseJob: Job? = null
 private var aiResponseServerSocket: ServerSocket? = null
 
@@ -448,6 +451,8 @@ fun stopAllSyncServices(context: Context) {
     aiResponseServerSocket?.close(); aiResponseServerSocket = null
     flashcardResponseJob?.cancel(); flashcardResponseJob = null
     flashcardResponseSocket?.close(); flashcardResponseSocket = null
+    clipboardJob?.cancel(); clipboardJob = null
+    clipboardSocket?.close(); clipboardSocket = null
 
     triggerWakeLock.safeRelease(); triggerWakeLock = null
     cpuWakeLock.safeRelease(); cpuWakeLock = null
@@ -521,6 +526,7 @@ fun syncTodosWithLaptop(context: Context) {
 
             startMediaCommandListener(context)
             startMediaStateServer(context)
+            startClipboardListener(context)
 
             if (listenerJob == null || listenerJob?.isActive == false) {
                 startUpdateListener(context, 60)
@@ -2213,3 +2219,42 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
 
     return prompt
 }
+
+fun startClipboardListener(context: Context) {
+    if (clipboardJob?.isActive == true) return
+    clipboardSocket?.close()
+
+    clipboardJob = syncScope.launch(Dispatchers.IO) {
+        while (isActive) {
+            try {
+                clipboardSocket = ServerSocket().apply {
+                    reuseAddress = true
+                    bind(java.net.InetSocketAddress(Config.CLIPBOARD_PORT))
+                }
+
+                while (isActive) {
+                    try {
+                        val client = clipboardSocket?.accept() ?: break
+                        val text = client.inputStream.bufferedReader().readText()
+                        client.close()
+
+                        if (text.startsWith("CLIPBOARD:")) {
+                            val content = text.removePrefix("CLIPBOARD:")
+                            withContext(Dispatchers.Main) {
+                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                cm.setPrimaryClip(android.content.ClipData.newPlainText("sync", content))
+                            }
+                        }
+                    } catch (_: java.net.SocketException) { break }
+                }
+            } catch (e: Exception) {
+                syncScope.launch {
+                    ERRORINSERT(ERRORINSERTDATA("startClipboardListener", e.stackTraceToString(), Instant.now().toString(), "ERROR"))
+                }
+            } finally {
+                clipboardSocket?.close()
+                clipboardSocket = null
+            }
+            if (isActive) delay(2000)
+        }
+    }
