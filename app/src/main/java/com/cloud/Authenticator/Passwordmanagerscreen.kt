@@ -488,7 +488,6 @@ private fun PasswordDetailSheet(
     onDelete: () -> Unit
 ) {
     val context = LocalContext.current
-    var plainPassword by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
@@ -580,8 +579,8 @@ private fun PasswordDetailSheet(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = if (showPassword) plainPassword
-                                else "•".repeat(plainPassword.length.coerceAtMost(20)),
+                                text = if (showPassword) entry.password
+                                else "•".repeat(entry.password.length),
                                 color = if (showPassword) TextP else TextS,
                                 fontSize = 14.sp,
                                 fontFamily = if (showPassword) FontFamily.Monospace else FontFamily.Default,
@@ -597,7 +596,7 @@ private fun PasswordDetailSheet(
                                 )
                             }
                             IconButton(
-                                onClick = { copyToClipboard(context, "Passwort", plainPassword) },
+                                onClick = { copyToClipboard(context, "Passwort", entry.password) },
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
@@ -608,9 +607,9 @@ private fun PasswordDetailSheet(
                                 )
                             }
                         }
-                        if (plainPassword.isNotEmpty()) {
+                        if (entry.password.isNotEmpty()) {
                             Spacer(Modifier.height(6.dp))
-                            StrengthBar(PasswordGenerator.strength(plainPassword))
+                            StrengthBar(PasswordGenerator.strength(entry.password))
                         }
                     }
 
