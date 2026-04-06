@@ -8,7 +8,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
-import android.content.Context.WINDOW_SERVICE
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
@@ -55,14 +54,11 @@ import androidx.compose.material.icons.filled.Laptop
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
@@ -121,13 +117,11 @@ import com.cloud.quiethoursnotificationhelper.timeChangeReceiver
 import com.cloud.quiethoursnotificationhelper.updateNotification
 import com.cloud.quiethoursnotificationhelper.updateSingleSenderNotification
 import com.cloud.service.AutoClickAccessibilityService.Companion.closeNots
-import com.cloud.showSimpleNotificationExtern
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import rikka.shizuku.SystemServiceHelper.getSystemService
 import java.io.File
 import java.time.Instant
 import java.util.Calendar
@@ -1080,204 +1074,4 @@ class OverlayLifecycleOwner : LifecycleOwner, ViewModelStoreOwner, SavedStateReg
     fun onDestroy() {
         lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
     }
-}
-
-@SuppressLint("SetJavaScriptEnabled")
-@Composable
-@Preview
-fun OVERLAY() {
-    val context = LocalContext.current
-    if (!Settings.canDrawOverlays(context)) {
-        showSimpleNotificationExtern("Fehler", "Overlay-Berechtigung fehlt!", context = context)
-        return
-    }
-
-    var testOverlayView: ComposeView? = null
-    var testOverlayLifecycle: OverlayLifecycleOwner?
-
-    val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-
-    var currentUrl = "https://www.youtube.com"
-
-    var isDesktopMode = false
-
-    testOverlayLifecycle = OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
-
-    testOverlayView = ComposeView(context).apply {
-        setViewTreeLifecycleOwner(testOverlayLifecycle)
-        setViewTreeSavedStateRegistryOwner(testOverlayLifecycle)
-        setViewTreeViewModelStoreOwner(testOverlayLifecycle)
-        setContent {
-            val webView = remember {
-                WebView(context).apply {
-                    webChromeClient = object : WebChromeClient() {
-                        private var customView: View? = null
-                        private var customViewCallback: CustomViewCallback? = null
-
-                        override fun onShowCustomView(
-                            view: View?,
-                            callback: CustomViewCallback?
-                        ) {
-                            (context as? Activity)?.let { activity ->
-                                val decor = activity.window.decorView as FrameLayout
-                                decor.addView(
-                                    view,
-                                    FrameLayout.LayoutParams(
-                                        ViewGroup.LayoutParams.MATCH_PARENT,
-                                        ViewGroup.LayoutParams.MATCH_PARENT
-                                    )
-                                )
-                                activity.requestedOrientation =
-                                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                                customView = view
-                                customViewCallback = callback
-
-                                activity.window.insetsController?.apply {
-                                    hide(WindowInsets.Type.systemBars())
-                                    systemBarsBehavior =
-                                        WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                                }
-                            }
-                        }
-
-                        override fun onHideCustomView() {
-                            (context as? Activity)?.let { activity ->
-                                val decor = activity.window.decorView as FrameLayout
-                                decor.removeView(customView)
-                                customView = null
-                                customViewCallback?.onCustomViewHidden()
-                                customViewCallback = null
-
-                                activity.window.insetsController?.show(
-                                    WindowInsets.Type.systemBars()
-                                )
-                                activity.requestedOrientation =
-                                    ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                            }
-                        }
-                    }
-
-                    webViewClient = object : WebViewClient() {
-                        override fun shouldOverrideUrlLoading(
-                            view: WebView?,
-                            request: WebResourceRequest?
-                        ): Boolean = false
-
-                        override fun onPageFinished(view: WebView?, url: String?) {
-                            if (url != null) currentUrl = url
-                        }
-                    }
-
-                    settings.apply {
-                        javaScriptEnabled = true
-                        domStorageEnabled = true
-
-                        allowFileAccess = true
-                        allowContentAccess = true
-
-                        loadsImagesAutomatically = true
-                        blockNetworkLoads = false
-
-                        mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-
-                        useWideViewPort = true
-                        loadWithOverviewMode = true
-
-                        builtInZoomControls = true
-                        displayZoomControls = false
-                        setSupportZoom(true)
-
-                        javaScriptCanOpenWindowsAutomatically = true
-                        setSupportMultipleWindows(true)
-
-                        cacheMode = WebSettings.LOAD_DEFAULT
-                        mediaPlaybackRequiresUserGesture = false
-
-                        userAgentString =
-                            "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-                    }
-
-                    val cookieManager = CookieManager.getInstance()
-                    cookieManager.setAcceptCookie(true)
-                    cookieManager.setAcceptThirdPartyCookies(this, true)
-                    cookieManager.flush()
-
-                    loadUrl(currentUrl)
-                }
-            }
-
-            Box(modifier = Modifier.fillMaxSize()) {
-                AndroidView(
-                    factory = { webView },
-                    update = { },
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                Button(
-                    onClick = {
-                        isDesktopMode = !isDesktopMode
-
-                        webView.settings.apply {
-                            if (isDesktopMode) {
-                                userAgentString =
-                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                                useWideViewPort = true
-                                loadWithOverviewMode = true
-                            } else {
-                                userAgentString =
-                                    "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-                                useWideViewPort = true
-                                loadWithOverviewMode = true
-                            }
-                        }
-
-                        webView.loadUrl(currentUrl)
-                    },
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 16.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Laptop,
-                        contentDescription = null,
-                        tint = Color.White
-                    )
-                }
-
-                IconButton(
-                    onClick = {
-                        testOverlayView?.let { windowManager.removeView(it) }
-                        testOverlayLifecycle?.onDestroy()
-                        testOverlayView = null
-                        testOverlayLifecycle = null
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .size(40.dp)
-                        .background(Color.Black.copy(alpha = 0.6f), shape = RoundedCornerShape(50))
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Schließen",
-                        tint = Color.White
-                    )
-                }
-            }
-        }
-    }
-
-    val params = WindowManager.LayoutParams(
-        WindowManager.LayoutParams.MATCH_PARENT,
-        WindowManager.LayoutParams.MATCH_PARENT,
-        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-        PixelFormat.TRANSLUCENT
-    ).apply {
-        gravity = Gravity.CENTER
-    }
-
-    windowManager.addView(testOverlayView, params)
 }
