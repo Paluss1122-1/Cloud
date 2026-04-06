@@ -268,7 +268,51 @@ fun AITabContent() {
                         .size(48.dp)
                         .background(Color(0xFF333333), RoundedCornerShape(50))
                         .combinedClickable(
-                            onClick = {},
+                            onClick = {
+                                val userText = currentMsg.trim()
+                                if (userText.isNotEmpty()) {
+                                    val modeAtSend = currentMode
+
+                                    val userMsg = ChatMessage(
+                                        text = userText,
+                                        ts = System.currentTimeMillis(),
+                                        own = true
+                                    )
+                                    history.add(userMsg)
+                                    saveHistory(context, scope, history)
+                                    currentMsg = ""
+                                    isLoading = true
+
+                                    scope.launch {
+                                        try {
+                                            val responseText = withContext(Dispatchers.IO) {
+                                                send(userText)
+                                            }
+
+                                            val aiMsg = ChatMessage(
+                                                text = responseText,
+                                                ts = System.currentTimeMillis(),
+                                                own = false,
+                                                mode = modeAtSend
+                                            )
+
+                                            history.add(aiMsg)
+                                            isLoading = false
+                                            saveHistory(context, scope, history)
+                                        } catch (e: Exception) {
+                                            isLoading = false
+                                            history.add(
+                                                ChatMessage(
+                                                    "Fehler: ${e.message}",
+                                                    System.currentTimeMillis(),
+                                                    false,
+                                                    modeAtSend
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            },
                             onLongClick = {
                                 history.clear()
                                 saveHistory(context, scope, history)
