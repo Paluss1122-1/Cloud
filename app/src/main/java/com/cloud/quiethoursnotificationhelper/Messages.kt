@@ -4,7 +4,6 @@ import android.Manifest
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
-import android.content.Context.MODE_PRIVATE
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -15,7 +14,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
-import androidx.core.content.edit
 import com.cloud.Config.cms
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
@@ -23,12 +21,7 @@ import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_MARK_PAR
 import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_MESSAGE_SENT
 import com.cloud.service.QuietHoursNotificationService.Companion.EXTRA_MESSAGE_ID
 import com.cloud.service.QuietHoursNotificationService.Companion.EXTRA_SENDER
-import com.cloud.service.QuietHoursNotificationService.Companion.KEY_HAS_SAVED_DATA
-import com.cloud.service.QuietHoursNotificationService.Companion.KEY_SAVED_PACKAGE
-import com.cloud.service.QuietHoursNotificationService.Companion.KEY_SAVED_RESULT_KEY
-import com.cloud.service.QuietHoursNotificationService.Companion.KEY_SAVED_SENDER
 import com.cloud.service.QuietHoursNotificationService.Companion.MAX_MESSAGES_PER_CONTACT
-import com.cloud.service.QuietHoursNotificationService.Companion.PREFS_REPLY_DATA
 import com.cloud.service.QuietHoursNotificationService.Companion.isSupportedMessenger
 import com.cloud.service.QuietHoursNotificationService.Companion.readMessageIds
 import com.cloud.service.QuietHoursNotificationService.Companion.workerHandler
@@ -45,12 +38,6 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 private const val NVIDIA_CHAT_PREFIX = "NVIDIA Chat"
-
-data class SavedReplyData(
-    val sender: String,
-    val packageName: String,
-    val resultKey: String
-)
 
 private fun resolveKey(sender: String): String? {
     if (sender.contains("|")) return sender
@@ -382,104 +369,6 @@ fun createNvidiaChat(name: String?, context: Context) {
         )
     }
     updateChatNotification(title, context)
-}
-
-fun saveReplyDataPermanently(sender: String, context: Context) {
-    try {
-        val key = resolveKey(sender) ?: sender
-        val replyData = WhatsAppNotificationListener.replyActions[key]
-        if (replyData == null) {
-            showSimpleNotificationExtern(
-                "❌ Fehler",
-                "Keine Reply-Daten für '$sender' gefunden",
-                context = context
-            )
-            return
-        }
-        val displayName = key.substringAfter("|")
-        context.getSharedPreferences(PREFS_REPLY_DATA, MODE_PRIVATE).edit(commit = true) {
-            putString(KEY_SAVED_SENDER, displayName)
-            putString(KEY_SAVED_PACKAGE, replyData.pendingIntent.creatorPackage ?: "unknown")
-            putString(KEY_SAVED_RESULT_KEY, replyData.originalResultKey)
-            putBoolean(KEY_HAS_SAVED_DATA, true)
-        }
-        showSimpleNotificationExtern(
-            "✅ Gespeichert",
-            "Reply-Daten für '$displayName' gespeichert",
-            context = context
-        )
-    } catch (_: Exception) {
-        showSimpleNotificationExtern(
-            "❌ Fehler",
-            "Konnte Reply-Daten nicht speichern",
-            context = context
-        )
-    }
-}
-
-private fun loadSavedReplyData(context: Context): SavedReplyData? {
-    return try {
-        val prefs = context.getSharedPreferences(PREFS_REPLY_DATA, MODE_PRIVATE)
-        if (!prefs.getBoolean(KEY_HAS_SAVED_DATA, false)) return null
-        SavedReplyData(
-            prefs.getString(KEY_SAVED_SENDER, null) ?: return null,
-            prefs.getString(KEY_SAVED_PACKAGE, null) ?: return null,
-            prefs.getString(KEY_SAVED_RESULT_KEY, null) ?: return null
-        )
-    } catch (_: Exception) {
-        null
-    }
-}
-
-fun sendMessageViaSavedReplyData(messageText: String, context: Context) {
-    val savedData = loadSavedReplyData(context) ?: run {
-        showSimpleNotificationExtern(
-            "❌ Keine Daten",
-            "Keine gespeicherten Reply-Daten. Verwende 'save [kontakt]'.",
-            context = context
-        )
-        return
-    }
-    val key = resolveKey(savedData.sender) ?: savedData.sender
-    val replyData = WhatsAppNotificationListener.replyActions[key]
-    if (replyData != null) {
-        handleMessageSent(key, messageText, context)
-    } else {
-        showSimpleNotificationExtern(
-            "❌ Senden fehlgeschlagen",
-            "Keine aktive Notification von ${savedData.sender}. Warte auf neue Nachricht.",
-            20.seconds, context = context
-        )
-    }
-}
-
-fun showSavedReplyInfo(context: Context) {
-    val savedData = loadSavedReplyData(context)
-    if (savedData == null) {
-        showSimpleNotificationExtern(
-            "ℹ️ Info",
-            "Keine gespeicherten Reply-Daten vorhanden",
-            context = context
-        )
-        return
-    }
-    val nm = context.getSystemService(NotificationManager::class.java)
-    if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-        nm.notify(
-            cms(), NotificationCompat.Builder(context, "Nachrichten")
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle("💾 Gespeicherte Reply-Daten")
-                .setContentText(savedData.sender)
-                .setStyle(
-                    NotificationCompat.BigTextStyle().bigText(
-                        "Kontakt: ${savedData.sender}\nPackage: ${savedData.packageName}\nResult Key: ${savedData.resultKey}\n\nVerwende 'message [text]' zum Senden"
-                    )
-                )
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                .setAutoCancel(true)
-                .build()
-        )
-    }
 }
 
 fun extractLastMessage(context: Context) {
