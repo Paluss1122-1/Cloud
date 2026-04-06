@@ -1013,81 +1013,77 @@ fun LearnScreen(
                 targetState = showAnswer,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
                 label = "btns"
-            ) { revealed ->
-                if (revealed) {
-                    Row(
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0xFFB71C1C).copy(alpha = 0.2f))
+                            .clickable {
+                                wrong++
+                                wrongVokabeln = wrongVokabeln + shuffled[currentIndex]
+                                showAnswer = false
+                                currentIndex++
+                            }
+                            .padding(vertical = 16.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xFFB71C1C).copy(alpha = 0.2f))
-                                .clickable {
-                                    wrong++
-                                    wrongVokabeln = wrongVokabeln + shuffled[currentIndex]
-                                    showAnswer = false
-                                    currentIndex++
-                                }
-                                .padding(vertical = 16.dp),
-                            contentAlignment = Alignment.Center
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    "✗",
-                                    color = Color(0xFFEF5350),
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    "Falsch",
-                                    color = Color(0xFFEF5350),
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(MaterialTheme.colorScheme.primary)
-                                .clickable {
-                                    correct++
-                                    correctVokabeln = correctVokabeln + shuffled[currentIndex]
-                                    showAnswer = false
-                                    currentIndex++
-                                }
-                                .padding(vertical = 16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    "✓",
-                                    color = TextPrimary,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    "Richtig",
-                                    color = TextPrimary,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
+                            Text(
+                                "✗",
+                                color = Color(0xFFEF5350),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Falsch",
+                                color = Color(0xFFEF5350),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
-                } else {
-                    Box(Modifier.height(56.dp))
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.primary)
+                            .clickable {
+                                correct++
+                                correctVokabeln = correctVokabeln + shuffled[currentIndex]
+                                showAnswer = false
+                                currentIndex++
+                            }
+                            .padding(vertical = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                "✓",
+                                color = TextPrimary,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Richtig",
+                                color = TextPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
                 }
             }
         } else {
