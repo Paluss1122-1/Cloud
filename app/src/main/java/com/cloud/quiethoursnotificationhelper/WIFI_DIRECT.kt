@@ -3,7 +3,6 @@ package com.cloud.quiethoursnotificationhelper
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.NotificationManager
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.content.Intent
@@ -19,7 +18,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import com.cloud.Config
-import com.cloud.Config.CLIPBOARD_PORT
 import com.cloud.Config.FLASHCARD_RECEIVE_PORT
 import com.cloud.Config.SYNC_PORT
 import com.cloud.Config.TODOS
@@ -99,7 +97,6 @@ private var wifiLock: WifiManager.WifiLock? = null
 private var cpuWakeLock: PowerManager.WakeLock? = null
 private var appContext: Context? = null
 
-private var clipboardListener: ClipboardManager.OnPrimaryClipChangedListener? = null
 private var triggerWakeLock: PowerManager.WakeLock? = null
 
 private const val PREFS_SYNC = "sync_prefs"
@@ -442,7 +439,6 @@ fun restoreSyncIfNeeded(context: Context) {
 
 fun stopAllSyncServices(context: Context) {
     stopUpdateListener(false)
-    stopClipboardSync(context)
 
     mediaCommandJob?.cancel(); mediaCommandJob = null
     mediaCommandSocket?.close(); mediaCommandSocket = null
@@ -609,8 +605,6 @@ fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
     )
     cpuWakeLock?.acquire(durationMinutes * 60_000L)
 
-    startClipboardSync(context)
-
     listenerJob = syncScope.launch(Dispatchers.IO) {
         try {
             updateServerSocket = ServerSocket().apply {
@@ -623,7 +617,6 @@ fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
                 stopUpdateListener(false)
                 isLaptopConnected = true
                 withContext(Dispatchers.Main) {
-                    stopClipboardSync(context)
                     showSimpleNotificationExtern(
                         "⏸️ Sync-Listener gestoppt",
                         "Nach $durationMinutes min automatisch beendet.",
@@ -985,58 +978,6 @@ private fun parseTodosFromJson(jsonData: String): List<TodoItem> =
         }
         emptyList()
     }
-
-fun startClipboardSync(context: Context) {
-    stopClipboardSync(context)
-    val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-
-    clipboardListener = ClipboardManager.OnPrimaryClipChangedListener {
-        val clip = clipboardManager.primaryClip
-        if (clip != null && clip.itemCount > 0) {
-            val text = clip.getItemAt(0).text?.toString()
-            if (!text.isNullOrEmpty()) {
-                sendClipboardToLaptop(text)
-            }
-        }
-    }
-
-    clipboardManager.addPrimaryClipChangedListener(clipboardListener)
-}
-
-fun stopClipboardSync(context: Context) {
-    if (clipboardListener != null) {
-        val clipboardManager =
-            context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboardManager.removePrimaryClipChangedListener(clipboardListener)
-        clipboardListener = null
-    }
-}
-
-private fun sendClipboardToLaptop(text: String) {
-    syncScope.launch(Dispatchers.IO) {
-        try {
-            if (laptopIp == "") return@launch
-            val socket = java.net.Socket()
-            socket.connect(java.net.InetSocketAddress(laptopIp, CLIPBOARD_PORT), 3000)
-
-            val writer = java.io.PrintWriter(socket.getOutputStream(), true)
-            writer.println("CLIPBOARD:$text")
-            writer.flush()
-            socket.close()
-        } catch (e: Exception) {
-            syncScope.launch {
-                ERRORINSERT(
-                    ERRORINSERTDATA(
-                        service_name = "sendClipboardtoLaptop",
-                        error_message = e.stackTraceToString(),
-                        created_at = Instant.now().toString(),
-                        severity = "ERROR"
-                    )
-                )
-            }
-        }
-    }
-}
 
 fun startAiResponseListener(context: Context) {
     aiResponseJob?.cancel()
