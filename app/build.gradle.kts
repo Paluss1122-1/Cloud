@@ -168,7 +168,7 @@ dependencies {
 
     implementation(libs.mp3agic)
 
-    implementation(libs.api)
+    implementation(libs.shizuku.provider)
 
     implementation("dev.rikka.shizuku:api:13.1.5") { isTransitive = true }
 
