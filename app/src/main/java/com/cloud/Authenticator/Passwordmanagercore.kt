@@ -16,6 +16,7 @@ import com.cloud.Config
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
 import com.cloud.SupabaseConfigALT
+import com.cloud.privatecloudapp.isOnline
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -227,8 +228,11 @@ data class PasswordEntrySupabase(
     val totp_secret: String? = null
 )
 
-suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: TwoFADatabase) {
-    withContext(Dispatchers.IO) {
+suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: TwoFADatabase, context: Context): SyncResult {
+    if (!isOnline(context)) {
+        return SyncResult(uploaded = 0, downloaded = 0, total = 0, error = "Kein Internet")
+    }
+    return withContext(Dispatchers.IO) {
         try {
             val localPasswords = passwordDb.passwordDao().getAll()
             val localTwoFa = twoFaDb.twoFADao().getAll()
@@ -244,7 +248,7 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
                         "ERROR"
                     )
                 )
-                return@withContext
+                return@withContext SyncResult(uploaded = 0, downloaded = 0, total = 0, error = e.message)
             }
 
             // Cloud → Lokal: decrypt, skip bei Fehler
@@ -299,6 +303,7 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
                     )
                 }
             }
+            SyncResult(uploaded = missingInCloud.size, downloaded = 0, total = localPasswords.size)
         } catch (e: Exception) {
             ERRORINSERT(
                 ERRORINSERTDATA(
@@ -308,6 +313,7 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
                     "ERROR"
                 )
             )
+            SyncResult(uploaded = 0, downloaded = 0, total = 0, error = e.message)
         }
     }
 }
