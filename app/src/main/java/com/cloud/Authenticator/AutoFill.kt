@@ -29,97 +29,90 @@ class CloudAutofillService : AutofillService() {
         private const val TAG = "CLOUD_AUTOFILL"
     }
 
-
     override fun onFillRequest(
         request: FillRequest,
         cancellationSignal: CancellationSignal,
         callback: FillCallback
     ) {
         val structure = request.fillContexts.last().structure
-
         val loginFields = findLoginFields(structure)
-        if (loginFields.usernameId == null && loginFields.passwordId == null) {
+
+        if (loginFields.usernameId == null && loginFields.passwordId == null && loginFields.otpId == null) {
             callback.onSuccess(null)
             return
         }
 
         val domain = extractRequestDomain(structure)
-        Log.d(
-            TAG,
-            "AutoFill request – domain: $domain  pkg: ${structure.activityComponent.packageName}"
-        )
-
-        val db = PasswordDatabase.getDatabase(applicationContext)
-        val entries = runBlocking {
-            if (domain.isNotEmpty()) {
-                db.passwordDao().findByDomain(domain)
-            } else {
-                val pkg = structure.activityComponent.packageName
-                db.passwordDao().search(pkg)
-            }
-        }
-
-        if (entries.isEmpty()) {
-            Log.d(TAG, "No credentials found for domain=$domain")
-            callback.onSuccess(null)
-            return
-        }
+        Log.d(TAG, "AutoFill request – domain: $domain  pkg: ${structure.activityComponent.packageName}")
 
         val inlineRequest = request.inlineSuggestionsRequest
         val responseBuilder = FillResponse.Builder()
+        var hasDataset = false
 
-        entries.take(5).forEachIndexed { index, entry ->
-            val presentation = RemoteViews(packageName, android.R.layout.simple_list_item_2).apply {
-                setTextViewText(android.R.id.text1, "☁️ ${entry.name}")
-                setTextViewText(
-                    android.R.id.text2,
-                    entry.username.ifEmpty { "(kein Benutzername)" })
+        if (loginFields.usernameId != null || loginFields.passwordId != null) {
+            val db = PasswordDatabase.getDatabase(applicationContext)
+            val entries = runBlocking {
+                if (domain.isNotEmpty()) db.passwordDao().findByDomain(domain)
+                else db.passwordDao().search(structure.activityComponent.packageName)
             }
-
-            val datasetBuilder = Dataset.Builder()
-
-            loginFields.usernameId?.let { id ->
-                datasetBuilder.setValue(
-                    id,
-                    AutofillValue.forText(entry.username),
-                    presentation
-                )
-            }
-
-            loginFields.passwordId?.let { id ->
-                datasetBuilder.setValue(
-                    id,
-                    AutofillValue.forText(entry.password),
-                    presentation
-                )
-            }
-
-            if (inlineRequest != null) {
-                createInlinePresentation(inlineRequest, index, entry)?.let {
-                    datasetBuilder.setInlinePresentation(it)
+            entries.take(5).forEachIndexed { index, entry ->
+                val presentation = RemoteViews(packageName, android.R.layout.simple_list_item_2).apply {
+                    setTextViewText(android.R.id.text1, "☁️ ${entry.name}")
+                    setTextViewText(android.R.id.text2, entry.username.ifEmpty { "(kein Benutzername)" })
                 }
+                val ds = Dataset.Builder()
+                loginFields.usernameId?.let { ds.setValue(it, AutofillValue.forText(entry.username), presentation) }
+                loginFields.passwordId?.let { ds.setValue(it, AutofillValue.forText(entry.password), presentation) }
+                if (inlineRequest != null) createInlinePresentation(inlineRequest, index, entry)?.let { ds.setInlinePresentation(it) }
+                responseBuilder.addDataset(ds.build())
+                hasDataset = true
             }
-
-            responseBuilder.addDataset(datasetBuilder.build())
         }
 
+        loginFields.otpId?.let { otpFieldId ->
+            val twoFaDb = TwoFADatabase.getDatabase(applicationContext)
+            val twoFaEntries = runBlocking { twoFaDb.twoFADao().getAll() }
+            val matched = twoFaEntries.filter { entry ->
+                domain.isNotEmpty() && (
+                        entry.url.contains(domain, ignoreCase = true) ||
+                                entry.name.lowercase().contains(domain.substringBefore(".")) ||
+                                domain.contains(entry.name.lowercase().replace(" ", ""))
+                        )
+            }
+            matched.take(3).forEachIndexed { index, entry ->
+                val code = TotpGenerator.generateTOTP(entry.secret)
+                val presentation = RemoteViews(packageName, android.R.layout.simple_list_item_2).apply {
+                    setTextViewText(android.R.id.text1, "🛡️ ${entry.name}")
+                    setTextViewText(android.R.id.text2, code)
+                }
+                val ds = Dataset.Builder().setValue(otpFieldId, AutofillValue.forText(code), presentation)
+                if (inlineRequest != null) createInlinePresentation(
+                    inlineRequest, index,
+                    PasswordEntry(name = entry.name, username = code, password = "")
+                )?.let { ds.setInlinePresentation(it) }
+                responseBuilder.addDataset(ds.build())
+                hasDataset = true
+            }
+        }
+
+        if (!hasDataset) { callback.onSuccess(null); return }
         callback.onSuccess(responseBuilder.build())
     }
-
 
     override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
         callback.onSuccess()
     }
 
-
     data class LoginFields(
         val usernameId: AutofillId? = null,
-        val passwordId: AutofillId? = null
+        val passwordId: AutofillId? = null,
+        val otpId: AutofillId? = null
     )
 
     private fun findLoginFields(structure: AssistStructure): LoginFields {
         var usernameId: AutofillId? = null
         var passwordId: AutofillId? = null
+        var otpId: AutofillId? = null
 
         fun searchNode(node: AssistStructure.ViewNode) {
             val hints = node.autofillHints
@@ -128,44 +121,34 @@ class CloudAutofillService : AutofillService() {
             val idEntry = node.idEntry?.lowercase() ?: ""
 
             val isPassword = (
-                    hints?.any { h ->
-                        h.contains(
-                            "password",
-                            true
-                        ) || h == "current-password" || h == "new-password"
-                    } == true
+                    hints?.any { h -> h.contains("password", true) || h == "current-password" || h == "new-password" } == true
                             || (inputType and android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
                             || (inputType and android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
                             || (inputType and android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
-                            || hint.contains("passwort") || hint.contains("password") || hint.contains(
-                        "pin"
-                    )
-                            || idEntry.contains("password") || idEntry.contains("passwd") || idEntry.contains(
-                        "pwd"
-                    )
+                            || hint.contains("passwort") || hint.contains("password") || hint.contains("pin")
+                            || idEntry.contains("password") || idEntry.contains("passwd") || idEntry.contains("pwd")
                     )
 
-            if (isPassword && node.autofillId != null) {
-                passwordId = node.autofillId
-            }
+            if (isPassword && node.autofillId != null) passwordId = node.autofillId
+
+            val isOtp = (
+                    hints?.any { h -> h.contains("one-time-code", true) || h.contains("otp", true) } == true
+                            || hint.contains("otp") || hint.contains("einmal") || hint.contains("token") || hint.contains("authenticator")
+                            || idEntry.contains("otp") || idEntry.contains("totp") || idEntry.contains("token") || idEntry.contains("mfa") || idEntry.contains("tfa")
+                    )
+
+            if (isOtp && !isPassword && node.autofillId != null) otpId = node.autofillId
 
             val isUsername = (
-                    hints?.any { h ->
-                        h.contains("username", true) || h.contains("email", true)
-                                || h == "username" || h == "email"
-                    } == true
+                    hints?.any { h -> h.contains("username", true) || h.contains("email", true) || h == "username" || h == "email" } == true
                             || hint.contains("user") || hint.contains("email") || hint.contains("benutzername")
                             || hint.contains("login") || hint.contains("e-mail")
-                            || idEntry.contains("user") || idEntry.contains("email") || idEntry.contains(
-                        "login"
-                    )
+                            || idEntry.contains("user") || idEntry.contains("email") || idEntry.contains("login")
                             || (inputType and android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
                             || (inputType and android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS
                     )
 
-            if (isUsername && node.autofillId != null && !isPassword) {
-                usernameId = node.autofillId
-            }
+            if (isUsername && !isPassword && !isOtp && node.autofillId != null) usernameId = node.autofillId
 
             for (i in 0 until node.childCount) searchNode(node.getChildAt(i))
         }
@@ -174,14 +157,13 @@ class CloudAutofillService : AutofillService() {
             searchNode(structure.getWindowNodeAt(i).rootViewNode)
         }
 
-        return LoginFields(usernameId, passwordId)
+        return LoginFields(usernameId, passwordId, otpId)
     }
-
 
     private fun extractDomain(raw: String): String {
         return try {
             val normalized = if (raw.contains("://")) raw else "https://$raw"
-            val host = normalized.toUri().host ?: return ""  // android.net.Uri statt toUri()
+            val host = normalized.toUri().host ?: return ""
             host.lowercase().removePrefix("www.").trim()
         } catch (_: Exception) {
             ""
@@ -202,7 +184,6 @@ class CloudAutofillService : AutofillService() {
             if (!domain.isNullOrBlank()) return extractDomain(domain)
         }
 
-        // Titel-Fallback: nur wenn wirklich eine URL-artige Struktur vorliegt
         for (i in 0 until structure.windowNodeCount) {
             val title = structure.getWindowNodeAt(i).title?.toString() ?: ""
             val urlRegex = Regex("""https?://[^\s/$.?#].\S*""")
@@ -211,7 +192,6 @@ class CloudAutofillService : AutofillService() {
 
         return ""
     }
-
 
     private fun createInlinePresentation(
         inlineRequest: InlineSuggestionsRequest,
@@ -230,10 +210,7 @@ class CloudAutofillService : AutofillService() {
     }
 
     @SuppressLint("RestrictedApi")
-    private fun createInlineChip(
-        spec: InlinePresentationSpec,
-        entry: PasswordEntry
-    ): InlinePresentation? {
+    private fun createInlineChip(spec: InlinePresentationSpec, entry: PasswordEntry): InlinePresentation? {
         return try {
             val pendingIntent = PendingIntent.getActivity(
                 this, 0,
@@ -241,11 +218,10 @@ class CloudAutofillService : AutofillService() {
                 PendingIntent.FLAG_IMMUTABLE
             )
             val content = InlineSuggestionUi.newContentBuilder(pendingIntent)
-                .setTitle("☁️ ${entry.name}")
+                .setTitle(entry.name)
                 .setSubtitle(entry.username.ifEmpty { "Kein Benutzername" })
                 .setStartIcon(Icon.createWithResource(this, android.R.drawable.ic_lock_lock))
                 .build()
-
             InlinePresentation(content.slice, spec, false)
         } catch (e: Exception) {
             Log.e(TAG, "createInlineChip failed: ${e.message}")
