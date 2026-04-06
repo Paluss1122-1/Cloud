@@ -1589,13 +1589,13 @@ class MediaPlayerService : MediaSessionService() {
             context = this
         )
 
-    private fun updateNotification() {
+    private fun updateNotification(important: Boolean = true) {
         val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
         nm?.notify(
             MEDIA_PLAYER,
             buildNotification()
         )
-        pushMediaStateToLaptop(this)
+        if (important) pushMediaStateToLaptop(this)
     }
 
     private fun buildNotification(): Notification =
