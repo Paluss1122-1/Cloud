@@ -53,16 +53,20 @@ object PasswordStorage {
         val file = File(context.noBackupFilesDir, FILE_NAME)
         if (!file.exists()) return null
 
-        val all = file.readBytes()
-        val iv = all.copyOfRange(0, 12)
-        val encrypted = all.copyOfRange(12, all.size)
+        return try {
+            val all = file.readBytes()
+            val iv = all.copyOfRange(0, 12)
+            val encrypted = all.copyOfRange(12, all.size)
 
-        val key = getOrCreateKey()
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
+            val key = getOrCreateKey()
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
 
-        val decrypted = cipher.doFinal(encrypted)
-        return String(decrypted, Charsets.UTF_8)
+            String(cipher.doFinal(encrypted), Charsets.UTF_8)
+        } catch (e: Exception) {
+            file.delete()
+            null
+        }
     }
 
     fun changePassword(context: Context, newPassword: String) {
