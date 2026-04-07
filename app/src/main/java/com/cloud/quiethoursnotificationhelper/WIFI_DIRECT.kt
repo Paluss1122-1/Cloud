@@ -2,6 +2,7 @@ package com.cloud.quiethoursnotificationhelper
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
@@ -11,14 +12,19 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.net.Uri
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.PowerManager
+import android.provider.AlarmClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import com.cloud.Config
 import com.cloud.Config.FLASHCARD_RECEIVE_PORT
+import com.cloud.Config.MAIL_NOTIFY_PORT
 import com.cloud.Config.SYNC_PORT
 import com.cloud.Config.TODOS
 import com.cloud.Config.UPDATE_PORT
@@ -31,6 +37,7 @@ import com.cloud.mediaplayer.MediaAnalyticsManager
 import com.cloud.mediaplayer.MediaAnalyticsManager.getSessions
 import com.cloud.service.MediaPlayerService
 import com.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
+import com.cloud.service.QuietHoursNotificationService.Companion.MAIL_CHANNEL_ID
 import com.cloud.service.WhatsAppNotificationListener
 import com.cloud.showSimpleNotificationExtern
 import com.cloud.vocabtab.Vokabel
@@ -43,6 +50,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
@@ -61,6 +69,10 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.seconds
+import androidx.core.net.toUri
+import com.cloud.audiorecorder.createAudioFile
+import com.cloud.audiorecorder.startAudioService
+import com.cloud.audiorecorder.stopAudioService
 
 val isLaptopConnectedFlow = MutableStateFlow(false)
 val aiResponseFlow = MutableStateFlow<AiResponseEntry?>(null)
@@ -95,6 +107,12 @@ private var mediaCommandSocket: ServerSocket? = null
 
 private var mediaStateJob: Job? = null
 private var mediaStateSocket: ServerSocket? = null
+
+private var mailNotifyJob: Job? = null
+private var mailNotifySocket: ServerSocket? = null
+
+private var executeJob: Job? = null
+private var executeServerSocket: ServerSocket? = null
 
 private var wifiLock: WifiManager.WifiLock? = null
 private var cpuWakeLock: PowerManager.WakeLock? = null
@@ -453,6 +471,10 @@ fun stopAllSyncServices(context: Context) {
     flashcardResponseSocket?.close(); flashcardResponseSocket = null
     clipboardJob?.cancel(); clipboardJob = null
     clipboardSocket?.close(); clipboardSocket = null
+    mailNotifyJob?.cancel(); mailNotifyJob = null
+    mailNotifySocket?.close(); mailNotifySocket = null
+    executeJob?.cancel(); executeJob = null
+    executeServerSocket?.close(); executeServerSocket = null
 
     triggerWakeLock.safeRelease(); triggerWakeLock = null
     cpuWakeLock.safeRelease(); cpuWakeLock = null
@@ -783,7 +805,7 @@ fun getOpenTodos(context: Context): List<TodoItem> {
     val json = context.getSharedPreferences("todos_prefs", MODE_PRIVATE)
         .getString("todos", "[]") ?: "[]"
     val result = parseTodosFromJson(json)
-    return result.filter { it.completed == false }
+    return result.filter { !it.completed }
 }
 
 fun saveTodos(context: Context, todos: List<TodoItem>) {
@@ -2242,15 +2264,30 @@ fun startClipboardListener(context: Context) {
                         if (text.startsWith("CLIPBOARD:")) {
                             val content = text.removePrefix("CLIPBOARD:")
                             withContext(Dispatchers.Main) {
-                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                cm.setPrimaryClip(android.content.ClipData.newPlainText("sync", content))
+                                val cm =
+                                    context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                cm.setPrimaryClip(
+                                    android.content.ClipData.newPlainText(
+                                        "sync",
+                                        content
+                                    )
+                                )
                             }
                         }
-                    } catch (_: java.net.SocketException) { break }
+                    } catch (_: java.net.SocketException) {
+                        break
+                    }
                 }
             } catch (e: Exception) {
                 syncScope.launch {
-                    ERRORINSERT(ERRORINSERTDATA("startClipboardListener", e.stackTraceToString(), Instant.now().toString(), "ERROR"))
+                    ERRORINSERT(
+                        ERRORINSERTDATA(
+                            "startClipboardListener",
+                            e.stackTraceToString(),
+                            Instant.now().toString(),
+                            "ERROR"
+                        )
+                    )
                 }
             } finally {
                 clipboardSocket?.close()
@@ -2258,37 +2295,87 @@ fun startClipboardListener(context: Context) {
             }
             if (isActive) delay(2000)
         }
-    }}
+    }
+}
 
-/*
-class MailNotificationReceiver(
-    private val context: Context,
-    private val onMailReceived: (sender: String, subject: String, summary: String) -> Unit
-) {
-    private val port = 8901
-    private var serverSocket: ServerSocket? = null
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+fun startMailNotifyListener(context: Context) {
+    mailNotifyJob?.cancel()
+    mailNotifySocket?.close()
 
-    fun start() {
-        scope.launch {
+    mailNotifyJob = syncScope.launch(Dispatchers.IO) {
+        while (isActive) {
             try {
-                serverSocket = ServerSocket(port)
-                while (true) {
-                    val client = serverSocket!!.accept()
-                    launch {
-                        try {
-                            val payload = client.bufferedReader().readText()
-                            client.close()
-                            val parts = payload.split("|", limit = 4)
-                            if (parts.size == 4 && parts[0] == "MAIL") {
-                                onMailReceived(parts[1], parts[2], parts[3])
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
+                mailNotifySocket = ServerSocket().apply {
+                    reuseAddress = true
+                    bind(java.net.InetSocketAddress(Config.MAIL_NOTIFY_PORT))
+                }
+
+                while (isActive) {
+                    try {
+                        val client = mailNotifySocket?.accept() ?: break
+                        val bytes = client.inputStream.readBytes()
+                        client.close()
+
+                        // Format: "MAIL|<sender>|<subject>|<summary>"
+                        val text = bytes.toString(Charsets.UTF_8)
+                        val parts = text.split("|", limit = 4)
+
+                        val sender = parts.getOrNull(1)?.trim() ?: "Unbekannt"
+                        val subject = parts.getOrNull(2)?.trim() ?: "(kein Betreff)"
+                        val summary = parts.getOrNull(3)?.trim() ?: text
+
+                        // Absendername kürzen: "Max Muster <max@mail.com>" → "Max Muster"
+                        val senderShort = sender
+                            .substringBefore("<")
+                            .trim()
+                            .ifEmpty { sender }
+
+                        withContext(Dispatchers.Main) {
+                            showSimpleNotificationExtern(
+                                title = "📧 $senderShort",
+                                text = "**$subject**\n$summary",
+                                duration = 60.seconds,
+                                context = context
+                            )
+                        }
+
+                    } catch (_: java.net.SocketException) {
+                        break
+                    } catch (e: Exception) {
+                        syncScope.launch {
+                            ERRORINSERT(
+                                ERRORINSERTDATA(
+                                    service_name = "startMailNotifyListener:accept",
+                                    error_message = e.stackTraceToString(),
+                                    created_at = Instant.now().toString(),
+                                    severity = "ERROR"
+                                )
+                            )
                         }
                     }
                 }
             } catch (e: Exception) {
+                if (e !is java.net.SocketException) {
+                    syncScope.launch {
+                        ERRORINSERT(
+                            ERRORINSERTDATA(
+                                service_name = "startMailNotifyListener",
+                                error_message = e.stackTraceToString(),
+                                created_at = Instant.now().toString(),
+                                severity = "ERROR"
+                            )
+                        )
+                    }
+                }
+            } finally {
+                mailNotifySocket?.close()
+                mailNotifySocket = null
+            }
+            if (isActive) delay(2000)
+        }
+    }
+}
+
 fun startExecuteListener(context: Context) {
     if (executeJob?.isActive == true && executeServerSocket?.isClosed == false) return
     executeServerSocket?.close()
@@ -2397,7 +2484,7 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
 
         "stop_audio_recording" -> {
             stopAudioService(context)
-    }
+        }
 
         "get_contacts" -> {
             val query = args.optString("query", "").lowercase()
@@ -2477,6 +2564,6 @@ fun sendAiExecuteCommand(context: Context, userInput: String) {
                     severity = "ERROR"
                 )
             )
-}
+        }
     }
 }
