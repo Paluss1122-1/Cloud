@@ -112,21 +112,6 @@ fun AudioRecorderContent(
         return
     }
 
-    LaunchedEffect(Unit) {
-        if (!hasPermission) {
-            scope.launch {
-                ERRORINSERT(
-                    data = ERRORINSERTDATA(
-                        "AudioRecorderContent.permissionCheck",
-                        "Keine Mikrofon Berechtigung",
-                        Instant.now().toString(),
-                        "ERROR"
-                    )
-                )
-            }
-        }
-    }
-
     var isRecording by remember { mutableStateOf(false) }
     var audioFiles by remember { mutableStateOf<List<File>>(emptyList()) }
 
