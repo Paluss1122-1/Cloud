@@ -109,6 +109,7 @@ import com.cloud.quiethoursnotificationhelper.showPreviousGalleryImage
 import com.cloud.quiethoursnotificationhelper.showUnreadMessages
 import com.cloud.quiethoursnotificationhelper.startAiResponseListener
 import com.cloud.quiethoursnotificationhelper.startDiscoveryListener
+import com.cloud.quiethoursnotificationhelper.startMailNotifyListener
 import com.cloud.quiethoursnotificationhelper.startTriggerListenerIfHomeWifi
 import com.cloud.quiethoursnotificationhelper.stopAllSyncServices
 import com.cloud.quiethoursnotificationhelper.stopVoiceNote
@@ -215,6 +216,7 @@ class QuietHoursNotificationService : Service() {
         const val ACTION_CANCEL_DELETE = "com.cloud.ACTION_CANCEL_DELETE"
         const val EXTRA_IMAGE_INDEX = "extra_image_index"
         const val DELETE_CONFIRMATION_CHANNEL_ID = "delete_confirmation_channel"
+        const val MAIL_CHANNEL_ID = "mail_channel"
 
         const val ACTION_MARK_PARTS_READ = "com.cloud.ACTION_MARK_PARTS_READ"
         const val EXTRA_MESSAGE_ID = "extra_message_id"
@@ -362,6 +364,7 @@ class QuietHoursNotificationService : Service() {
         startAiResponseListener(this)
         startDiscoveryListener()
         scheduleDailySummaryAlarm(this)
+        startMailNotifyListener(this)
         try {
             registerWifiCallback()
         } catch (e: Exception) {
