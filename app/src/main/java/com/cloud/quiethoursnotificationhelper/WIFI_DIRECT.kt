@@ -2258,3 +2258,4 @@ fun startClipboardListener(context: Context) {
             if (isActive) delay(2000)
         }
     }
+}
