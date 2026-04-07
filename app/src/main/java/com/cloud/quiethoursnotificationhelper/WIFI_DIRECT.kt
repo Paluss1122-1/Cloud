@@ -2257,4 +2257,75 @@ fun startClipboardListener(context: Context) {
             }
             if (isActive) delay(2000)
         }
+    }}
+
+/*
+class MailNotificationReceiver(
+    private val context: Context,
+    private val onMailReceived: (sender: String, subject: String, summary: String) -> Unit
+) {
+    private val port = 8901
+    private var serverSocket: ServerSocket? = null
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    fun start() {
+        scope.launch {
+            try {
+                serverSocket = ServerSocket(port)
+                while (true) {
+                    val client = serverSocket!!.accept()
+                    launch {
+                        try {
+                            val payload = client.bufferedReader().readText()
+                            client.close()
+                            val parts = payload.split("|", limit = 4)
+                            if (parts.size == 4 && parts[0] == "MAIL") {
+                                onMailReceived(parts[1], parts[2], parts[3])
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
+
+    fun stop() {
+        scope.cancel()
+        serverSocket?.close()
+    }
+}
+
+// In HandyService.kt → onCreate() oder wo deine Listener gestartet werden
+private lateinit var mailReceiver: MailNotificationReceiver
+
+// in onCreate/start:
+mailReceiver = MailNotificationReceiver(this) { sender, subject, summary ->
+    showMailNotification(sender, subject, summary)
+}
+mailReceiver.start()
+
+// in onDestroy:
+mailReceiver.stop()
+
+private fun showMailNotification(sender: String, subject: String, summary: String) {
+    val channelId = "mail_channel"
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val channel = NotificationChannel(channelId, "E-Mails", NotificationManager.IMPORTANCE_DEFAULT)
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+    }
+    val notification = NotificationCompat.Builder(this, channelId)
+        .setSmallIcon(R.drawable.ic_notification)
+        .setContentTitle(subject.take(60))
+        .setContentText(summary.take(100))
+        .setSubText(sender.take(40))
+        .setStyle(NotificationCompat.BigTextStyle().bigText(summary))
+        .setAutoCancel(true)
+        .build()
+    val notifId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
+    NotificationManagerCompat.from(this).notify(notifId, notification)
+}
+ */
