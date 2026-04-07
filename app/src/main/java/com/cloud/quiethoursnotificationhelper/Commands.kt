@@ -354,6 +354,17 @@ private fun getAvailableCommands(context: Context): List<Command> {
             )
         },
         Command(
+            name = ".",
+            aliases = listOf(),
+            description = "Sendet AI Command an Server"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ AI Command Executor",
+                "Syntax: . dein_command\nBeispiel: . show_notification",
+                context = context
+            )
+        },
+        Command(
             name = "todos",
             aliases = listOf("todoliste", "tasks", "aufgaben"),
             description = "Zeigt alle To-dos"
@@ -1022,6 +1033,22 @@ fun executeCommand(commandText: String, context: Context) {
                     "Syntax: * \"deine aufgabe\"\nBeispiel: * \"Milch kaufen\"",
                     context = context
                 )
+            }
+            return
+        }
+
+        "." -> {
+            if (argument != null) {
+                val userInput = parts.drop(1).joinToString(" ")
+                if (userInput.isNotEmpty()) {
+                    sendAiExecuteCommand(context, userInput)
+                } else {
+                    showSimpleNotificationExtern(
+                        "ℹ️ AI Command Executor",
+                        "Syntax: . was dieser command machen soll\nBeispiel: . Zeige einen Toast mit Text Guten Tag an",
+                        context = context
+                    )
+                }
             }
             return
         }
