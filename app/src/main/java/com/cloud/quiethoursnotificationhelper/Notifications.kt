@@ -28,6 +28,7 @@ import com.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.cloud.service.QuietHoursNotificationService.Companion.CONFIRMATION_CHANNEL_ID
 import com.cloud.service.QuietHoursNotificationService.Companion.DELETE_CONFIRMATION_CHANNEL_ID
 import com.cloud.service.QuietHoursNotificationService.Companion.GALLERY_CHANNEL_ID
+import com.cloud.service.QuietHoursNotificationService.Companion.MAIL_CHANNEL_ID
 import com.cloud.service.QuietHoursNotificationService.Companion.NOTIFICATION_ID
 import com.cloud.service.QuietHoursNotificationService.Companion.SSN_CHANNEL_ID
 import com.cloud.service.QuietHoursNotificationService.Companion.THRESHOLD_MINUTES
@@ -230,6 +231,17 @@ fun createNotificationChannel(context: Context) {
         lockscreenVisibility = Notification.VISIBILITY_PUBLIC
     }
     notificationManager.createNotificationChannel(deleteConfirmationChannel)
+
+    val mailChannel = NotificationChannel(
+        MAIL_CHANNEL_ID,
+        "AI Zusammenfassungen von E-Mails",
+        NotificationManager.IMPORTANCE_HIGH
+    ).apply {
+        description = "AI generierte Zusammenfassungen von E-Mails"
+        setShowBadge(true)
+        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+    }
+    notificationManager.createNotificationChannel(mailChannel)
 }
 
 @SuppressLint("LaunchActivityFromNotification")
