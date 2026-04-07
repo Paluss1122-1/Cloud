@@ -43,6 +43,9 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.cloud.Config
 import com.cloud.Config.SHOWCOMMANDS
+import com.cloud.audiorecorder.createAudioFile
+import com.cloud.audiorecorder.startAudioService
+import com.cloud.audiorecorder.stopAudioService
 import com.cloud.mediaplayer.AlgorithmicPlaylistRegistry
 import com.cloud.mediaplayer.MediaAnalyticsManager
 import com.cloud.mediaplayer.MediaAnalyticsManager.rebuildSessions
@@ -62,6 +65,7 @@ import com.cloud.weathertab.getLastKnownLocation
 import com.cloud.weathertab.weathernot
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -692,8 +696,13 @@ fun executeCommand(commandText: String, context: Context) {
         "record", "rec", "aufnahme", "audiorec", "recording" -> {
             if (argument != null) {
                 when (argument.lowercase()) {
-                    "start" -> startAudioRecording(context)
-                    "stop" -> stopAudioRecording(context)
+                    "start" -> {
+                        val file = createAudioFile(context)
+                        startAudioService(context, file.absolutePath)
+                    }
+                    "stop" -> {
+                        stopAudioService(context)
+                    }
                     else -> showSimpleNotificationExtern(
                         "❌ Fehler",
                         "Syntax: record start | record stop",
