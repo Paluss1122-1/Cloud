@@ -525,6 +525,7 @@ fun syncTodosWithLaptop(context: Context) {
             isLaptopConnected = true
 
             startMediaCommandListener(context)
+            startExecuteListener(context)
             startMediaStateServer(context)
             startClipboardListener(context)
 
@@ -2288,44 +2289,194 @@ class MailNotificationReceiver(
                     }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+fun startExecuteListener(context: Context) {
+    if (executeJob?.isActive == true && executeServerSocket?.isClosed == false) return
+    executeServerSocket?.close()
+
+    executeJob = syncScope.launch(Dispatchers.IO) {
+        while (isActive) {
+            try {
+                executeServerSocket = ServerSocket().apply {
+                    reuseAddress = true
+                    bind(java.net.InetSocketAddress(Config.EXECUTE_PORT))
+                }
+
+                while (isActive) {
+                    try {
+                        val client = executeServerSocket?.accept() ?: break
+                        val json =
+                            JSONObject(client.inputStream.readBytes().toString(Charsets.UTF_8))
+                        client.close()
+                        handleExecuteCommand(context, json)
+                    } catch (_: java.net.SocketException) {
+                        break
+                    } catch (e: Exception) {
+                        Log.e("EXECUTE", "Fehler", e)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("EXECUTE", "Bind-Fehler", e)
+            } finally {
+                executeServerSocket?.close()
+                executeServerSocket = null
             }
+            if (isActive) delay(2000)
         }
     }
+}
 
-    fun stop() {
-        scope.cancel()
-        serverSocket?.close()
+private fun handleExecuteCommand(context: Context, json: JSONObject) {
+    val tool = json.optString("tool")
+    val args = json.optJSONObject("args") ?: JSONObject()
+
+    when (tool) {
+        "show_toast" -> {
+            val msg = args.optString("message", "")
+            syncScope.launch(Dispatchers.Main) {
+                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+
+        "show_notification" -> {
+            showSimpleNotificationExtern(
+                args.optString("title", "AI"),
+                args.optString("text", ""),
+                10.seconds,
+                context
+            )
+        }
+
+        "add_todo" -> addTodo(args.optString("text", ""), context)
+        "play_music" -> {
+            val action = args.optString("action", "play")
+            val intent = Intent(context, MediaPlayerService::class.java).apply {
+                this.action = when (action) {
+                    "pause" -> "com.cloud.ACTION_MUSIC_PAUSE"
+                    "next" -> "com.cloud.ACTION_MUSIC_NEXT"
+                    "previous" -> "com.cloud.ACTION_MUSIC_PREVIOUS"
+                    else -> "com.cloud.ACTION_MUSIC_PLAY"
+                }
+            }
+            context.startService(intent)
+        }
+
+        "set_alarm" -> {
+            val time = args.optString("time", "")
+
+            val parts = time.split(":")
+            if (parts.size == 2) {
+                val hour = parts[0].toIntOrNull() ?: return
+                val minutes = parts[1].toIntOrNull() ?: return
+
+                val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
+                    putExtra(AlarmClock.EXTRA_HOUR, hour)
+                    putExtra(AlarmClock.EXTRA_MINUTES, minutes)
+                    putExtra(AlarmClock.EXTRA_MESSAGE, "Alarm")
+                }
+
+                context.startActivity(intent)
+            }
+        }
+
+        "send_whatsapp" -> {
+            val number = args.getString("phone_number")
+            val message = args.getString("message")
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                data =
+                    "https://wa.me/${number.replace("+", "")}?text=${Uri.encode(message)}".toUri()
+                setPackage("com.whatsapp")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        }
+
+        "start_audio_recording" -> {
+            val file = createAudioFile(context)
+            startAudioService(context, file.absolutePath)
+        }
+
+        "stop_audio_recording" -> {
+            stopAudioService(context)
+    }
+
+        "get_contacts" -> {
+            val query = args.optString("query", "").lowercase()
+            val resolver = context.contentResolver
+            val results = JSONArray()
+
+            resolver.query(
+                android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                arrayOf(
+                    android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                    android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER
+                ),
+                null, null,
+                android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
+            )?.use { cursor ->
+                val nameCol = cursor.getColumnIndex(android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                val numberCol = cursor.getColumnIndex(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER)
+                while (cursor.moveToNext()) {
+                    val name = cursor.getString(nameCol) ?: continue
+                    val number = cursor.getString(numberCol) ?: continue
+                    // Filter: nur Treffer wenn query nicht leer
+                    if (query.isEmpty() || name.lowercase().contains(query)) {
+                        results.put(JSONObject().apply {
+                            put("name", name)
+                            put("number", number.replace(" ", "").replace("-", ""))
+                        })
+                    }
+                }
+            }
+
+            syncScope.launch(Dispatchers.IO) {
+                try {
+                    java.net.Socket().use { sock ->
+                        sock.connect(java.net.InetSocketAddress(laptopIp, Config.EXECUTE_RESPONSE_PORT), 3000)
+                        sock.getOutputStream().write(results.toString().toByteArray(Charsets.UTF_8))
+                        sock.getOutputStream().flush()
+                    }
+                } catch (e: Exception) {
+                    Log.e("EXECUTE", "Kontakte senden fehlgeschlagen", e)
+                }
+            }
+        }
+
+        else -> Log.w("EXECUTE", "Unbekanntes Tool: $tool")
     }
 }
 
-// In HandyService.kt → onCreate() oder wo deine Listener gestartet werden
-private lateinit var mailReceiver: MailNotificationReceiver
-
-// in onCreate/start:
-mailReceiver = MailNotificationReceiver(this) { sender, subject, summary ->
-    showMailNotification(sender, subject, summary)
-}
-mailReceiver.start()
-
-// in onDestroy:
-mailReceiver.stop()
-
-private fun showMailNotification(sender: String, subject: String, summary: String) {
-    val channelId = "mail_channel"
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val channel = NotificationChannel(channelId, "E-Mails", NotificationManager.IMPORTANCE_DEFAULT)
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+fun sendAiExecuteCommand(context: Context, userInput: String) {
+    if (laptopIp.isEmpty()) {
+        showSimpleNotificationExtern("❌ AI Execute", "Laptop nicht verbunden", 10.seconds, context)
+        return
     }
-    val notification = NotificationCompat.Builder(this, channelId)
-        .setSmallIcon(R.drawable.ic_notification)
-        .setContentTitle(subject.take(60))
-        .setContentText(summary.take(100))
-        .setSubText(sender.take(40))
-        .setStyle(NotificationCompat.BigTextStyle().bigText(summary))
-        .setAutoCancel(true)
-        .build()
-    val notifId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
-    NotificationManagerCompat.from(this).notify(notifId, notification)
+
+    syncScope.launch(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                put("prompt", userInput)
+            }.toString().toByteArray(Charsets.UTF_8)
+
+            java.net.Socket().use { sock ->
+                sock.connect(
+                    java.net.InetSocketAddress(
+                        laptopIp,
+                        Config.EXECUTE_PORT_SEND_FROM_HANDY
+                    ), 3000
+                )
+                sock.getOutputStream().write(payload)
+                sock.shutdownOutput()
+            }
+
+        } catch (e: Exception) {
+            ERRORINSERT(
+                ERRORINSERTDATA(
+                    service_name = "sendAiExecuteCommand",
+                    error_message = e.stackTraceToString(),
+                    created_at = Instant.now().toString(),
+                    severity = "ERROR"
+                )
+            )
 }
- */
+    }
+}
