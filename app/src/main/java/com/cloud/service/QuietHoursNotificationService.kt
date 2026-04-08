@@ -17,10 +17,6 @@ import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.hardware.camera2.CameraManager
 import android.media.MediaPlayer
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
@@ -107,13 +103,11 @@ import com.cloud.quiethoursnotificationhelper.sendNvidiaChatMessageAITab
 import com.cloud.quiethoursnotificationhelper.showDeleteConfirmation
 import com.cloud.quiethoursnotificationhelper.showNextGalleryImage
 import com.cloud.quiethoursnotificationhelper.showPreviousGalleryImage
-import com.cloud.quiethoursnotificationhelper.showCredentialsOverlay
 import com.cloud.quiethoursnotificationhelper.showUnreadMessages
 import com.cloud.quiethoursnotificationhelper.startAiResponseListener
 import com.cloud.quiethoursnotificationhelper.startDiscoveryListener
 import com.cloud.quiethoursnotificationhelper.startMailNotifyListener
 import com.cloud.quiethoursnotificationhelper.startTriggerListenerIfHomeWifi
-import com.cloud.quiethoursnotificationhelper.stopAllSyncServices
 import com.cloud.quiethoursnotificationhelper.stopVoiceNote
 import com.cloud.quiethoursnotificationhelper.syncTodosWithLaptop
 import com.cloud.quiethoursnotificationhelper.timeChangeReceiver
@@ -365,11 +359,6 @@ class QuietHoursNotificationService : Service() {
         startDiscoveryListener()
         scheduleDailySummaryAlarm(this)
         startMailNotifyListener(this)
-        try {
-            registerWifiCallback()
-        } catch (e: Exception) {
-            reportServiceError("onCreate:registerWifiCallback", e)
-        }
 
         val filter = IntentFilter(ACTION_MESSAGE_SENT)
         try {
@@ -889,17 +878,6 @@ class QuietHoursNotificationService : Service() {
 
         handler.removeCallbacksAndMessages(null)
 
-        networkCallback?.let {
-            try {
-                val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
-                cm.unregisterNetworkCallback(it)
-            } catch (e: Exception) {
-                reportServiceError("onDestroy:unregisterNetworkCallback", e)
-            } finally {
-                networkCallback = null
-            }
-        }
-
         voiceNotePlayer?.apply {
             try {
                 if (isPlaying) stop()
@@ -1034,40 +1012,6 @@ class QuietHoursNotificationService : Service() {
             MusicPlayerServiceCompat.startAndPlay(this)
         } catch (_: Exception) {
             showSimpleNotification("Fehler", "Musik Player konnte nicht geöffnet werden")
-        }
-    }
-
-    private var networkCallback: ConnectivityManager.NetworkCallback? = null
-
-    private fun registerWifiCallback() {
-        val connectivityManager =
-            getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
-        val request = NetworkRequest.Builder()
-            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-            .build()
-
-        networkCallback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                try {
-                    startTriggerListenerIfHomeWifi(this@QuietHoursNotificationService)
-                } catch (e: Exception) {
-                    reportServiceError("registerWifiCallback:onAvailable", e)
-                }
-            }
-
-            override fun onLost(network: Network) {
-                try {
-                    stopAllSyncServices(this@QuietHoursNotificationService)
-                } catch (e: Exception) {
-                    reportServiceError("registerWifiCallback:onLost", e)
-                }
-            }
-        }
-
-        try {
-            connectivityManager.registerNetworkCallback(request, networkCallback!!)
-        } catch (e: Exception) {
-            reportServiceError("registerWifiCallback:registerNetworkCallback", e)
         }
     }
 }
