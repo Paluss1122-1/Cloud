@@ -36,6 +36,7 @@ import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import org.json.JSONObject
 import java.time.Instant
 
 private fun normalizeSecret(secret: String): String =
@@ -59,6 +60,16 @@ fun TwoFAEntry.toSupabase(): TwoFaEntrySupabase {
         account_name = this.name,
         secret = CloudCrypto.encryptForCloud(this.secret)
     )
+}
+
+fun TwoFAEntry.toJsonObject(): JSONObject {
+    return JSONObject().apply {
+        put("id", id)
+        put("supabaseId", supabaseId)
+        put("name", name)
+        put("secret", secret) // bereits verschlüsselt!
+        put("url", url)
+    }
 }
 
 suspend fun loadTwoFaEntriesFromSupabase(): List<TwoFAEntry> {
