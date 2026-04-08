@@ -20,26 +20,19 @@ import com.cloud.service.PodcastPlayerServiceCompat.startService
 import com.cloud.showSimpleNotificationExtern
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.time.Instant
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
-
 data class SimplePodcast(val name: String, val path: String)
 
 fun clearPodcastSelectionNotifications(context: Context) {
     try {
         val notificationManager = context.getSystemService(NotificationManager::class.java)
-
-        for (i in 0..998) {
-            notificationManager.cancel(PODCASTS + i)
-        }
-
-        notificationManager.cancel(PODCASTS)
-
-        for (i in 0..999) {
-            notificationManager.cancel(COMPLETED_PODCASTS + i)
-        }
+        notificationManager.activeNotifications
+            .filter { it.id in PODCASTS..(PODCASTS + 998) || it.id in COMPLETED_PODCASTS..(COMPLETED_PODCASTS + 999) }
+            .forEach { notificationManager.cancel(it.id) }
 
         showSimpleNotificationExtern(
             "✅ Notifications gelöscht",
@@ -295,7 +288,10 @@ fun clearPodcastQueue(context: Context) {
 
 fun getPodcastQueueFromService(context: Context): List<String> {
     val prefs = context.getSharedPreferences("podcast_player_prefs", MODE_PRIVATE)
-    return prefs.getString("podcast_queue", "")?.split("|||") ?: emptyList()
+    return prefs.getString("podcast_queue", "")
+        ?.takeIf { it.isNotEmpty() }
+        ?.split("|||")
+        ?: emptyList()
 }
 
 fun addToQueueViaService(path: String, context: Context) {
