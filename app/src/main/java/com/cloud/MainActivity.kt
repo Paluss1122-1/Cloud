@@ -88,7 +88,6 @@ class MainActivity : FragmentActivity() {
             animator.doOnEnd { splashScreenView.remove() }
             animator.start()
         }
-        WindowCompat.setDecorFitsSystemWindows(window, false)
         window.attributes.layoutInDisplayCutoutMode =
             WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
 
