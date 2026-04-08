@@ -2,44 +2,92 @@ package com.cloud.quiethoursnotificationhelper
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.NotificationChannel
+import android.app.Activity
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
+import android.content.Context.WINDOW_SERVICE
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.graphics.PixelFormat
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.Uri
 import android.net.wifi.WifiManager
-import android.os.Build
 import android.os.PowerManager
 import android.provider.AlarmClock
+import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowInsets
+import android.view.WindowInsetsController
+import android.view.WindowManager
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.widget.FrameLayout
+import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Laptop
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import androidx.core.net.toUri
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.cloud.Config
 import com.cloud.Config.FLASHCARD_RECEIVE_PORT
-import com.cloud.Config.MAIL_NOTIFY_PORT
 import com.cloud.Config.SYNC_PORT
 import com.cloud.Config.TODOS
 import com.cloud.Config.UPDATE_PORT
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
 import com.cloud.aitab.ChatMessage
+import com.cloud.audiorecorder.createAudioFile
+import com.cloud.audiorecorder.startAudioService
+import com.cloud.audiorecorder.stopAudioService
+import com.cloud.authenticator.PasswordDatabase
+import com.cloud.authenticator.TotpGenerator.generateTOTP
+import com.cloud.authenticator.TwoFADatabase
 import com.cloud.mediaplayer.AlgorithmicPlaylistRegistry
 import com.cloud.mediaplayer.ListenSession
 import com.cloud.mediaplayer.MediaAnalyticsManager
 import com.cloud.mediaplayer.MediaAnalyticsManager.getSessions
 import com.cloud.service.MediaPlayerService
+import com.cloud.service.OverlayLifecycleOwner
 import com.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
-import com.cloud.service.QuietHoursNotificationService.Companion.MAIL_CHANNEL_ID
 import com.cloud.service.WhatsAppNotificationListener
 import com.cloud.showSimpleNotificationExtern
+import com.cloud.ui.theme.Cloud
 import com.cloud.vocabtab.Vokabel
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -50,7 +98,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
@@ -62,6 +109,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.ConnectException
 import java.net.ServerSocket
+import java.nio.ByteBuffer
 import java.time.Instant
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -69,10 +117,6 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.seconds
-import androidx.core.net.toUri
-import com.cloud.audiorecorder.createAudioFile
-import com.cloud.audiorecorder.startAudioService
-import com.cloud.audiorecorder.stopAudioService
 
 val isLaptopConnectedFlow = MutableStateFlow(false)
 val aiResponseFlow = MutableStateFlow<AiResponseEntry?>(null)
@@ -2316,7 +2360,6 @@ fun startMailNotifyListener(context: Context) {
                         val bytes = client.inputStream.readBytes()
                         client.close()
 
-                        // Format: "MAIL|<sender>|<subject>|<summary>"
                         val text = bytes.toString(Charsets.UTF_8)
                         val parts = text.split("|", limit = 4)
 
@@ -2324,7 +2367,6 @@ fun startMailNotifyListener(context: Context) {
                         val subject = parts.getOrNull(2)?.trim() ?: "(kein Betreff)"
                         val summary = parts.getOrNull(3)?.trim() ?: text
 
-                        // Absendername kürzen: "Max Muster <max@mail.com>" → "Max Muster"
                         val senderShort = sender
                             .substringBefore("<")
                             .trim()
@@ -2500,12 +2542,13 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                 null, null,
                 android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
             )?.use { cursor ->
-                val nameCol = cursor.getColumnIndex(android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
-                val numberCol = cursor.getColumnIndex(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER)
+                val nameCol =
+                    cursor.getColumnIndex(android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                val numberCol =
+                    cursor.getColumnIndex(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER)
                 while (cursor.moveToNext()) {
                     val name = cursor.getString(nameCol) ?: continue
                     val number = cursor.getString(numberCol) ?: continue
-                    // Filter: nur Treffer wenn query nicht leer
                     if (query.isEmpty() || name.lowercase().contains(query)) {
                         results.put(JSONObject().apply {
                             put("name", name)
@@ -2518,7 +2561,12 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
             syncScope.launch(Dispatchers.IO) {
                 try {
                     java.net.Socket().use { sock ->
-                        sock.connect(java.net.InetSocketAddress(laptopIp, Config.EXECUTE_RESPONSE_PORT), 3000)
+                        sock.connect(
+                            java.net.InetSocketAddress(
+                                laptopIp,
+                                Config.EXECUTE_RESPONSE_PORT
+                            ), 3000
+                        )
                         sock.getOutputStream().write(results.toString().toByteArray(Charsets.UTF_8))
                         sock.getOutputStream().flush()
                     }
@@ -2528,8 +2576,203 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
             }
         }
 
+        "lookup_credentials" -> {
+            // Search PasswordDatabase + TwoFADatabase.
+            // Returns ONLY id / name / username — password never leaves the device.
+            syncScope.launch(Dispatchers.IO) {
+                val queries = args.optJSONArray("queries")
+                    ?.let { arr -> (0 until arr.length()).map { arr.getString(it).lowercase() } }
+                    ?: emptyList()
+
+                val allPasswords = PasswordDatabase.getDatabase(context).passwordDao().getAll()
+                val allTwoFa = TwoFADatabase.getDatabase(context).twoFADao().getAll()
+
+                val matchedPasswords = allPasswords.filter { entry ->
+                    queries.any { q ->
+                        entry.name.contains(q, ignoreCase = true) ||
+                                entry.username.contains(q, ignoreCase = true)
+                    }
+                }
+                val matchedTwoFa = allTwoFa.filter { entry ->
+                    queries.any { q -> entry.name.contains(q, ignoreCase = true) }
+                }
+
+                val response = JSONObject().apply {
+                    put("matchedCredentials", JSONArray(matchedPasswords.map { entry ->
+                        JSONObject().apply {
+                            put("id", entry.id)
+                            put("name", entry.name)
+                            put("username", entry.username)
+                            // ⚠️  Password intentionally omitted
+                        }
+                    }))
+                    put("matchedTwoFaCodes", JSONArray(matchedTwoFa.map { entry ->
+                        JSONObject().apply {
+                            put("id", entry.id)
+                            put("name", entry.name)
+                        }
+                    }))
+                }
+
+                val jsonBytes = response.toString().toByteArray(Charsets.UTF_8)
+                // 4-byte big-endian length prefix, matching _recv_exact() on the Python side
+                val sizePrefix = ByteBuffer.allocate(4).putInt(jsonBytes.size).array()
+
+                try {
+                    java.net.Socket().use { sock ->
+                        sock.connect(
+                            java.net.InetSocketAddress(
+                                laptopIp,
+                                Config.EXECUTE_RESPONSE_PORT
+                            ), 3000
+                        )
+                        sock.getOutputStream().write(sizePrefix + jsonBytes)
+                        sock.getOutputStream().flush()
+                    }
+                    Log.d(
+                        "EXECUTE",
+                        "lookup_credentials: sent ${matchedPasswords.size} creds, ${matchedTwoFa.size} 2FA"
+                    )
+                } catch (e: Exception) {
+                    Log.e("EXECUTE", "lookup_credentials: send failed", e)
+                }
+            }
+        }
+
+        "reveal_credentials" -> {
+            // Decrypt and show credentials LOCALLY on the phone only.
+            // The laptop only knows the ID – the plaintext password never leaves.
+            syncScope.launch(Dispatchers.IO) {
+                val credentialId = args.optInt("credential_id", -1)
+                val twofaId = args.optInt("twofa_id", -1)
+
+                if (credentialId == -1) {
+                    Log.w("EXECUTE", "reveal_credentials: no credential_id provided")
+                    return@launch
+                }
+
+                val entry = PasswordDatabase.getDatabase(context).passwordDao().getAll()
+                    .firstOrNull { it.id == credentialId }
+
+                if (entry == null) {
+                    showSimpleNotificationExtern(
+                        "❌ Zugangsdaten",
+                        "Eintrag #$credentialId nicht gefunden",
+                        10.seconds, context
+                    )
+                    return@launch
+                }
+
+                val decryptedPassword = entry.password
+
+                val totpCode: String? = if (twofaId != -1) {
+                    TwoFADatabase.getDatabase(context).twoFADao().getAll()
+                        .firstOrNull { it.id == twofaId }
+                        ?.let { runCatching { generateTOTP(it.secret) }.getOrNull() }
+                } else null
+
+                // Copy username to clipboard for convenience
+                withContext(Dispatchers.Main) {
+                    val cm =
+                        context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    cm.setPrimaryClip(
+                        android.content.ClipData.newPlainText(
+                            "username",
+                            entry.username
+                        )
+                    )
+                }
+
+                val notificationText = buildString {
+                    appendLine("👤 ${entry.username}")
+                    appendLine("🔑 $decryptedPassword")
+                    if (totpCode != null) appendLine("🔐 2FA: $totpCode")
+                    append("(Benutzername in Zwischenablage kopiert)")
+                }
+
+                showSimpleNotificationExtern(
+                    title = "🔓 ${entry.name}",
+                    text = notificationText,
+                    duration = 30.seconds,
+                    context = context
+                )
+
+                Log.d("EXECUTE", "reveal_credentials: showed '${entry.name}' locally")
+            }
+        }
+
         else -> Log.w("EXECUTE", "Unbekanntes Tool: $tool")
     }
+}
+
+fun showTestOverlay1(context: Context, us: String, pw: String, totp: String) {
+    if (!Settings.canDrawOverlays(context)) {
+        Toast.makeText(context, "Overlay-Berechtigung fehlt!", Toast.LENGTH_LONG).show()
+        return
+    }
+
+    val windowManager = context.getSystemService(WINDOW_SERVICE) as WindowManager
+
+    var testOverlayView: ComposeView? = null
+    var testOverlayLifecycle: OverlayLifecycleOwner? = null
+
+    testOverlayLifecycle = OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
+
+    testOverlayView = ComposeView(context).apply {
+        setViewTreeLifecycleOwner(testOverlayLifecycle)
+        setViewTreeSavedStateRegistryOwner(testOverlayLifecycle)
+        setViewTreeViewModelStoreOwner(testOverlayLifecycle)
+        setContent {
+            Box(modifier = Modifier.height(30.dp).fillMaxWidth().background(Cloud)) {
+                Row(Modifier.fillMaxWidth()) {
+                    Text(us, textAlign = TextAlign.Center, color = Color.White)
+                }
+
+                IconButton(
+                    onClick = {
+                        try {
+                            testOverlayView?.let { windowManager.removeView(it) }
+                        } catch (_: Exception) {}
+                        try {
+                            testOverlayLifecycle?.onDestroy()
+                        } catch (_: Exception) {}
+                        testOverlayView = null
+                        testOverlayLifecycle = null
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(40.dp)
+                        .background(
+                            Color.Black.copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(50)
+                        )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Schließen",
+                        tint = Color.White
+                    )
+                }
+            }
+        }
+    }
+
+    val params = WindowManager.LayoutParams(
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+        PixelFormat.TRANSLUCENT
+    ).apply {
+        gravity = Gravity.CENTER
+    }
+
+    try {
+        windowManager.addView(testOverlayView, params)
+    } catch (_: Exception) {}
 }
 
 fun sendAiExecuteCommand(context: Context, userInput: String) {
