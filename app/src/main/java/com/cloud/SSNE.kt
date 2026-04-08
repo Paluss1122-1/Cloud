@@ -9,11 +9,12 @@ import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.cloud.Config.cms
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 fun showSimpleNotificationExtern(
     title: String,
     text: String,
-    duration: Duration = Duration.ZERO,
+    duration: Duration = 15.seconds,
     context: Context,
     silent: Boolean = true
 ) {
