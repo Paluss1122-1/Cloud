@@ -165,6 +165,7 @@ import com.cloud.audiorecorder.AudioRecorderContent
 import com.cloud.authenticator.AuthenticatorTab
 import com.cloud.autoclickertab.AutoClickerTabContent
 import com.cloud.browsertab.BrowserTabContent
+import com.cloud.calender.CalendarTabContent
 import com.cloud.contactstab.ContactsRepository
 import com.cloud.contactstab.ContactsTabContent
 import com.cloud.contactstab.ContactsViewModel
@@ -346,6 +347,11 @@ enum class MenuItem(
             ExploreTabContent(setGesturesEnabled)
         }
     ),
+    CALENDAR(
+        "Kalender",
+        "📅",
+        { CalendarTabContent() }
+    )
 }
 
 fun saveRecentTab(context: Context, menuItem: MenuItem) {
