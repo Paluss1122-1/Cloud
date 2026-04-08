@@ -30,20 +30,22 @@ object ExploreLocationTracker {
         val repo = ExploreRepository(context.applicationContext)
         val client = LocationServices.getFusedLocationProviderClient(context.applicationContext)
 
+        // Viel häufigeres Tracking: alle 1 Minute statt 5 Minuten
         val request = LocationRequest.Builder(
             Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-            5 * 60 * 1000L
+            1 * 60 * 1000L  // 1 Minute (war: 5 Minuten)
         )
-            .setMinUpdateDistanceMeters(30f)
+            .setMinUpdateDistanceMeters(50f)  // 50m Distanz (angepasst an größere Tiles)
             .setWaitForAccurateLocation(false)
-            .setMaxUpdateDelayMillis(10 * 60 * 1000L)
+            .setMaxUpdateDelayMillis(2 * 60 * 1000L)  // Max 2 Minuten Verzögerung
             .build()
 
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 val loc = result.lastLocation ?: return
                 val last = lastLocation
-                if (last != null && loc.distanceTo(last) < 30f) return
+                // Aktualisiere wenn mindestens 50m entfernt (passt zu größeren Tiles)
+                if (last != null && loc.distanceTo(last) < 50f) return
                 lastLocation = loc
                 scope.launch {
                     repo.recordLocation(loc.latitude, loc.longitude)
