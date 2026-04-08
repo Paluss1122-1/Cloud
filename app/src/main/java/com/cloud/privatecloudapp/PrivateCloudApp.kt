@@ -15,6 +15,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.graphics.Paint
 import android.media.MediaScannerConnection
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -44,10 +45,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -66,6 +69,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -75,7 +79,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Laptop
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
@@ -122,9 +125,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -136,6 +143,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -144,11 +153,11 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
 import androidx.core.content.edit
-import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
 import com.cloud.Config
 import com.cloud.Config.cms
+import com.cloud.Config.realDevice
 import com.cloud.PasswordStorage
 import com.cloud.R
 import com.cloud.aitab.AITabContent
@@ -334,8 +343,7 @@ enum class MenuItem(
         "Erkunden",
         "🗺️",
         { setGesturesEnabled ->
-            LaunchedEffect(Unit) { setGesturesEnabled(false) }  // ✅ Gestures deaktivieren
-            ExploreTabContent()
+            ExploreTabContent(setGesturesEnabled)
         }
     ),
 }
@@ -368,23 +376,36 @@ fun loadRecentTabs(context: Context): List<MenuItem> {
         }
 }
 
+fun getDeviceName(): String {
+    val manufacturer = Build.MANUFACTURER.replaceFirstChar { it.uppercaseChar() }
+    val model = Build.MODEL
+    return if (model.startsWith(manufacturer, ignoreCase = true)) {
+        model.replaceFirstChar { it.uppercaseChar() }
+    } else {
+        "$manufacturer $model"
+    }
+}
+
 @Composable
 fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     val context = LocalContext.current
     var showLandingPage by rememberSaveable { mutableStateOf(startTarget == null) }
     var selectedMenuItem by remember { mutableStateOf<MenuItem?>(null) }
     var masterPw by remember { mutableStateOf(PasswordStorage.loadPassword(context)) }
+    realDevice = getDeviceName().trim().equals("Samsung SM-S921U1", ignoreCase = true)
 
-    if (masterPw == null) {
-        MasterPasswordSetupScreen { pw ->
-            PasswordStorage.savePassword(context, pw)
-            Config.masterPassword = pw
-            masterPw = pw
+    if (realDevice) {
+        if (masterPw == null || Config.masterPassword.isEmpty()) {
+            MasterPasswordSetupScreen { pw ->
+                PasswordStorage.savePassword(context, pw)
+                Config.masterPassword = pw
+                masterPw = pw
+            }
+            return
         }
-        return
-    }
 
-    Config.masterPassword = masterPw!!
+        Config.masterPassword = masterPw!!
+    }
 
     LaunchedEffect(Unit) {
         QuietHoursNotificationService.startService(context)
@@ -481,6 +502,12 @@ fun MasterPasswordSetupScreen(onPasswordSaved: (String) -> Unit) {
             ) { Text("Speichern & Starten") }
         }
     }
+}
+
+@Preview
+@Composable
+fun test() {
+    LandingPage {}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -622,33 +649,56 @@ fun TabCard(
     isRecent: Boolean,
     onClick: () -> Unit
 ) {
-    val containerColor = if (isRecent) c() else Color(0xFF333333)
+    val containerColor = MaterialTheme.colorScheme.primary
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(if (isRecent) 72.dp else 64.dp),
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-        onClick = onClick
-    ) {
-        Row(
+    Box(Modifier.drawBehind {
+        val canvasSize = size
+        drawContext.canvas.nativeCanvas.apply {
+            drawRoundRect(
+                0f, // Left
+                0f, // Top
+                canvasSize.width, // Right
+                canvasSize.height, // Bottom
+                5.dp.toPx(),
+                5.dp.toPx(),
+                Paint().apply {
+                    color = containerColor.toArgb()
+                    isAntiAlias = true
+                    setShadowLayer(
+                        5.dp.toPx(),
+                        0.dp.toPx(), 0.dp.toPx(),
+                        containerColor.copy(alpha = 0.85f).toArgb()
+                    )
+                }
+            )
+        }
+    }.border(1.dp, Color.Gray.copy(0.8f), RoundedCornerShape(5.dp))) {
+        Card(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxWidth()
+                .height(if (isRecent) 72.dp else 64.dp),
+            colors = CardDefaults.cardColors(containerColor = containerColor),
+            onClick = onClick
         ) {
-            Text(
-                text = menuItem.icon,
-                fontSize = if (isRecent) 32.sp else 28.sp,
-                modifier = Modifier.padding(end = 16.dp)
-            )
-            Text(
-                text = menuItem.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
-                fontWeight = if (isRecent) FontWeight.Bold else FontWeight.Normal,
-                fontSize = if (isRecent) 18.sp else 16.sp
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = menuItem.icon,
+                    fontSize = if (isRecent) 32.sp else 28.sp,
+                    modifier = Modifier.padding(end = 16.dp)
+                )
+                Text(
+                    text = menuItem.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    fontWeight = if (isRecent) FontWeight.Bold else FontWeight.Normal,
+                    fontSize = if (isRecent) 18.sp else 16.sp
+                )
+            }
         }
     }
 }
@@ -2809,5 +2859,93 @@ object WebViewCookieBackup {
             cm.setCookie(url, cookie.trim())
         }
         cm.flush()
+    }
+}
+
+@Composable
+fun GlowingCard(
+    glowingColor: Color,
+    modifier: Modifier = Modifier,
+    containerColor: Color = Color.White,
+    cornersRadius: Dp = 0.dp,
+    glowingRadius: Dp = 20.dp,
+    xShifting: Dp = 0.dp,
+    yShifting: Dp = 0.dp,
+    content: @Composable BoxScope.() -> Unit
+) {
+    Box(
+        modifier = modifier
+            .drawBehind {
+                val canvasSize = size
+                drawContext.canvas.nativeCanvas.apply {
+                    drawRoundRect(
+                        0f, // Left
+                        0f, // Top
+                        canvasSize.width, // Right
+                        canvasSize.height, // Bottom
+                        cornersRadius.toPx(), // Radius X
+                        cornersRadius.toPx(), // Radius Y
+                        Paint().apply {
+                            color = containerColor.toArgb()
+                            isAntiAlias = true
+                            setShadowLayer(
+                                glowingRadius.toPx(),
+                                xShifting.toPx(), yShifting.toPx(),
+                                glowingColor.copy(alpha = 0.85f).toArgb()
+                            )
+                        }
+                    )
+                }
+            }
+    ) {
+        content()
+    }
+}
+
+/////////////////////////////////////////////////////////////////////
+
+@Composable
+fun ClickableGlowingCard(
+    glowingColor: Color,
+    modifier: Modifier = Modifier,
+    containerColor: Color = Color.White,
+    cornersRadius: Dp = 0.dp,
+    glowingRadius: Dp = 20.dp,
+    xShifting: Dp = 0.dp,
+    yShifting: Dp = 0.dp,
+    onClick: () -> Unit = {},
+    content: @Composable BoxScope.() -> Unit
+) {
+    Box(
+        modifier = modifier
+            .drawBehind {
+                val canvasSize = size
+                drawContext.canvas.nativeCanvas.apply {
+                    drawRoundRect(
+                        0f, // Left
+                        0f, // Top
+                        canvasSize.width, // Right
+                        canvasSize.height, // Bottom
+                        cornersRadius.toPx(), // Radius X
+                        cornersRadius.toPx(), // Radius Y
+                        Paint().apply {
+                            color = containerColor.toArgb()
+                            isAntiAlias = true
+                            setShadowLayer(
+                                glowingRadius.toPx(),
+                                xShifting.toPx(), yShifting.toPx(),
+                                glowingColor.copy(alpha = 0.85f).toArgb()
+                            )
+                        }
+                    )
+                }
+            }
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(cornersRadius))
+                .clickable { onClick() }) {
+            content()
+        }
     }
 }
