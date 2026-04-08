@@ -4,13 +4,9 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlarmManager
-import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -18,22 +14,13 @@ import android.content.SharedPreferences
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.graphics.ImageFormat
 import android.graphics.PixelFormat
-import android.hardware.camera2.CameraCaptureSession
-import android.hardware.camera2.CameraCharacteristics
-import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
-import android.hardware.camera2.CaptureRequest
-import android.media.Image
-import android.media.ImageReader
 import android.media.MediaPlayer
-import android.media.MediaScannerConnection
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
-import android.os.Environment
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
@@ -91,8 +78,6 @@ import com.cloud.Config.DEL_GAL_CONF
 import com.cloud.Config.cms
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
-import com.cloud.MyDeviceAdminReceiver
-import com.cloud.enableCameraIfDisabled
 import com.cloud.mediaplayer.MediaAnalyticsManager
 import com.cloud.mediaplayer.MediaAnalyticsManager.getSessions
 import com.cloud.mediarecorder.AudioRecorder
@@ -122,7 +107,7 @@ import com.cloud.quiethoursnotificationhelper.sendNvidiaChatMessageAITab
 import com.cloud.quiethoursnotificationhelper.showDeleteConfirmation
 import com.cloud.quiethoursnotificationhelper.showNextGalleryImage
 import com.cloud.quiethoursnotificationhelper.showPreviousGalleryImage
-import com.cloud.quiethoursnotificationhelper.showTestOverlay1
+import com.cloud.quiethoursnotificationhelper.showCredentialsOverlay
 import com.cloud.quiethoursnotificationhelper.showUnreadMessages
 import com.cloud.quiethoursnotificationhelper.startAiResponseListener
 import com.cloud.quiethoursnotificationhelper.startDiscoveryListener
@@ -141,7 +126,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.io.File
-import java.io.FileOutputStream
 import java.time.Instant
 import java.util.Calendar
 import kotlin.time.Duration
@@ -213,9 +197,6 @@ class QuietHoursNotificationService : Service() {
         const val VOICE_NOTE_CHANNEL_ID = "voice_note_player_channel"
         const val ACTION_EXECUTE_COMMAND = "com.cloud.ACTION_EXECUTE_COMMAND"
 
-        const val PREFS_REPLY_DATA = "reply_data_prefs"
-        const val KEY_SAVED_SENDER = "saved_sender"
-        const val KEY_SAVED_PACKAGE = "saved_package"
         const val KEY_SAVED_RESULT_KEY = "saved_result_key"
         const val KEY_HAS_SAVED_DATA = "has_saved_data"
 
@@ -369,9 +350,6 @@ class QuietHoursNotificationService : Service() {
         } catch (e: Exception) {
             reportServiceError("onCreate:startForeground", e)
         }
-
-
-        showTestOverlay1(this, "Paluss1122gmail.com", "3hsjasda73437", "73h3nsh273h501ß66h")
 
         try {
             sharedPreferences.registerOnSharedPreferenceChangeListener(prefChangeListener)
