@@ -13,7 +13,7 @@ data class TabNavigationState(
 // TabNavigationViewModel.kt
 class TabNavigationViewModel : ViewModel() {
 
-    private val _navigationState = MutableStateFlow<TabNavigationState>(TabNavigationState())
+    private val _navigationState = MutableStateFlow(TabNavigationState())
     val navigationState: StateFlow<TabNavigationState> = _navigationState.asStateFlow()
 
     fun updateBackState(
