@@ -85,6 +85,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
+import com.cloud.Config.realDevice
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
 import com.google.zxing.ResultPoint
@@ -135,6 +136,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
         entries = db.twoFADao().getAll()
         isLoading = false
 
+        if (!realDevice) return@LaunchedEffect
         val prefs = context.getSharedPreferences("sync_prefs", Context.MODE_PRIVATE)
         val lastSyncTime = prefs.getLong("last_sync_timestamp", 0L)
         val currentTime = System.currentTimeMillis()
@@ -406,6 +408,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                         val newEntry = TwoFAEntry(name = name.trim(), secret = normalized)
                         try {
                             db.twoFADao().insert(newEntry)
+                            if (!realDevice) return@launch
                             val ok = saveTwoFaEntryToSupabase(newEntry, db)
                             Toast.makeText(
                                 context,
