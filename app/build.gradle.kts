@@ -42,12 +42,6 @@ android {
 
     buildTypes {
         debug {
-            /*isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )*/
             buildConfigField(
                 "String",
                 "SUPABASE_PUBLISHABLE_KEY",
