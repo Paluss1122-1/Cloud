@@ -1,14 +1,15 @@
 package com.cloud.quiethoursnotificationhelper
 
 import android.Manifest
+import android.R
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.app.NotificationManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.content.Context.WINDOW_SERVICE
 import android.content.Intent
-import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.graphics.PixelFormat
 import android.net.ConnectivityManager
@@ -19,22 +20,22 @@ import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.PowerManager
 import android.provider.AlarmClock
+import android.provider.ContactsContract
+import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
-import android.view.View
-import android.view.ViewGroup
-import android.view.WindowInsets
-import android.view.WindowInsetsController
 import android.view.WindowManager
-import android.webkit.WebChromeClient
-import android.webkit.WebView
-import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -43,22 +44,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Laptop
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -94,6 +95,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import io.github.jan.supabase.realtime.Column
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -106,11 +108,26 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.File
 import java.io.InputStreamReader
+import java.io.PrintWriter
 import java.net.ConnectException
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.HttpURLConnection
+import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.ServerSocket
+import java.net.Socket
+import java.net.SocketException
+import java.net.SocketTimeoutException
+import java.net.URL
 import java.nio.ByteBuffer
+import java.text.SimpleDateFormat
 import java.time.Instant
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.pow
@@ -248,9 +265,9 @@ private object ConnectionGuard {
 
     suspend fun quickPingTest(ip: String, port: Int): Boolean = withContext(Dispatchers.IO) {
         try {
-            val socket = java.net.Socket()
+            val socket = Socket()
             socket.connect(
-                java.net.InetSocketAddress(ip, port),
+                InetSocketAddress(ip, port),
                 QUICK_PING_TIMEOUT_MS
             )
             socket.close()
@@ -391,7 +408,7 @@ fun startTriggerListener(context: Context) {
             try {
                 triggerServerSocket = ServerSocket().apply {
                     reuseAddress = true
-                    bind(java.net.InetSocketAddress(Config.TRIGGER_PORT))
+                    bind(InetSocketAddress(Config.TRIGGER_PORT))
                 }
 
                 while (isActive) {
@@ -450,14 +467,14 @@ fun startTriggerListener(context: Context) {
                         } finally {
                             wl.safeRelease()
                         }
-                    } catch (_: java.net.SocketException) {
+                    } catch (_: SocketException) {
                         break
                     } catch (e: Exception) {
                         Log.e("TRIGGER", "Fehler beim Accept", e)
                     }
                 }
             } catch (e: Exception) {
-                if (e !is java.net.SocketException) {
+                if (e !is SocketException) {
                     syncScope.launch {
                         ERRORINSERT(
                             ERRORINSERTDATA(
@@ -579,10 +596,10 @@ fun syncTodosWithLaptop(context: Context) {
                 todosJson.put(obj)
             }
 
-            val socket = java.net.Socket()
-            socket.connect(java.net.InetSocketAddress(laptopIp, SYNC_PORT), 3000)
+            val socket = Socket()
+            socket.connect(InetSocketAddress(laptopIp, SYNC_PORT), 3000)
 
-            val writer = java.io.PrintWriter(socket.getOutputStream(), true)
+            val writer = PrintWriter(socket.getOutputStream(), true)
             writer.println(todosJson.toString())
             writer.flush()
             socket.close()
@@ -624,7 +641,7 @@ fun syncTodosWithLaptop(context: Context) {
                     context
                 )
             }
-        } catch (_: java.net.SocketTimeoutException) {
+        } catch (_: SocketTimeoutException) {
             ConnectionGuard.recordFailure()
             withContext(Dispatchers.Main) {
                 showSimpleNotificationExtern(
@@ -682,7 +699,7 @@ fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
         try {
             updateServerSocket = ServerSocket().apply {
                 reuseAddress = true
-                bind(java.net.InetSocketAddress(UPDATE_PORT))
+                bind(InetSocketAddress(UPDATE_PORT))
             }
 
             val timeoutJob = launch {
@@ -719,7 +736,7 @@ fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
                             )
                         }
                     }
-                } catch (_: java.net.SocketException) {
+                } catch (_: SocketException) {
                     break
                 } catch (e: Exception) {
                     syncScope.launch {
@@ -789,8 +806,8 @@ private fun sendSessionDataToLaptop(context: Context) {
 
     val sessions = getSessions().filter { it.startedAt >= lastAiTimestamp }
 
-    val cal = java.util.Calendar.getInstance()
-    cal.add(java.util.Calendar.DAY_OF_YEAR, -2)
+    val cal = Calendar.getInstance()
+    cal.add(Calendar.DAY_OF_YEAR, -2)
     val twoDaysAgoStart = cal.timeInMillis
     val previousSessions =
         getSessions().filter { it.startedAt in twoDaysAgoStart..<lastAiTimestamp }
@@ -817,9 +834,9 @@ private fun sendSessionDataToLaptop(context: Context) {
 
     try {
         if (laptopIp == "") return
-        java.net.Socket().use { socket ->
-            socket.connect(java.net.InetSocketAddress(laptopIp, Config.SESSION_PORT), 3000)
-            val writer = java.io.PrintWriter(socket.getOutputStream(), true)
+        Socket().use { socket ->
+            socket.connect(InetSocketAddress(laptopIp, Config.SESSION_PORT), 3000)
+            val writer = PrintWriter(socket.getOutputStream(), true)
             writer.println(jsonString)
             writer.flush()
             socket.close()
@@ -989,7 +1006,7 @@ fun showAllTodos(context: Context) {
 
     chunks.forEachIndexed { index, chunk ->
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_agenda)
+            .setSmallIcon(R.drawable.ic_menu_agenda)
             .setContentTitle("📝 To-do Liste (${todos.size})")
             .setStyle(NotificationCompat.BigTextStyle().bigText(chunk))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -1001,7 +1018,7 @@ fun showAllTodos(context: Context) {
     }
 
     val summary = NotificationCompat.Builder(context, CHANNEL_ID)
-        .setSmallIcon(android.R.drawable.ic_menu_info_details)
+        .setSmallIcon(R.drawable.ic_menu_info_details)
         .setContentTitle("Alle Todos")
         .setContentText("${chunks.size} Todos")
         .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -1027,7 +1044,7 @@ private fun splitText(text: String): List<String> {
 
 private fun parseTodosFromJson(jsonData: String): List<TodoItem> =
     try {
-        val jsonArray = org.json.JSONArray(jsonData)
+        val jsonArray = JSONArray(jsonData)
         (0 until jsonArray.length()).map { i ->
             jsonArray.getJSONObject(i).run {
                 TodoItem(
@@ -1065,7 +1082,7 @@ fun startAiResponseListener(context: Context) {
         try {
             aiResponseServerSocket = ServerSocket().apply {
                 reuseAddress = true
-                bind(java.net.InetSocketAddress(Config.AI_RECEIVE_PORT))
+                bind(InetSocketAddress(Config.AI_RECEIVE_PORT))
             }
             while (isActive) {
                 try {
@@ -1090,7 +1107,7 @@ fun startAiResponseListener(context: Context) {
                         30.seconds,
                         context
                     )
-                } catch (_: java.net.SocketException) {
+                } catch (_: SocketException) {
                     break
                 } catch (e: Exception) {
                     syncScope.launch {
@@ -1126,7 +1143,7 @@ fun saveAiResponse(context: Context, text: String) {
     val timestamp = System.currentTimeMillis()
 
     val allJson = prefs.getString("all_entries", "[]") ?: "[]"
-    val arr = org.json.JSONArray(allJson)
+    val arr = JSONArray(allJson)
 
     val obj = JSONObject().apply {
         put("text", text)
@@ -1145,7 +1162,7 @@ fun saveAiResponse(context: Context, text: String) {
 fun deleteAiResponse(context: Context, timestamp: Long) {
     val prefs = context.getSharedPreferences("ai_responses", MODE_PRIVATE)
     val allJson = prefs.getString("all_entries", "[]") ?: "[]"
-    val arr = org.json.JSONArray(allJson)
+    val arr = JSONArray(allJson)
     val newArr = JSONArray()
 
     for (i in 0 until arr.length()) {
@@ -1216,7 +1233,7 @@ fun loadAllAiResponses(context: Context): List<AiResponseEntry> {
     val prefs = context.getSharedPreferences("ai_responses", MODE_PRIVATE)
     val allJson = prefs.getString("all_entries", "[]") ?: "[]"
     return try {
-        val arr = org.json.JSONArray(allJson)
+        val arr = JSONArray(allJson)
         (0 until arr.length()).map { i ->
             arr.getJSONObject(i).run {
                 AiResponseEntry(
@@ -1242,14 +1259,14 @@ fun loadAllAiResponses(context: Context): List<AiResponseEntry> {
 }
 
 fun getTodayKey(): String {
-    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.GERMANY)
-    return sdf.format(java.util.Date())
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.GERMANY)
+    return sdf.format(Date())
 }
 
 private fun getYesterdayKey(): String {
-    val cal = java.util.Calendar.getInstance()
-    cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
-    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.GERMANY)
+    val cal = Calendar.getInstance()
+    cal.add(Calendar.DAY_OF_YEAR, -1)
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.GERMANY)
     return sdf.format(cal.time)
 }
 
@@ -1262,13 +1279,13 @@ suspend fun trySendImageToLaptop(imageBytes: ByteArray): Boolean {
             val serverSocket = ServerSocket().apply {
                 reuseAddress = true
                 soTimeout = 30_000
-                bind(java.net.InetSocketAddress(FLASHCARD_RECEIVE_PORT))
+                bind(InetSocketAddress(FLASHCARD_RECEIVE_PORT))
             }
             flashcardResponseSocket = serverSocket
             startFlashcardResponseListener(serverSocket)
 
-            val s = java.net.Socket()
-            s.connect(java.net.InetSocketAddress(laptopIp, Config.FLASHCARD_SEND_PORT), 3000)
+            val s = Socket()
+            s.connect(InetSocketAddress(laptopIp, Config.FLASHCARD_SEND_PORT), 3000)
             s.getOutputStream().write(imageBytes)
             s.shutdownOutput()
             s.close()
@@ -1297,7 +1314,7 @@ private suspend fun bindFlashcardResponseSocket(): ServerSocket? {
             ServerSocket().apply {
                 reuseAddress = true
                 soTimeout = 600_000
-                bind(java.net.InetSocketAddress(FLASHCARD_RECEIVE_PORT))
+                bind(InetSocketAddress(FLASHCARD_RECEIVE_PORT))
             }.also { flashcardResponseSocket = it }
         } catch (e: Exception) {
             syncScope.launch {
@@ -1328,7 +1345,7 @@ private fun startFlashcardResponseListener(boundSocket: ServerSocket) {
             val json = bytes.toString(Charsets.UTF_8)
             val vokabeln = parseVokabelnFromJson(json)
             flashcardVokabelnFlow.emit(vokabeln.ifEmpty { null })
-        } catch (_: java.net.SocketTimeoutException) {
+        } catch (_: SocketTimeoutException) {
             flashcardVokabelnFlow.emit(null)
         } catch (e: Exception) {
             syncScope.launch {
@@ -1350,7 +1367,7 @@ private fun startFlashcardResponseListener(boundSocket: ServerSocket) {
 }
 
 private fun parseVokabelnFromJson(json: String): List<Vokabel> = try {
-    val arr = org.json.JSONArray(json)
+    val arr = JSONArray(json)
     (0 until arr.length()).map { i ->
         arr.getJSONObject(i).run {
             Vokabel(getString("latein"), getString("deutsch"))
@@ -1380,7 +1397,7 @@ fun startMediaCommandListener(context: Context) {
             try {
                 mediaCommandSocket = ServerSocket().apply {
                     reuseAddress = true
-                    bind(java.net.InetSocketAddress(Config.MEDIA_COMMAND_PORT))
+                    bind(InetSocketAddress(Config.MEDIA_COMMAND_PORT))
                 }
 
                 while (isActive) {
@@ -1412,9 +1429,9 @@ fun startMediaCommandListener(context: Context) {
                                 }
                             }
                         }
-                    } catch (_: java.net.SocketException) {
+                    } catch (_: SocketException) {
                         break
-                    } catch (e: java.net.SocketException) {
+                    } catch (e: SocketException) {
                         syncScope.launch {
                             ERRORINSERT(
                                 ERRORINSERTDATA(
@@ -1494,8 +1511,8 @@ suspend fun sendNvidiaChatMessage(
                 put("stream", false)
             }
 
-            val url = java.net.URL("https://integrate.api.nvidia.com/v1/chat/completions")
-            val connection = url.openConnection() as java.net.HttpURLConnection
+            val url = URL("https://integrate.api.nvidia.com/v1/chat/completions")
+            val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
             connection.setRequestProperty("Authorization", "Bearer $apiKey")
             connection.setRequestProperty("Content-Type", "application/json")
@@ -1580,8 +1597,8 @@ suspend fun sendNvidiaChatMessageAITab(
                 put("stream", false)
             }
 
-            val url = java.net.URL("https://integrate.api.nvidia.com/v1/chat/completions")
-            val connection = url.openConnection() as java.net.HttpURLConnection
+            val url = URL("https://integrate.api.nvidia.com/v1/chat/completions")
+            val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
             connection.setRequestProperty("Authorization", "Bearer $apiKey")
             connection.setRequestProperty("Content-Type", "application/json")
@@ -1701,7 +1718,7 @@ fun startMediaStateServer(context: Context) {
                 if (mediaStateSocket != null) mediaStateSocket?.close()
                 mediaStateSocket = ServerSocket().apply {
                     reuseAddress = true
-                    bind(java.net.InetSocketAddress(8900))
+                    bind(InetSocketAddress(8900))
                 }
 
                 while (isActive) {
@@ -1738,9 +1755,9 @@ fun startMediaStateServer(context: Context) {
                                 }
                             }
                         }
-                    } catch (_: java.net.SocketException) {
+                    } catch (_: SocketException) {
                         break
-                    } catch (e: java.net.SocketException) {
+                    } catch (e: SocketException) {
                         syncScope.launch {
                             ERRORINSERT(
                                 ERRORINSERTDATA(
@@ -1915,21 +1932,21 @@ private fun buildPlaylistsJson(context: Context): String {
     try {
         val cr = context.contentResolver
         val proj = arrayOf(
-            android.provider.MediaStore.Audio.Media.DISPLAY_NAME,
-            android.provider.MediaStore.Audio.Media.DATA,
-            android.provider.MediaStore.Audio.Media.TITLE
+            MediaStore.Audio.Media.DISPLAY_NAME,
+            MediaStore.Audio.Media.DATA,
+            MediaStore.Audio.Media.TITLE
         )
         var index = 0
         cr.query(
-            android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
             proj, null, null,
-            "${android.provider.MediaStore.Audio.Media.DISPLAY_NAME} ASC"
+            "${MediaStore.Audio.Media.DISPLAY_NAME} ASC"
         )?.use { cursor ->
             val nameCol =
-                cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.DISPLAY_NAME)
-            val dataCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.DATA)
+                cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+            val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
             val titleCol =
-                cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.TITLE)
+                cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
             while (cursor.moveToNext()) {
                 val data = cursor.getString(dataCol) ?: continue
                 val norm = data.lowercase()
@@ -1984,15 +2001,15 @@ fun pushMediaStateToLaptop(context: Context) {
     syncScope.launch(Dispatchers.IO) {
         try {
             if (laptopIp == "") return@launch
-            val socket = java.net.Socket()
-            socket.connect(java.net.InetSocketAddress(laptopIp, 8901), 2000)
+            val socket = Socket()
+            socket.connect(InetSocketAddress(laptopIp, 8901), 2000)
             socket.getOutputStream().apply {
                 write(state.toByteArray(Charsets.UTF_8))
                 flush()
             }
             socket.close()
             return@launch
-        } catch (_: java.net.SocketTimeoutException) {
+        } catch (_: SocketTimeoutException) {
         } catch (e: Exception) {
             ERRORINSERT(
                 ERRORINSERTDATA(
@@ -2012,23 +2029,23 @@ fun startDiscoveryListener() {
     discoveryJob?.cancel()
     discoveryJob = syncScope.launch(Dispatchers.IO) {
         try {
-            val socket = java.net.DatagramSocket(
+            val socket = DatagramSocket(
                 Config.DISCOVERY_PORT,
-                java.net.InetAddress.getByName("0.0.0.0")
+                InetAddress.getByName("0.0.0.0")
             )
             socket.broadcast = true
 
             val buf = ByteArray(1024)
 
             while (isActive) {
-                val packet = java.net.DatagramPacket(buf, buf.size)
+                val packet = DatagramPacket(buf, buf.size)
                 socket.receive(packet)
 
                 val message = String(packet.data, 0, packet.length)
 
                 if (message == "DISCOVER_PHONE") {
                     val response = "PHONE_HERE"
-                    val responsePacket = java.net.DatagramPacket(
+                    val responsePacket = DatagramPacket(
                         response.toByteArray(),
                         response.length,
                         packet.address,
@@ -2119,7 +2136,7 @@ suspend fun askServer(
         try {
             if (laptopIp == "") throw Exception("Keine laptopIp is vorhanden")
             val request = "${question}. Here is the chat history:$history "
-            val sock = java.net.Socket(laptopIp, Config.AI_PORT)
+            val sock = Socket(laptopIp, Config.AI_PORT)
             sock.getOutputStream().write(request.toByteArray(Charsets.UTF_8))
             sock.shutdownOutput()
             val response = sock.getInputStream().readBytes().toString(Charsets.UTF_8)
@@ -2143,7 +2160,7 @@ fun triggerBuild(context: Context) {
     }
 
     syncScope.launch(Dispatchers.IO) {
-        var sock: java.net.Socket? = null
+        var sock: Socket? = null
         try {
             showSimpleNotificationExtern(
                 "🔨 Build gestartet",
@@ -2152,20 +2169,20 @@ fun triggerBuild(context: Context) {
                 context
             )
 
-            sock = java.net.Socket().apply {
+            sock = Socket().apply {
                 receiveBufferSize = 2 * 1024 * 1024
                 sendBufferSize = 64 * 1024
                 soTimeout = 180_000
             }
 
             Log.d("BUILD", "Versuche Build auf $laptopIp:${Config.BUILD_PORT}")
-            sock.connect(java.net.InetSocketAddress(laptopIp, Config.BUILD_PORT), 5000)
+            sock.connect(InetSocketAddress(laptopIp, Config.BUILD_PORT), 5000)
             Log.d("BUILD", "Socket connected: ${System.currentTimeMillis()}")
 
             sock.getOutputStream().write("BUILD\n".toByteArray())
             sock.getOutputStream().flush()
 
-            val apkFile = java.io.File(context.cacheDir, "cloud_update.apk")
+            val apkFile = File(context.cacheDir, "cloud_update.apk")
 
             val reader = sock.inputStream.bufferedReader()
             val headerLine = reader.readLine() ?: run {
@@ -2247,8 +2264,8 @@ fun triggerBuild(context: Context) {
     }
 }
 
-private fun installApk(context: Context, apkFile: java.io.File) {
-    val uri = androidx.core.content.FileProvider.getUriForFile(
+private fun installApk(context: Context, apkFile: File) {
+    val uri = FileProvider.getUriForFile(
         context, "${context.packageName}.provider", apkFile
     )
     val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -2269,7 +2286,7 @@ fun buildSessionStatsText(sessions: List<ListenSession>): String {
     val lines = mutableListOf<String>()
 
     val allTimes = sessions.map { it.startedAt }.sorted()
-    val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.GERMANY)
+    val fmt = SimpleDateFormat("HH:mm", Locale.GERMANY)
     lines += "Zeitraum: ${fmt.format(allTimes.first())} – ${fmt.format(allTimes.last())}"
     lines += "Tracks gesamt: ${totals.size}"
 
@@ -2296,7 +2313,7 @@ fun startClipboardListener(context: Context) {
             try {
                 clipboardSocket = ServerSocket().apply {
                     reuseAddress = true
-                    bind(java.net.InetSocketAddress(Config.CLIPBOARD_PORT))
+                    bind(InetSocketAddress(Config.CLIPBOARD_PORT))
                 }
 
                 while (isActive) {
@@ -2309,16 +2326,16 @@ fun startClipboardListener(context: Context) {
                             val content = text.removePrefix("CLIPBOARD:")
                             withContext(Dispatchers.Main) {
                                 val cm =
-                                    context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 cm.setPrimaryClip(
-                                    android.content.ClipData.newPlainText(
+                                    ClipData.newPlainText(
                                         "sync",
                                         content
                                     )
                                 )
                             }
                         }
-                    } catch (_: java.net.SocketException) {
+                    } catch (_: SocketException) {
                         break
                     }
                 }
@@ -2351,7 +2368,7 @@ fun startMailNotifyListener(context: Context) {
             try {
                 mailNotifySocket = ServerSocket().apply {
                     reuseAddress = true
-                    bind(java.net.InetSocketAddress(Config.MAIL_NOTIFY_PORT))
+                    bind(InetSocketAddress(Config.MAIL_NOTIFY_PORT))
                 }
 
                 while (isActive) {
@@ -2381,7 +2398,7 @@ fun startMailNotifyListener(context: Context) {
                             )
                         }
 
-                    } catch (_: java.net.SocketException) {
+                    } catch (_: SocketException) {
                         break
                     } catch (e: Exception) {
                         syncScope.launch {
@@ -2397,7 +2414,7 @@ fun startMailNotifyListener(context: Context) {
                     }
                 }
             } catch (e: Exception) {
-                if (e !is java.net.SocketException) {
+                if (e !is SocketException) {
                     syncScope.launch {
                         ERRORINSERT(
                             ERRORINSERTDATA(
@@ -2427,7 +2444,7 @@ fun startExecuteListener(context: Context) {
             try {
                 executeServerSocket = ServerSocket().apply {
                     reuseAddress = true
-                    bind(java.net.InetSocketAddress(Config.EXECUTE_PORT))
+                    bind(InetSocketAddress(Config.EXECUTE_PORT))
                 }
 
                 while (isActive) {
@@ -2437,7 +2454,7 @@ fun startExecuteListener(context: Context) {
                             JSONObject(client.inputStream.readBytes().toString(Charsets.UTF_8))
                         client.close()
                         handleExecuteCommand(context, json)
-                    } catch (_: java.net.SocketException) {
+                    } catch (_: SocketException) {
                         break
                     } catch (e: Exception) {
                         Log.e("EXECUTE", "Fehler", e)
@@ -2462,7 +2479,7 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
         "show_toast" -> {
             val msg = args.optString("message", "")
             syncScope.launch(Dispatchers.Main) {
-                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
             }
         }
 
@@ -2534,18 +2551,18 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
             val results = JSONArray()
 
             resolver.query(
-                android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                 arrayOf(
-                    android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-                    android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                    ContactsContract.CommonDataKinds.Phone.NUMBER
                 ),
                 null, null,
-                android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
             )?.use { cursor ->
                 val nameCol =
-                    cursor.getColumnIndex(android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                    cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
                 val numberCol =
-                    cursor.getColumnIndex(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER)
+                    cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
                 while (cursor.moveToNext()) {
                     val name = cursor.getString(nameCol) ?: continue
                     val number = cursor.getString(numberCol) ?: continue
@@ -2560,9 +2577,9 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
 
             syncScope.launch(Dispatchers.IO) {
                 try {
-                    java.net.Socket().use { sock ->
+                    Socket().use { sock ->
                         sock.connect(
-                            java.net.InetSocketAddress(
+                            InetSocketAddress(
                                 laptopIp,
                                 Config.EXECUTE_RESPONSE_PORT
                             ), 3000
@@ -2619,9 +2636,9 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                 val sizePrefix = ByteBuffer.allocate(4).putInt(jsonBytes.size).array()
 
                 try {
-                    java.net.Socket().use { sock ->
+                    Socket().use { sock ->
                         sock.connect(
-                            java.net.InetSocketAddress(
+                            InetSocketAddress(
                                 laptopIp,
                                 Config.EXECUTE_RESPONSE_PORT
                             ), 3000
@@ -2640,8 +2657,6 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
         }
 
         "reveal_credentials" -> {
-            // Decrypt and show credentials LOCALLY on the phone only.
-            // The laptop only knows the ID – the plaintext password never leaves.
             syncScope.launch(Dispatchers.IO) {
                 val credentialId = args.optInt("credential_id", -1)
                 val twofaId = args.optInt("twofa_id", -1)
@@ -2663,39 +2678,13 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                     return@launch
                 }
 
-                val decryptedPassword = entry.password
-
                 val totpCode: String? = if (twofaId != -1) {
                     TwoFADatabase.getDatabase(context).twoFADao().getAll()
                         .firstOrNull { it.id == twofaId }
                         ?.let { runCatching { generateTOTP(it.secret) }.getOrNull() }
                 } else null
 
-                // Copy username to clipboard for convenience
-                withContext(Dispatchers.Main) {
-                    val cm =
-                        context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    cm.setPrimaryClip(
-                        android.content.ClipData.newPlainText(
-                            "username",
-                            entry.username
-                        )
-                    )
-                }
-
-                val notificationText = buildString {
-                    appendLine("👤 ${entry.username}")
-                    appendLine("🔑 $decryptedPassword")
-                    if (totpCode != null) appendLine("🔐 2FA: $totpCode")
-                    append("(Benutzername in Zwischenablage kopiert)")
-                }
-
-                showSimpleNotificationExtern(
-                    title = "🔓 ${entry.name}",
-                    text = notificationText,
-                    duration = 30.seconds,
-                    context = context
-                )
+                showCredentialsOverlay(context, entry.username, entry.password, totpCode ?: "")
 
                 Log.d("EXECUTE", "reveal_credentials: showed '${entry.name}' locally")
             }
@@ -2705,7 +2694,7 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
     }
 }
 
-fun showTestOverlay1(context: Context, us: String, pw: String, totp: String) {
+fun showCredentialsOverlay(context: Context, us: String, pw: String, totp: String) {
     if (!Settings.canDrawOverlays(context)) {
         Toast.makeText(context, "Overlay-Berechtigung fehlt!", Toast.LENGTH_LONG).show()
         return
@@ -2714,7 +2703,7 @@ fun showTestOverlay1(context: Context, us: String, pw: String, totp: String) {
     val windowManager = context.getSystemService(WINDOW_SERVICE) as WindowManager
 
     var testOverlayView: ComposeView? = null
-    var testOverlayLifecycle: OverlayLifecycleOwner? = null
+    var testOverlayLifecycle: OverlayLifecycleOwner?
 
     testOverlayLifecycle = OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
 
@@ -2723,19 +2712,49 @@ fun showTestOverlay1(context: Context, us: String, pw: String, totp: String) {
         setViewTreeSavedStateRegistryOwner(testOverlayLifecycle)
         setViewTreeViewModelStoreOwner(testOverlayLifecycle)
         setContent {
-            Box(modifier = Modifier.height(30.dp).fillMaxWidth().background(Cloud)) {
-                Row(Modifier.fillMaxWidth()) {
-                    Text(us, textAlign = TextAlign.Center, color = Color.White)
+            Box(
+                modifier = Modifier
+                    .height(210.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Cloud),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp), // Abstand zur Box
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    listOf(us, pw, totp).forEach { value ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp) // Abstand zwischen den Blöcken
+                                .clip(RoundedCornerShape(12.dp)) // runde Ecken für jeden Text
+                                .background(MaterialTheme.colorScheme.primary)
+                                .clickable {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("username", value))
+                                }
+                                .padding(vertical = 8.dp) // innen Padding, damit Text nicht an den Rändern klebt
+                        ) {
+                            Text(
+                                text = value,
+                                textAlign = TextAlign.Center,
+                                color = Color.White,
+                                fontSize = 30.sp,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
                 }
 
                 IconButton(
                     onClick = {
-                        try {
-                            testOverlayView?.let { windowManager.removeView(it) }
-                        } catch (_: Exception) {}
-                        try {
-                            testOverlayLifecycle?.onDestroy()
-                        } catch (_: Exception) {}
+                        try { testOverlayView?.let { windowManager.removeView(it) } } catch (_: Exception) {}
+                        try { testOverlayLifecycle?.onDestroy() } catch (_: Exception) {}
                         testOverlayView = null
                         testOverlayLifecycle = null
                     },
@@ -2743,10 +2762,7 @@ fun showTestOverlay1(context: Context, us: String, pw: String, totp: String) {
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
                         .size(40.dp)
-                        .background(
-                            Color.Black.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(50)
-                        )
+                        .background(Color.Black.copy(alpha = 0.6f), shape = RoundedCornerShape(50))
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
@@ -2760,11 +2776,10 @@ fun showTestOverlay1(context: Context, us: String, pw: String, totp: String) {
 
     val params = WindowManager.LayoutParams(
         WindowManager.LayoutParams.MATCH_PARENT,
-        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
         PixelFormat.TRANSLUCENT
     ).apply {
         gravity = Gravity.CENTER
@@ -2772,7 +2787,8 @@ fun showTestOverlay1(context: Context, us: String, pw: String, totp: String) {
 
     try {
         windowManager.addView(testOverlayView, params)
-    } catch (_: Exception) {}
+    } catch (_: Exception) {
+    }
 }
 
 fun sendAiExecuteCommand(context: Context, userInput: String) {
@@ -2787,9 +2803,9 @@ fun sendAiExecuteCommand(context: Context, userInput: String) {
                 put("prompt", userInput)
             }.toString().toByteArray(Charsets.UTF_8)
 
-            java.net.Socket().use { sock ->
+            Socket().use { sock ->
                 sock.connect(
-                    java.net.InetSocketAddress(
+                    InetSocketAddress(
                         laptopIp,
                         Config.EXECUTE_PORT_SEND_FROM_HANDY
                     ), 3000
