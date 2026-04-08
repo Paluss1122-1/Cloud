@@ -95,7 +95,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.edit
 import androidx.core.net.toUri
-import com.cloud.Config
+import com.cloud.Config.realDevice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -188,7 +188,7 @@ fun PasswordManagerScreen(db: PasswordDatabase, twoFaDb: TwoFADatabase) {
                         }
                         IconButton(
                             onClick = {
-                                if (!isSyncing) {
+                                if (!isSyncing && realDevice) {
                                     val prefs = context.getSharedPreferences(
                                         "sync_prefs",
                                         Context.MODE_PRIVATE
