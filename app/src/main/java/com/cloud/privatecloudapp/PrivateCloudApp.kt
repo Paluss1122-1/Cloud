@@ -138,6 +138,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -657,28 +659,31 @@ fun TabCard(
 ) {
     val containerColor = MaterialTheme.colorScheme.primary
 
-    Box(Modifier.drawBehind {
-        val canvasSize = size
-        drawContext.canvas.nativeCanvas.apply {
-            drawRoundRect(
-                0f, // Left
-                0f, // Top
-                canvasSize.width, // Right
-                canvasSize.height, // Bottom
-                5.dp.toPx(),
-                5.dp.toPx(),
-                Paint().apply {
-                    color = containerColor.toArgb()
-                    isAntiAlias = true
-                    setShadowLayer(
+    Box(
+        Modifier
+            .drawBehind {
+                val canvasSize = size
+                drawContext.canvas.nativeCanvas.apply {
+                    drawRoundRect(
+                        0f, // Left
+                        0f, // Top
+                        canvasSize.width, // Right
+                        canvasSize.height, // Bottom
                         5.dp.toPx(),
-                        0.dp.toPx(), 0.dp.toPx(),
-                        containerColor.copy(alpha = 0.85f).toArgb()
+                        5.dp.toPx(),
+                        Paint().apply {
+                            color = containerColor.toArgb()
+                            isAntiAlias = true
+                            setShadowLayer(
+                                5.dp.toPx(),
+                                0.dp.toPx(), 0.dp.toPx(),
+                                containerColor.copy(alpha = 0.85f).toArgb()
+                            )
+                        }
                     )
                 }
-            )
-        }
-    }.border(1.dp, Color.Gray.copy(0.8f), RoundedCornerShape(5.dp))) {
+            }
+            .border(1.dp, Color.Gray.copy(0.8f), RoundedCornerShape(5.dp))) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2952,6 +2957,27 @@ fun ClickableGlowingCard(
                 .clip(RoundedCornerShape(cornersRadius))
                 .clickable { onClick() }) {
             content()
+        }
+    }
+}
+
+@Preview(device = "spec:width=1080px,height=2340px,dpi=640")
+@Composable
+fun GoogNightScreen() {
+    // params: AI: String
+    Box(modifier = Modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(id = R.drawable.night),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+        val spaceMono = FontFamily(
+            Font(R.font.SMB, FontWeight.Normal),
+            Font(R.font.SMB, FontWeight.Bold)
+        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            Text("AI", fontFamily = spaceMono, color = Color.White, fontSize = 30.sp)
         }
     }
 }
