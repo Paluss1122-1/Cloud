@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 private const val EARTH_AREA_KM2 = 510_000_000.0
+// Angepasst für TILE_SIZE = 0.001 (~100m)
 private val TILE_AREA_KM2 = (TILE_SIZE * 111.32) * (TILE_SIZE * 111.32)
 
 class ExploreViewModel(app: Application) : AndroidViewModel(app) {
