@@ -27,15 +27,11 @@ import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.Toast
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -51,7 +47,6 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.text.style.TextAlign
@@ -95,7 +90,6 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import io.github.jan.supabase.realtime.Column
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -190,6 +184,9 @@ private var networkCallback: ConnectivityManager.NetworkCallback? = null
 private var pendingSyncJob: Job? = null
 private var lastTriggerTime = 0L
 private const val MIN_TRIGGER_INTERVAL = 15_000L
+
+@Volatile
+private var syncInProgress = false
 
 private fun PowerManager.WakeLock?.safeRelease() {
     if (this != null && isHeld) release()
@@ -303,27 +300,11 @@ data class AiResponseEntry(
 )
 
 fun startTriggerListenerIfHomeWifi(context: Context) {
-    startTriggerListener(context)
-    registerWifiReconnectReceiver(context)
 
     checkIfNearLocation(context) { atHome ->
         ConnectionGuard.updateLocationStatus(atHome)
-
-        if (atHome) {
-            showSimpleNotificationExtern(
-                "📶 WLAN verbunden",
-                "✅ Im Heim-WLAN, Trigger Listener gestartet",
-                10.seconds,
-                context
-            )
-        } else {
-            showSimpleNotificationExtern(
-                "📶 WLAN verbunden",
-                "⚠️ Nicht zu Hause, Sync deaktiviert",
-                10.seconds,
-                context
-            )
-        }
+        startTriggerListener(context)
+        registerWifiReconnectReceiver(context)
     }
 }
 
@@ -340,6 +321,7 @@ fun registerWifiReconnectReceiver(context: Context) {
     val callback = object : ConnectivityManager.NetworkCallback() {
 
         override fun onAvailable(network: Network) {
+            Log.d("SA!", "SUI")
             ConnectionGuard.updateWifiStatus(true)
             val now = System.currentTimeMillis()
             if (now - lastTriggerTime < MIN_TRIGGER_INTERVAL) {
@@ -349,27 +331,14 @@ fun registerWifiReconnectReceiver(context: Context) {
                 )
                 return
             }
+            lastTriggerTime = now
 
             checkIfNearLocation(context) { atHome ->
                 ConnectionGuard.updateLocationStatus(atHome)
 
                 if (atHome && ConnectionGuard.canAttemptConnection()) {
-                    lastTriggerTime = now
-
-                    pendingSyncJob?.cancel()
-                    pendingSyncJob = syncScope.launch {
-                        delay(2_000)
-                        if (!isLaptopConnected) {
-                            syncTodosWithLaptop(context)
-                        }
-                    }
-
-                    if (triggerWakeLock?.isHeld != true) {
-                        val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-                        triggerWakeLock = pm.newWakeLock(
-                            PowerManager.PARTIAL_WAKE_LOCK,
-                            "TodoSync:TriggerWakeLock"
-                        ).apply { acquire(30_000L) }
+                    if (!isLaptopConnected) {
+                        syncTodosWithLaptop(context)
                     }
                 }
             }
@@ -377,11 +346,9 @@ fun registerWifiReconnectReceiver(context: Context) {
 
         override fun onLost(network: Network) {
             ConnectionGuard.updateWifiStatus(false)
-            if (!ConnectionGuard.isAtHomeLocation()) {
-                pendingSyncJob?.cancel()
-                triggerWakeLock.safeRelease(); triggerWakeLock = null
-                triggerWakeLock = null
-            }
+            syncInProgress = false
+            pendingSyncJob?.cancel()
+            stopAllSyncServices(context)
         }
     }
 
@@ -551,9 +518,12 @@ fun stopAllSyncServices(context: Context) {
 }
 
 fun syncTodosWithLaptop(context: Context) {
+    if (syncInProgress) return
+    syncInProgress = true
     if (laptopIp.isEmpty()) {
         Log.d("SYNC", "❌ Keine Laptop-IP gesetzt")
         ConnectionGuard.recordFailure()
+        syncInProgress = false
         return
     }
 
@@ -570,6 +540,7 @@ fun syncTodosWithLaptop(context: Context) {
             if (!pingSuccess) {
                 Log.d("SYNC", "❌ Ping fehlgeschlagen (500ms timeout)")
                 ConnectionGuard.recordFailure()
+                isLaptopConnected = true
                 withContext(Dispatchers.Main) {
                     showSimpleNotificationExtern(
                         "❌ Laptop nicht erreichbar",
@@ -672,6 +643,8 @@ fun syncTodosWithLaptop(context: Context) {
                     context
                 )
             }
+        } finally {
+            syncInProgress = false
         }
     }
 }
@@ -2703,9 +2676,7 @@ fun showCredentialsOverlay(context: Context, us: String, pw: String, totp: Strin
     val windowManager = context.getSystemService(WINDOW_SERVICE) as WindowManager
 
     var testOverlayView: ComposeView? = null
-    var testOverlayLifecycle: OverlayLifecycleOwner?
-
-    testOverlayLifecycle = OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
+    var testOverlayLifecycle: OverlayLifecycleOwner? = OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
 
     testOverlayView = ComposeView(context).apply {
         setViewTreeLifecycleOwner(testOverlayLifecycle)
@@ -2735,8 +2706,14 @@ fun showCredentialsOverlay(context: Context, us: String, pw: String, totp: Strin
                                 .clip(RoundedCornerShape(12.dp)) // runde Ecken für jeden Text
                                 .background(MaterialTheme.colorScheme.primary)
                                 .clickable {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("username", value))
+                                    val clipboard =
+                                        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(
+                                        ClipData.newPlainText(
+                                            "username",
+                                            value
+                                        )
+                                    )
                                 }
                                 .padding(vertical = 8.dp) // innen Padding, damit Text nicht an den Rändern klebt
                         ) {
@@ -2753,8 +2730,14 @@ fun showCredentialsOverlay(context: Context, us: String, pw: String, totp: Strin
 
                 IconButton(
                     onClick = {
-                        try { testOverlayView?.let { windowManager.removeView(it) } } catch (_: Exception) {}
-                        try { testOverlayLifecycle?.onDestroy() } catch (_: Exception) {}
+                        try {
+                            testOverlayView?.let { windowManager.removeView(it) }
+                        } catch (_: Exception) {
+                        }
+                        try {
+                            testOverlayLifecycle?.onDestroy()
+                        } catch (_: Exception) {
+                        }
                         testOverlayView = null
                         testOverlayLifecycle = null
                     },
