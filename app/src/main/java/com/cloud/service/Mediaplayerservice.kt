@@ -904,6 +904,7 @@ class MediaPlayerService : MediaSessionService() {
         currentMode = MODE_MUSIC
         saveMusicState()
         updateNotification()
+        musicPlayer?.start()
     }
 
     private fun switchToPodcast() {
@@ -914,6 +915,7 @@ class MediaPlayerService : MediaSessionService() {
         currentMode = MODE_PODCAST
         saveMusicState()
         updateNotification()
+        podcastPlayer?.start()
     }
 
     private fun switchModeViaButton() {
