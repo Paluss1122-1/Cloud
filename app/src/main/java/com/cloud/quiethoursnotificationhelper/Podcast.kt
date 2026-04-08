@@ -20,11 +20,11 @@ import com.cloud.service.PodcastPlayerServiceCompat.startService
 import com.cloud.showSimpleNotificationExtern
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.time.Instant
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+
 data class SimplePodcast(val name: String, val path: String)
 
 fun clearPodcastSelectionNotifications(context: Context) {
