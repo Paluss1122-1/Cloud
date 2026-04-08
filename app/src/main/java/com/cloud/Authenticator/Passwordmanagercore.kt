@@ -27,6 +27,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import org.json.JSONObject
 import java.nio.ByteBuffer
 import java.security.SecureRandom
 import java.time.Instant
@@ -45,6 +46,21 @@ data class PasswordEntry(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
+
+
+
+fun PasswordEntry.toJsonObject(): JSONObject {
+    return JSONObject().apply {
+        put("id", id)
+        put("name", name)
+        put("url", url)
+        put("username", username)
+        put("password", password) // bereits verschlüsselt!
+        put("notes", notes)
+        put("createdAt", createdAt)
+        put("updatedAt", updatedAt)
+    }
+}
 
 
 @Dao
@@ -112,7 +128,6 @@ abstract class PasswordDatabase : RoomDatabase() {
 object CloudCrypto {
 
     private val cachedKey: SecretKey by lazy {
-        // fixer Salt für Cloud-Sync — nicht kryptografisch ideal aber 100x schneller
         val fixedSalt = "cloud_sync_salt_v1".toByteArray(Charsets.UTF_8).copyOf(16)
         Config.deriveKey(Config.masterPassword, fixedSalt)
     }
