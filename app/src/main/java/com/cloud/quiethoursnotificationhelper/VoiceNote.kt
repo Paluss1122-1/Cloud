@@ -91,7 +91,9 @@ fun playVoiceNoteAtIndex(index: Int, context: Context) {
                 mp.start()
                 showVoiceNotePlayerNotification(file, true, context)
             }
-            setOnCompletionListener {
+            setOnCompletionListener { mp ->
+                mp.release()
+                voiceNotePlayer = null
                 showVoiceNotePlayerNotification(file, false, context)
             }
             setOnErrorListener { _, what, extra ->
