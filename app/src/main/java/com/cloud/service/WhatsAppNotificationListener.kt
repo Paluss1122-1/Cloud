@@ -108,7 +108,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 .forEach { sbn ->
                     val extras = sbn.notification.extras
                     val title = extras.getCharSequence("android.title")?.toString() ?: ""
-                    val text = extras.getCharSequence("android.text")?.toString() ?: ""
+                    var text = extras.getCharSequence("android.text")?.toString() ?: ""
+                    text += extras.getCharSequence("android.bigText")?.toString() ?: ""
                     if (title.isBlank() && text.isBlank()) return@forEach
 
                     val appName = try {
