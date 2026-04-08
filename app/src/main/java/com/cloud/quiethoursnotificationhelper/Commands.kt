@@ -65,7 +65,6 @@ import com.cloud.weathertab.getLastKnownLocation
 import com.cloud.weathertab.weathernot
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
