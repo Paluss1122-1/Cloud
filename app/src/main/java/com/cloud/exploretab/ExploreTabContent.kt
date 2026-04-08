@@ -1,10 +1,12 @@
 package com.cloud.exploretab
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -43,9 +45,10 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Overlay
 import kotlin.math.floor
 
+
 @SuppressLint("MissingPermission")
 @Composable
-fun ExploreTabContent() {
+fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
     val ctx = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val vm: ExploreViewModel = viewModel()
@@ -54,6 +57,8 @@ fun ExploreTabContent() {
     val exploredPercent by vm.exploredPercent.collectAsState()
     val tiles by vm.allTiles.collectAsState()
     var mapView by remember { mutableStateOf<MapView?>(null) }
+
+    LaunchedEffect(Unit) { setGesturesEnabled(false) }
 
     LaunchedEffect(Unit) {
         try {
@@ -85,43 +90,61 @@ fun ExploreTabContent() {
         }
     }
 
-    Column(
+    // Box mit fillMaxSize für stabiles Layout
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Transparent)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        Column(
+            modifier = Modifier.fillMaxSize()
         ) {
-            StatCard("🗺️ Tiles", tileCount.toString(), Modifier.weight(1f))
-            StatCard("🌍 Erkundet", "%.8f%%".format(exploredPercent), Modifier.weight(1f))
-            StatCard("📅 Heute", vm.todayCount.toString(), Modifier.weight(1f))
-        }
+            // Stats Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                StatCard("🗺️ Tiles", tileCount.toString(), Modifier.weight(1f))
+                StatCard("🌍 Erkundet", "%.8f%%".format(exploredPercent), Modifier.weight(1f))
+                StatCard("📅 Heute", vm.todayCount.toString(), Modifier.weight(1f))
+            }
 
-        AndroidView(
-            factory = { context ->
-                Configuration.getInstance().userAgentValue = context.packageName
-                MapView(context).apply {
-                    setTileSource(TileSourceFactory.MAPNIK)
-                    setMultiTouchControls(true)
-                    controller.setZoom(15.0)
-                    controller.setCenter(GeoPoint(48.137, 11.576))
-                }.also { mapView = it }
-            },
-            update = { mv ->
-                mv.overlays.removeAll(mv.overlays.filterIsInstance<ExploreOverlay>().toSet())
-                if (tiles.isNotEmpty()) {
-                    mv.overlays.add(0, ExploreOverlay(tiles))
-                    mv.invalidate()
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-        )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                AndroidView(
+                    factory = { context ->
+                        Configuration.getInstance().userAgentValue = context.packageName
+                        MapView(context).apply {
+                            setTileSource(TileSourceFactory.MAPNIK)
+                            setMultiTouchControls(true)
+                            controller.setZoom(15.0)
+                            controller.setCenter(GeoPoint(48.137, 11.576))
+
+                            // Verhindere Tile-Skalierung beim Zoomen für smootheres Rendering
+                            isTilesScaledToDpi = false
+                            setScrollableAreaLimitDouble(null)
+                        }.also { mapView = it }
+                    },
+                    update = { mv ->
+                        // Entferne alte Overlays
+                        mv.overlays.removeAll(
+                            mv.overlays.filterIsInstance<ExploreOverlay>().toSet()
+                        )
+                        if (tiles.isNotEmpty()) {
+                            mv.overlays.add(0, ExploreOverlay(tiles))
+                            mv.invalidate()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                )
+            }
+        }
     }
 }
 
@@ -142,13 +165,13 @@ private fun StatCard(label: String, value: String, modifier: Modifier) {
 
 private class ExploreOverlay(private val tiles: List<ExploredTile>) : Overlay() {
     private val fillPaint = Paint().apply {
-        color = android.graphics.Color.argb(80, 100, 149, 237)
+        color = android.graphics.Color.argb(100, 100, 149, 237)  // Etwas sichtbarer
         style = Paint.Style.FILL
     }
     private val strokePaint = Paint().apply {
-        color = android.graphics.Color.argb(150, 70, 120, 220)
+        color = android.graphics.Color.argb(180, 70, 120, 220)  // Stärkere Umrandung
         style = Paint.Style.STROKE
-        strokeWidth = 1f
+        strokeWidth = 2f  // Dickere Linien für größere Tiles
     }
 
     override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
