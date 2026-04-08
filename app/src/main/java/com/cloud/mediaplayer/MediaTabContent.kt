@@ -1,3 +1,5 @@
+@file:Suppress("AssignedValueIsNeverRead", "AssignedValueIsNeverRead")
+
 package com.cloud.mediaplayer
 
 import android.app.Application
@@ -409,10 +411,54 @@ private fun HomeTab(
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
             item {
-                GlobalStatsStrip(
-                    stats = state.globalStats,
-                    onShowAllStats = { showStatsSheet = true }
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(BgSurface)
+                        .padding(16.dp)
+                ) {
+                    val stats = state.globalStats
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        StatItem("⏰", formatDuration(stats.totalListenedMs), "Gesamt")
+                        StatDivider()
+                        StatItem(
+                            "🔥", "${stats.listeningStreakDays}d", "Streak",
+                            dimmed = !stats.playedToday
+                        )
+                        StatDivider()
+                        StatItem("🎵", "${stats.totalSongsPlayed}", "Songs gespielt")
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(AccentViolet.copy(alpha = 0.15f))
+                            .clickable { showStatsSheet = true }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("📊", fontSize = 14.sp)
+                            Text(
+                                "Alle Statistiken",
+                                color = AccentViolet,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
             }
 
             aiEntry?.let { entry ->
@@ -1611,60 +1657,6 @@ private fun ShowAssignBottomSheet(
             }
 
             Spacer(Modifier.height(16.dp))
-        }
-    }
-}
-
-@Composable
-private fun GlobalStatsStrip(
-    stats: MediaAnalyticsManager.GlobalStats,
-    onShowAllStats: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(BgSurface)
-            .padding(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            StatItem("⏰", formatDuration(stats.totalListenedMs), "Gesamt")
-            StatDivider()
-            StatItem(
-                "🔥", "${stats.listeningStreakDays}d", "Streak",
-                dimmed = !stats.playedToday
-            )
-            StatDivider()
-            StatItem("🎵", "${stats.totalSongsPlayed}", "Songs gespielt")
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(AccentViolet.copy(alpha = 0.15f))
-                .clickable { onShowAllStats() }
-                .padding(vertical = 10.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text("📊", fontSize = 14.sp)
-                Text(
-                    "Alle Statistiken",
-                    color = AccentViolet,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
         }
     }
 }
