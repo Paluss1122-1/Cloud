@@ -95,6 +95,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.edit
 import androidx.core.net.toUri
+import com.cloud.Config
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -262,31 +263,6 @@ fun PasswordManagerScreen(db: PasswordDatabase, twoFaDb: TwoFADatabase) {
                 cursorColor = AccentBlue
             )
         )
-
-        Spacer(Modifier.height(12.dp))
-
-        val duplicateNames = remember(entries) {
-            entries.groupBy { it.name.trim().lowercase() }.filter { it.value.size > 1 }.keys
-        }
-        if (duplicateNames.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFFFFCC00).copy(alpha = 0.15f))
-                    .border(1.dp, Color(0xFFFFCC00).copy(alpha = 0.4f), RoundedCornerShape(10.dp))
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "⚠️ Doppelte Einträge: ${duplicateNames.joinToString()}",
-                    color = Color(0xFFFFCC00),
-                    fontSize = 13.sp
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-        }
 
         if (isLoading) {
             Box(
