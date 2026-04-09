@@ -63,6 +63,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ModalBottomSheet
@@ -946,7 +947,12 @@ private fun LibraryTab(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        item { SectionHeader("Podcast-Shows") }
+        item { Row() {
+            SectionHeader("Podcast-Shows")
+            Button(onClick = { PodcastShowManager.resetToDefault()}) {
+                Text("Reset")
+            }
+        } }
         items(state.shows) { show ->
             val eps = grouped[show] ?: emptyList()
             val stats = PodcastShowManager.getShowStats(show.id, eps)
@@ -3480,6 +3486,15 @@ object PodcastShowManager {
         loadPatternMappings()
     }
 
+    fun resetToDefault() {
+        shows.clear()
+        shows.addAll(defaultShows)
+
+        extraPatterns.clear()
+
+        saveShows()
+        savePatternMappings()
+    }
 
     fun getShows(): List<PodcastShow> = shows.toList()
 
