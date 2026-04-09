@@ -27,16 +27,18 @@ fun showSimpleNotificationExtern(
         .setSilent(silent)
         .build()
 
+    val id = cms()
+
     val notificationManager = context.getSystemService(NotificationManager::class.java)
 
     if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
         == PackageManager.PERMISSION_GRANTED
     ) {
-        notificationManager.notify(cms(), notification)
+        notificationManager.notify(id, notification)
 
         if (duration > Duration.ZERO) {
             Handler(Looper.getMainLooper()).postDelayed(
-                { notificationManager.cancel(cms()) },
+                { notificationManager.cancel(id) },
                 duration.inWholeMilliseconds
             )
         }
