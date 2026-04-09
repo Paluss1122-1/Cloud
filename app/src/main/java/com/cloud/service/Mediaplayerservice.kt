@@ -58,7 +58,11 @@ import com.cloud.mediaplayer.ListenSession
 import com.cloud.mediaplayer.MediaAnalyticsManager
 import com.cloud.mediaplayer.PodcastShowManager
 import com.cloud.quiethoursnotificationhelper.pushMediaStateToLaptop
+import com.cloud.quiethoursnotificationhelper.sendNvidiaChatMessageAITab
 import com.cloud.showSimpleNotificationExtern
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.io.File
 import java.net.URLDecoder
 import java.util.UUID
@@ -448,6 +452,29 @@ class MediaPlayerService : MediaSessionService() {
 
     private var podcastSessionStartedAt: Long = 0L
     private var podcastSessionStartPos: Long = 0L
+    private val showNameCache = mutableMapOf<String, String>() // showId -> displayName
+
+    private fun loadShowNamesFromPrefs() {
+        val prefs = getSharedPreferences("show_name_prefs", MODE_PRIVATE)
+        val all = prefs.all
+        for ((key, value) in all) {
+            if (value is String) showNameCache[key] = value
+        }
+    }
+
+    private fun saveShowNameToPrefs(showId: String, name: String) {
+        showNameCache[showId] = name
+        getSharedPreferences("show_name_prefs", MODE_PRIVATE).edit {
+            putString(showId, name)
+        }
+    }
+
+    private fun resolveShowDisplayName(podcast: Podcast): String {
+        val showId = PodcastShowManager.resolveShowForEpisode(podcast.path, podcast.name)
+        return showNameCache[showId]
+            ?: PodcastShowManager.getShow(showId)?.name
+            ?: podcast.name
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -458,6 +485,7 @@ class MediaPlayerService : MediaSessionService() {
         MediaAnalyticsManager.init(this)
         FavoritesPlaylist.setContext(this)
         PodcastShowManager.init(this)
+        loadShowNamesFromPrefs()
 
         currentMode = musicPrefs.getString(KEY_CURRENT_MODE, MODE_MUSIC) ?: MODE_MUSIC
         currentSongIndex = musicPrefs.getInt(KEY_CURRENT_SONG_INDEX, 0)
@@ -492,6 +520,9 @@ class MediaPlayerService : MediaSessionService() {
 
         createMediaSession()
         startForeground(MEDIA_PLAYER, buildNotification(), getServiceForegroundType())
+        Handler(Looper.getMainLooper()).postDelayed({
+            refreshShowNamesViaNvidia()
+        }, 3000L)
         startPositionSaving()
         registerBluetoothReceiver()
 
@@ -911,6 +942,22 @@ class MediaPlayerService : MediaSessionService() {
 
     private fun switchToPodcast() {
         if (isPlayingMusic) {
+            if (songStartedAt > 0L && currentSongName.isNotEmpty()) {
+                val listenedMs = System.currentTimeMillis() - songStartedAt
+                if (listenedMs > 3000) {
+                    MediaAnalyticsManager.addSession(
+                        ListenSession(
+                            label = currentSongName,
+                            type = "music",
+                            listenedMs = listenedMs,
+                            startedAt = songStartedAt,
+                            repeatCount = consecutiveRepeatCount.coerceAtLeast(1)
+                        )
+                    )
+                }
+                songStartedAt = 0L
+                consecutiveRepeatCount = 0
+            }
             musicPlayer?.pause()
             isPlayingMusic = false
         }
@@ -1112,8 +1159,7 @@ class MediaPlayerService : MediaSessionService() {
     }
 
     private fun pauseMusic() {
-        if (!isPlayingMusic || musicPlayer?.isPlaying != true) return
-
+        if (!isPlayingMusic) return
         if (songStartedAt > 0L && currentSongName.isNotEmpty()) {
             val listenedMs = System.currentTimeMillis() - songStartedAt
             if (listenedMs > 3000) {
@@ -1130,7 +1176,6 @@ class MediaPlayerService : MediaSessionService() {
             songStartedAt = 0L
             consecutiveRepeatCount = 0
         }
-
         musicPlayer?.pause()
         musicPrefs.editAsync { putBoolean("is_playing", false) }
         isPlayingMusic = false
@@ -1333,6 +1378,7 @@ class MediaPlayerService : MediaSessionService() {
             if (savedPos > 1000) podcastPlayer?.seekTo((savedPos - 1000).toInt())
             musicPrefs.editAsync { putBoolean("is_playing", true) }
             podcastPlayer?.start()
+            podcastSessionStartedAt = System.currentTimeMillis()
             isPlayingPodcast = true
             updateNotification()
             return
@@ -2182,6 +2228,26 @@ class MediaPlayerService : MediaSessionService() {
             nm?.notify(PLALISTS + 50, summary)
     }
 
+    private fun refreshShowNamesViaNvidia() {
+        val shows = PodcastShowManager.getShows()
+        if (shows.isEmpty()) return
+
+        CoroutineScope(Dispatchers.IO).launch {
+            shows.forEach { show ->
+                if (showNameCache.containsKey(show.id)) return@forEach // schon gecacht
+                try {
+                    val result = sendNvidiaChatMessageAITab(
+                        history = emptyList(),
+                        userMessage = "Wie lautet der offizielle, vollständige deutsche Name des Podcasts \"${show.name}\"? Antworte NUR mit dem Namen, ohne Erklärung."
+                    )
+                    if (!result.isNullOrBlank()) {
+                        saveShowNameToPrefs(show.id, result.trim())
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
     @UnstableApi
     private class DummyPlayer : Player {
         override fun getApplicationLooper(): Looper = Looper.getMainLooper()
@@ -2362,10 +2428,8 @@ class MediaPlayerService : MediaSessionService() {
             podcastSessionStartedAt = 0L; return
         }
 
-        val showId = podcast.path.let { path ->
-            PodcastShowManager.resolveShowForEpisode(path, podcast.name)
-        }
-        val showName = PodcastShowManager.getShow(showId)?.name ?: podcast.name
+        val showId = PodcastShowManager.resolveShowForEpisode(podcast.path, podcast.name)
+        val showName = resolveShowDisplayName(podcast)
 
         MediaAnalyticsManager.addSession(
             ListenSession(
