@@ -147,6 +147,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.FontScaling
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -175,6 +177,8 @@ import com.cloud.datecalculator.DateCalculatorContent
 import com.cloud.exploretab.ExploreTabContent
 import com.cloud.gallery.GalleryTab
 import com.cloud.gmailtab.GmailTabContent
+import com.cloud.mediaplayer.AiResponseHistorySheet
+import com.cloud.mediaplayer.MediaAnalyticsManager
 import com.cloud.mediaplayer.MediaTab
 import com.cloud.mediarecorder.MediaRecorderContent
 import com.cloud.movietab.MovieDiscoveryTabContent
@@ -510,12 +514,6 @@ fun MasterPasswordSetupScreen(onPasswordSaved: (String) -> Unit) {
             ) { Text("Speichern & Starten") }
         }
     }
-}
-
-@Preview
-@Composable
-fun test() {
-    LandingPage {}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -2961,10 +2959,11 @@ fun ClickableGlowingCard(
     }
 }
 
-@Preview(device = "spec:width=1080px,height=2340px,dpi=640")
 @Composable
-fun GoogNightScreen() {
-    // params: AI: String
+fun GoodNightScreen(ai: String) {
+    val context = LocalContext.current
+    MediaAnalyticsManager.init(context)
+    var showStats by remember { mutableStateOf(false) }
     Box(modifier = Modifier.fillMaxSize()) {
         Image(
             painter = painterResource(id = R.drawable.night),
@@ -2976,8 +2975,35 @@ fun GoogNightScreen() {
             Font(R.font.smb, FontWeight.Normal),
             Font(R.font.smb, FontWeight.Bold)
         )
-        Box(modifier = Modifier.fillMaxSize()) {
-            Text("AI", fontFamily = spaceMono, color = Color.White, fontSize = 30.sp)
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(Modifier.fillMaxWidth(0.8f)) {
+                Row{
+                    Text("Guck wie du heute abgeschnitten hast:", color = Color.White, fontFamily = spaceMono)
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(20))
+                        .background(Cloud)
+                        .padding(5.dp)
+                        .clickable(onClick = {
+                            showStats = true
+                        })
+                ) {
+                    Text(
+                        "$ai...",
+                        fontFamily = spaceMono,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        fontSize = 15.sp
+                    )
+                }
+            }
         }
+    }
+    if (showStats) {
+        AiResponseHistorySheet(context = context, onDismiss = { showStats = false })
     }
 }
