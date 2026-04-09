@@ -2973,8 +2973,8 @@ fun GoogNightScreen() {
             modifier = Modifier.fillMaxSize()
         )
         val spaceMono = FontFamily(
-            Font(R.font.SMB, FontWeight.Normal),
-            Font(R.font.SMB, FontWeight.Bold)
+            Font(R.font.smb, FontWeight.Normal),
+            Font(R.font.smb, FontWeight.Bold)
         )
         Box(modifier = Modifier.fillMaxSize()) {
             Text("AI", fontFamily = spaceMono, color = Color.White, fontSize = 30.sp)
