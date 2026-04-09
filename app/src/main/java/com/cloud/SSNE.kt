@@ -12,8 +12,6 @@ import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.cloud.Config.cms
 import com.cloud.service.MediaPlayerService
-import com.cloud.service.MediaPlayerService.Companion.ACTION_DELETE_SINGLE
-import com.cloud.service.QuietHoursNotificationService
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -37,16 +35,14 @@ fun showSimpleNotificationExtern(
 
     if (onClick != null) {
         val intent = PendingIntent.getService(
-            context, 70000 + i,
+            context, 70000,
             Intent(context, MediaPlayerService::class.java).apply {
-                action = ACTION_DELETE_SINGLE + path.hashCode()
+                action = onClick
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         notification.setContentIntent(intent)
     }
-
-    notification.build()
 
     val id = cms()
 
@@ -55,7 +51,7 @@ fun showSimpleNotificationExtern(
     if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
         == PackageManager.PERMISSION_GRANTED
     ) {
-        notificationManager.notify(id, notification)
+        notificationManager.notify(id, notification.build())
 
         if (duration > Duration.ZERO) {
             Handler(Looper.getMainLooper()).postDelayed(
