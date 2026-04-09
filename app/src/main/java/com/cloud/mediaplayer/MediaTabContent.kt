@@ -62,9 +62,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetDefaults
+import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
@@ -77,6 +80,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -254,7 +258,7 @@ fun MediaTab(viewModel: MediaViewModel = viewModel()) {
         }
 
         if (showFullscreenPlayer) {
-            var offsetY by remember { mutableStateOf(0f) }
+            var offsetY by remember { mutableFloatStateOf(0f) }
             val dismissThreshold = 200f
 
             Box(
@@ -3538,7 +3542,7 @@ object PodcastShowManager {
 
 
     fun resolveShowForEpisode(path: String, title: String): String {
-        val combined = (path + " " + title).lowercase()
+        val combined = ("$path $title").lowercase()
         extraPatterns.forEach { (pattern, showId) ->
             if (combined.contains(pattern)) return showId
         }
@@ -3654,13 +3658,6 @@ fun AiResponseCard(
     entry: AiResponseEntry,
     onShowHistory: () -> Unit
 ) {
-    val todayKey = remember {
-        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.GERMANY)
-            .format(java.util.Date())
-    }
-    val isToday = entry.dateKey == todayKey
-    val label = if (isToday) "Heute" else "Gestern"
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -3711,7 +3708,9 @@ fun AiResponseHistorySheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = BgSurface
+        containerColor = BgSurface,
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
+        properties = ModalBottomSheetProperties()
     ) {
         Column(
             modifier = Modifier
