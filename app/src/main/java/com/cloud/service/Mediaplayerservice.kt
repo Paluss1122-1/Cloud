@@ -1,3 +1,5 @@
+@file:Suppress("AssignedValueIsNeverRead")
+
 package com.cloud.service
 
 import android.Manifest
@@ -512,14 +514,14 @@ class MediaPlayerService : MediaSessionService() {
 
             GET_ACTIVE_PLALIST -> {
                 val songs = getActivePlaylist()
-                val query = intent?.getStringExtra("SearchQuery") ?: return START_STICKY
+                val query = intent.getStringExtra("SearchQuery") ?: return START_STICKY
                 val result = songs.indexOfFirst { it.name.equals(query, ignoreCase = true) }
                     .takeIf { it >= 0 } ?: songs.indexOfFirst {
                     it.name.contains(
                         query,
                         ignoreCase = true
                     )
-                } ?: return START_STICKY
+                }
                 musicPlayer?.release()
                 musicPlayer = null
                 ensureMusicMode()
