@@ -1,4 +1,4 @@
-@file:Suppress("AssignedValueIsNeverRead", "AssignedValueIsNeverRead")
+@file:Suppress("AssignedValueIsNeverRead")
 
 package com.cloud.mediaplayer
 
@@ -34,7 +34,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -195,7 +194,7 @@ fun MediaTab(viewModel: MediaViewModel = viewModel()) {
                     )
                 }
             }
-        ) { padding ->
+        ) { _ ->
             Crossfade(
                 targetState = state.currentTab,
                 label = "tab_transition"
