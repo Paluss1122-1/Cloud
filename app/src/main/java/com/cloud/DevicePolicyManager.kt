@@ -42,7 +42,7 @@ class PolicyManager(private val activity: ComponentActivity) {
             try {
                 adminRequestInFlight = true
                 adminRequestLauncher.launch(intent)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 adminRequestInFlight = false
             }
         }
