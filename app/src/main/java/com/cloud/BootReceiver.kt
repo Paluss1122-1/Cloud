@@ -17,15 +17,11 @@ class BootReceiver : BroadcastReceiver() {
                 context.startService(serviceIntent)
             } catch (_: Exception) {
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             try {
                 context.startService(serviceIntent)
             } catch (_: Exception) {
             }
         }
-    }
-
-    private companion object {
-        private const val TAG = "BootReceiver"
     }
 }
