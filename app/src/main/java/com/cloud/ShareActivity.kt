@@ -261,7 +261,7 @@ class ShareActivity : ComponentActivity() {
                 }
             }
             true
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             false
         }
     }
