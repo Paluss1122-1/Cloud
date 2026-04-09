@@ -63,13 +63,10 @@ object PasswordStorage {
             cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
 
             String(cipher.doFinal(encrypted), Charsets.UTF_8)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             file.delete()
             null
         }
     }
 
-    fun changePassword(context: Context, newPassword: String) {
-        savePassword(context, newPassword)
-    }
 }
