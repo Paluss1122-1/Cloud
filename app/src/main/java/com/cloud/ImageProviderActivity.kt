@@ -1,6 +1,7 @@
+@file:Suppress("AssignedValueIsNeverRead")
+
 package com.cloud
 
-import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -51,7 +52,7 @@ class ImageProviderActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         if (intent.action != Intent.ACTION_GET_CONTENT) {
-            setResult(Activity.RESULT_CANCELED)
+            setResult(RESULT_CANCELED)
             finish()
             return
         }
@@ -70,12 +71,12 @@ class ImageProviderActivity : ComponentActivity() {
         lifecycleScope.launch {
             val uri = withContext(Dispatchers.IO) { downloadToCache(url) }
             if (uri != null) {
-                setResult(Activity.RESULT_OK, Intent().apply {
+                setResult(RESULT_OK, Intent().apply {
                     data = uri
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 })
             } else {
-                setResult(Activity.RESULT_CANCELED)
+                setResult(RESULT_CANCELED)
             }
             finish()
         }
