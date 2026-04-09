@@ -90,6 +90,7 @@ import com.cloud.quiethoursnotificationhelper.deleteGalleryImage
 import com.cloud.quiethoursnotificationhelper.getTodayKey
 import com.cloud.quiethoursnotificationhelper.isQuietHoursNow
 import com.cloud.quiethoursnotificationhelper.loadGalleryImages
+import com.cloud.quiethoursnotificationhelper.loadTodayOrYesterdayEntry
 import com.cloud.quiethoursnotificationhelper.markReadReceiver
 import com.cloud.quiethoursnotificationhelper.messageSentReceiver
 import com.cloud.quiethoursnotificationhelper.notificationDismissReceiver
@@ -190,9 +191,6 @@ class QuietHoursNotificationService : Service() {
 
         const val VOICE_NOTE_CHANNEL_ID = "voice_note_player_channel"
         const val ACTION_EXECUTE_COMMAND = "com.cloud.ACTION_EXECUTE_COMMAND"
-
-        const val KEY_SAVED_RESULT_KEY = "saved_result_key"
-        const val KEY_HAS_SAVED_DATA = "has_saved_data"
 
         val commandHistory = mutableListOf<String>()
 
@@ -583,12 +581,13 @@ class QuietHoursNotificationService : Service() {
                     CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
                         try {
                             MediaAnalyticsManager.init(this@QuietHoursNotificationService)
-                            val sessions = getSessions()
+                            val lastAiTimestamp = loadTodayOrYesterdayEntry(this@QuietHoursNotificationService)?.timestamp ?: 0L
+
+                            val sessions = getSessions().filter { it.startedAt >= lastAiTimestamp }
                             if (sessions.isEmpty()) return@launch
 
                             val stats = buildSessionStatsText(sessions)
-                            val result =
-                                sendNvidiaChatMessageAITab(emptyList(), stats) ?: return@launch
+                            val result = sendNvidiaChatMessageAITab(emptyList(), stats) ?: return@launch
                             val musicMs = sessions.filter { it.type == "music" }.sumOf { it.listenedMs }
                             val podcastMs = sessions.filter { it.type == "podcast" }.sumOf { it.listenedMs }
 
