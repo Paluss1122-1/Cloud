@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.view.animation.AnticipateInterpolator
 import android.widget.Toast
@@ -53,7 +54,6 @@ class MainActivity : FragmentActivity() {
     private var showJsonEditor by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
 
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             CoroutineScope(Dispatchers.IO).launch {
@@ -88,19 +88,8 @@ class MainActivity : FragmentActivity() {
             animator.doOnEnd { splashScreenView.remove() }
             animator.start()
         }
-        window.attributes.layoutInDisplayCutoutMode =
-            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-
-        window.insetsController?.let { controller ->
-            controller.hide(android.view.WindowInsets.Type.systemBars())
-            controller.systemBarsBehavior =
-                android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
-
+        super.onCreate(savedInstanceState)
         policyManager = PolicyManager(this)
-
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        window.isNavigationBarContrastEnforced = false
 
         policyManager.checkAndRequestAdminRights()
         BatteryDataRepository.init(this)
