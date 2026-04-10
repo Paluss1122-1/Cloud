@@ -11,6 +11,8 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -21,6 +23,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -30,6 +33,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
@@ -37,6 +41,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -69,6 +74,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -112,7 +119,7 @@ fun OtherBucketViewer(
     var uploadProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var showFullscreenImage by rememberSaveable { mutableStateOf<LocalFileInfo?>(null) }
     var showVideoPlayer by rememberSaveable { mutableStateOf<LocalFileInfo?>(null) }
-    var selectedFilter by remember { mutableStateOf("all") }
+    var selectedFilter by remember { mutableStateOf("Alle") }
     val context = LocalContext.current
     var currentVideoIndex by rememberSaveable { mutableIntStateOf(0) }
     var currentImageIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -305,30 +312,41 @@ fun OtherBucketViewer(
                     .padding(bottom = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                FilterButton(
-                    text = "Alle (${fileList.size})",
-                    isSelected = selectedFilter == "all",
-                    onClick = { selectedFilter = "all" },
-                    modifier = Modifier.weight(1f)
-                )
-                FilterButton(
-                    text = "Videos (${fileList.count { it.isVideo }})",
-                    isSelected = selectedFilter == "videos",
-                    onClick = { selectedFilter = "videos" },
-                    modifier = Modifier.weight(1f)
-                )
-                FilterButton(
-                    text = "Bilder (${fileList.count { !it.isVideo }})",
-                    isSelected = selectedFilter == "images",
-                    onClick = { selectedFilter = "images" },
-                    modifier = Modifier.weight(1f)
-                )
-                FilterButton(
-                    text = "⭐ (${fileList.count { it.isFavorite && it.isVideo }})",
-                    isSelected = selectedFilter == "favorites",
-                    onClick = { selectedFilter = "favorites" },
-                    modifier = Modifier.weight(1f)
-                )
+                listOf("Alle", "Videos", "Bilder", "Favoriten").forEach { filter ->
+                    val suffix = when (filter) {
+                        "Alle" -> fileList.size
+                        "Videos" -> fileList.count { it.isVideo }
+                        "Bilder" -> fileList.count { !it.isVideo }
+                        "Favoriten" -> fileList.count { it.isFavorite && it.isVideo }
+                        else -> {
+                            ""
+                        }
+                    }
+                    val containerColor by animateColorAsState(
+                        targetValue = if (selectedFilter == filter) Color(0xFF555555) else Color(
+                            0xFF333333
+                        ),
+                        animationSpec = tween(durationMillis = 300),
+                        label = "containerColor"
+                    )
+                    PloppingButton(
+                        onClick = {
+                            selectedFilter = filter
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            "$filter ($suffix)",
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
             }
 
             if (fileList.isEmpty()) {
@@ -354,9 +372,9 @@ fun OtherBucketViewer(
                 }
             } else {
                 val filteredList = when (selectedFilter) {
-                    "videos" -> fileList.filter { it.isVideo }
-                    "images" -> fileList.filter { !it.isVideo }
-                    "favorites" -> fileList.filter { it.isFavorite && it.isVideo }
+                    "Videos" -> fileList.filter { it.isVideo }
+                    "Bilder" -> fileList.filter { !it.isVideo }
+                    "Favoriten" -> fileList.filter { it.isFavorite && it.isVideo }
                     else -> fileList
                 }
 
@@ -667,9 +685,9 @@ fun OtherBucketViewer(
 
     showFullscreenImage?.let { _ ->
         val imageFiles = when (selectedFilter) {
-            "videos" -> emptyList()
-            "images" -> fileList.filter { !it.isVideo }
-            "favorites" -> emptyList()
+            "Videos" -> emptyList()
+            "Bilder" -> fileList.filter { !it.isVideo }
+            "Favoriten" -> emptyList()
             else -> fileList.filter { !it.isVideo }
         }
 
