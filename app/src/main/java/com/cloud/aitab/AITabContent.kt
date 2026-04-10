@@ -2,6 +2,10 @@ package com.cloud.aitab
 
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,7 +24,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,17 +39,20 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
+import com.cloud.privatecloudapp.PloppingButton
 import com.cloud.privatecloudapp.isOnline
 import com.cloud.quiethoursnotificationhelper.askServer
 import com.cloud.quiethoursnotificationhelper.sendNvidiaChatMessageAITab
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -106,30 +112,49 @@ fun AITabContent() {
         }
     }
 
+    val alpha = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        delay(100)
+        alpha.animateTo(
+            1f, animationSpec = tween(
+                durationMillis = 300,
+                easing = FastOutSlowInEasing
+            )
+        )
+    }
+
     Box(
         Modifier
             .fillMaxSize()
             .background(Color.Transparent)
             .imePadding()
+            .alpha(alpha.value)
     ) {
         Column(verticalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                listOf("Nvidia", "Server").forEach { mode ->
-                    Button(
-                        onClick = { currentMode = mode },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (currentMode == mode) Color(0xFF555555) else Color(
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(
+                    modifier = Modifier
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("Nvidia", "Server").forEach { mode ->
+                        val containerColor by animateColorAsState(
+                            targetValue = if (currentMode == mode) Color(0xFF555555) else Color(
                                 0xFF333333
-                            )
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(mode, color = Color.White)
+                            ),
+                            animationSpec = tween(durationMillis = 300),
+                            label = "containerColor"
+                        )
+                        PloppingButton(
+                            onClick = { currentMode = mode },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = containerColor
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(mode, color = Color.White)
+                        }
                     }
                 }
             }
@@ -154,7 +179,9 @@ fun AITabContent() {
                                 fontSize = 15.sp,
                                 modifier = Modifier
                                     .background(
-                                        if (isUser) MaterialTheme.colorScheme.primary else Color(0xFF444444),
+                                        if (isUser) MaterialTheme.colorScheme.primary else Color(
+                                            0xFF444444
+                                        ),
                                         RoundedCornerShape(10.dp)
                                     )
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
