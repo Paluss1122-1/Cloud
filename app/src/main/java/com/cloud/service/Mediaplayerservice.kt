@@ -130,10 +130,12 @@ class MediaPlayerService : MediaSessionService() {
 
         const val ACTION_PLAY_ALL_SONGS_AT_INDEX = "com.cloud.ACTION_PLAY_ALL_SONGS_AT_INDEX"
 
-        fun playFromAllSongs(context: Context, index: Int) = context.startForegroundService(
+        const val EXTRA_SONG_PATH = "extra_song_path"
+
+        fun playFromAllSongs(context: Context, path: String) = context.startForegroundService(
             Intent(context, MediaPlayerService::class.java).apply {
                 action = ACTION_PLAY_ALL_SONGS_AT_INDEX
-                putExtra(EXTRA_SONG_INDEX, index)
+                putExtra(EXTRA_SONG_PATH, path)
             }
         )
 
@@ -442,6 +444,7 @@ class MediaPlayerService : MediaSessionService() {
     private var playPauseCount = 0
 
     private val playlists = mutableListOf<Playlist>()
+    private var allSongs: List<Song> = emptyList()
     private var activePlaylistId: String? = null
     private var activeAlgorithmicPlaylistId: String? = null
     private var algorithmicPlaylistSongs: List<Song> = emptyList()
@@ -763,19 +766,27 @@ class MediaPlayerService : MediaSessionService() {
             }
 
             ACTION_PLAY_ALL_SONGS_AT_INDEX -> {
-                activeAlgorithmicPlaylistId = null
-                algorithmicPlaylistSongs = emptyList()
-                activePlaylistId = null
-                favoritesMode = false
-                saveFavorites()
-                savePlaylists()
-                loadPlaylist()
-                val idx = intent.getIntExtra(EXTRA_SONG_INDEX, 1)
-                currentSongIndex = (idx - 1).coerceAtLeast(0)
-                saveMusicState()
-                ensureMusicMode()
-                musicPlayer?.release(); musicPlayer = null
-                loadSong(currentSongIndex)
+                val path = intent.getStringExtra(EXTRA_SONG_PATH)
+                CoroutineScope(Dispatchers.IO).launch {
+                    activeAlgorithmicPlaylistId = null
+                    algorithmicPlaylistSongs = emptyList()
+                    activePlaylistId = null
+                    favoritesMode = false
+                    saveFavorites()
+                    savePlaylists()
+                    if (allSongs.isNotEmpty()) playlist = allSongs else loadPlaylist()
+                    currentSongIndex = if (path != null)
+                        playlist.indexOfFirst { it.path == path }.coerceAtLeast(0)
+                    else
+                        (intent.getIntExtra(EXTRA_SONG_INDEX, 1) - 1).coerceAtLeast(0)
+                    saveMusicState()
+                    handler.post {
+                        ensureMusicMode()
+                        musicPlayer?.release()
+                        musicPlayer = null
+                        loadSong(currentSongIndex)
+                    }
+                }
             }
 
             else -> when {
@@ -1786,6 +1797,7 @@ class MediaPlayerService : MediaSessionService() {
                 }
             }
             playlist = songs.sortedBy { it.name.lowercase() }
+            allSongs = playlist
             if (currentSongIndex >= playlist.size) {
                 currentSongIndex = 0; saveMusicState()
             }
