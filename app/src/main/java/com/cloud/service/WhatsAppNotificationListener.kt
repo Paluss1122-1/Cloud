@@ -1,14 +1,58 @@
 package com.cloud.service
 
+import android.app.Activity
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.graphics.PixelFormat
 import android.net.Uri
 import android.os.DeadObjectException
+import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowInsets
+import android.view.WindowInsetsController
+import android.view.WindowManager
+import android.webkit.CookieManager
+import android.webkit.WebChromeClient
+import android.webkit.WebChromeClient.CustomViewCallback
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.FrameLayout
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Laptop
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.cloud.Config.BLOCKED_MESSAGES
 import com.cloud.Config.NOTIFICATION_PORT
 import com.cloud.database.WhatsAppMessage
@@ -16,6 +60,8 @@ import com.cloud.database.WhatsAppMessageRepository
 import com.cloud.objects.NotificationRepository
 import com.cloud.quiethoursnotificationhelper.isLaptopConnected
 import com.cloud.quiethoursnotificationhelper.laptopIp
+import com.cloud.showSimpleNotificationExtern
+import com.cloud.ui.theme.Cloud
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -32,7 +78,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     private lateinit var repository: WhatsAppMessageRepository
 
     val replyActions = java.util.concurrent.ConcurrentHashMap<String, ReplyData>()
-    val messagesByContact = java.util.concurrent.ConcurrentHashMap<String, MutableList<ChatMessage>>()
+    val messagesByContact =
+        java.util.concurrent.ConcurrentHashMap<String, MutableList<ChatMessage>>()
 
     private val serviceJob = SupervisorJob()
     private val forwardScope = CoroutineScope(Dispatchers.IO + serviceJob)
@@ -42,7 +89,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
     companion object {
         private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
-        private val TELEGRAM_PACKAGES = setOf("org.telegram.messenger", "org.telegram.messenger.web")
+        private val TELEGRAM_PACKAGES =
+            setOf("org.telegram.messenger", "org.telegram.messenger.web")
 
         private const val FORWARD_DEBOUNCE_MS = 500L
         private const val PREFS_BLOCKED = "blocked_notifications_prefs"
@@ -50,8 +98,10 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
         private var instance: WeakReference<WhatsAppNotificationListener>? = null
 
-        val messagesByContact get() = instance?.get()?.messagesByContact ?: java.util.concurrent.ConcurrentHashMap()
-        val replyActions get() = instance?.get()?.replyActions ?: java.util.concurrent.ConcurrentHashMap()
+        val messagesByContact
+            get() = instance?.get()?.messagesByContact ?: java.util.concurrent.ConcurrentHashMap()
+        val replyActions
+            get() = instance?.get()?.replyActions ?: java.util.concurrent.ConcurrentHashMap()
 
         fun forwardNotificationsToLaptop1() {
             val svc = instance?.get() ?: return
@@ -114,7 +164,10 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
                     val appName = try {
                         packageManager.getApplicationLabel(
-                            packageManager.getApplicationInfo(sbn.packageName, PackageManager.GET_META_DATA)
+                            packageManager.getApplicationInfo(
+                                sbn.packageName,
+                                PackageManager.GET_META_DATA
+                            )
                         ).toString()
                     } catch (_: Exception) {
                         sbn.packageName
@@ -156,6 +209,9 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         super.onDestroy()
     }
 
+    private var testOverlayView: ComposeView? = null
+    private var testOverlayLifecycle: OverlayLifecycleOwner? = null
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         try {
             super.onNotificationPosted(sbn)
@@ -163,10 +219,101 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             if (sbn.packageName != "com.example.cloud" && sbn.packageName != "com.android.systemui") {
                 if (listenerConnected) {
                     try {
-                        activeNotifications?.let { forwardNotificationsToLaptop(it, packageManager) }
+                        activeNotifications?.let {
+                            forwardNotificationsToLaptop(
+                                it,
+                                packageManager
+                            )
+                        }
                     } catch (se: SecurityException) {
-                        Log.w("MessageListener", "getActiveNotifications not allowed yet: ${se.message}")
+                        Log.w(
+                            "MessageListener",
+                            "getActiveNotifications not allowed yet: ${se.message}"
+                        )
                     }
+                }
+            }
+
+            if (sbn.packageName == "com.google.android.gm") {
+                if (!Settings.canDrawOverlays(this)) {
+                    showSimpleNotificationExtern(
+                        "Fehler",
+                        "Overlay-Berechtigung fehlt!",
+                        context = this
+                    )
+                    return
+                }
+                val text = "${
+                    sbn.notification.extras.getCharSequence("android.text")?.toString() ?: ""
+                } ${sbn.notification.extras.getCharSequence("android.bigText")?.toString() ?: ""}"
+                val code = Regex("\\b\\d{4,6}\\b").find(text)?.value ?: return
+
+                val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+
+                testOverlayLifecycle = OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
+
+                testOverlayView = ComposeView(this).apply {
+                    setViewTreeLifecycleOwner(testOverlayLifecycle)
+                    setViewTreeSavedStateRegistryOwner(testOverlayLifecycle)
+                    setViewTreeViewModelStoreOwner(testOverlayLifecycle)
+                    setContent {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(Modifier.fillMaxSize().background(Cloud), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                Text("$code", fontSize = 100.sp, color = Color.White)
+                            }
+                            IconButton(
+                                onClick = {
+                                    try {
+                                        testOverlayView?.let { windowManager.removeView(it) }
+                                    } catch (_: Exception) {
+                                    }
+                                    try {
+                                        testOverlayLifecycle?.onDestroy()
+                                    } catch (_: Exception) {
+                                    }
+                                    testOverlayView = null
+                                    testOverlayLifecycle = null
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(8.dp)
+                                    .size(40.dp)
+                                    .background(
+                                        Color.Black.copy(alpha = 0.6f),
+                                        shape = RoundedCornerShape(50)
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Schließen",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
+
+                val params = WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or  // ✅ Statt FLAG_NOT_FOCUSABLE
+                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                    PixelFormat.TRANSLUCENT
+                ).apply {
+                    gravity = Gravity.CENTER
+                }
+
+
+                try {
+                    windowManager.addView(testOverlayView, params)
+                } catch (e: Exception) {
+                    showSimpleNotificationExtern(
+                        "Fehler",
+                        "Overlay konnte nicht gestartet werden",
+                        context = this
+                    )
                 }
             }
 
@@ -218,7 +365,10 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                         originalResultKey = systemRemoteInput.resultKey,
                         timestamp = System.currentTimeMillis()
                     )
-                    Log.d("MessageListener", "Saved reply action for $title with key: ${systemRemoteInput.resultKey}")
+                    Log.d(
+                        "MessageListener",
+                        "Saved reply action for $title with key: ${systemRemoteInput.resultKey}"
+                    )
                 }
             }
 
@@ -230,7 +380,11 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 val exists = repository.getAll().any { it.sender == title && it.text == text }
                 if (!exists && !title.contains("Du")) {
                     repository.insert(
-                        WhatsAppMessage(sender = title, text = text, timestamp = System.currentTimeMillis())
+                        WhatsAppMessage(
+                            sender = title,
+                            text = text,
+                            timestamp = System.currentTimeMillis()
+                        )
                     )
                     val broadcastIntent = Intent("WHATSAPP_MESSAGE_RECEIVED").apply {
                         setPackage(applicationContext.packageName)
@@ -263,9 +417,17 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             ) {
                 if (listenerConnected) {
                     try {
-                        activeNotifications?.let { forwardNotificationsToLaptop(it, packageManager) }
+                        activeNotifications?.let {
+                            forwardNotificationsToLaptop(
+                                it,
+                                packageManager
+                            )
+                        }
                     } catch (se: SecurityException) {
-                        Log.w("MessageListener", "getActiveNotifications not allowed yet: ${se.message}")
+                        Log.w(
+                            "MessageListener",
+                            "getActiveNotifications not allowed yet: ${se.message}"
+                        )
                     }
                 }
             }
@@ -301,7 +463,11 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         NotificationRepository.clear()
     }
 
-    private fun handleBlockedSender(sbn: StatusBarNotification, title: String, text: String): Boolean {
+    private fun handleBlockedSender(
+        sbn: StatusBarNotification,
+        title: String,
+        text: String
+    ): Boolean {
         val normalizedTitle = title.trim()
         if (BLOCKED_SENDERS.none { it.equals(normalizedTitle, ignoreCase = true) }) return false
 
