@@ -267,8 +267,23 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
         }
 
         val replyData = WhatsAppNotificationListener.replyActions[key]
+
+        if (replyData == null) {
+            Log.e("Messages", "replyData ist null für key='$key'. replyActions-Keys: ${WhatsAppNotificationListener.replyActions.keys}")
+            showSimpleNotificationExtern("⚠️ Kein replyData", "Kein Eintrag in replyActions für: $key", context = context, silent = false)
+            return
+        }
+
+        val creatorPackage = replyData.pendingIntent?.creatorPackage
+        if (creatorPackage == null) {
+            Log.e("Messages", "creatorPackage ist null für key='$key'")
+            showSimpleNotificationExtern("⚠️ Kein Package", "PendingIntent hat kein creatorPackage", context = context, silent = false)
+            return
+        }
+
         val supported =
             replyData?.pendingIntent?.creatorPackage?.let { isSupportedMessenger(it) } ?: false
+        Log.d("Messages", "creatorPackage='$creatorPackage', supported=$supported")
 
         if (!supported) {
             Log.w("Messages", "Unsupported messenger: ${replyData?.pendingIntent?.creatorPackage}")
@@ -343,7 +358,6 @@ fun markMessageAsRead(messageId: String, readMessageIds: MutableSet<String>, con
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         for (i in 0 until 100) nm.cancel(notifId + i)
         nm.cancel(notifId + 1000000)
-        nm.cancel(notifId + 2000000)
     } catch (e: Exception) {
         CoroutineScope(Dispatchers.IO).launch {
             ERRORINSERT(ERRORINSERTDATA("markMessageAsRead", "ERROR: ${e.message}", Instant.now().toString(), "ERROR"))
