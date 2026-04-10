@@ -43,11 +43,18 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -57,7 +64,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -83,6 +89,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -92,7 +99,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -123,14 +129,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -145,10 +161,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.FontScaling
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -199,6 +213,8 @@ import com.cloud.weathertab.WeatherTabContent
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -415,7 +431,6 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
             }
             return
         }
-
         Config.masterPassword = masterPw!!
     }
 
@@ -425,31 +440,196 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
         BatteryDataRepository.init(context)
     }
 
-    if (showLandingPage) {
-        LandingPage(
-            onTabSelected = { menuItem ->
-                selectedMenuItem = menuItem
-                saveRecentTab(context, menuItem)
-                showLandingPage = false
+    // ── Forward-Transition (LandingPage → Tab) ──────────────────────────────
+    var pendingOverlayItem by remember { mutableStateOf<MenuItem?>(null) }
+    val overlayScale = remember { Animatable(0f) }
+    val overlayAlpha = remember { Animatable(0f) }
+
+    // ── Backward-Transition (Tab → LandingPage) ─────────────────────────────
+    var closingBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    val closeScale = remember { Animatable(1f) }
+    val closeAlpha = remember { Animatable(1f) }
+
+    // GraphicsLayer, das PrivateCloudApp kontinuierlich aufzeichnet
+    val appGraphicsLayer = rememberGraphicsLayer()
+
+    val scope = rememberCoroutineScope()
+
+    Box(modifier = Modifier.fillMaxSize()) {
+
+        // ── LandingPage ──────────────────────────────────────────────────────
+        if (showLandingPage) {
+            LandingPage(
+                onTabSelected = { menuItem ->
+                    // Nur State setzen – Animation startet erst wenn Bitmap bereit ist
+                    pendingOverlayItem = menuItem
+                }
+            )
+        }
+        var recordingEnabled by remember { mutableStateOf(false) }
+
+
+        // ── PrivateCloudApp (in GraphicsLayer gezeichnet, damit wir capturen können) ──
+        if (!showLandingPage) {
+            val targetMenuItem = selectedMenuItem ?: startTarget?.let { target ->
+                when (target) {
+                    "weather" -> MenuItem.WEATHER
+                    else -> null
+                }
             }
-        )
-    } else {
-        val targetMenuItem = selectedMenuItem ?: startTarget?.let { target ->
-            when (target) {
-                "weather" -> MenuItem.WEATHER
-                else -> null
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (recordingEnabled) {
+                            Modifier.drawWithContent {
+                                appGraphicsLayer.record { this@drawWithContent.drawContent() }
+                                drawLayer(appGraphicsLayer)
+                            }
+                        } else Modifier
+                    )
+            ) {
+                if (targetMenuItem != null) {
+                    PrivateCloudApp(
+                        storage = storage,
+                        startTarget = null,
+                        initialMenuItem = targetMenuItem,
+                        onBackToLanding = {
+                            scope.launch {
+                                // Recording einschalten
+                                recordingEnabled = true
+                                // Einen Frame warten damit Layer gefüllt wird
+                                withFrameNanos { }
+                                withFrameNanos { }
+                                // Jetzt capturen
+                                val bitmap = appGraphicsLayer.toImageBitmap()
+                                recordingEnabled = false
+                                closingBitmap = bitmap
+                                closeScale.snapTo(1f)
+                                closeAlpha.snapTo(1f)
+
+                                // 2. LandingPage sofort dahinter einblenden
+                                showLandingPage = true
+
+                                // 3. Einen Frame warten – LandingPage hat Zeit zu rendern
+                                withFrameNanos { }
+
+                                // 4. Frozen Frame schrumpft weg
+                                closeScale.animateTo(
+                                    0f,
+                                    tween(durationMillis = 380, easing = FastOutSlowInEasing)
+                                )
+
+                                // 5. Aufräumen
+                                closingBitmap = null
+                                closeScale.snapTo(1f)
+                                closeAlpha.snapTo(1f)
+                            }
+                        }
+                    )
+                } else {
+                    PrivateCloudApp(
+                        storage = storage,
+                        startTarget = startTarget,
+                        initialMenuItem = null
+                    )
+                }
             }
         }
 
-        if (targetMenuItem != null) {
-            PrivateCloudApp(
-                storage = storage,
-                startTarget = null,
-                initialMenuItem = targetMenuItem,
-                onBackToLanding = { showLandingPage = true }
-            )
-        } else {
-            PrivateCloudApp(storage = storage, startTarget = startTarget, initialMenuItem = null)
+        // ── Forward-Overlay (Tab öffnen) ─────────────────────────────────────
+        if (pendingOverlayItem != null) {
+            val item = pendingOverlayItem!!
+            val graphicsLayer = rememberGraphicsLayer()
+            var previewBitmap by remember(item) { mutableStateOf<ImageBitmap?>(null) }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { translationY = 10000f }
+                    .drawWithContent {
+                        graphicsLayer.record { this@drawWithContent.drawContent() }
+                        drawLayer(graphicsLayer)
+                    }
+                    .background(Cloud)
+            ) {
+                PrivateCloudApp(
+                    storage = storage,
+                    startTarget = null,
+                    initialMenuItem = item,
+                    onBackToLanding = null
+                )
+            }
+
+            LaunchedEffect(item) {
+                repeat(5) { withFrameNanos { } }
+
+                val captured = graphicsLayer.toImageBitmap()
+                previewBitmap = captured
+
+                snapshotFlow { previewBitmap }
+                    .filter { it != null }
+                    .first()
+
+                overlayScale.snapTo(0.05f)
+                overlayAlpha.snapTo(1f)
+
+                overlayScale.animateTo(
+                    1f,
+                    tween(durationMillis = 320, easing = FastOutSlowInEasing)
+                )
+
+                selectedMenuItem = item
+                saveRecentTab(context, item)
+                showLandingPage = false
+
+                delay(80)
+                overlayAlpha.animateTo(0f, tween(durationMillis = 200))
+                overlayScale.snapTo(0f)
+                pendingOverlayItem = null
+            }
+
+            if (previewBitmap != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = overlayScale.value
+                            scaleY = overlayScale.value
+                            alpha = overlayAlpha.value
+                            transformOrigin = TransformOrigin(0.5f, 0.5f)
+                        }
+                ) {
+                    Image(
+                        bitmap = previewBitmap!!,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.FillBounds
+                    )
+                }
+            }
+        }
+
+        // ── Backward-Overlay (Tab schließen – schrumpft weg) ────────────────
+        if (closingBitmap != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = closeScale.value
+                        scaleY = closeScale.value
+                        alpha = closeAlpha.value
+                        transformOrigin = TransformOrigin(0.5f, 0.5f)
+                    }
+            ) {
+                Image(
+                    bitmap = closingBitmap!!,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.FillBounds
+                )
+            }
         }
     }
 }
@@ -525,7 +705,6 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
     val allTabsSorted = remember { MenuItem.entries.sortedBy { it.title } }
     val haptic = LocalHapticFeedback.current
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
-
     val gradient = remember {
         val colors = when (currentHour) {
             in 11..16 -> listOf(
@@ -538,43 +717,32 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
                 Color(0xFF001A93).copy(alpha = 0.7f)
             )
         }
-
-        Brush.linearGradient(
-            colors = colors,
-            start = Offset.Zero,
-            end = Offset.Infinite
-        )
+        Brush.linearGradient(colors = colors, start = Offset.Zero, end = Offset.Infinite)
     }
 
     val txtcolors = remember {
         when (currentHour) {
-            in 11..16 -> Color.Black
-            else -> Color.White
+            in 11..16 -> Color.Black; else -> Color.White
         }
     }
 
     val bgpicture = remember {
         when (currentHour) {
-            in 11..16 -> R.drawable.mittag
-            else -> R.drawable.night
+            in 11..16 -> R.drawable.mittag; else -> R.drawable.night
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
         Image(
-            painter = painterResource(id = bgpicture),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
+            painter = painterResource(id = bgpicture), contentDescription = null,
+            contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()
         )
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(gradient)
         )
+
         CompositionLocalProvider(LocalContentColor provides txtcolors) {
             Column(
                 modifier = Modifier
@@ -608,17 +776,12 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
                                 modifier = Modifier.padding(bottom = 12.dp)
                             )
                         }
-
                         items(items = recentTabs, key = { "recent_${it.ordinal}" }) { menuItem ->
-                            val onClick = remember(menuItem) {
-                                {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onTabSelected(menuItem)
-                                }
-                            }
-                            TabCard(menuItem = menuItem, isRecent = true, onClick = onClick)
+                            TabCard(
+                                menuItem = menuItem,
+                                isRecent = true,
+                                onClick = { onTabSelected(menuItem) })
                         }
-
                         item(key = "divider") {
                             HorizontalDivider(
                                 modifier = Modifier.padding(vertical = 16.dp),
@@ -633,15 +796,11 @@ fun LandingPage(onTabSelected: (MenuItem) -> Unit) {
                             )
                         }
                     }
-
                     items(items = allTabsSorted, key = { "all_${it.ordinal}" }) { menuItem ->
-                        val onClick = remember(menuItem) {
-                            {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onTabSelected(menuItem)
-                            }
-                        }
-                        TabCard(menuItem = menuItem, isRecent = false, onClick = onClick)
+                        TabCard(
+                            menuItem = menuItem,
+                            isRecent = false,
+                            onClick = { onTabSelected(menuItem) })
                     }
                 }
             }
@@ -663,25 +822,21 @@ fun TabCard(
                 val canvasSize = size
                 drawContext.canvas.nativeCanvas.apply {
                     drawRoundRect(
-                        0f, // Left
-                        0f, // Top
-                        canvasSize.width, // Right
-                        canvasSize.height, // Bottom
-                        5.dp.toPx(),
-                        5.dp.toPx(),
+                        0f, 0f, canvasSize.width, canvasSize.height,
+                        5.dp.toPx(), 5.dp.toPx(),
                         Paint().apply {
                             color = containerColor.toArgb()
                             isAntiAlias = true
                             setShadowLayer(
-                                5.dp.toPx(),
-                                0.dp.toPx(), 0.dp.toPx(),
+                                5.dp.toPx(), 0f, 0f,
                                 containerColor.copy(alpha = 0.85f).toArgb()
                             )
                         }
                     )
                 }
             }
-            .border(1.dp, Color.Gray.copy(0.8f), RoundedCornerShape(5.dp))) {
+            .border(1.dp, Color.Gray.copy(0.8f), RoundedCornerShape(5.dp))
+    ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -745,6 +900,16 @@ fun PrivateCloudApp(
         }
     }
 
+    val activity = context as? Activity
+    LaunchedEffect(isFullScreen) {
+        val controller = activity?.window?.insetsController ?: return@LaunchedEffect
+        if (isFullScreen) {
+            controller.hide(android.view.WindowInsets.Type.systemBars())
+        } else {
+            controller.show(android.view.WindowInsets.Type.systemBars())
+        }
+    }
+
     LaunchedEffect(selectedMenuItem) {
         gesturesEnabled = when (selectedMenuItem) {
             MenuItem.EXPLORE -> false
@@ -805,8 +970,7 @@ fun PrivateCloudApp(
             drawerContent = {
                 ModalDrawerSheet(
                     drawerContainerColor = Color.DarkGray,
-                    modifier = Modifier.fillMaxWidth(0.75f),
-                    windowInsets = WindowInsets(0, 0, 0, 0)
+                    modifier = Modifier.fillMaxWidth(0.75f)
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         Column(modifier = Modifier.fillMaxSize()) {
@@ -867,21 +1031,6 @@ fun PrivateCloudApp(
                                 }
                             }
                         }
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .width(26.dp)
-                                .align(Alignment.CenterEnd)
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(
-                                            Color.Transparent,
-                                            Color.Black.copy(alpha = 0.4f)
-                                        )
-                                    )
-                                )
-                        )
-
                     }
                 }
             }
@@ -962,8 +1111,7 @@ fun PrivateCloudApp(
                             windowInsets = WindowInsets.statusBars
                         )
                     },
-                    containerColor = Color.Transparent,
-                    contentWindowInsets = WindowInsets(0, 0, 0, 0)
+                    containerColor = Color.Transparent
                 ) { paddingValues ->
                     Box(modifier = Modifier.padding(paddingValues)) {
                         when (selectedMenuItem) {
@@ -1180,6 +1328,12 @@ fun MainCloudScreen(storage: Storage) {
     var fullscreenImageDialogData by remember { mutableStateOf<Triple<String?, String, Long>?>(null) }
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
+    var pendingOtherBucket by remember { mutableStateOf(false) }
+    val otherBucketLayer = rememberGraphicsLayer()
+    var otherBucketBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    val otherBucketScale = remember { Animatable(0f) }
+    val otherBucketAlpha = remember { Animatable(0f) }
+    var shouldshow by remember { mutableStateOf(false) }
 
     BackHandler(true) { }
 
@@ -1343,33 +1497,49 @@ fun MainCloudScreen(storage: Storage) {
     }
 
     if (!showOtherBucket) {
+        val alpha = remember { Animatable(0f) }
+
+        LaunchedEffect(Unit) {
+            delay(100)
+            alpha.animateTo(
+                1f, animationSpec = tween(
+                    durationMillis = 300,
+                    easing = FastOutSlowInEasing
+                )
+            )
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(0.dp)
                 .background(Color.Transparent)
+                .alpha(alpha.value)
         )
         {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp),
+                    .padding(16.dp, 0.dp, 16.dp, 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf("Alle", "Dateien", "Bilder", "Favoriten").forEach { filter ->
-                        FilterChip(
-                            selected = selectedFilter == filter,
+                        val containerColor by animateColorAsState(
+                            targetValue = if (selectedFilter == filter) Color(0xFF555555) else Color(
+                                0xFF333333
+                            ),
+                            animationSpec = tween(durationMillis = 300),
+                            label = "containerColor"
+                        )
+                        PloppingButton(
                             onClick = {
                                 if (filter == "Favoriten") {
                                     favoritesClickCount++
                                     if (favoritesClickCount >= 5) {
-                                        showOtherBucket = true
+                                        pendingOtherBucket = true
                                         favoritesClickCount = 0
                                     }
                                 } else {
@@ -1377,12 +1547,20 @@ fun MainCloudScreen(storage: Storage) {
                                 }
                                 selectedFilter = filter
                             },
-                            label = {
-                                Text(
-                                    filter,
-                                    color = if (selectedFilter == filter) Color.Black else Color.White
-                                )
-                            })
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = containerColor),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = filter,
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
                 val preFilteredFileList = remember(fileList, selectedFilter) {
@@ -2108,30 +2286,46 @@ fun MainCloudScreen(storage: Storage) {
                                 }
                                 uploadLauncher.launch(intent)
                             },
-                            enabled = !isUploading
+                            enabled = !isUploading,
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Text("Datei auswählen & hochladen", fontSize = 12.sp)
+                            Text(
+                                "Datei auswählen & hochladen",
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
+                            )
                         }
 
-                        Button(onClick = {
-                            scope.launch {
-                                if (!isOnline(context)) {
-                                    Toast.makeText(
-                                        context,
-                                        "🚫 Keine Internetverbindung",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                } else {
-                                    loadFiles()
-                                    Toast.makeText(
-                                        context,
-                                        "Liste aktualisiert ✅",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    if (!isOnline(context)) {
+                                        Toast.makeText(
+                                            context,
+                                            "🚫 Keine Internetverbindung",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    } else {
+                                        loadFiles()
+                                        Toast.makeText(
+                                            context,
+                                            "Liste aktualisiert ✅",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
                                 }
-                            }
-                        }) {
-                            Text("🔄 Aktualisieren", fontSize = 12.sp)
+                            },
+                            modifier = Modifier.weight(0.64f)
+                        ) {
+                            Text(
+                                "🔄 Aktualisieren",
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 }
@@ -2257,12 +2451,81 @@ fun MainCloudScreen(storage: Storage) {
             }
         )
     }
-    if (showOtherBucket) {
-        OtherBucketViewer(
-            onBackPressed = {
-                showOtherBucket = false
+    if (pendingOtherBucket || showOtherBucket) {
+        if (pendingOtherBucket) {
+            // Off-screen rendern für Bitmap-Capture
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { translationY = 10000f }
+                    .drawWithContent {
+                        otherBucketLayer.record { this@drawWithContent.drawContent() }
+                        drawLayer(otherBucketLayer)
+                    }
+            ) {
+                OtherBucketViewer(onBackPressed = {
+                    showOtherBucket = false
+                })
             }
-        )
+
+            LaunchedEffect(Unit) {
+                repeat(5) { withFrameNanos { } }
+
+                val captured = otherBucketLayer.toImageBitmap()
+                otherBucketBitmap = captured
+
+                snapshotFlow { otherBucketBitmap }
+                    .filter { it != null }
+                    .first()
+
+                showOtherBucket = true
+                otherBucketScale.snapTo(0.05f)
+                otherBucketAlpha.snapTo(1f)
+
+                otherBucketScale.animateTo(
+                    1f,
+                    tween(durationMillis = 320, easing = FastOutSlowInEasing)
+                )
+
+                // Animation fertig → echten Screen zeigen
+                pendingOtherBucket = false
+                shouldshow = true
+
+                delay(80)
+                otherBucketAlpha.animateTo(0f, tween(durationMillis = 200))
+                otherBucketScale.snapTo(0f)
+                otherBucketBitmap = null
+            }
+
+            // Bitmap-Overlay
+            if (otherBucketBitmap != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = otherBucketScale.value
+                            scaleY = otherBucketScale.value
+                            alpha = otherBucketAlpha.value
+                            transformOrigin = TransformOrigin(0.5f, 0.5f)
+                        }
+                ) {
+                    Image(
+                        bitmap = otherBucketBitmap!!,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.FillBounds
+                    )
+                }
+            }
+        }
+
+        if (shouldshow) {
+            OtherBucketViewer(
+                onBackPressed = {
+                    shouldshow = false
+                }
+            )
+        }
     }
 }
 
@@ -2285,12 +2548,25 @@ fun QuickSettingsTabContent() {
     var showNumberDialog by remember { mutableStateOf(false) }
     var showNumberDialogSave by remember { mutableStateOf(false) }
 
+    val alpha = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        delay(100)
+        alpha.animateTo(
+            1f, animationSpec = tween(
+                durationMillis = 300,
+                easing = FastOutSlowInEasing
+            )
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Transparent)
-            .padding(7.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(7.dp)
+            .alpha(alpha.value),
+        verticalArrangement = Arrangement.Center
     ) {
         QuickSettingRow(
             listOf(
@@ -2300,16 +2576,9 @@ fun QuickSettingsTabContent() {
             ))
         QuickSettingRow(
             listOf(
-                "📊\nDaten\nnutzung" to { openDataUsage(context) },
                 "🔋\nBatterie\nInfo" to { showBatteryInfo(context) },
-                "💾\nSpeicher" to { openStorageSettings(context) }
-            )
-        )
-        QuickSettingRow(
-            listOf(
                 "Batterie\nDiagramm" to { showBatteryChart = true },
-                "📱\nGeräte\nInfo" to { showDeviceInfo(context) },
-                "🔨\nEntwickler" to { openDeveloperOptions(context) }
+                "📱\nGeräte\nInfo" to { showDeviceInfo(context) }
             )
         )
         QuickSettingRow(
@@ -2366,7 +2635,7 @@ fun QuickSettingRow(buttons: List<Pair<String, () -> Unit>>) {
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         buttons.forEach { (label, action) ->
-            Button(
+            PloppingButton(
                 onClick = action,
                 modifier = Modifier
                     .weight(1f)
@@ -2977,8 +3246,12 @@ fun GoodNightScreen(ai: String) {
         )
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(Modifier.fillMaxWidth(0.8f)) {
-                Row{
-                    Text("Guck wie du heute abgeschnitten hast:", color = Color.White, fontFamily = spaceMono)
+                Row {
+                    Text(
+                        "Guck wie du heute abgeschnitten hast:",
+                        color = Color.White,
+                        fontFamily = spaceMono
+                    )
                 }
 
                 Spacer(Modifier.height(10.dp))
@@ -3005,5 +3278,58 @@ fun GoodNightScreen(ai: String) {
     }
     if (showStats) {
         AiResponseHistorySheet(context = context, onDismiss = { showStats = false })
+    }
+}
+
+@Composable
+fun PloppingButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    colors: ButtonColors = ButtonDefaults.buttonColors(),
+    shape: Shape = ButtonDefaults.shape,
+    enabled: Boolean = true,
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+    content: @Composable () -> Unit,
+) {
+    val scale = remember { Animatable(1f) }
+    val scope = rememberCoroutineScope()
+    val containerColor = if (enabled) colors.containerColor else colors.disabledContainerColor
+
+    Box(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+                alpha = if (enabled) 1f else 0.38f
+            }
+            .clip(shape)
+            .background(containerColor)
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                enabled = enabled
+            ) {
+                scope.launch {
+                    scale.animateTo(
+                        0.82f,
+                        spring(
+                            stiffness = Spring.StiffnessHigh,
+                            dampingRatio = Spring.DampingRatioMediumBouncy
+                        )
+                    )
+                    onClick()
+                    scale.animateTo(
+                        1f,
+                        spring(
+                            stiffness = Spring.StiffnessMedium,
+                            dampingRatio = Spring.DampingRatioLowBouncy
+                        )
+                    )
+                }
+            }
+            .padding(contentPadding),
+        contentAlignment = Alignment.Center
+    ) {
+        content()
     }
 }
