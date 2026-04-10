@@ -56,6 +56,7 @@ uiTooling = "1.10.6"
 foundationLayout = "1.10.6"
 uiGraphics = "1.10.6"
 runtimeVersion = "1.10.6"
+ui = "1.10.6"
 
 [libraries]
 androidx-autofill = { module = "androidx.autofill:autofill", version.ref = "autofill" }
@@ -118,6 +119,7 @@ androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-toolin
 androidx-compose-foundation-layout = { group = "androidx.compose.foundation", name = "foundation-layout", version.ref = "foundationLayout" }
 androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics", version.ref = "uiGraphics" }
 androidx-runtime = { group = "androidx.compose.runtime", name = "runtime", version.ref = "runtimeVersion" }
+androidx-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "ui" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
