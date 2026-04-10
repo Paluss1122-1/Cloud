@@ -8,8 +8,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
-import android.view.WindowInsetsController
-import android.view.WindowManager
 import android.view.animation.AnticipateInterpolator
 import android.widget.Toast
 import androidx.activity.compose.setContent
@@ -42,6 +40,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 import java.time.Instant
+import java.util.Calendar
 
 var storage: Storage? = null
 
@@ -89,6 +88,12 @@ class MainActivity : FragmentActivity() {
             animator.start()
         }
         super.onCreate(savedInstanceState)
+
+        val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        when (currentHour) {
+            in 11..16 -> WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = true
+            else -> WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
+        }
         policyManager = PolicyManager(this)
 
         policyManager.checkAndRequestAdminRights()
