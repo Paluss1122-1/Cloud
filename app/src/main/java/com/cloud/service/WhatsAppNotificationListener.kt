@@ -245,7 +245,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             val quietStart = prefs.getString("saved_number_start", null)?.toIntOrNull() ?: 7
 
             // Fix: außerhalb der aktiven Stunden → zurückhalten
-            if (hour !in quietStart..<quietEnd) return
+            if (hour in quietStart..<quietEnd) return
 
             QuietHoursNotificationService.updateSingleSenderNotification(this, title)
         } catch (_: DeadObjectException) {
