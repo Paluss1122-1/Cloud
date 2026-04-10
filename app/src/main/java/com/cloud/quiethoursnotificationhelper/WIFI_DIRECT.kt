@@ -11,6 +11,10 @@ import android.content.Context.WINDOW_SERVICE
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.PixelFormat
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.PowerManager
@@ -80,6 +84,11 @@ import com.cloud.service.WhatsAppNotificationListener
 import com.cloud.showSimpleNotificationExtern
 import com.cloud.ui.theme.Cloud
 import com.cloud.vocabtab.Vokabel
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -112,6 +121,11 @@ import java.time.Instant
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.seconds
 
 val isLaptopConnectedFlow = MutableStateFlow(false)
@@ -120,7 +134,9 @@ val flashcardVokabelnFlow = MutableStateFlow<List<Vokabel>?>(null)
 
 var isLaptopConnected: Boolean
     get() = isLaptopConnectedFlow.value
-    set(value) { isLaptopConnectedFlow.value = value }
+    set(value) {
+        isLaptopConnectedFlow.value = value
+    }
 
 private val syncScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 private val mediaScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -147,12 +163,20 @@ private val activeServers = mutableListOf<ServerSocket>()
 
 private var wifiLock: WifiManager.WifiLock? = null
 private var cpuWakeLock: PowerManager.WakeLock? = null
-private var triggerWakeLock: PowerManager.WakeLock? = null
 private var appContext: Context? = null
+private var triggerWakeLock: PowerManager.WakeLock? = null
+private var homeWifiWakeLock: PowerManager.WakeLock? = null
+private var triggerWifiLock: WifiManager.WifiLock? = null
 
 private const val PREFS_SYNC = "sync_prefs"
-private const val KEY_LAPTOP_IP = "laptop_ip"
+private const val KEY_SYNC_ACTIVE = "sync_active"
+private const val KEY_SYNC_UNTIL = "sync_until"
 private var lastPushedState: String = ""
+
+private var networkCallback: ConnectivityManager.NetworkCallback? = null
+private var pendingSyncJob: Job? = null
+private var lastTriggerTime = 0L
+private const val MIN_TRIGGER_INTERVAL = 15_000L
 
 @Volatile
 private var syncInProgress = false
@@ -247,6 +271,70 @@ private suspend fun callNvidiaApi(model: String, messagesJson: JSONArray): Strin
         }
     }
 
+private object ConnectionGuard {
+    private var lastFailedAttempt: Long = 0L
+    private var consecutiveFailures: Int = 0
+    private var lastSuccessfulConnection: Long = 0L
+    private var isWifiConnected: Boolean = false
+    private var isAtHomeLocation: Boolean = false
+
+    private const val MIN_RETRY_DELAY_MS = 5_000L
+    private const val MAX_RETRY_DELAY_MS = 300_000L
+    private const val QUICK_PING_TIMEOUT_MS = 500
+
+    fun isAtHomeLocation(): Boolean = isAtHomeLocation
+
+    fun updateWifiStatus(connected: Boolean) {
+        isWifiConnected = connected
+        if (!connected) consecutiveFailures = 0
+    }
+
+    fun updateLocationStatus(atHome: Boolean) {
+        isAtHomeLocation = atHome
+        if (!atHome) consecutiveFailures = 0
+    }
+
+    fun canAttemptConnection(): Boolean {
+        if (!isWifiConnected && !isAtHomeLocation) return false
+        val now = System.currentTimeMillis()
+        return (now - lastFailedAttempt) >= calculateBackoffDelay()
+    }
+
+    private fun calculateBackoffDelay(): Long {
+        if (consecutiveFailures == 0) return 0L
+        return (MIN_RETRY_DELAY_MS * (1 shl (consecutiveFailures - 1)))
+            .coerceIn(MIN_RETRY_DELAY_MS, MAX_RETRY_DELAY_MS)
+    }
+
+    fun recordFailure() {
+        lastFailedAttempt = System.currentTimeMillis()
+        consecutiveFailures++
+    }
+
+    fun recordSuccess() {
+        lastSuccessfulConnection = System.currentTimeMillis()
+        consecutiveFailures = 0
+        lastFailedAttempt = 0L
+    }
+
+    fun getBackoffInfo(): String {
+        if (consecutiveFailures == 0) return "Bereit"
+        val delay = calculateBackoffDelay()
+        val remaining = delay - (System.currentTimeMillis() - lastFailedAttempt)
+        return if (remaining > 0) "Warte ${remaining / 1000}s (Fehler: $consecutiveFailures)"
+        else "Bereit (nach $consecutiveFailures Fehlern)"
+    }
+
+    suspend fun quickPingTest(ip: String, port: Int): Boolean = withContext(Dispatchers.IO) {
+        try {
+            Socket().apply { connect(InetSocketAddress(ip, port), QUICK_PING_TIMEOUT_MS) }.close()
+            true
+        } catch (_: Exception) { false }
+    }
+}
+
+private const val KEY_LAPTOP_IP = "laptop_ip"
+
 var laptopIp: String
     get() = appContext?.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)
         ?.getString(KEY_LAPTOP_IP, "") ?: ""
@@ -269,18 +357,60 @@ data class AiResponseEntry(
     val dateKey: String
 )
 
-// ─── Trigger Listener ────────────────────────────────────────────────────────
+fun startTriggerListenerIfHomeWifi(context: Context) {
+    checkIfNearLocation(context) { atHome ->
+        ConnectionGuard.updateLocationStatus(atHome)
+        startTriggerListener(context)
+        registerWifiReconnectReceiver(context)
+    }
+}
+
+fun registerWifiReconnectReceiver(context: Context) {
+    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    networkCallback?.let { try { cm.unregisterNetworkCallback(it) } catch (_: Exception) {} }
+
+    val callback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            ConnectionGuard.updateWifiStatus(true)
+
+            val now = System.currentTimeMillis()
+            if (now - lastTriggerTime < MIN_TRIGGER_INTERVAL) return
+            lastTriggerTime = now
+            checkIfNearLocation(context) { atHome ->
+                ConnectionGuard.updateLocationStatus(atHome)
+                if (!atHome) {
+                    // Nicht zuhause → WakeLock sofort wieder freigeben
+                    homeWifiWakeLock.safeRelease()
+                    homeWifiWakeLock = null
+                    return@checkIfNearLocation
+                }
+                if (ConnectionGuard.canAttemptConnection() && !isLaptopConnected) {
+                    syncTodosWithLaptop(context)
+                }
+            }
+        }
+
+        override fun onLost(network: Network) {
+            ConnectionGuard.updateWifiStatus(false)
+            syncInProgress = false
+            pendingSyncJob?.cancel()
+            stopAllSyncServices(context)
+        }
+    }
+
+    networkCallback = callback
+
+    val request = NetworkRequest.Builder()
+        .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+        .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        .build()
+
+    cm.registerNetworkCallback(request, callback)
+}
 
 @SuppressLint("Wakelock", "WakelockTimeout")
 fun startTriggerListener(context: Context) {
     appContext = context.applicationContext
-
-    // Dauerhafter WakeLock für den 7:00–21:30 Betrieb
-    if (triggerWakeLock == null || triggerWakeLock?.isHeld == false) {
-        val pm = context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
-        triggerWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:TriggerWakeLock")
-        triggerWakeLock?.acquire(15 * 60 * 60 * 1000L) // 15h
-    }
 
     triggerJob?.cancel()
     triggerServerSocket?.close()
@@ -309,10 +439,13 @@ fun startTriggerListener(context: Context) {
                             when {
                                 command.startsWith("CONNECT") -> {
                                     laptopIp = command.substringAfter("CONNECT:", "")
+                                    ConnectionGuard.recordSuccess()
+
                                     showSimpleNotificationExtern("📡 CONNECT empfangen", "Starte Sync...", 10.seconds, context)
 
                                     val syncWl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:SyncWakeLock")
                                     syncWl.acquire(60_000L)
+
                                     syncScope.launch {
                                         try { syncTodosWithLaptop(context) }
                                         finally { syncWl.release() }
@@ -334,7 +467,9 @@ fun startTriggerListener(context: Context) {
                     catch (e: Exception) { Log.e("TRIGGER", "Fehler beim Accept", e) }
                 }
             } catch (e: Exception) {
-                if (e !is SocketException) logError("startTriggerListener", e)
+                if (e !is SocketException) {
+                    logError("startTriggerListener", e)
+                }
             } finally {
                 triggerServerSocket?.close()
                 triggerServerSocket = null
@@ -345,7 +480,24 @@ fun startTriggerListener(context: Context) {
     }
 }
 
-// ─── Stop all services ───────────────────────────────────────────────────────
+fun restoreSyncIfNeeded(context: Context) {
+    appContext = context.applicationContext
+    val prefs = context.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)
+    val syncActive = prefs.getBoolean(KEY_SYNC_ACTIVE, false)
+    val syncUntil = prefs.getLong(KEY_SYNC_UNTIL, 0L)
+    val remainingMs = syncUntil - System.currentTimeMillis()
+
+    if (syncActive && remainingMs > 0) {
+        val remainingMinutes = (remainingMs / 60_000L).toInt().coerceAtLeast(1)
+        isLaptopConnected = true
+        startUpdateListener(context, remainingMinutes)
+        syncScope.launch {
+            delay(5_000)
+            syncTodosWithLaptop(context)
+        }
+        showSimpleNotificationExtern("🔁 Sync wiederhergestellt", "Listener läuft noch $remainingMinutes min", 10.seconds, context)
+    }
+}
 
 fun stopAllSyncServices(context: Context) {
     stopUpdateListener(false)
@@ -364,19 +516,20 @@ fun stopAllSyncServices(context: Context) {
     }
 
     triggerWakeLock.safeRelease(); triggerWakeLock = null
+    cpuWakeLock.safeRelease(); cpuWakeLock = null
+    homeWifiWakeLock.safeRelease(); homeWifiWakeLock = null
+
     isLaptopConnected = false
 
     showSimpleNotificationExtern("📴 Laptop getrennt", "Alle Sync-Services gestoppt", 10.seconds, context)
 }
 
-// ─── Sync ────────────────────────────────────────────────────────────────────
-
 fun syncTodosWithLaptop(context: Context) {
     if (syncInProgress) return
     syncInProgress = true
-
     if (laptopIp.isEmpty()) {
         Log.d("SYNC", "❌ Keine Laptop-IP gesetzt")
+        ConnectionGuard.recordFailure()
         syncInProgress = false
         return
     }
@@ -385,6 +538,19 @@ fun syncTodosWithLaptop(context: Context) {
 
     syncScope.launch {
         try {
+            val pingSuccess = ConnectionGuard.quickPingTest(laptopIp, SYNC_PORT)
+            if (!pingSuccess) {
+                Log.d("SYNC", "❌ Ping fehlgeschlagen (500ms timeout)")
+                ConnectionGuard.recordFailure()
+                isLaptopConnected = true
+                withContext(Dispatchers.Main) {
+                    showSimpleNotificationExtern("❌ Laptop nicht erreichbar", "Ping fehlgeschlagen", 5.seconds, context)
+                }
+                return@launch
+            }
+
+            Log.d("SYNC", "✅ Ping erfolgreich, starte Datenübertragung")
+
             val todos = getTodos(context)
             val socket = Socket()
             socket.connect(InetSocketAddress(laptopIp, SYNC_PORT), 3000)
@@ -393,7 +559,16 @@ fun syncTodosWithLaptop(context: Context) {
             writer.flush()
             socket.close()
 
+            ConnectionGuard.recordSuccess()
             isLaptopConnected = true
+
+            if (homeWifiWakeLock == null || homeWifiWakeLock?.isHeld == false) {
+                val pm = context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+                homeWifiWakeLock = pm.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "TodoSync:HomeWifiWakeLock"
+                ).also { it.acquire(8 * 60 * 60 * 1000L) }
+            }
 
             startMediaCommandListener(context)
             startExecuteListener(context)
@@ -401,14 +576,14 @@ fun syncTodosWithLaptop(context: Context) {
             startClipboardListener(context)
 
             if (listenerJob == null || listenerJob?.isActive == false) {
-                startUpdateListener(context)
+                startUpdateListener(context, 60)
             }
 
             withContext(Dispatchers.Main) {
                 WhatsAppNotificationListener.forwardNotificationsToLaptop1()
                 showSimpleNotificationExtern(
                     "✅ Sync erfolgreich",
-                    "${todos.size} To-dos übertragen\n🔄 Listener aktiv",
+                    "${todos.size} To-dos übertragen\n🔄 Listener aktiv für 60min",
                     10.seconds, context, silent = false
                 )
             }
@@ -416,15 +591,22 @@ fun syncTodosWithLaptop(context: Context) {
             pushMediaStateToLaptop(context)
 
         } catch (e: ConnectException) {
+            ConnectionGuard.recordFailure()
             Log.d("SYNC", "❌ Connection failed: ${e.message}")
             withContext(Dispatchers.Main) {
-                showSimpleNotificationExtern("❌ Laptop nicht erreichbar", e.message ?: "", 10.seconds, context)
+                showSimpleNotificationExtern(
+                    "❌ Sync fehlgeschlagen",
+                    "Laptop nicht erreichbar (nächster Versuch: ${ConnectionGuard.getBackoffInfo()})",
+                    10.seconds, context
+                )
             }
         } catch (_: SocketTimeoutException) {
+            ConnectionGuard.recordFailure()
             withContext(Dispatchers.Main) {
                 showSimpleNotificationExtern("❌ Sync Timeout", "Laptop antwortet nicht", 10.seconds, context)
             }
         } catch (e: Exception) {
+            ConnectionGuard.recordFailure()
             logError("syncTodosWithLaptop", e)
             withContext(Dispatchers.Main) {
                 showSimpleNotificationExtern("❌ Sync Fehler", e.message ?: "Unbekannter Fehler", 10.seconds, context)
@@ -435,26 +617,33 @@ fun syncTodosWithLaptop(context: Context) {
     }
 }
 
-// ─── Update Listener ─────────────────────────────────────────────────────────
-
-fun startUpdateListener(context: Context) {
+fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
     stopUpdateListener(true)
     appContext = context.applicationContext
+    saveSyncState(context, durationMinutes)
 
     val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
     wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "TodoSync:WifiLock")
     wifiLock?.acquire()
 
     val powerManager = context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
-    // 14.5h WakeLock deckt das gesamte 7:00–21:30 Fenster ab
     cpuWakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:UpdateWakeLock")
-    cpuWakeLock?.acquire(14_5 * 60_000L)
+    cpuWakeLock?.acquire(durationMinutes * 60_000L)
 
     listenerJob = syncScope.launch(Dispatchers.IO) {
         try {
             updateServerSocket = ServerSocket().apply {
                 reuseAddress = true
                 bind(InetSocketAddress(UPDATE_PORT))
+            }
+
+            val timeoutJob = launch {
+                delay(durationMinutes * 60_000L)
+                stopUpdateListener(false)
+                isLaptopConnected = true
+                withContext(Dispatchers.Main) {
+                    showSimpleNotificationExtern("⏸️ Sync-Listener gestoppt", "Nach $durationMinutes min automatisch beendet.", 15.seconds, context)
+                }
             }
 
             while (isActive) {
@@ -474,15 +663,20 @@ fun startUpdateListener(context: Context) {
                 } catch (_: SocketException) { break }
                 catch (e: Exception) { logError("startUpdateListener", e) }
             }
+
+            timeoutJob.cancel()
         } catch (e: Exception) {
             logError("startUpdateListener", e)
         }
     }
 }
 
-fun stopUpdateListener(keepConnected: Boolean = false) {
+fun stopUpdateListener(boolean: Boolean = false) {
     try {
-        isLaptopConnected = keepConnected
+        appContext?.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)?.edit {
+            putBoolean(KEY_SYNC_ACTIVE, false)
+        }
+        isLaptopConnected = boolean
         wifiLock?.release(); wifiLock = null
         cpuWakeLock.safeRelease(); cpuWakeLock = null
         listenerJob?.cancel(); listenerJob = null
@@ -492,7 +686,12 @@ fun stopUpdateListener(keepConnected: Boolean = false) {
     }
 }
 
-// ─── Session data ────────────────────────────────────────────────────────────
+private fun saveSyncState(context: Context, durationMinutes: Int = 0) {
+    context.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE).edit {
+        putBoolean(KEY_SYNC_ACTIVE, true)
+        putLong(KEY_SYNC_UNTIL, System.currentTimeMillis() + durationMinutes * 60_000L)
+    }
+}
 
 private fun sendSessionDataToLaptop(context: Context) {
     MediaAnalyticsManager.init(context)
@@ -535,8 +734,6 @@ private fun sendSessionDataToLaptop(context: Context) {
         logError("sendSessionDataToLaptop", e)
     }
 }
-
-// ─── Todos ───────────────────────────────────────────────────────────────────
 
 fun getTodos(context: Context): List<TodoItem> {
     val json = context.getSharedPreferences("todos_prefs", MODE_PRIVATE)
@@ -656,8 +853,6 @@ private fun parseTodosFromJson(jsonData: String): List<TodoItem> =
         logError("parseTodosFromJson", e)
         emptyList()
     }
-
-// ─── AI Response ─────────────────────────────────────────────────────────────
 
 fun startAiResponseListener(context: Context) {
     aiResponseJob?.cancel()
@@ -792,8 +987,6 @@ private fun getYesterdayKey(): String {
     return SimpleDateFormat("yyyy-MM-dd", Locale.GERMANY).format(cal.time)
 }
 
-// ─── Flashcards ───────────────────────────────────────────────────────────────
-
 suspend fun trySendImageToLaptop(imageBytes: ByteArray): Boolean {
     return withContext(Dispatchers.IO) {
         try {
@@ -854,8 +1047,6 @@ private fun parseVokabelnFromJson(json: String): List<Vokabel> = try {
     logError("parseVokabelnFromJson", e)
     emptyList()
 }
-
-// ─── Media ───────────────────────────────────────────────────────────────────
 
 fun startMediaCommandListener(context: Context) {
     if (mediaCommandJob?.isActive == true) return
@@ -933,12 +1124,12 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
             }
         }
 
-        "play"            -> MediaPlayerService.sendMusicPlayAction(context)
-        "pause"           -> sendIntent("com.cloud.ACTION_MUSIC_PAUSE")
-        "next"            -> sendIntent("com.cloud.ACTION_MUSIC_NEXT")
-        "previous"        -> sendIntent("com.cloud.ACTION_MUSIC_PREVIOUS")
-        "toggleRepeat"    -> sendIntent("com.cloud.ACTION_TOGGLE_REPEAT")
-        "toggleFavorite"  -> sendIntent("com.cloud.ACTION_TOGGLE_FAVORITE")
+        "play" -> MediaPlayerService.sendMusicPlayAction(context)
+        "pause" -> sendIntent("com.cloud.ACTION_MUSIC_PAUSE")
+        "next" -> sendIntent("com.cloud.ACTION_MUSIC_NEXT")
+        "previous" -> sendIntent("com.cloud.ACTION_MUSIC_PREVIOUS")
+        "toggleRepeat" -> sendIntent("com.cloud.ACTION_TOGGLE_REPEAT")
+        "toggleFavorite" -> sendIntent("com.cloud.ACTION_TOGGLE_FAVORITE")
 
         "activatePlaylist" -> {
             val playlistId = json.optString("playlistId", "")
@@ -975,8 +1166,8 @@ fun startMediaStateServer(context: Context) {
         val command = BufferedReader(InputStreamReader(client.getInputStream())).readLine()?.trim() ?: ""
         val response = when (command) {
             "GET_MEDIA_STATE" -> buildMediaStateJson(context)
-            "GET_PLAYLISTS"   -> buildPlaylistsJson(context)
-            else              -> "{}"
+            "GET_PLAYLISTS" -> buildPlaylistsJson(context)
+            else -> "{}"
         }
         client.getOutputStream().apply {
             write(response.toByteArray(Charsets.UTF_8))
@@ -992,10 +1183,16 @@ private fun buildMediaStateJson(context: Context): String {
 
     if (!MediaPlayerService.isServiceActive()) {
         return JSONObject().apply {
-            put("mode", "music"); put("isPlaying", false); put("currentSong", "")
-            put("currentPlaylist", ""); put("songIndex", 0); put("isFavorite", false)
-            put("activePlaylistId", ""); put("activeAlgoPlaylistId", "")
-            put("positionMs", 0); put("durationMs", 0)
+            put("mode", "music")
+            put("isPlaying", false)
+            put("currentSong", "")
+            put("currentPlaylist", "")
+            put("songIndex", 0)
+            put("isFavorite", false)
+            put("activePlaylistId", "")
+            put("activeAlgoPlaylistId", "")
+            put("positionMs", 0)
+            put("durationMs", 0)
         }.toString()
     }
 
@@ -1003,9 +1200,14 @@ private fun buildMediaStateJson(context: Context): String {
     val mode = musicPrefs.getString("current_mode", "music") ?: "music"
     val isPlaying = musicPrefs.getBoolean("is_playing", false)
 
-    val songName: String; val playlistName: String; val songIndex: Int
-    val isFavorite: Boolean; val activePlaylistId: String; val activeAlgoPlaylistId: String
-    val positionMs: Long; val durationMs: Long
+    val songName: String
+    val playlistName: String
+    val songIndex: Int
+    val isFavorite: Boolean
+    val activePlaylistId: String
+    val activeAlgoPlaylistId: String
+    val positionMs: Long
+    val durationMs: Long
 
     if (mode == "music") {
         songName = musicPrefs.getString("current_song_name", "") ?: ""
@@ -1017,26 +1219,37 @@ private fun buildMediaStateJson(context: Context): String {
             ?.mapNotNull { entry -> entry.split(":::").takeIf { it.isNotEmpty() }?.get(0) }
             ?.toSet() ?: emptySet()
         isFavorite = favorites.contains(songName)
-        activePlaylistId = activePl; activeAlgoPlaylistId = activeAlgoPl
-        positionMs = 0L; durationMs = 0L
+        activePlaylistId = activePl
+        activeAlgoPlaylistId = activeAlgoPl
+        positionMs = 0L
+        durationMs = 0L
         playlistName = when {
             activeAlgoPl.isNotEmpty() -> activeAlgoPl
-            activePl.isNotEmpty()     -> activePl
-            else                      -> "Alle Songs"
+            activePl.isNotEmpty() -> activePl
+            else -> "Alle Songs"
         }
     } else {
         val path = podcastPrefs.getString("current_podcast_path", null)
         songName = path?.substringAfterLast("/")?.substringBeforeLast(".") ?: ""
         positionMs = if (path != null) podcastPrefs.getLong("podcast_position_${path.hashCode()}", 0L) else 0L
-        durationMs = 0L; playlistName = "Podcast"; songIndex = 0
-        isFavorite = false; activePlaylistId = ""; activeAlgoPlaylistId = ""
+        durationMs = 0L
+        playlistName = "Podcast"
+        songIndex = 0
+        isFavorite = false
+        activePlaylistId = ""
+        activeAlgoPlaylistId = ""
     }
 
     return JSONObject().apply {
-        put("mode", mode); put("isPlaying", isPlaying); put("currentSong", songName)
-        put("currentPlaylist", playlistName); put("positionMs", positionMs)
-        put("durationMs", durationMs); put("songIndex", songIndex)
-        put("isFavorite", isFavorite); put("activePlaylistId", activePlaylistId)
+        put("mode", mode)
+        put("isPlaying", isPlaying)
+        put("currentSong", songName)
+        put("currentPlaylist", playlistName)
+        put("positionMs", positionMs)
+        put("durationMs", durationMs)
+        put("songIndex", songIndex)
+        put("isFavorite", isFavorite)
+        put("activePlaylistId", activePlaylistId)
         put("activeAlgoPlaylistId", activeAlgoPlaylistId)
     }.toString()
 }
@@ -1053,18 +1266,24 @@ private fun buildPlaylistsJson(context: Context): String {
                     val items = if (parts.size > 3 && parts[3].isNotEmpty())
                         parts[3].split("|~~|") else emptyList()
                     playlistsJson.put(JSONObject().apply {
-                        put("id", parts[0]); put("name", parts[1])
-                        put("type", parts[2]); put("song_count", items.size)
+                        put("id", parts[0])
+                        put("name", parts[1])
+                        put("type", parts[2])
+                        put("song_count", items.size)
                     })
                 }
             }
-    } catch (e: Exception) { logError("buildPlaylistsJson", e) }
+    } catch (e: Exception) {
+        logError("buildPlaylistsJson", e)
+    }
 
     val algoJson = JSONArray()
     AlgorithmicPlaylistRegistry.all.forEach { source ->
         algoJson.put(JSONObject().apply {
-            put("id", source.id); put("name", source.name)
-            put("description", source.description); put("icon", source.icon)
+            put("id", source.id)
+            put("name", source.name)
+            put("description", source.description)
+            put("icon", source.icon)
         })
     }
 
@@ -1095,16 +1314,21 @@ private fun buildPlaylistsJson(context: Context): String {
                     val displayName = if (!title.isNullOrBlank() && title != "<unknown>") title
                     else name.substringBeforeLast('.')
                     songsJson.put(JSONObject().apply {
-                        put("index", index++); put("name", displayName)
+                        put("index", index++)
+                        put("name", displayName)
                     })
                 }
             }
         }
-    } catch (e: Exception) { logError("buildPlaylistsJson", e) }
+    } catch (e: Exception) {
+        logError("buildPlaylistsJson", e)
+    }
 
     return JSONObject().apply {
-        put("playlists", playlistsJson); put("algorithmicPlaylists", algoJson)
-        put("algo_playlists", algoJson); put("songs", songsJson)
+        put("playlists", playlistsJson)
+        put("algorithmicPlaylists", algoJson)
+        put("algo_playlists", algoJson)
+        put("songs", songsJson)
     }.toString()
 }
 
@@ -1123,38 +1347,196 @@ fun pushMediaStateToLaptop(context: Context) {
             if (laptopIp == "") return@launch
             Socket().apply {
                 connect(InetSocketAddress(laptopIp, 8901), 2000)
-                getOutputStream().apply { write(state.toByteArray(Charsets.UTF_8)); flush() }
+                getOutputStream().apply {
+                    write(state.toByteArray(Charsets.UTF_8))
+                    flush()
+                }
                 close()
             }
         } catch (_: SocketTimeoutException) {
-        } catch (e: Exception) { logError("pushMediaStateToLaptop", e) }
+        } catch (e: Exception) {
+            logError("pushMediaStateToLaptop", e)
+        }
     }
 }
 
-// ─── Discovery ────────────────────────────────────────────────────────────────
+fun checkIfNearLocation(
+    context: Context,
+    targetLat: Double = Config.LAT,
+    targetLon: Double = Config.LON,
+    radiusMeters: Float = 150f,
+    callback: (Boolean) -> Unit
+) {
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+        != PackageManager.PERMISSION_GRANTED) {
+        callback(false)
+        return
+    }
 
-private var discoveryJob: Job? = null
+    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+    val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
+        .setMinUpdateIntervalMillis(500L)
+        .setMaxUpdateDelayMillis(2000L)
+        .setMaxUpdates(1)
+        .build()
 
-fun startDiscoveryListener() {
-    discoveryJob?.cancel()
-    discoveryJob = syncScope.launch(Dispatchers.IO) {
+    val locationCallback = object : LocationCallback() {
+        override fun onLocationResult(locationResult: LocationResult) {
+            val location = locationResult.lastLocation
+            if (location != null) {
+                Log.d("CLOUD", "$location")
+                callback(distanceBetween(location.latitude, location.longitude, targetLat, targetLon) <= radiusMeters)
+            } else {
+                callback(false)
+            }
+            fusedLocationClient.removeLocationUpdates(this)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, context.mainLooper)
+}
+
+fun distanceBetween(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
+    val earthRadius = 6371000.0
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val a = sin(dLat / 2).pow(2.0) + cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2.0)
+    return (earthRadius * 2 * atan2(sqrt(a), sqrt(1 - a))).toFloat()
+}
+
+suspend fun askServer(history: List<ChatMessage>, question: String): String {
+    return withContext(Dispatchers.IO) {
         try {
-            val socket = DatagramSocket(Config.DISCOVERY_PORT, InetAddress.getByName("0.0.0.0"))
-            socket.broadcast = true
-            val buf = ByteArray(1024)
-            while (isActive) {
-                val packet = DatagramPacket(buf, buf.size)
-                socket.receive(packet)
-                if (String(packet.data, 0, packet.length) == "DISCOVER_PHONE") {
-                    val response = "PHONE_HERE"
-                    socket.send(DatagramPacket(response.toByteArray(), response.length, packet.address, packet.port))
+            if (laptopIp == "") throw Exception("Keine laptopIp is vorhanden")
+            val request = "${question}. Here is the chat history:$history "
+            val sock = Socket(laptopIp, Config.AI_PORT)
+            sock.getOutputStream().write(request.toByteArray(Charsets.UTF_8))
+            sock.shutdownOutput()
+            val response = sock.getInputStream().readBytes().toString(Charsets.UTF_8)
+            sock.close()
+            response
+        } catch (e: Exception) {
+            var msg = ""
+            e.message?.let { msg = if (it.contains("failed to connect")) "Keine Verbindung mit Server möglich" else "Fehler: ${e.message}" }
+            msg
+        }
+    }
+}
+
+fun triggerBuild(context: Context) {
+    if (laptopIp.isEmpty()) {
+        showSimpleNotificationExtern("❌ Build", "Laptop nicht verbunden", 10.seconds, context)
+        return
+    }
+
+    syncScope.launch(Dispatchers.IO) {
+        var sock: Socket? = null
+        try {
+            showSimpleNotificationExtern("🔨 Build gestartet", "Warte auf APK...", 10.seconds, context)
+
+            sock = Socket().apply {
+                receiveBufferSize = 2 * 1024 * 1024
+                sendBufferSize = 64 * 1024
+                soTimeout = 180_000
+            }
+
+            Log.d("BUILD", "Versuche Build auf $laptopIp:${Config.BUILD_PORT}")
+            sock.connect(InetSocketAddress(laptopIp, Config.BUILD_PORT), 5000)
+            Log.d("BUILD", "Socket connected: ${System.currentTimeMillis()}")
+
+            sock.getOutputStream().write("BUILD\n".toByteArray())
+            sock.getOutputStream().flush()
+
+            val apkFile = File(context.cacheDir, "cloud_update.apk")
+            val reader = sock.inputStream.bufferedReader()
+            val headerLine = reader.readLine() ?: run {
+                sock.close()
+                showSimpleNotificationExtern("❌ Build fehlgeschlagen", "Keine Antwort", 10.seconds, context)
+                return@launch
+            }
+
+            Log.d("BUILD", "Header received: $headerLine")
+
+            if (headerLine.startsWith("ERROR:")) {
+                sock.close()
+                showSimpleNotificationExtern("❌ Build fehlgeschlagen", headerLine.substringAfter("ERROR:"), 10.seconds, context)
+                return@launch
+            }
+
+            val apkSize = headerLine.substringAfter("OK:").toLongOrNull() ?: 0L
+            Log.d("BUILD", "Erwarte APK: ${apkSize / 1024 / 1024}MB")
+
+            var bytesRead = 0L
+            apkFile.outputStream().buffered(1024 * 1024).use { fileOut ->
+                val buffer = ByteArray(1024 * 1024)
+                var read: Int
+                while (sock.inputStream.read(buffer).also { read = it } != -1) {
+                    fileOut.write(buffer, 0, read)
+                    bytesRead += read
+                    if (apkSize > 0) {
+                        val progress = (bytesRead * 100 / apkSize).toInt()
+                        if (progress % 10 == 0) Log.d("BUILD", "Progress: $progress%")
+                    }
                 }
             }
-        } catch (e: Exception) { logError("startDiscoveryListener", e) }
+
+            sock.close()
+            Log.d("BUILD", "APK written: ${apkFile.length()} bytes in ${System.currentTimeMillis()}ms")
+
+            if (apkFile.length() == 0L) {
+                showSimpleNotificationExtern("❌ Build fehlgeschlagen", "Leere APK", 10.seconds, context)
+                return@launch
+            }
+
+            withContext(Dispatchers.Main) {
+                showSimpleNotificationExtern("✅ Build fertig", "Starte Installation...", 5.seconds, context)
+                installApk(context, apkFile)
+            }
+
+        } catch (e: Exception) {
+            sock?.close()
+            Log.e("BUILD", "Fehler", e)
+            showSimpleNotificationExtern("❌ Build Fehler", e.message ?: "", 10.seconds, context)
+        }
     }
 }
 
-// ─── Misc ─────────────────────────────────────────────────────────────────────
+private fun installApk(context: Context, apkFile: File) {
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", apkFile)
+    context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, "application/vnd.android.package-archive")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+    })
+}
+
+fun buildSessionStatsText(sessions: List<ListenSession>): String {
+    val totals = mutableMapOf<String, Triple<Long, String, Int>>()
+    for (s in sessions) {
+        val cur = totals[s.label] ?: Triple(0L, s.type, 0)
+        totals[s.label] = Triple(cur.first + s.listenedMs, s.type, cur.third + 1)
+    }
+
+    val sorted = totals.entries.sortedByDescending { it.value.first }.take(15)
+    val allTimes = sessions.map { it.startedAt }.sorted()
+    val fmt = SimpleDateFormat("HH:mm", Locale.GERMANY)
+
+    val lines = mutableListOf(
+        "Zeitraum: ${fmt.format(allTimes.first())} – ${fmt.format(allTimes.last())}",
+        "Tracks gesamt: ${totals.size}"
+    )
+
+    for ((label, info) in sorted) {
+        val mins = info.first / 1000.0 / 60.0
+        val typ = if (info.second == "music") "Musik" else "Podcast"
+        lines += "- [$typ] $label: ${"%.1f".format(mins)} min, ${info.third}x"
+    }
+
+    return """Hör-Stats von heute (bereits berechnet):
+${lines.joinToString("\n")}
+
+Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn beides da ist. Nur fließender Text, keine Liste, kein Markdown."""
+}
 
 fun startClipboardListener(context: Context) {
     if (clipboardJob?.isActive == true) return
@@ -1221,10 +1603,10 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
         "play_music" -> {
             val intent = Intent(context, MediaPlayerService::class.java).apply {
                 this.action = when (args.optString("action", "play")) {
-                    "pause"    -> "com.cloud.ACTION_MUSIC_PAUSE"
-                    "next"     -> "com.cloud.ACTION_MUSIC_NEXT"
+                    "pause" -> "com.cloud.ACTION_MUSIC_PAUSE"
+                    "next" -> "com.cloud.ACTION_MUSIC_NEXT"
                     "previous" -> "com.cloud.ACTION_MUSIC_PREVIOUS"
-                    else       -> "com.cloud.ACTION_MUSIC_PLAY"
+                    else -> "com.cloud.ACTION_MUSIC_PLAY"
                 }
             }
             context.startService(intent)
@@ -1252,7 +1634,7 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
         }
 
         "start_audio_recording" -> startAudioService(context, createAudioFile(context).absolutePath)
-        "stop_audio_recording"  -> stopAudioService(context)
+        "stop_audio_recording" -> stopAudioService(context)
 
         "get_contacts" -> {
             val query = args.optString("query", "").lowercase()
@@ -1282,7 +1664,9 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                         sock.getOutputStream().write(results.toString().toByteArray(Charsets.UTF_8))
                         sock.getOutputStream().flush()
                     }
-                } catch (e: Exception) { Log.e("EXECUTE", "Kontakte senden fehlgeschlagen", e) }
+                } catch (e: Exception) {
+                    Log.e("EXECUTE", "Kontakte senden fehlgeschlagen", e)
+                }
             }
         }
 
@@ -1305,11 +1689,16 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                 val response = JSONObject().apply {
                     put("matchedCredentials", JSONArray(matchedPasswords.map { entry ->
                         JSONObject().apply {
-                            put("id", entry.id); put("name", entry.name); put("username", entry.username)
+                            put("id", entry.id)
+                            put("name", entry.name)
+                            put("username", entry.username)
                         }
                     }))
                     put("matchedTwoFaCodes", JSONArray(matchedTwoFa.map { entry ->
-                        JSONObject().apply { put("id", entry.id); put("name", entry.name) }
+                        JSONObject().apply {
+                            put("id", entry.id)
+                            put("name", entry.name)
+                        }
                     }))
                 }
 
@@ -1322,7 +1711,10 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                         sock.getOutputStream().write(sizePrefix + jsonBytes)
                         sock.getOutputStream().flush()
                     }
-                } catch (e: Exception) { Log.e("EXECUTE", "lookup_credentials: send failed", e) }
+                    Log.d("EXECUTE", "lookup_credentials: sent ${matchedPasswords.size} creds, ${matchedTwoFa.size} 2FA")
+                } catch (e: Exception) {
+                    Log.e("EXECUTE", "lookup_credentials: send failed", e)
+                }
             }
         }
 
@@ -1331,7 +1723,10 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                 val credentialId = args.optInt("credential_id", -1)
                 val twofaId = args.optInt("twofa_id", -1)
 
-                if (credentialId == -1) return@launch
+                if (credentialId == -1) {
+                    Log.w("EXECUTE", "reveal_credentials: no credential_id provided")
+                    return@launch
+                }
 
                 val entry = PasswordDatabase.getDatabase(context).passwordDao().getAll()
                     .firstOrNull { it.id == credentialId }
@@ -1348,6 +1743,7 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                 } else null
 
                 showCredentialsOverlay(context, entry.username, entry.password, totpCode ?: "")
+                Log.d("EXECUTE", "reveal_credentials: showed '${entry.name}' locally")
             }
         }
 
@@ -1401,7 +1797,8 @@ fun showCredentialsOverlay(context: Context, us: String, pw: String, totp: Strin
                     onClick = {
                         try { testOverlayView?.let { windowManager.removeView(it) } } catch (_: Exception) {}
                         try { testOverlayLifecycle?.onDestroy() } catch (_: Exception) {}
-                        testOverlayView = null; testOverlayLifecycle = null
+                        testOverlayView = null
+                        testOverlayLifecycle = null
                     },
                     modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(40.dp)
                         .background(Color.Black.copy(alpha = 0.6f), shape = RoundedCornerShape(50))
@@ -1423,135 +1820,6 @@ fun showCredentialsOverlay(context: Context, us: String, pw: String, totp: Strin
     try { windowManager.addView(testOverlayView, params) } catch (_: Exception) {}
 }
 
-fun buildSessionStatsText(sessions: List<ListenSession>): String {
-    val totals = mutableMapOf<String, Triple<Long, String, Int>>()
-    for (s in sessions) {
-        val cur = totals[s.label] ?: Triple(0L, s.type, 0)
-        totals[s.label] = Triple(cur.first + s.listenedMs, s.type, cur.third + 1)
-    }
-
-    val sorted = totals.entries.sortedByDescending { it.value.first }.take(15)
-    val allTimes = sessions.map { it.startedAt }.sorted()
-    val fmt = SimpleDateFormat("HH:mm", Locale.GERMANY)
-
-    val lines = mutableListOf(
-        "Zeitraum: ${fmt.format(allTimes.first())} – ${fmt.format(allTimes.last())}",
-        "Tracks gesamt: ${totals.size}"
-    )
-
-    for ((label, info) in sorted) {
-        val mins = info.first / 1000.0 / 60.0
-        val typ = if (info.second == "music") "Musik" else "Podcast"
-        lines += "- [$typ] $label: ${"%.1f".format(mins)} min, ${info.third}x"
-    }
-
-    return """Hör-Stats von heute (bereits berechnet):
-${lines.joinToString("\n")}
-
-Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn beides da ist. Nur fließender Text, keine Liste, kein Markdown."""
-}
-
-fun triggerBuild(context: Context) {
-    if (laptopIp.isEmpty()) {
-        showSimpleNotificationExtern("❌ Build", "Laptop nicht verbunden", 10.seconds, context)
-        return
-    }
-
-    syncScope.launch(Dispatchers.IO) {
-        var sock: Socket? = null
-        try {
-            showSimpleNotificationExtern("🔨 Build gestartet", "Warte auf APK...", 10.seconds, context)
-
-            sock = Socket().apply {
-                receiveBufferSize = 2 * 1024 * 1024
-                sendBufferSize = 64 * 1024
-                soTimeout = 180_000
-            }
-
-            Log.d("BUILD", "Versuche Build auf $laptopIp:${Config.BUILD_PORT}")
-            sock.connect(InetSocketAddress(laptopIp, Config.BUILD_PORT), 5000)
-
-            sock.getOutputStream().write("BUILD\n".toByteArray())
-            sock.getOutputStream().flush()
-
-            val apkFile = File(context.cacheDir, "cloud_update.apk")
-            val reader = sock.inputStream.bufferedReader()
-            val headerLine = reader.readLine() ?: run {
-                sock.close()
-                showSimpleNotificationExtern("❌ Build fehlgeschlagen", "Keine Antwort", 10.seconds, context)
-                return@launch
-            }
-
-            if (headerLine.startsWith("ERROR:")) {
-                sock.close()
-                showSimpleNotificationExtern("❌ Build fehlgeschlagen", headerLine.substringAfter("ERROR:"), 10.seconds, context)
-                return@launch
-            }
-
-            val apkSize = headerLine.substringAfter("OK:").toLongOrNull() ?: 0L
-            Log.d("BUILD", "Erwarte APK: ${apkSize / 1024 / 1024}MB")
-
-            var bytesRead = 0L
-            apkFile.outputStream().buffered(1024 * 1024).use { fileOut ->
-                val buffer = ByteArray(1024 * 1024)
-                var read: Int
-                while (sock.inputStream.read(buffer).also { read = it } != -1) {
-                    fileOut.write(buffer, 0, read)
-                    bytesRead += read
-                    if (apkSize > 0) {
-                        val progress = (bytesRead * 100 / apkSize).toInt()
-                        if (progress % 10 == 0) Log.d("BUILD", "Progress: $progress%")
-                    }
-                }
-            }
-
-            sock.close()
-
-            if (apkFile.length() == 0L) {
-                showSimpleNotificationExtern("❌ Build fehlgeschlagen", "Leere APK", 10.seconds, context)
-                return@launch
-            }
-
-            withContext(Dispatchers.Main) {
-                showSimpleNotificationExtern("✅ Build fertig", "Starte Installation...", 5.seconds, context)
-                installApk(context, apkFile)
-            }
-
-        } catch (e: Exception) {
-            sock?.close()
-            Log.e("BUILD", "Fehler", e)
-            showSimpleNotificationExtern("❌ Build Fehler", e.message ?: "", 10.seconds, context)
-        }
-    }
-}
-
-private fun installApk(context: Context, apkFile: File) {
-    val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", apkFile)
-    context.startActivity(Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(uri, "application/vnd.android.package-archive")
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-    })
-}
-
-suspend fun askServer(history: List<ChatMessage>, question: String): String {
-    return withContext(Dispatchers.IO) {
-        try {
-            if (laptopIp == "") throw Exception("Keine laptopIp vorhanden")
-            val request = "${question}. Here is the chat history:$history "
-            val sock = Socket(laptopIp, Config.AI_PORT)
-            sock.getOutputStream().write(request.toByteArray(Charsets.UTF_8))
-            sock.shutdownOutput()
-            val response = sock.getInputStream().readBytes().toString(Charsets.UTF_8)
-            sock.close()
-            response
-        } catch (e: Exception) {
-            var msg = ""
-            e.message?.let { msg = if (it.contains("failed to connect")) "Keine Verbindung mit Server möglich" else "Fehler: ${e.message}" }
-            msg
-        }
-    }
-}
-
 fun sendAiExecuteCommand(context: Context, userInput: String) {
     if (laptopIp.isEmpty()) {
         showSimpleNotificationExtern("❌ AI Execute", "Laptop nicht verbunden", 10.seconds, context)
@@ -1565,6 +1833,8 @@ fun sendAiExecuteCommand(context: Context, userInput: String) {
                 sock.getOutputStream().write(JSONObject().apply { put("prompt", userInput) }.toString().toByteArray(Charsets.UTF_8))
                 sock.shutdownOutput()
             }
-        } catch (e: Exception) { logError("sendAiExecuteCommand", e) }
+        } catch (e: Exception) {
+            logError("sendAiExecuteCommand", e)
+        }
     }
 }
