@@ -1,7 +1,6 @@
 package com.cloud.quiethoursnotificationhelper
 
 import android.Manifest
-import android.R
 import android.annotation.SuppressLint
 import android.app.NotificationManager
 import android.content.ClipData
@@ -12,10 +11,6 @@ import android.content.Context.WINDOW_SERVICE
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.PixelFormat
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.PowerManager
@@ -85,11 +80,6 @@ import com.cloud.service.WhatsAppNotificationListener
 import com.cloud.showSimpleNotificationExtern
 import com.cloud.ui.theme.Cloud
 import com.cloud.vocabtab.Vokabel
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -122,11 +112,6 @@ import java.time.Instant
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.pow
-import kotlin.math.sin
-import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.seconds
 
 val isLaptopConnectedFlow = MutableStateFlow(false)
@@ -135,9 +120,7 @@ val flashcardVokabelnFlow = MutableStateFlow<List<Vokabel>?>(null)
 
 var isLaptopConnected: Boolean
     get() = isLaptopConnectedFlow.value
-    set(value) {
-        isLaptopConnectedFlow.value = value
-    }
+    set(value) { isLaptopConnectedFlow.value = value }
 
 private val syncScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 private val mediaScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -148,9 +131,6 @@ private var updateServerSocket: ServerSocket? = null
 private var triggerJob: Job? = null
 private var triggerServerSocket: ServerSocket? = null
 
-private var clipboardJob: Job? = null
-private var clipboardSocket: ServerSocket? = null
-
 private var aiResponseJob: Job? = null
 private var aiResponseServerSocket: ServerSocket? = null
 
@@ -158,32 +138,21 @@ private var flashcardResponseJob: Job? = null
 private var flashcardResponseSocket: ServerSocket? = null
 
 private var mediaCommandJob: Job? = null
-private var mediaCommandSocket: ServerSocket? = null
-
 private var mediaStateJob: Job? = null
-private var mediaStateSocket: ServerSocket? = null
-
+private var clipboardJob: Job? = null
 private var mailNotifyJob: Job? = null
-private var mailNotifySocket: ServerSocket? = null
-
 private var executeJob: Job? = null
-private var executeServerSocket: ServerSocket? = null
+
+private val activeServers = mutableListOf<ServerSocket>()
 
 private var wifiLock: WifiManager.WifiLock? = null
 private var cpuWakeLock: PowerManager.WakeLock? = null
+private var triggerWakeLock: PowerManager.WakeLock? = null
 private var appContext: Context? = null
 
-private var triggerWakeLock: PowerManager.WakeLock? = null
-
 private const val PREFS_SYNC = "sync_prefs"
-private const val KEY_SYNC_ACTIVE = "sync_active"
-private const val KEY_SYNC_UNTIL = "sync_until"
+private const val KEY_LAPTOP_IP = "laptop_ip"
 private var lastPushedState: String = ""
-
-private var networkCallback: ConnectivityManager.NetworkCallback? = null
-private var pendingSyncJob: Job? = null
-private var lastTriggerTime = 0L
-private const val MIN_TRIGGER_INTERVAL = 15_000L
 
 @Volatile
 private var syncInProgress = false
@@ -192,90 +161,91 @@ private fun PowerManager.WakeLock?.safeRelease() {
     if (this != null && isHeld) release()
 }
 
-private object ConnectionGuard {
-    private var lastFailedAttempt: Long = 0L
-    private var consecutiveFailures: Int = 0
-    private var lastSuccessfulConnection: Long = 0L
-    private var isWifiConnected: Boolean = false
-    private var isAtHomeLocation: Boolean = false
-
-    private const val MIN_RETRY_DELAY_MS = 5_000L
-    private const val MAX_RETRY_DELAY_MS = 300_000L
-    private const val QUICK_PING_TIMEOUT_MS = 500
-
-    fun isAtHomeLocation(): Boolean = isAtHomeLocation
-
-    fun updateWifiStatus(connected: Boolean) {
-        isWifiConnected = connected
-        if (!connected) {
-            consecutiveFailures = 0
-        }
-    }
-
-    fun updateLocationStatus(atHome: Boolean) {
-        isAtHomeLocation = atHome
-        if (!atHome) {
-            consecutiveFailures = 0
-        }
-    }
-
-    fun canAttemptConnection(): Boolean {
-        if (!isWifiConnected && !isAtHomeLocation) {
-            return false
-        }
-
-        val now = System.currentTimeMillis()
-        val timeSinceLastFailure = now - lastFailedAttempt
-        val requiredDelay = calculateBackoffDelay()
-
-        return timeSinceLastFailure >= requiredDelay
-    }
-
-    private fun calculateBackoffDelay(): Long {
-        if (consecutiveFailures == 0) return 0L
-
-        val delay = MIN_RETRY_DELAY_MS * (1 shl (consecutiveFailures - 1))
-        return delay.coerceIn(MIN_RETRY_DELAY_MS, MAX_RETRY_DELAY_MS)
-    }
-
-    fun recordFailure() {
-        lastFailedAttempt = System.currentTimeMillis()
-        consecutiveFailures++
-    }
-
-    fun recordSuccess() {
-        lastSuccessfulConnection = System.currentTimeMillis()
-        consecutiveFailures = 0
-        lastFailedAttempt = 0L
-    }
-
-    fun getBackoffInfo(): String {
-        if (consecutiveFailures == 0) return "Bereit"
-        val delay = calculateBackoffDelay()
-        val remaining = delay - (System.currentTimeMillis() - lastFailedAttempt)
-        return if (remaining > 0) {
-            "Warte ${remaining / 1000}s (Fehler: $consecutiveFailures)"
-        } else {
-            "Bereit (nach $consecutiveFailures Fehlern)"
-        }
-    }
-
-    suspend fun quickPingTest(ip: String, port: Int): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val socket = Socket()
-            socket.connect(
-                InetSocketAddress(ip, port),
-                QUICK_PING_TIMEOUT_MS
-            )
-            socket.close()
-            true
-        } catch (_: Exception) {
-            false
-        }
+private fun logError(service: String, e: Exception) {
+    syncScope.launch {
+        ERRORINSERT(ERRORINSERTDATA(
+            service_name = service,
+            error_message = e.stackTraceToString(),
+            created_at = Instant.now().toString(),
+            severity = "ERROR"
+        ))
     }
 }
 
-private const val KEY_LAPTOP_IP = "laptop_ip"
+private fun launchServer(
+    scope: CoroutineScope,
+    port: Int,
+    errorTag: String,
+    handler: suspend CoroutineScope.(Socket) -> Unit
+): Job = scope.launch(Dispatchers.IO) {
+    while (isActive) {
+        var server: ServerSocket? = null
+        try {
+            server = ServerSocket().apply {
+                reuseAddress = true
+                bind(InetSocketAddress(port))
+            }
+            synchronized(activeServers) { activeServers.add(server) }
+            while (isActive) {
+                try {
+                    val client = server.accept()
+                    scope.launch {
+                        try { handler(client) }
+                        catch (e: Exception) { logError(errorTag, e) }
+                    }
+                } catch (_: SocketException) { break }
+            }
+        } catch (e: Exception) {
+            logError(errorTag, e)
+        } finally {
+            server?.let {
+                synchronized(activeServers) { activeServers.remove(it) }
+                it.close()
+            }
+        }
+        if (isActive) delay(2000)
+    }
+}
+
+private fun todosToJsonArray(todos: List<TodoItem>): JSONArray = JSONArray().apply {
+    todos.forEach { todo ->
+        put(JSONObject().apply {
+            put("id", todo.id)
+            put("text", todo.text)
+            put("completed", todo.completed)
+            put("timestamp", todo.timestamp)
+        })
+    }
+}
+
+private suspend fun callNvidiaApi(model: String, messagesJson: JSONArray): String? =
+    withContext(Dispatchers.IO) {
+        try {
+            val requestBody = JSONObject().apply {
+                put("model", model)
+                put("messages", messagesJson)
+                put("temperature", 0.3)
+                put("max_tokens", 1024)
+                put("stream", false)
+            }
+            val connection = (URL("https://integrate.api.nvidia.com/v1/chat/completions")
+                .openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Authorization", "Bearer ${Config.NVIDIA}")
+                setRequestProperty("Content-Type", "application/json")
+                doOutput = true
+            }
+            connection.outputStream.use { it.write(requestBody.toString().toByteArray(Charsets.UTF_8)) }
+            if (connection.responseCode != 200) return@withContext null
+            JSONObject(connection.inputStream.bufferedReader().readText())
+                .getJSONArray("choices").getJSONObject(0)
+                .getJSONObject("message").getString("content").trim()
+                .ifBlank { null }
+        } catch (e: Exception) {
+            logError("callNvidiaApi", e)
+            null
+        }
+    }
 
 var laptopIp: String
     get() = appContext?.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)
@@ -299,72 +269,18 @@ data class AiResponseEntry(
     val dateKey: String
 )
 
-fun startTriggerListenerIfHomeWifi(context: Context) {
-
-    checkIfNearLocation(context) { atHome ->
-        ConnectionGuard.updateLocationStatus(atHome)
-        startTriggerListener(context)
-        registerWifiReconnectReceiver(context)
-    }
-}
-
-fun registerWifiReconnectReceiver(context: Context) {
-    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-
-    networkCallback?.let {
-        try {
-            cm.unregisterNetworkCallback(it)
-        } catch (_: Exception) {
-        }
-    }
-
-    val callback = object : ConnectivityManager.NetworkCallback() {
-
-        override fun onAvailable(network: Network) {
-            Log.d("SA!", "SUI")
-            ConnectionGuard.updateWifiStatus(true)
-            val now = System.currentTimeMillis()
-            if (now - lastTriggerTime < MIN_TRIGGER_INTERVAL) {
-                Log.d(
-                    "NetworkCallback",
-                    "⏭️ Sync übersprungen (${(now - lastTriggerTime) / 1000}s seit letztem)"
-                )
-                return
-            }
-            lastTriggerTime = now
-
-            checkIfNearLocation(context) { atHome ->
-                ConnectionGuard.updateLocationStatus(atHome)
-
-                if (atHome && ConnectionGuard.canAttemptConnection()) {
-                    if (!isLaptopConnected) {
-                        syncTodosWithLaptop(context)
-                    }
-                }
-            }
-        }
-
-        override fun onLost(network: Network) {
-            ConnectionGuard.updateWifiStatus(false)
-            syncInProgress = false
-            pendingSyncJob?.cancel()
-            stopAllSyncServices(context)
-        }
-    }
-
-    networkCallback = callback
-
-    val request = NetworkRequest.Builder()
-        .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-        .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-        .build()
-
-    cm.registerNetworkCallback(request, callback)
-}
+// ─── Trigger Listener ────────────────────────────────────────────────────────
 
 @SuppressLint("Wakelock", "WakelockTimeout")
 fun startTriggerListener(context: Context) {
     appContext = context.applicationContext
+
+    // Dauerhafter WakeLock für den 7:00–21:30 Betrieb
+    if (triggerWakeLock == null || triggerWakeLock?.isHeld == false) {
+        val pm = context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+        triggerWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:TriggerWakeLock")
+        triggerWakeLock?.acquire(15 * 60 * 60 * 1000L) // 15h
+    }
 
     triggerJob?.cancel()
     triggerServerSocket?.close()
@@ -381,12 +297,8 @@ fun startTriggerListener(context: Context) {
                 while (isActive) {
                     try {
                         val client = triggerServerSocket?.accept() ?: break
-                        val pm =
-                            context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
-                        val wl = pm.newWakeLock(
-                            PowerManager.PARTIAL_WAKE_LOCK,
-                            "TodoSync:AcceptWakeLock"
-                        )
+                        val pm = context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+                        val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:AcceptWakeLock")
                         wl.acquire(30_000L)
 
                         try {
@@ -397,34 +309,18 @@ fun startTriggerListener(context: Context) {
                             when {
                                 command.startsWith("CONNECT") -> {
                                     laptopIp = command.substringAfter("CONNECT:", "")
-                                    ConnectionGuard.recordSuccess()
+                                    showSimpleNotificationExtern("📡 CONNECT empfangen", "Starte Sync...", 10.seconds, context)
 
-                                    showSimpleNotificationExtern(
-                                        "📡 CONNECT empfangen",
-                                        "Starte Sync...",
-                                        10.seconds,
-                                        context
-                                    )
-
-                                    val syncWl = pm.newWakeLock(
-                                        PowerManager.PARTIAL_WAKE_LOCK,
-                                        "TodoSync:SyncWakeLock"
-                                    )
+                                    val syncWl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:SyncWakeLock")
                                     syncWl.acquire(60_000L)
-
                                     syncScope.launch {
-                                        try {
-                                            syncTodosWithLaptop(context)
-                                        } finally {
-                                            syncWl.release()
-                                        }
+                                        try { syncTodosWithLaptop(context) }
+                                        finally { syncWl.release() }
                                     }
                                 }
 
                                 command == "REQUEST_SESSIONS" -> {
-                                    syncScope.launch {
-                                        sendSessionDataToLaptop(context)
-                                    }
+                                    syncScope.launch { sendSessionDataToLaptop(context) }
                                 }
 
                                 command == "DISCONNECT" -> {
@@ -434,25 +330,11 @@ fun startTriggerListener(context: Context) {
                         } finally {
                             wl.safeRelease()
                         }
-                    } catch (_: SocketException) {
-                        break
-                    } catch (e: Exception) {
-                        Log.e("TRIGGER", "Fehler beim Accept", e)
-                    }
+                    } catch (_: SocketException) { break }
+                    catch (e: Exception) { Log.e("TRIGGER", "Fehler beim Accept", e) }
                 }
             } catch (e: Exception) {
-                if (e !is SocketException) {
-                    syncScope.launch {
-                        ERRORINSERT(
-                            ERRORINSERTDATA(
-                                service_name = "startTriggerListener",
-                                error_message = e.stackTraceToString(),
-                                created_at = Instant.now().toString(),
-                                severity = "WARNING"
-                            )
-                        )
-                    }
-                }
+                if (e !is SocketException) logError("startTriggerListener", e)
             } finally {
                 triggerServerSocket?.close()
                 triggerServerSocket = null
@@ -463,119 +345,54 @@ fun startTriggerListener(context: Context) {
     }
 }
 
-fun restoreSyncIfNeeded(context: Context) {
-    appContext = context.applicationContext
-    val prefs = context.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)
-    val syncActive = prefs.getBoolean(KEY_SYNC_ACTIVE, false)
-    val syncUntil = prefs.getLong(KEY_SYNC_UNTIL, 0L)
-    val remainingMs = syncUntil - System.currentTimeMillis()
-
-    if (syncActive && remainingMs > 0) {
-        val remainingMinutes = (remainingMs / 60_000L).toInt().coerceAtLeast(1)
-        isLaptopConnected = true
-        startUpdateListener(context, remainingMinutes)
-        syncScope.launch {
-            delay(5_000)
-            syncTodosWithLaptop(context)
-        }
-        showSimpleNotificationExtern(
-            "🔁 Sync wiederhergestellt",
-            "Listener läuft noch $remainingMinutes min",
-            10.seconds, context
-        )
-    }
-}
+// ─── Stop all services ───────────────────────────────────────────────────────
 
 fun stopAllSyncServices(context: Context) {
     stopUpdateListener(false)
 
-    mediaCommandJob?.cancel(); mediaCommandJob = null
-    mediaCommandSocket?.close(); mediaCommandSocket = null
-    mediaStateJob?.cancel(); mediaStateJob = null
-    mediaStateSocket?.close(); mediaStateSocket = null
-    aiResponseJob?.cancel(); aiResponseJob = null
+    listOf(mediaCommandJob, mediaStateJob, aiResponseJob, flashcardResponseJob,
+        clipboardJob, mailNotifyJob, executeJob).forEach { it?.cancel() }
+    mediaCommandJob = null; mediaStateJob = null; aiResponseJob = null
+    flashcardResponseJob = null; clipboardJob = null; mailNotifyJob = null; executeJob = null
+
     aiResponseServerSocket?.close(); aiResponseServerSocket = null
-    flashcardResponseJob?.cancel(); flashcardResponseJob = null
     flashcardResponseSocket?.close(); flashcardResponseSocket = null
-    clipboardJob?.cancel(); clipboardJob = null
-    clipboardSocket?.close(); clipboardSocket = null
-    mailNotifyJob?.cancel(); mailNotifyJob = null
-    mailNotifySocket?.close(); mailNotifySocket = null
-    executeJob?.cancel(); executeJob = null
-    executeServerSocket?.close(); executeServerSocket = null
+
+    synchronized(activeServers) {
+        activeServers.forEach { runCatching { it.close() } }
+        activeServers.clear()
+    }
 
     triggerWakeLock.safeRelease(); triggerWakeLock = null
-    cpuWakeLock.safeRelease(); cpuWakeLock = null
-
     isLaptopConnected = false
 
-    showSimpleNotificationExtern(
-        "📴 Laptop getrennt",
-        "Alle Sync-Services gestoppt",
-        10.seconds,
-        context
-    )
+    showSimpleNotificationExtern("📴 Laptop getrennt", "Alle Sync-Services gestoppt", 10.seconds, context)
 }
+
+// ─── Sync ────────────────────────────────────────────────────────────────────
 
 fun syncTodosWithLaptop(context: Context) {
     if (syncInProgress) return
     syncInProgress = true
+
     if (laptopIp.isEmpty()) {
         Log.d("SYNC", "❌ Keine Laptop-IP gesetzt")
-        ConnectionGuard.recordFailure()
         syncInProgress = false
         return
     }
 
-    showSimpleNotificationExtern(
-        "🔄 Sync gestartet",
-        "Verbinde mit Laptop...",
-        10.seconds,
-        context
-    )
+    showSimpleNotificationExtern("🔄 Sync gestartet", "Verbinde mit Laptop...", 10.seconds, context)
 
     syncScope.launch {
         try {
-            val pingSuccess = ConnectionGuard.quickPingTest(laptopIp, SYNC_PORT)
-            if (!pingSuccess) {
-                Log.d("SYNC", "❌ Ping fehlgeschlagen (500ms timeout)")
-                ConnectionGuard.recordFailure()
-                isLaptopConnected = true
-                withContext(Dispatchers.Main) {
-                    showSimpleNotificationExtern(
-                        "❌ Laptop nicht erreichbar",
-                        "Ping fehlgeschlagen",
-                        5.seconds,
-                        context
-                    )
-                }
-                return@launch
-            }
-
-            Log.d("SYNC", "✅ Ping erfolgreich, starte Datenübertragung")
-
             val todos = getTodos(context)
-            val todosJson = JSONArray()
-
-            todos.forEach { todo ->
-                val obj = JSONObject().apply {
-                    put("id", todo.id)
-                    put("text", todo.text)
-                    put("completed", todo.completed)
-                    put("timestamp", todo.timestamp)
-                }
-                todosJson.put(obj)
-            }
-
             val socket = Socket()
             socket.connect(InetSocketAddress(laptopIp, SYNC_PORT), 3000)
-
             val writer = PrintWriter(socket.getOutputStream(), true)
-            writer.println(todosJson.toString())
+            writer.println(todosToJsonArray(todos).toString())
             writer.flush()
             socket.close()
 
-            ConnectionGuard.recordSuccess()
             isLaptopConnected = true
 
             startMediaCommandListener(context)
@@ -584,64 +401,33 @@ fun syncTodosWithLaptop(context: Context) {
             startClipboardListener(context)
 
             if (listenerJob == null || listenerJob?.isActive == false) {
-                startUpdateListener(context, 60)
+                startUpdateListener(context)
             }
 
             withContext(Dispatchers.Main) {
                 WhatsAppNotificationListener.forwardNotificationsToLaptop1()
                 showSimpleNotificationExtern(
                     "✅ Sync erfolgreich",
-                    "${todos.size} To-dos übertragen\n🔄 Listener aktiv für 60min",
-                    10.seconds,
-                    context,
-                    silent = false
+                    "${todos.size} To-dos übertragen\n🔄 Listener aktiv",
+                    10.seconds, context, silent = false
                 )
             }
 
             pushMediaStateToLaptop(context)
 
         } catch (e: ConnectException) {
-            ConnectionGuard.recordFailure()
             Log.d("SYNC", "❌ Connection failed: ${e.message}")
-
             withContext(Dispatchers.Main) {
-                showSimpleNotificationExtern(
-                    "❌ Sync fehlgeschlagen",
-                    "Laptop nicht erreichbar (nächster Versuch: ${ConnectionGuard.getBackoffInfo()})",
-                    10.seconds,
-                    context
-                )
+                showSimpleNotificationExtern("❌ Laptop nicht erreichbar", e.message ?: "", 10.seconds, context)
             }
         } catch (_: SocketTimeoutException) {
-            ConnectionGuard.recordFailure()
             withContext(Dispatchers.Main) {
-                showSimpleNotificationExtern(
-                    "❌ Sync Timeout",
-                    "Laptop antwortet nicht",
-                    10.seconds,
-                    context
-                )
+                showSimpleNotificationExtern("❌ Sync Timeout", "Laptop antwortet nicht", 10.seconds, context)
             }
         } catch (e: Exception) {
-            ConnectionGuard.recordFailure()
-            syncScope.launch {
-                ERRORINSERT(
-                    ERRORINSERTDATA(
-                        service_name = "syncTodosWithLaptop",
-                        error_message = e.stackTraceToString(),
-                        created_at = Instant.now().toString(),
-                        severity = "WARNING"
-                    )
-                )
-            }
-
+            logError("syncTodosWithLaptop", e)
             withContext(Dispatchers.Main) {
-                showSimpleNotificationExtern(
-                    "❌ Sync Fehler",
-                    e.message ?: "Unbekannter Fehler",
-                    10.seconds,
-                    context
-                )
+                showSimpleNotificationExtern("❌ Sync Fehler", e.message ?: "Unbekannter Fehler", 10.seconds, context)
             }
         } finally {
             syncInProgress = false
@@ -649,24 +435,20 @@ fun syncTodosWithLaptop(context: Context) {
     }
 }
 
-fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
+// ─── Update Listener ─────────────────────────────────────────────────────────
+
+fun startUpdateListener(context: Context) {
     stopUpdateListener(true)
     appContext = context.applicationContext
-    saveSyncState(context, durationMinutes)
 
-    val wifiManager =
-        context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-    wifiLock =
-        wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "TodoSync:WifiLock")
+    val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "TodoSync:WifiLock")
     wifiLock?.acquire()
 
-    val powerManager =
-        context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
-    cpuWakeLock = powerManager.newWakeLock(
-        PowerManager.PARTIAL_WAKE_LOCK,
-        "TodoSync:UpdateWakeLock"
-    )
-    cpuWakeLock?.acquire(durationMinutes * 60_000L)
+    val powerManager = context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+    // 14.5h WakeLock deckt das gesamte 7:00–21:30 Fenster ab
+    cpuWakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:UpdateWakeLock")
+    cpuWakeLock?.acquire(14_5 * 60_000L)
 
     listenerJob = syncScope.launch(Dispatchers.IO) {
         try {
@@ -675,23 +457,9 @@ fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
                 bind(InetSocketAddress(UPDATE_PORT))
             }
 
-            val timeoutJob = launch {
-                delay(durationMinutes * 60_000L)
-                stopUpdateListener(false)
-                isLaptopConnected = true
-                withContext(Dispatchers.Main) {
-                    showSimpleNotificationExtern(
-                        "⏸️ Sync-Listener gestoppt",
-                        "Nach $durationMinutes min automatisch beendet.",
-                        15.seconds, context
-                    )
-                }
-            }
-
             while (isActive) {
                 try {
                     val client = updateServerSocket?.accept() ?: break
-
                     val reader = BufferedReader(InputStreamReader(client.getInputStream()))
                     val jsonData = reader.readLine()
                     client.close()
@@ -699,96 +467,47 @@ fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
                     if (jsonData != null) {
                         val updatedTodos = parseTodosFromJson(jsonData)
                         saveTodos(context, updatedTodos)
-
                         withContext(Dispatchers.Main) {
-                            showSimpleNotificationExtern(
-                                "🔄 To-dos aktualisiert",
-                                "Änderungen vom Laptop empfangen",
-                                10.seconds,
-                                context
-                            )
+                            showSimpleNotificationExtern("🔄 To-dos aktualisiert", "Änderungen vom Laptop empfangen", 10.seconds, context)
                         }
                     }
-                } catch (_: SocketException) {
-                    break
-                } catch (e: Exception) {
-                    syncScope.launch {
-                        ERRORINSERT(
-                            ERRORINSERTDATA(
-                                service_name = "startUpdateListener",
-                                error_message = e.stackTraceToString(),
-                                created_at = Instant.now().toString(),
-                                severity = "ERROR"
-                            )
-                        )
-                    }
-                }
+                } catch (_: SocketException) { break }
+                catch (e: Exception) { logError("startUpdateListener", e) }
             }
-
-            timeoutJob.cancel()
         } catch (e: Exception) {
-            syncScope.launch {
-                ERRORINSERT(
-                    ERRORINSERTDATA(
-                        service_name = "startUpdateListener",
-                        error_message = e.stackTraceToString(),
-                        created_at = Instant.now().toString(),
-                        severity = "ERROR"
-                    )
-                )
-            }
+            logError("startUpdateListener", e)
         }
     }
 }
 
-fun stopUpdateListener(boolean: Boolean = false) {
+fun stopUpdateListener(keepConnected: Boolean = false) {
     try {
-        appContext?.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)?.edit {
-            putBoolean(KEY_SYNC_ACTIVE, false)
-        }
-        isLaptopConnected = boolean
+        isLaptopConnected = keepConnected
         wifiLock?.release(); wifiLock = null
         cpuWakeLock.safeRelease(); cpuWakeLock = null
         listenerJob?.cancel(); listenerJob = null
         updateServerSocket?.close(); updateServerSocket = null
     } catch (e: Exception) {
-        syncScope.launch {
-            ERRORINSERT(
-                ERRORINSERTDATA(
-                    service_name = "stopUpdateListener",
-                    error_message = e.stackTraceToString(),
-                    created_at = Instant.now().toString(),
-                    severity = "ERROR"
-                )
-            )
-        }
+        logError("stopUpdateListener", e)
     }
 }
 
-private fun saveSyncState(context: Context, durationMinutes: Int = 0) {
-    context.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE).edit {
-        putBoolean(KEY_SYNC_ACTIVE, true)
-        putLong(KEY_SYNC_UNTIL, System.currentTimeMillis() + durationMinutes * 60_000L)
-    }
-}
+// ─── Session data ────────────────────────────────────────────────────────────
 
 private fun sendSessionDataToLaptop(context: Context) {
     MediaAnalyticsManager.init(context)
 
     val lastAiTimestamp = loadTodayOrYesterdayEntry(context)?.timestamp ?: 0L
-
     val sessions = getSessions().filter { it.startedAt >= lastAiTimestamp }
 
     val cal = Calendar.getInstance()
     cal.add(Calendar.DAY_OF_YEAR, -2)
     val twoDaysAgoStart = cal.timeInMillis
-    val previousSessions =
-        getSessions().filter { it.startedAt in twoDaysAgoStart..<lastAiTimestamp }
+    val previousSessions = getSessions().filter { it.startedAt in twoDaysAgoStart..<lastAiTimestamp }
 
-    fun buildJsonArray(list: List<ListenSession>): JSONArray {
-        val arr = JSONArray()
+    fun buildJsonArray(list: List<ListenSession>): JSONArray = JSONArray().apply {
         list.forEach { s ->
-            arr.put(JSONObject().apply {
+            put(JSONObject().apply {
                 put("label", s.label)
                 put("type", s.type)
                 put("listenedMs", s.listenedMs)
@@ -796,38 +515,28 @@ private fun sendSessionDataToLaptop(context: Context) {
                 put("repeatCount", s.repeatCount)
             })
         }
-        return arr
     }
 
     val payload = JSONObject().apply {
         put("today", buildJsonArray(sessions))
         put("previous_2_days", buildJsonArray(previousSessions))
     }
-    val jsonString = payload.toString()
 
     try {
         if (laptopIp == "") return
         Socket().use { socket ->
             socket.connect(InetSocketAddress(laptopIp, Config.SESSION_PORT), 3000)
-            val writer = PrintWriter(socket.getOutputStream(), true)
-            writer.println(jsonString)
-            writer.flush()
-            socket.close()
+            PrintWriter(socket.getOutputStream(), true).apply {
+                println(payload.toString())
+                flush()
+            }
         }
-        return
     } catch (e: Exception) {
-        syncScope.launch {
-            ERRORINSERT(
-                ERRORINSERTDATA(
-                    service_name = "sendSessionDataToLaptop",
-                    error_message = e.stackTraceToString(),
-                    created_at = Instant.now().toString(),
-                    severity = "ERROR"
-                )
-            )
-        }
+        logError("sendSessionDataToLaptop", e)
     }
 }
+
+// ─── Todos ───────────────────────────────────────────────────────────────────
 
 fun getTodos(context: Context): List<TodoItem> {
     val json = context.getSharedPreferences("todos_prefs", MODE_PRIVATE)
@@ -835,107 +544,43 @@ fun getTodos(context: Context): List<TodoItem> {
     return parseTodosFromJson(json)
 }
 
-fun getOpenTodos(context: Context): List<TodoItem> {
-    val json = context.getSharedPreferences("todos_prefs", MODE_PRIVATE)
-        .getString("todos", "[]") ?: "[]"
-    val result = parseTodosFromJson(json)
-    return result.filter { !it.completed }
-}
+fun getOpenTodos(context: Context): List<TodoItem> = getTodos(context).filter { !it.completed }
 
 fun saveTodos(context: Context, todos: List<TodoItem>) {
     val prefs = context.getSharedPreferences("todos_prefs", MODE_PRIVATE)
-
     try {
-        val jsonArray = JSONArray()
-        todos.forEach { todo ->
-            val obj = JSONObject().apply {
-                put("id", todo.id)
-                put("text", todo.text)
-                put("completed", todo.completed)
-                put("timestamp", todo.timestamp)
-            }
-            jsonArray.put(obj)
-        }
-
-        prefs.edit {
-            putString("todos", jsonArray.toString()).apply()
-        }
+        prefs.edit { putString("todos", todosToJsonArray(todos).toString()).apply() }
     } catch (e: Exception) {
-        syncScope.launch {
-            ERRORINSERT(
-                ERRORINSERTDATA(
-                    service_name = "saveTodos",
-                    error_message = e.stackTraceToString(),
-                    created_at = Instant.now().toString(),
-                    severity = "ERROR"
-                )
-            )
-        }
+        logError("saveTodos", e)
     }
 }
 
 fun addTodo(text: String, context: Context) {
     val todos = getTodos(context).toMutableList()
-    val newTodo = TodoItem(
-        id = System.currentTimeMillis(),
-        text = text,
-        completed = false,
-        timestamp = System.currentTimeMillis()
-    )
-    todos.add(newTodo)
+    todos.add(TodoItem(id = System.currentTimeMillis(), text = text, completed = false, timestamp = System.currentTimeMillis()))
     saveTodos(context, todos)
-
-    showSimpleNotificationExtern(
-        "✅ To-do hinzugefügt",
-        "\"$text\"\n\nGesamt: ${todos.size} To-dos",
-        10.seconds,
-        context
-    )
+    showSimpleNotificationExtern("✅ To-do hinzugefügt", "\"$text\"\n\nGesamt: ${todos.size} To-dos", 10.seconds, context)
 }
 
 fun completeTodo(index: Int, context: Context) {
     val todos = getTodos(context).toMutableList()
-
     if (index in todos.indices) {
         todos[index] = todos[index].copy(completed = true)
         saveTodos(context, todos)
-
-        showSimpleNotificationExtern(
-            "✓ Erledigt",
-            "\"${todos[index].text}\"",
-            10.seconds,
-            context
-        )
+        showSimpleNotificationExtern("✓ Erledigt", "\"${todos[index].text}\"", 10.seconds, context)
     } else {
-        showSimpleNotificationExtern(
-            "❌ Fehler",
-            "To-do #${index + 1} existiert nicht",
-            10.seconds,
-            context
-        )
+        showSimpleNotificationExtern("❌ Fehler", "To-do #${index + 1} existiert nicht", 10.seconds, context)
     }
 }
 
 fun removeTodo(index: Int, context: Context) {
     val todos = getTodos(context).toMutableList()
-
     if (index in todos.indices) {
         val removed = todos.removeAt(index)
         saveTodos(context, todos)
-
-        showSimpleNotificationExtern(
-            "🗑️ Gelöscht",
-            "\"${removed.text}\"",
-            10.seconds,
-            context
-        )
+        showSimpleNotificationExtern("🗑️ Gelöscht", "\"${removed.text}\"", 10.seconds, context)
     } else {
-        showSimpleNotificationExtern(
-            "❌ Fehler",
-            "To-do #${index + 1} existiert nicht",
-            10.seconds,
-            context
-        )
+        showSimpleNotificationExtern("❌ Fehler", "To-do #${index + 1} existiert nicht", 10.seconds, context)
     }
 }
 
@@ -943,12 +588,7 @@ fun showAllTodos(context: Context) {
     val todos = getTodos(context)
 
     if (todos.isEmpty()) {
-        showSimpleNotificationExtern(
-            "📝 To-dos",
-            "Keine To-dos vorhanden",
-            10.seconds,
-            context = context
-        )
+        showSimpleNotificationExtern("📝 To-dos", "Keine To-dos vorhanden", 10.seconds, context = context)
         return
     }
 
@@ -959,54 +599,43 @@ fun showAllTodos(context: Context) {
     val todoText = buildString {
         if (activeTodos.isNotEmpty()) {
             append("📌 OFFEN (${activeTodos.size}):\n")
-            activeTodos.forEachIndexed { _, todo ->
-                append("${todoIndexMap[todo.id]}. ${todo.text}\n")
-            }
+            activeTodos.forEach { append("${todoIndexMap[it.id]}. ${it.text}\n") }
         }
-
         if (completedTodos.isNotEmpty()) {
             if (activeTodos.isNotEmpty()) append("\n")
             append("✓ ERLEDIGT (${completedTodos.size}):\n")
-            completedTodos.forEachIndexed { _, todo ->
-                append("${todoIndexMap[todo.id]}. ${todo.text}\n")
-            }
+            completedTodos.forEach { append("${todoIndexMap[it.id]}. ${it.text}\n") }
         }
     }
 
     val chunks = splitText(todoText)
-
     val notificationManager = context.getSystemService(NotificationManager::class.java)
 
     chunks.forEachIndexed { index, chunk ->
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_menu_agenda)
+        notificationManager.notify(TODOS + index, NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_agenda)
             .setContentTitle("📝 To-do Liste (${todos.size})")
             .setStyle(NotificationCompat.BigTextStyle().bigText(chunk))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setGroup("todos")
-            .build()
-
-        notificationManager.notify(TODOS + index, notification)
+            .build())
     }
 
-    val summary = NotificationCompat.Builder(context, CHANNEL_ID)
-        .setSmallIcon(R.drawable.ic_menu_info_details)
+    notificationManager.notify(TODOS + 50, NotificationCompat.Builder(context, CHANNEL_ID)
+        .setSmallIcon(android.R.drawable.ic_menu_info_details)
         .setContentTitle("Alle Todos")
         .setContentText("${chunks.size} Todos")
         .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setGroup("todos")
         .setGroupSummary(true)
         .setAutoCancel(true)
-        .build()
-
-    notificationManager.notify(TODOS + 50, summary)
+        .build())
 }
 
 private fun splitText(text: String): List<String> {
     val parts = mutableListOf<String>()
     var start = 0
-
     while (start < text.length) {
         val end = minOf(start + 200, text.length)
         parts.add(text.substring(start, end))
@@ -1020,27 +649,15 @@ private fun parseTodosFromJson(jsonData: String): List<TodoItem> =
         val jsonArray = JSONArray(jsonData)
         (0 until jsonArray.length()).map { i ->
             jsonArray.getJSONObject(i).run {
-                TodoItem(
-                    getLong("id"),
-                    getString("text"),
-                    getBoolean("completed"),
-                    getLong("timestamp")
-                )
+                TodoItem(getLong("id"), getString("text"), getBoolean("completed"), getLong("timestamp"))
             }
         }
     } catch (e: Exception) {
-        syncScope.launch {
-            ERRORINSERT(
-                ERRORINSERTDATA(
-                    service_name = "parseTodosFromJson",
-                    error_message = e.stackTraceToString(),
-                    created_at = Instant.now().toString(),
-                    severity = "ERROR"
-                )
-            )
-        }
+        logError("parseTodosFromJson", e)
         emptyList()
     }
+
+// ─── AI Response ─────────────────────────────────────────────────────────────
 
 fun startAiResponseListener(context: Context) {
     aiResponseJob?.cancel()
@@ -1060,52 +677,17 @@ fun startAiResponseListener(context: Context) {
             while (isActive) {
                 try {
                     val client = aiResponseServerSocket?.accept() ?: break
-                    val bytes = client.inputStream.readBytes()
+                    val text = client.inputStream.readBytes().toString(Charsets.UTF_8)
                     client.close()
 
-                    val text = bytes.toString(Charsets.UTF_8)
-
                     saveAiResponse(context, text)
-
-                    val entry = AiResponseEntry(
-                        text = text,
-                        timestamp = System.currentTimeMillis(),
-                        dateKey = getTodayKey()
-                    )
-                    aiResponseFlow.emit(entry)
-
-                    showSimpleNotificationExtern(
-                        "🤖 AI Antwort",
-                        text.take(100),
-                        30.seconds,
-                        context
-                    )
-                } catch (_: SocketException) {
-                    break
-                } catch (e: Exception) {
-                    syncScope.launch {
-                        ERRORINSERT(
-                            ERRORINSERTDATA(
-                                service_name = "startAiREsponseListener",
-                                error_message = e.stackTraceToString(),
-                                created_at = Instant.now().toString(),
-                                severity = "ERROR"
-                            )
-                        )
-                    }
-                }
+                    aiResponseFlow.emit(AiResponseEntry(text = text, timestamp = System.currentTimeMillis(), dateKey = getTodayKey()))
+                    showSimpleNotificationExtern("🤖 AI Antwort", text.take(100), 30.seconds, context)
+                } catch (_: SocketException) { break }
+                catch (e: Exception) { logError("startAiResponseListener", e) }
             }
         } catch (e: Exception) {
-            syncScope.launch {
-                ERRORINSERT(
-                    ERRORINSERTDATA(
-                        service_name = "startAiResponseListener",
-                        error_message = e.stackTraceToString(),
-                        created_at = Instant.now().toString(),
-                        severity = "ERROR"
-                    )
-                )
-            }
+            logError("startAiResponseListener", e)
         }
     }
 }
@@ -1115,15 +697,12 @@ fun saveAiResponse(context: Context, text: String) {
     val dateKey = getTodayKey()
     val timestamp = System.currentTimeMillis()
 
-    val allJson = prefs.getString("all_entries", "[]") ?: "[]"
-    val arr = JSONArray(allJson)
-
-    val obj = JSONObject().apply {
+    val arr = JSONArray(prefs.getString("all_entries", "[]") ?: "[]")
+    arr.put(JSONObject().apply {
         put("text", text)
         put("timestamp", timestamp)
         put("dateKey", dateKey)
-    }
-    arr.put(obj)
+    })
 
     prefs.edit {
         putString("all_entries", arr.toString())
@@ -1134,24 +713,20 @@ fun saveAiResponse(context: Context, text: String) {
 
 fun deleteAiResponse(context: Context, timestamp: Long) {
     val prefs = context.getSharedPreferences("ai_responses", MODE_PRIVATE)
-    val allJson = prefs.getString("all_entries", "[]") ?: "[]"
-    val arr = JSONArray(allJson)
+    val arr = JSONArray(prefs.getString("all_entries", "[]") ?: "[]")
     val newArr = JSONArray()
 
     for (i in 0 until arr.length()) {
         val obj = arr.getJSONObject(i)
-        if (obj.getLong("timestamp") != timestamp) {
-            newArr.put(obj)
-        }
+        if (obj.getLong("timestamp") != timestamp) newArr.put(obj)
     }
 
     prefs.edit {
         putString("all_entries", newArr.toString())
-        val dateKey = arr.let {
-            for (i in 0 until it.length()) {
-                val obj = it.getJSONObject(i)
-                if (obj.getLong("timestamp") == timestamp)
-                    return@let obj.getString("dateKey")
+        val dateKey = run {
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                if (obj.getLong("timestamp") == timestamp) return@run obj.getString("dateKey")
             }
             null
         }
@@ -1183,20 +758,12 @@ fun loadTodayOrYesterdayEntry(context: Context): AiResponseEntry? {
 
     val todayText = prefs.getString("entry_$todayKey", null)
     if (todayText != null) {
-        return AiResponseEntry(
-            text = todayText,
-            timestamp = prefs.getLong("timestamp_$todayKey", 0L),
-            dateKey = todayKey
-        )
+        return AiResponseEntry(todayText, prefs.getLong("timestamp_$todayKey", 0L), todayKey)
     }
 
     val yesterdayText = prefs.getString("entry_$yesterdayKey", null)
     if (yesterdayText != null) {
-        return AiResponseEntry(
-            text = yesterdayText,
-            timestamp = prefs.getLong("timestamp_$yesterdayKey", 0L),
-            dateKey = yesterdayKey
-        )
+        return AiResponseEntry(yesterdayText, prefs.getLong("timestamp_$yesterdayKey", 0L), yesterdayKey)
     }
 
     return null
@@ -1204,44 +771,28 @@ fun loadTodayOrYesterdayEntry(context: Context): AiResponseEntry? {
 
 fun loadAllAiResponses(context: Context): List<AiResponseEntry> {
     val prefs = context.getSharedPreferences("ai_responses", MODE_PRIVATE)
-    val allJson = prefs.getString("all_entries", "[]") ?: "[]"
     return try {
-        val arr = JSONArray(allJson)
+        val arr = JSONArray(prefs.getString("all_entries", "[]") ?: "[]")
         (0 until arr.length()).map { i ->
             arr.getJSONObject(i).run {
-                AiResponseEntry(
-                    text = getString("text"),
-                    timestamp = getLong("timestamp"),
-                    dateKey = getString("dateKey")
-                )
+                AiResponseEntry(getString("text"), getLong("timestamp"), getString("dateKey"))
             }
         }.sortedByDescending { it.timestamp }
     } catch (e: Exception) {
-        syncScope.launch {
-            ERRORINSERT(
-                ERRORINSERTDATA(
-                    service_name = "loadAllAiResponses",
-                    error_message = e.stackTraceToString(),
-                    created_at = Instant.now().toString(),
-                    severity = "ERROR"
-                )
-            )
-        }
+        logError("loadAllAiResponses", e)
         emptyList()
     }
 }
 
-fun getTodayKey(): String {
-    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.GERMANY)
-    return sdf.format(Date())
-}
+fun getTodayKey(): String = SimpleDateFormat("yyyy-MM-dd", Locale.GERMANY).format(Date())
 
 private fun getYesterdayKey(): String {
     val cal = Calendar.getInstance()
     cal.add(Calendar.DAY_OF_YEAR, -1)
-    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.GERMANY)
-    return sdf.format(cal.time)
+    return SimpleDateFormat("yyyy-MM-dd", Locale.GERMANY).format(cal.time)
 }
+
+// ─── Flashcards ───────────────────────────────────────────────────────────────
 
 suspend fun trySendImageToLaptop(imageBytes: ByteArray): Boolean {
     return withContext(Dispatchers.IO) {
@@ -1257,51 +808,18 @@ suspend fun trySendImageToLaptop(imageBytes: ByteArray): Boolean {
             flashcardResponseSocket = serverSocket
             startFlashcardResponseListener(serverSocket)
 
-            val s = Socket()
-            s.connect(InetSocketAddress(laptopIp, Config.FLASHCARD_SEND_PORT), 3000)
-            s.getOutputStream().write(imageBytes)
-            s.shutdownOutput()
-            s.close()
+            Socket().apply {
+                connect(InetSocketAddress(laptopIp, Config.FLASHCARD_SEND_PORT), 3000)
+                getOutputStream().write(imageBytes)
+                shutdownOutput()
+                close()
+            }
             true
         } catch (e: Exception) {
-            syncScope.launch {
-                ERRORINSERT(
-                    ERRORINSERTDATA(
-                        service_name = "trySendImageToLaptop",
-                        error_message = e.stackTraceToString(),
-                        created_at = Instant.now().toString(),
-                        severity = "ERROR"
-                    )
-                )
-            }
+            logError("trySendImageToLaptop", e)
             flashcardVokabelnFlow.emit(null)
             false
         }
-    }
-}
-
-private suspend fun bindFlashcardResponseSocket(): ServerSocket? {
-    return withContext(Dispatchers.IO) {
-        try {
-            flashcardResponseSocket?.close()
-            ServerSocket().apply {
-                reuseAddress = true
-                soTimeout = 600_000
-                bind(InetSocketAddress(FLASHCARD_RECEIVE_PORT))
-            }.also { flashcardResponseSocket = it }
-        } catch (e: Exception) {
-            syncScope.launch {
-                ERRORINSERT(
-                    ERRORINSERTDATA(
-                        service_name = "bindFlashcardResponseSocket",
-                        error_message = e.stackTraceToString(),
-                        created_at = Instant.now().toString(),
-                        severity = "ERROR"
-                    )
-                )
-            }
-        }
-        null
     }
 }
 
@@ -1312,25 +830,13 @@ private fun startFlashcardResponseListener(boundSocket: ServerSocket) {
     flashcardResponseJob = syncScope.launch(Dispatchers.IO) {
         try {
             val client = boundSocket.accept()
-            val bytes = client.inputStream.readBytes()
+            val vokabeln = parseVokabelnFromJson(client.inputStream.readBytes().toString(Charsets.UTF_8))
             client.close()
-
-            val json = bytes.toString(Charsets.UTF_8)
-            val vokabeln = parseVokabelnFromJson(json)
             flashcardVokabelnFlow.emit(vokabeln.ifEmpty { null })
         } catch (_: SocketTimeoutException) {
             flashcardVokabelnFlow.emit(null)
         } catch (e: Exception) {
-            syncScope.launch {
-                ERRORINSERT(
-                    ERRORINSERTDATA(
-                        service_name = "startFlashcardResponseListener",
-                        error_message = e.stackTraceToString(),
-                        created_at = Instant.now().toString(),
-                        severity = "ERROR"
-                    )
-                )
-            }
+            logError("startFlashcardResponseListener", e)
             flashcardVokabelnFlow.emit(null)
         } finally {
             flashcardResponseSocket?.close()
@@ -1342,99 +848,24 @@ private fun startFlashcardResponseListener(boundSocket: ServerSocket) {
 private fun parseVokabelnFromJson(json: String): List<Vokabel> = try {
     val arr = JSONArray(json)
     (0 until arr.length()).map { i ->
-        arr.getJSONObject(i).run {
-            Vokabel(getString("latein"), getString("deutsch"))
-        }
+        arr.getJSONObject(i).run { Vokabel(getString("latein"), getString("deutsch")) }
     }
 } catch (e: Exception) {
-    syncScope.launch {
-        ERRORINSERT(
-            ERRORINSERTDATA(
-                service_name = "parseVokabelnFromJson",
-                error_message = e.stackTraceToString(),
-                created_at = Instant.now().toString(),
-                severity = "ERROR"
-            )
-        )
-    }
+    logError("parseVokabelnFromJson", e)
     emptyList()
 }
 
+// ─── Media ───────────────────────────────────────────────────────────────────
 
 fun startMediaCommandListener(context: Context) {
-    if (mediaCommandJob?.isActive == true && mediaCommandSocket?.isClosed == false) return
-    mediaCommandSocket?.close()
-
-    mediaCommandJob = mediaScope.launch {
-        while (isActive) {
-            try {
-                mediaCommandSocket = ServerSocket().apply {
-                    reuseAddress = true
-                    bind(InetSocketAddress(Config.MEDIA_COMMAND_PORT))
-                }
-
-                while (isActive) {
-                    try {
-                        val client = mediaCommandSocket?.accept() ?: break
-                        mediaScope.launch {
-                            try {
-                                val reader =
-                                    BufferedReader(InputStreamReader(client.getInputStream()))
-                                val sb = StringBuilder()
-                                var line: String?
-                                while (reader.readLine().also { line = it } != null) {
-                                    sb.append(line)
-                                }
-                                client.close()
-
-                                val json = JSONObject(sb.toString())
-                                handleMediaCommand(context, json)
-                            } catch (e: Exception) {
-                                syncScope.launch {
-                                    ERRORINSERT(
-                                        ERRORINSERTDATA(
-                                            service_name = "startMediaCommandListener",
-                                            error_message = e.stackTraceToString(),
-                                            created_at = Instant.now().toString(),
-                                            severity = "ERROR"
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    } catch (_: SocketException) {
-                        break
-                    } catch (e: SocketException) {
-                        syncScope.launch {
-                            ERRORINSERT(
-                                ERRORINSERTDATA(
-                                    service_name = "startMediaCommandListener",
-                                    error_message = e.stackTraceToString(),
-                                    created_at = Instant.now().toString(),
-                                    severity = "ERROR"
-                                )
-                            )
-                        }
-                        break
-                    }
-                }
-            } catch (e: Exception) {
-                syncScope.launch {
-                    ERRORINSERT(
-                        ERRORINSERTDATA(
-                            service_name = "startMediaCommandListener",
-                            error_message = e.stackTraceToString(),
-                            created_at = Instant.now().toString(),
-                            severity = "ERROR"
-                        )
-                    )
-                }
-            } finally {
-                mediaCommandSocket?.close()
-                mediaCommandSocket = null
-            }
-            if (isActive) delay(2000)
-        }
+    if (mediaCommandJob?.isActive == true) return
+    mediaCommandJob = launchServer(mediaScope, Config.MEDIA_COMMAND_PORT, "startMediaCommandListener") { client ->
+        val sb = StringBuilder()
+        val reader = BufferedReader(InputStreamReader(client.getInputStream()))
+        var line: String?
+        while (reader.readLine().also { line = it } != null) sb.append(line)
+        client.close()
+        handleMediaCommand(context, JSONObject(sb.toString()))
     }
 }
 
@@ -1442,172 +873,40 @@ suspend fun sendNvidiaChatMessage(
     history: List<WhatsAppNotificationListener.Companion.ChatMessage>,
     userMessage: String
 ): String? {
-    return withContext(Dispatchers.IO) {
-        try {
-            val apiKey = Config.NVIDIA
-            val model = "meta/llama-3.1-8b-instruct"
-
-            val messagesJson = JSONArray()
-
-            messagesJson.put(
-                JSONObject().apply {
-                    put("role", "system")
-                    put(
-                        "content",
-                        "Du bist ein hilfreicher Chat-Assistent. Antworte kurz, klar und auf Deutsch und verwende keine Markdown Syntax."
-                    )
-                }
-            )
-
-            history.forEach { msg ->
-                val role = if (msg.isOwnMessage) "user" else "assistant"
-                messagesJson.put(
-                    JSONObject().apply {
-                        put("role", role)
-                        put("content", msg.text)
-                    }
-                )
-            }
-
-            messagesJson.put(
-                JSONObject().apply {
-                    put("role", "user")
-                    put("content", userMessage)
-                }
-            )
-
-            val requestBody = JSONObject().apply {
-                put("model", model)
-                put("messages", messagesJson)
-                put("temperature", 0.3)
-                put("max_tokens", 1024)
-                put("stream", false)
-            }
-
-            val url = URL("https://integrate.api.nvidia.com/v1/chat/completions")
-            val connection = url.openConnection() as HttpURLConnection
-            connection.requestMethod = "POST"
-            connection.setRequestProperty("Authorization", "Bearer $apiKey")
-            connection.setRequestProperty("Content-Type", "application/json")
-            connection.doOutput = true
-            connection.outputStream.use {
-                it.write(requestBody.toString().toByteArray(Charsets.UTF_8))
-            }
-
-            val responseCode = connection.responseCode
-            if (responseCode != 200) {
-                return@withContext null
-            }
-
-            val raw = connection.inputStream.bufferedReader().readText()
-            val content = JSONObject(raw)
-                .getJSONArray("choices")
-                .getJSONObject(0)
-                .getJSONObject("message")
-                .getString("content")
-                .trim()
-
-            content.ifBlank { null }
-        } catch (e: Exception) {
-            syncScope.launch {
-                ERRORINSERT(
-                    ERRORINSERTDATA(
-                        service_name = "sendNvidiaChatMessage",
-                        error_message = e.stackTraceToString(),
-                        created_at = Instant.now().toString(),
-                        severity = "ERROR"
-                    )
-                )
-            }
-            null
+    val messages = JSONArray().apply {
+        put(JSONObject().apply {
+            put("role", "system")
+            put("content", "Du bist ein hilfreicher Chat-Assistent. Antworte kurz, klar und auf Deutsch und verwende keine Markdown Syntax.")
+        })
+        history.forEach { msg ->
+            put(JSONObject().apply {
+                put("role", if (msg.isOwnMessage) "user" else "assistant")
+                put("content", msg.text)
+            })
         }
+        put(JSONObject().apply { put("role", "user"); put("content", userMessage) })
     }
+    return callNvidiaApi("meta/llama-3.1-8b-instruct", messages)
 }
 
 suspend fun sendNvidiaChatMessageAITab(
     history: List<ChatMessage>,
     userMessage: String
 ): String? {
-    return withContext(Dispatchers.IO) {
-        try {
-            val apiKey = Config.NVIDIA
-            val model = "nvidia/nemotron-3-nano-30b-a3b"
-
-            val messagesJson = JSONArray()
-
-            messagesJson.put(
-                JSONObject().apply {
-                    put("role", "system")
-                    put(
-                        "content",
-                        "Du bist ein hilfreicher Chat-Assistent. Antworte kurz, klar und auf Deutsch."
-                    )
-                }
-            )
-
-            history.forEach { msg ->
-                val role = if (msg.own) "user" else "assistant"
-                messagesJson.put(
-                    JSONObject().apply {
-                        put("role", role)
-                        put("content", msg.text)
-                    }
-                )
-            }
-
-            messagesJson.put(
-                JSONObject().apply {
-                    put("role", "user")
-                    put("content", userMessage)
-                }
-            )
-
-            val requestBody = JSONObject().apply {
-                put("model", model)
-                put("messages", messagesJson)
-                put("temperature", 0.3)
-                put("max_tokens", 1024)
-                put("stream", false)
-            }
-
-            val url = URL("https://integrate.api.nvidia.com/v1/chat/completions")
-            val connection = url.openConnection() as HttpURLConnection
-            connection.requestMethod = "POST"
-            connection.setRequestProperty("Authorization", "Bearer $apiKey")
-            connection.setRequestProperty("Content-Type", "application/json")
-            connection.doOutput = true
-            connection.outputStream.use {
-                it.write(requestBody.toString().toByteArray(Charsets.UTF_8))
-            }
-
-            val responseCode = connection.responseCode
-            if (responseCode != 200) {
-                return@withContext null
-            }
-
-            val raw = connection.inputStream.bufferedReader().readText()
-            val content = JSONObject(raw)
-                .getJSONArray("choices")
-                .getJSONObject(0)
-                .getJSONObject("message")
-                .getString("content")
-                .trim()
-
-            content.ifBlank { null }
-        } catch (e: Exception) {
-            syncScope.launch {
-                ERRORINSERT(
-                    ERRORINSERTDATA(
-                        service_name = "sendNvidiaChatMessage",
-                        error_message = e.stackTraceToString(),
-                        created_at = Instant.now().toString(),
-                        severity = "ERROR"
-                    )
-                )
-            }
-            null
+    val messages = JSONArray().apply {
+        put(JSONObject().apply {
+            put("role", "system")
+            put("content", "Du bist ein hilfreicher Chat-Assistent. Antworte kurz, klar und auf Deutsch.")
+        })
+        history.forEach { msg ->
+            put(JSONObject().apply {
+                put("role", if (msg.own) "user" else "assistant")
+                put("content", msg.text)
+            })
         }
+        put(JSONObject().apply { put("role", "user"); put("content", userMessage) })
     }
+    return callNvidiaApi("nvidia/nemotron-3-nano-30b-a3b", messages)
 }
 
 private fun handleMediaCommand(context: Context, json: JSONObject) {
@@ -1627,29 +926,19 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
             val isPlaying = prefs.getBoolean("is_playing", false)
             val mode = prefs.getString("current_mode", "music") ?: "music"
             if (isPlaying) {
-                val pauseAction = if (mode == "music")
-                    "com.cloud.ACTION_MUSIC_PAUSE"
-                else
-                    "com.cloud.ACTION_PODCAST_PAUSE"
-                sendIntent(pauseAction)
+                sendIntent(if (mode == "music") "com.cloud.ACTION_MUSIC_PAUSE" else "com.cloud.ACTION_PODCAST_PAUSE")
             } else {
                 if (mode == "music") MediaPlayerService.sendMusicPlayAction(context)
                 else MediaPlayerService.sendPodcastPlayAction(context)
             }
         }
 
-        "play" -> MediaPlayerService.sendMusicPlayAction(context)
-        "pause" -> sendIntent("com.cloud.ACTION_MUSIC_PAUSE")
-        "next" -> sendIntent("com.cloud.ACTION_MUSIC_NEXT")
-        "previous" -> sendIntent("com.cloud.ACTION_MUSIC_PREVIOUS")
-
-        "toggleRepeat" -> sendIntent("com.cloud.ACTION_TOGGLE_REPEAT")
-        "toggleFavorite" -> sendIntent("com.cloud.ACTION_TOGGLE_FAVORITE")
-
-        "playSongAtIndex" -> {
-            val index = json.optInt("index", 0)
-            MediaPlayerService.playFromAllSongs(context, index)
-        }
+        "play"            -> MediaPlayerService.sendMusicPlayAction(context)
+        "pause"           -> sendIntent("com.cloud.ACTION_MUSIC_PAUSE")
+        "next"            -> sendIntent("com.cloud.ACTION_MUSIC_NEXT")
+        "previous"        -> sendIntent("com.cloud.ACTION_MUSIC_PREVIOUS")
+        "toggleRepeat"    -> sendIntent("com.cloud.ACTION_TOGGLE_REPEAT")
+        "toggleFavorite"  -> sendIntent("com.cloud.ACTION_TOGGLE_FAVORITE")
 
         "activatePlaylist" -> {
             val playlistId = json.optString("playlistId", "")
@@ -1671,9 +960,8 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
         }
 
         "seek" -> {
-            val posMs = json.optLong("positionMs", 0L)
             sendIntent("com.cloud.ACTION_SEEK") {
-                putExtra("SEEK_POSITION_MS", posMs)
+                putExtra("SEEK_POSITION_MS", json.optLong("positionMs", 0L))
             }
         }
 
@@ -1683,119 +971,41 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
 
 fun startMediaStateServer(context: Context) {
     if (mediaStateJob?.isActive == true) return
-    mediaStateSocket?.close()
-
-    mediaStateJob = mediaScope.launch {
-        while (isActive) {
-            try {
-                if (mediaStateSocket != null) mediaStateSocket?.close()
-                mediaStateSocket = ServerSocket().apply {
-                    reuseAddress = true
-                    bind(InetSocketAddress(8900))
-                }
-
-                while (isActive) {
-                    try {
-                        val client = mediaStateSocket?.accept() ?: break
-                        mediaScope.launch {
-                            try {
-                                val reader =
-                                    BufferedReader(InputStreamReader(client.getInputStream()))
-                                val command = reader.readLine()?.trim() ?: ""
-
-                                val response = when (command) {
-                                    "GET_MEDIA_STATE" -> buildMediaStateJson(context)
-                                    "GET_PLAYLISTS" -> buildPlaylistsJson(context)
-                                    else -> "{}"
-                                }
-
-                                val out = client.getOutputStream()
-                                out.write(response.toByteArray(Charsets.UTF_8))
-                                out.flush()
-                                client.close()
-
-                                Log.d("MEDIA_STATE", "📤 Antwort gesendet für: $command")
-                            } catch (e: Exception) {
-                                syncScope.launch {
-                                    ERRORINSERT(
-                                        ERRORINSERTDATA(
-                                            service_name = "startMediaStateServer",
-                                            error_message = e.stackTraceToString(),
-                                            created_at = Instant.now().toString(),
-                                            severity = "ERROR"
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    } catch (_: SocketException) {
-                        break
-                    } catch (e: SocketException) {
-                        syncScope.launch {
-                            ERRORINSERT(
-                                ERRORINSERTDATA(
-                                    service_name = "startMediaStateServer",
-                                    error_message = e.stackTraceToString(),
-                                    created_at = Instant.now().toString(),
-                                    severity = "ERROR"
-                                )
-                            )
-                        }
-                        break
-                    }
-                }
-            } catch (e: Exception) {
-                syncScope.launch {
-                    ERRORINSERT(
-                        ERRORINSERTDATA(
-                            service_name = "startMediaStateServer",
-                            error_message = e.stackTraceToString(),
-                            created_at = Instant.now().toString(),
-                            severity = "ERROR"
-                        )
-                    )
-                }
-            } finally {
-                mediaStateSocket?.close()
-                mediaStateSocket = null
-            }
-            if (isActive) delay(2000)
+    mediaStateJob = launchServer(mediaScope, Config.MEDIA_STATE_PORT, "startMediaStateServer") { client ->
+        val command = BufferedReader(InputStreamReader(client.getInputStream())).readLine()?.trim() ?: ""
+        val response = when (command) {
+            "GET_MEDIA_STATE" -> buildMediaStateJson(context)
+            "GET_PLAYLISTS"   -> buildPlaylistsJson(context)
+            else              -> "{}"
         }
+        client.getOutputStream().apply {
+            write(response.toByteArray(Charsets.UTF_8))
+            flush()
+        }
+        client.close()
+        Log.d("MEDIA_STATE", "📤 Antwort gesendet für: $command")
     }
 }
 
 private fun buildMediaStateJson(context: Context): String {
     val musicPrefs = context.getSharedPreferences("music_player_prefs", MODE_PRIVATE)
-    val isServiceRunning = MediaPlayerService.isServiceActive()
 
-    if (!isServiceRunning) {
+    if (!MediaPlayerService.isServiceActive()) {
         return JSONObject().apply {
-            put("mode", "music")
-            put("is_playing", false)
-            put("song_name", "")
-            put("title", "Spielt nichts")
-            put("playlist_name", "")
-            put("song_index", 0)
-            put("is_favorite", false)
-            put("active_playlist_id", "")
-            put("active_algo_playlist_id", "")
-            put("position_ms", 0)
-            put("duration_ms", 0)
+            put("mode", "music"); put("isPlaying", false); put("currentSong", "")
+            put("currentPlaylist", ""); put("songIndex", 0); put("isFavorite", false)
+            put("activePlaylistId", ""); put("activeAlgoPlaylistId", "")
+            put("positionMs", 0); put("durationMs", 0)
         }.toString()
     }
-    val podcastPrefs = context.getSharedPreferences("podcast_player_prefs", MODE_PRIVATE)
 
+    val podcastPrefs = context.getSharedPreferences("podcast_player_prefs", MODE_PRIVATE)
     val mode = musicPrefs.getString("current_mode", "music") ?: "music"
     val isPlaying = musicPrefs.getBoolean("is_playing", false)
 
-    val songName: String
-    val playlistName: String
-    val songIndex: Int
-    val isFavorite: Boolean
-    val activePlaylistId: String
-    val activeAlgoPlaylistId: String
-    val positionMs: Long
-    val durationMs: Long
+    val songName: String; val playlistName: String; val songIndex: Int
+    val isFavorite: Boolean; val activePlaylistId: String; val activeAlgoPlaylistId: String
+    val positionMs: Long; val durationMs: Long
 
     if (mode == "music") {
         songName = musicPrefs.getString("current_song_name", "") ?: ""
@@ -1804,58 +1014,30 @@ private fun buildMediaStateJson(context: Context): String {
         songIndex = musicPrefs.getInt("current_song_index", 0)
         val favorites = musicPrefs.getString("favorite_songs", null)
             ?.split("|||")
-            ?.mapNotNull { entry ->
-                val parts = entry.split(":::")
-                if (parts.isNotEmpty()) parts[0] else null
-            }
+            ?.mapNotNull { entry -> entry.split(":::").takeIf { it.isNotEmpty() }?.get(0) }
             ?.toSet() ?: emptySet()
         isFavorite = favorites.contains(songName)
-        activePlaylistId = activePl
-        activeAlgoPlaylistId = activeAlgoPl
-        positionMs = 0L
-        durationMs = 0L
+        activePlaylistId = activePl; activeAlgoPlaylistId = activeAlgoPl
+        positionMs = 0L; durationMs = 0L
         playlistName = when {
             activeAlgoPl.isNotEmpty() -> activeAlgoPl
-            activePl.isNotEmpty() -> activePl
-            else -> "Alle Songs"
+            activePl.isNotEmpty()     -> activePl
+            else                      -> "Alle Songs"
         }
     } else {
         val path = podcastPrefs.getString("current_podcast_path", null)
         songName = path?.substringAfterLast("/")?.substringBeforeLast(".") ?: ""
-        positionMs = if (path != null) podcastPrefs.getLong(
-            "podcast_position_${path.hashCode()}",
-            0L
-        ) else 0L
-        durationMs = 0L
-        playlistName = "Podcast"
-        songIndex = 0
-        isFavorite = false
-        activePlaylistId = ""
-        activeAlgoPlaylistId = ""
+        positionMs = if (path != null) podcastPrefs.getLong("podcast_position_${path.hashCode()}", 0L) else 0L
+        durationMs = 0L; playlistName = "Podcast"; songIndex = 0
+        isFavorite = false; activePlaylistId = ""; activeAlgoPlaylistId = ""
     }
 
     return JSONObject().apply {
-        put("mode", mode)
-        put("isPlaying", isPlaying)
-        put("currentSong", songName)
-        put("currentPlaylist", playlistName)
-        put("positionMs", positionMs)
-        put("durationMs", durationMs)
-        put("songIndex", songIndex)
-        put("isFavorite", isFavorite)
-        put("activePlaylistId", activePlaylistId)
+        put("mode", mode); put("isPlaying", isPlaying); put("currentSong", songName)
+        put("currentPlaylist", playlistName); put("positionMs", positionMs)
+        put("durationMs", durationMs); put("songIndex", songIndex)
+        put("isFavorite", isFavorite); put("activePlaylistId", activePlaylistId)
         put("activeAlgoPlaylistId", activeAlgoPlaylistId)
-
-        put("is_playing", isPlaying)
-        put("song_name", songName)
-        put("title", songName)
-        put("playlist_name", playlistName)
-        put("song_index", songIndex)
-        put("is_favorite", isFavorite)
-        put("active_playlist_id", activePlaylistId)
-        put("active_algo_playlist_id", activeAlgoPlaylistId)
-        put("position_ms", positionMs)
-        put("duration_ms", durationMs)
     }.toString()
 }
 
@@ -1864,62 +1046,43 @@ private fun buildPlaylistsJson(context: Context): String {
 
     val playlistsJson = JSONArray()
     try {
-        val raw = musicPrefs.getString("playlists_json", null)
-        raw?.split("\n---\n")?.filter { it.isNotBlank() }?.forEach { line ->
-            val parts = line.split(":::", limit = 4)
-            if (parts.size >= 3) {
-                val items = if (parts.size > 3 && parts[3].isNotEmpty())
-                    parts[3].split("|~~|") else emptyList()
-                playlistsJson.put(JSONObject().apply {
-                    put("id", parts[0])
-                    put("name", parts[1])
-                    put("type", parts[2])
-                    put("song_count", items.size)
-                })
+        musicPrefs.getString("playlists_json", null)
+            ?.split("\n---\n")?.filter { it.isNotBlank() }?.forEach { line ->
+                val parts = line.split(":::", limit = 4)
+                if (parts.size >= 3) {
+                    val items = if (parts.size > 3 && parts[3].isNotEmpty())
+                        parts[3].split("|~~|") else emptyList()
+                    playlistsJson.put(JSONObject().apply {
+                        put("id", parts[0]); put("name", parts[1])
+                        put("type", parts[2]); put("song_count", items.size)
+                    })
+                }
             }
-        }
-    } catch (e: Exception) {
-        syncScope.launch {
-            ERRORINSERT(
-                ERRORINSERTDATA(
-                    service_name = "buildPlaylistsJson",
-                    error_message = e.stackTraceToString(),
-                    created_at = Instant.now().toString(),
-                    severity = "ERROR"
-                )
-            )
-        }
-    }
+    } catch (e: Exception) { logError("buildPlaylistsJson", e) }
 
     val algoJson = JSONArray()
     AlgorithmicPlaylistRegistry.all.forEach { source ->
         algoJson.put(JSONObject().apply {
-            put("id", source.id)
-            put("name", source.name)
-            put("description", source.description)
-            put("icon", source.icon)
+            put("id", source.id); put("name", source.name)
+            put("description", source.description); put("icon", source.icon)
         })
     }
 
     val songsJson = JSONArray()
     try {
-        val cr = context.contentResolver
         val proj = arrayOf(
             MediaStore.Audio.Media.DISPLAY_NAME,
             MediaStore.Audio.Media.DATA,
             MediaStore.Audio.Media.TITLE
         )
         var index = 0
-        cr.query(
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-            proj, null, null,
+        context.contentResolver.query(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, proj, null, null,
             "${MediaStore.Audio.Media.DISPLAY_NAME} ASC"
         )?.use { cursor ->
-            val nameCol =
-                cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+            val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
             val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
-            val titleCol =
-                cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+            val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
             while (cursor.moveToNext()) {
                 val data = cursor.getString(dataCol) ?: continue
                 val norm = data.lowercase()
@@ -1932,31 +1095,16 @@ private fun buildPlaylistsJson(context: Context): String {
                     val displayName = if (!title.isNullOrBlank() && title != "<unknown>") title
                     else name.substringBeforeLast('.')
                     songsJson.put(JSONObject().apply {
-                        put("index", index++)
-                        put("name", displayName)
+                        put("index", index++); put("name", displayName)
                     })
                 }
             }
         }
-    } catch (e: Exception) {
-        syncScope.launch {
-            ERRORINSERT(
-                ERRORINSERTDATA(
-                    service_name = "buildPlaylistsJson",
-                    error_message = e.stackTraceToString(),
-                    created_at = Instant.now().toString(),
-                    severity = "ERROR"
-                )
-            )
-        }
-    }
+    } catch (e: Exception) { logError("buildPlaylistsJson", e) }
 
     return JSONObject().apply {
-        put("playlists", playlistsJson)
-        put("algorithmicPlaylists", algoJson)
-
-        put("algo_playlists", algoJson)
-        put("songs", songsJson)
+        put("playlists", playlistsJson); put("algorithmicPlaylists", algoJson)
+        put("algo_playlists", algoJson); put("songs", songsJson)
     }.toString()
 }
 
@@ -1969,32 +1117,21 @@ fun pushMediaStateToLaptop(context: Context) {
     val state = buildMediaStateJson(context)
     if (state == lastPushedState) return
     lastPushedState = state
-    lastPushedState = state
     lastPushTime = now
     syncScope.launch(Dispatchers.IO) {
         try {
             if (laptopIp == "") return@launch
-            val socket = Socket()
-            socket.connect(InetSocketAddress(laptopIp, 8901), 2000)
-            socket.getOutputStream().apply {
-                write(state.toByteArray(Charsets.UTF_8))
-                flush()
+            Socket().apply {
+                connect(InetSocketAddress(laptopIp, 8901), 2000)
+                getOutputStream().apply { write(state.toByteArray(Charsets.UTF_8)); flush() }
+                close()
             }
-            socket.close()
-            return@launch
         } catch (_: SocketTimeoutException) {
-        } catch (e: Exception) {
-            ERRORINSERT(
-                ERRORINSERTDATA(
-                    service_name = "pushMediaStateToLaptop",
-                    error_message = e.stackTraceToString(),
-                    created_at = Instant.now().toString(),
-                    severity = "ERROR"
-                )
-            )
-        }
+        } catch (e: Exception) { logError("pushMediaStateToLaptop", e) }
     }
 }
+
+// ─── Discovery ────────────────────────────────────────────────────────────────
 
 private var discoveryJob: Job? = null
 
@@ -2002,445 +1139,65 @@ fun startDiscoveryListener() {
     discoveryJob?.cancel()
     discoveryJob = syncScope.launch(Dispatchers.IO) {
         try {
-            val socket = DatagramSocket(
-                Config.DISCOVERY_PORT,
-                InetAddress.getByName("0.0.0.0")
-            )
+            val socket = DatagramSocket(Config.DISCOVERY_PORT, InetAddress.getByName("0.0.0.0"))
             socket.broadcast = true
-
             val buf = ByteArray(1024)
-
             while (isActive) {
                 val packet = DatagramPacket(buf, buf.size)
                 socket.receive(packet)
-
-                val message = String(packet.data, 0, packet.length)
-
-                if (message == "DISCOVER_PHONE") {
+                if (String(packet.data, 0, packet.length) == "DISCOVER_PHONE") {
                     val response = "PHONE_HERE"
-                    val responsePacket = DatagramPacket(
-                        response.toByteArray(),
-                        response.length,
-                        packet.address,
-                        packet.port
-                    )
-                    socket.send(responsePacket)
+                    socket.send(DatagramPacket(response.toByteArray(), response.length, packet.address, packet.port))
                 }
             }
-        } catch (e: Exception) {
-            syncScope.launch {
-                ERRORINSERT(
-                    ERRORINSERTDATA(
-                        service_name = "startDiscoveryListener",
-                        error_message = e.stackTraceToString(),
-                        created_at = Instant.now().toString(),
-                        severity = "ERROR"
-                    )
-                )
-            }
-        }
+        } catch (e: Exception) { logError("startDiscoveryListener", e) }
     }
 }
 
-fun checkIfNearLocation(
-    context: Context,
-    targetLat: Double = Config.LAT,
-    targetLon: Double = Config.LON,
-    radiusMeters: Float = 150f,
-    callback: (Boolean) -> Unit
-) {
-    if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
-        != PackageManager.PERMISSION_GRANTED
-    ) {
-        callback(false)
-        return
-    }
-
-    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-
-    val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
-        .setMinUpdateIntervalMillis(500L)
-        .setMaxUpdateDelayMillis(2000L)
-        .setMaxUpdates(1)
-        .build()
-
-    val locationCallback = object : LocationCallback() {
-        override fun onLocationResult(locationResult: LocationResult) {
-            val location = locationResult.lastLocation
-            if (location != null) {
-                Log.d("CLOUD", "$location")
-                val distance = distanceBetween(
-                    location.latitude, location.longitude,
-                    targetLat, targetLon
-                )
-                callback(distance <= radiusMeters)
-            } else {
-                callback(false)
-            }
-            fusedLocationClient.removeLocationUpdates(this)
-        }
-    }
-
-    @SuppressLint("MissingPermission")
-    fusedLocationClient.requestLocationUpdates(
-        locationRequest,
-        locationCallback,
-        context.mainLooper
-    )
-}
-
-fun distanceBetween(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
-    val earthRadius = 6371000.0
-    val dLat = Math.toRadians(lat2 - lat1)
-    val dLon = Math.toRadians(lon2 - lon1)
-    val a =
-        sin(dLat / 2).pow(2.0) + cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(
-            2.0
-        )
-    val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    return (earthRadius * c).toFloat()
-}
-
-suspend fun askServer(
-    history: List<ChatMessage>,
-    question: String
-): String {
-    return withContext(Dispatchers.IO) {
-        try {
-            if (laptopIp == "") throw Exception("Keine laptopIp is vorhanden")
-            val request = "${question}. Here is the chat history:$history "
-            val sock = Socket(laptopIp, Config.AI_PORT)
-            sock.getOutputStream().write(request.toByteArray(Charsets.UTF_8))
-            sock.shutdownOutput()
-            val response = sock.getInputStream().readBytes().toString(Charsets.UTF_8)
-            sock.close()
-            response
-        } catch (e: Exception) {
-            var msg = ""
-            e.message?.let { it1 ->
-                msg =
-                    if (it1.contains("failed to connect")) "Keine Verbindung mit Server möglich" else "Fehler: ${e.message}"
-            }
-            msg
-        }
-    }
-}
-
-fun triggerBuild(context: Context) {
-    if (laptopIp.isEmpty()) {
-        showSimpleNotificationExtern("❌ Build", "Laptop nicht verbunden", 10.seconds, context)
-        return
-    }
-
-    syncScope.launch(Dispatchers.IO) {
-        var sock: Socket? = null
-        try {
-            showSimpleNotificationExtern(
-                "🔨 Build gestartet",
-                "Warte auf APK...",
-                10.seconds,
-                context
-            )
-
-            sock = Socket().apply {
-                receiveBufferSize = 2 * 1024 * 1024
-                sendBufferSize = 64 * 1024
-                soTimeout = 180_000
-            }
-
-            Log.d("BUILD", "Versuche Build auf $laptopIp:${Config.BUILD_PORT}")
-            sock.connect(InetSocketAddress(laptopIp, Config.BUILD_PORT), 5000)
-            Log.d("BUILD", "Socket connected: ${System.currentTimeMillis()}")
-
-            sock.getOutputStream().write("BUILD\n".toByteArray())
-            sock.getOutputStream().flush()
-
-            val apkFile = File(context.cacheDir, "cloud_update.apk")
-
-            val reader = sock.inputStream.bufferedReader()
-            val headerLine = reader.readLine() ?: run {
-                sock.close()
-                showSimpleNotificationExtern(
-                    "❌ Build fehlgeschlagen",
-                    "Keine Antwort",
-                    10.seconds,
-                    context
-                )
-                return@launch
-            }
-
-            Log.d("BUILD", "Header received: $headerLine")
-
-            if (headerLine.startsWith("ERROR:")) {
-                sock.close()
-                val errorMsg = headerLine.substringAfter("ERROR:")
-                showSimpleNotificationExtern(
-                    "❌ Build fehlgeschlagen",
-                    errorMsg,
-                    10.seconds,
-                    context
-                )
-                return@launch
-            }
-
-            val apkSize = headerLine.substringAfter("OK:").toLongOrNull() ?: 0L
-            Log.d("BUILD", "Erwarte APK: ${apkSize / 1024 / 1024}MB")
-
-            var bytesRead = 0L
-            apkFile.outputStream().buffered(1024 * 1024).use { fileOut ->
-                val buffer = ByteArray(1024 * 1024)
-                var read: Int
-                while (sock.inputStream.read(buffer).also { read = it } != -1) {
-                    fileOut.write(buffer, 0, read)
-                    bytesRead += read
-
-                    if (apkSize > 0) {
-                        val progress = (bytesRead * 100 / apkSize).toInt()
-                        if (progress % 10 == 0) {
-                            Log.d("BUILD", "Progress: $progress%")
-                        }
-                    }
-                }
-            }
-
-            sock.close()
-            Log.d(
-                "BUILD",
-                "APK written: ${apkFile.length()} bytes in ${System.currentTimeMillis()}ms"
-            )
-
-            if (apkFile.length() == 0L) {
-                showSimpleNotificationExtern(
-                    "❌ Build fehlgeschlagen",
-                    "Leere APK",
-                    10.seconds,
-                    context
-                )
-                return@launch
-            }
-
-            withContext(Dispatchers.Main) {
-                showSimpleNotificationExtern(
-                    "✅ Build fertig",
-                    "Starte Installation...",
-                    5.seconds,
-                    context
-                )
-                installApk(context, apkFile)
-            }
-
-        } catch (e: Exception) {
-            sock?.close()
-            Log.e("BUILD", "Fehler", e)
-            showSimpleNotificationExtern("❌ Build Fehler", e.message ?: "", 10.seconds, context)
-        }
-    }
-}
-
-private fun installApk(context: Context, apkFile: File) {
-    val uri = FileProvider.getUriForFile(
-        context, "${context.packageName}.provider", apkFile
-    )
-    val intent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(uri, "application/vnd.android.package-archive")
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-    context.startActivity(intent)
-}
-
-fun buildSessionStatsText(sessions: List<ListenSession>): String {
-    val totals = mutableMapOf<String, Triple<Long, String, Int>>()
-    for (s in sessions) {
-        val cur = totals[s.label] ?: Triple(0L, s.type, 0)
-        totals[s.label] = Triple(cur.first + s.listenedMs, s.type, cur.third + 1)
-    }
-
-    val sorted = totals.entries.sortedByDescending { it.value.first }.take(15)
-    val lines = mutableListOf<String>()
-
-    val allTimes = sessions.map { it.startedAt }.sorted()
-    val fmt = SimpleDateFormat("HH:mm", Locale.GERMANY)
-    lines += "Zeitraum: ${fmt.format(allTimes.first())} – ${fmt.format(allTimes.last())}"
-    lines += "Tracks gesamt: ${totals.size}"
-
-    for ((label, info) in sorted) {
-        val mins = info.first / 1000.0 / 60.0
-        val typ = if (info.second == "music") "Musik" else "Podcast"
-        lines += "- [$typ] $label: ${"%.1f".format(mins)} min, ${info.third}x"
-    }
-
-    val prompt = """Hör-Stats von heute (bereits berechnet):
-${lines.joinToString("\n")}
-
-Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn beides da ist. Nur fließender Text, keine Liste, kein Markdown."""
-
-    return prompt
-}
+// ─── Misc ─────────────────────────────────────────────────────────────────────
 
 fun startClipboardListener(context: Context) {
     if (clipboardJob?.isActive == true) return
-    clipboardSocket?.close()
-
-    clipboardJob = syncScope.launch(Dispatchers.IO) {
-        while (isActive) {
-            try {
-                clipboardSocket = ServerSocket().apply {
-                    reuseAddress = true
-                    bind(InetSocketAddress(Config.CLIPBOARD_PORT))
-                }
-
-                while (isActive) {
-                    try {
-                        val client = clipboardSocket?.accept() ?: break
-                        val text = client.inputStream.bufferedReader().readText()
-                        client.close()
-
-                        if (text.startsWith("CLIPBOARD:")) {
-                            val content = text.removePrefix("CLIPBOARD:")
-                            withContext(Dispatchers.Main) {
-                                val cm =
-                                    context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                cm.setPrimaryClip(
-                                    ClipData.newPlainText(
-                                        "sync",
-                                        content
-                                    )
-                                )
-                            }
-                        }
-                    } catch (_: SocketException) {
-                        break
-                    }
-                }
-            } catch (e: Exception) {
-                syncScope.launch {
-                    ERRORINSERT(
-                        ERRORINSERTDATA(
-                            "startClipboardListener",
-                            e.stackTraceToString(),
-                            Instant.now().toString(),
-                            "ERROR"
-                        )
-                    )
-                }
-            } finally {
-                clipboardSocket?.close()
-                clipboardSocket = null
+    clipboardJob = launchServer(syncScope, Config.CLIPBOARD_PORT, "startClipboardListener") { client ->
+        val text = client.inputStream.bufferedReader().readText()
+        client.close()
+        if (text.startsWith("CLIPBOARD:")) {
+            val content = text.removePrefix("CLIPBOARD:")
+            withContext(Dispatchers.Main) {
+                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("sync", content))
             }
-            if (isActive) delay(2000)
         }
     }
 }
 
 fun startMailNotifyListener(context: Context) {
     mailNotifyJob?.cancel()
-    mailNotifySocket?.close()
-
-    mailNotifyJob = syncScope.launch(Dispatchers.IO) {
-        while (isActive) {
-            try {
-                mailNotifySocket = ServerSocket().apply {
-                    reuseAddress = true
-                    bind(InetSocketAddress(Config.MAIL_NOTIFY_PORT))
-                }
-
-                while (isActive) {
-                    try {
-                        val client = mailNotifySocket?.accept() ?: break
-                        val bytes = client.inputStream.readBytes()
-                        client.close()
-
-                        val text = bytes.toString(Charsets.UTF_8)
-                        val parts = text.split("|", limit = 4)
-
-                        val sender = parts.getOrNull(1)?.trim() ?: "Unbekannt"
-                        val subject = parts.getOrNull(2)?.trim() ?: "(kein Betreff)"
-                        val summary = parts.getOrNull(3)?.trim() ?: text
-
-                        val senderShort = sender
-                            .substringBefore("<")
-                            .trim()
-                            .ifEmpty { sender }
-
-                        withContext(Dispatchers.Main) {
-                            showSimpleNotificationExtern(
-                                title = "📧 $senderShort",
-                                text = "**$subject**\n$summary",
-                                duration = 60.seconds,
-                                context = context
-                            )
-                        }
-
-                    } catch (_: SocketException) {
-                        break
-                    } catch (e: Exception) {
-                        syncScope.launch {
-                            ERRORINSERT(
-                                ERRORINSERTDATA(
-                                    service_name = "startMailNotifyListener:accept",
-                                    error_message = e.stackTraceToString(),
-                                    created_at = Instant.now().toString(),
-                                    severity = "ERROR"
-                                )
-                            )
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                if (e !is SocketException) {
-                    syncScope.launch {
-                        ERRORINSERT(
-                            ERRORINSERTDATA(
-                                service_name = "startMailNotifyListener",
-                                error_message = e.stackTraceToString(),
-                                created_at = Instant.now().toString(),
-                                severity = "ERROR"
-                            )
-                        )
-                    }
-                }
-            } finally {
-                mailNotifySocket?.close()
-                mailNotifySocket = null
-            }
-            if (isActive) delay(2000)
+    mailNotifyJob = launchServer(syncScope, Config.MAIL_NOTIFY_PORT, "startMailNotifyListener") { client ->
+        val text = client.inputStream.readBytes().toString(Charsets.UTF_8)
+        client.close()
+        val parts = text.split("|", limit = 4)
+        val sender = parts.getOrNull(1)?.trim() ?: "Unbekannt"
+        val subject = parts.getOrNull(2)?.trim() ?: "(kein Betreff)"
+        val summary = parts.getOrNull(3)?.trim() ?: text
+        val senderShort = sender.substringBefore("<").trim().ifEmpty { sender }
+        withContext(Dispatchers.Main) {
+            showSimpleNotificationExtern(
+                title = "📧 $senderShort",
+                text = "**$subject**\n$summary",
+                duration = 60.seconds,
+                context = context
+            )
         }
     }
 }
 
 fun startExecuteListener(context: Context) {
-    if (executeJob?.isActive == true && executeServerSocket?.isClosed == false) return
-    executeServerSocket?.close()
-
-    executeJob = syncScope.launch(Dispatchers.IO) {
-        while (isActive) {
-            try {
-                executeServerSocket = ServerSocket().apply {
-                    reuseAddress = true
-                    bind(InetSocketAddress(Config.EXECUTE_PORT))
-                }
-
-                while (isActive) {
-                    try {
-                        val client = executeServerSocket?.accept() ?: break
-                        val json =
-                            JSONObject(client.inputStream.readBytes().toString(Charsets.UTF_8))
-                        client.close()
-                        handleExecuteCommand(context, json)
-                    } catch (_: SocketException) {
-                        break
-                    } catch (e: Exception) {
-                        Log.e("EXECUTE", "Fehler", e)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("EXECUTE", "Bind-Fehler", e)
-            } finally {
-                executeServerSocket?.close()
-                executeServerSocket = null
-            }
-            if (isActive) delay(2000)
-        }
+    if (executeJob?.isActive == true) return
+    executeJob = launchServer(syncScope, Config.EXECUTE_PORT, "startExecuteListener") { client ->
+        val json = JSONObject(client.inputStream.readBytes().toString(Charsets.UTF_8))
+        client.close()
+        handleExecuteCommand(context, json)
     }
 }
 
@@ -2450,92 +1207,63 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
 
     when (tool) {
         "show_toast" -> {
-            val msg = args.optString("message", "")
             syncScope.launch(Dispatchers.Main) {
-                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                Toast.makeText(context, args.optString("message", ""), Toast.LENGTH_LONG).show()
             }
         }
 
         "show_notification" -> {
-            showSimpleNotificationExtern(
-                args.optString("title", "AI"),
-                args.optString("text", ""),
-                10.seconds,
-                context
-            )
+            showSimpleNotificationExtern(args.optString("title", "AI"), args.optString("text", ""), 10.seconds, context)
         }
 
         "add_todo" -> addTodo(args.optString("text", ""), context)
+
         "play_music" -> {
-            val action = args.optString("action", "play")
             val intent = Intent(context, MediaPlayerService::class.java).apply {
-                this.action = when (action) {
-                    "pause" -> "com.cloud.ACTION_MUSIC_PAUSE"
-                    "next" -> "com.cloud.ACTION_MUSIC_NEXT"
+                this.action = when (args.optString("action", "play")) {
+                    "pause"    -> "com.cloud.ACTION_MUSIC_PAUSE"
+                    "next"     -> "com.cloud.ACTION_MUSIC_NEXT"
                     "previous" -> "com.cloud.ACTION_MUSIC_PREVIOUS"
-                    else -> "com.cloud.ACTION_MUSIC_PLAY"
+                    else       -> "com.cloud.ACTION_MUSIC_PLAY"
                 }
             }
             context.startService(intent)
         }
 
         "set_alarm" -> {
-            val time = args.optString("time", "")
-
-            val parts = time.split(":")
+            val parts = args.optString("time", "").split(":")
             if (parts.size == 2) {
                 val hour = parts[0].toIntOrNull() ?: return
                 val minutes = parts[1].toIntOrNull() ?: return
-
-                val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
+                context.startActivity(Intent(AlarmClock.ACTION_SET_ALARM).apply {
                     putExtra(AlarmClock.EXTRA_HOUR, hour)
                     putExtra(AlarmClock.EXTRA_MINUTES, minutes)
                     putExtra(AlarmClock.EXTRA_MESSAGE, "Alarm")
-                }
-
-                context.startActivity(intent)
+                })
             }
         }
 
         "send_whatsapp" -> {
-            val number = args.getString("phone_number")
-            val message = args.getString("message")
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                data =
-                    "https://wa.me/${number.replace("+", "")}?text=${Uri.encode(message)}".toUri()
+            context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+                data = "https://wa.me/${args.getString("phone_number").replace("+", "")}?text=${Uri.encode(args.getString("message"))}".toUri()
                 setPackage("com.whatsapp")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            context.startActivity(intent)
+            })
         }
 
-        "start_audio_recording" -> {
-            val file = createAudioFile(context)
-            startAudioService(context, file.absolutePath)
-        }
-
-        "stop_audio_recording" -> {
-            stopAudioService(context)
-        }
+        "start_audio_recording" -> startAudioService(context, createAudioFile(context).absolutePath)
+        "stop_audio_recording"  -> stopAudioService(context)
 
         "get_contacts" -> {
             val query = args.optString("query", "").lowercase()
-            val resolver = context.contentResolver
             val results = JSONArray()
-
-            resolver.query(
+            context.contentResolver.query(
                 ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                arrayOf(
-                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-                    ContactsContract.CommonDataKinds.Phone.NUMBER
-                ),
-                null, null,
-                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
+                arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER),
+                null, null, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
             )?.use { cursor ->
-                val nameCol =
-                    cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
-                val numberCol =
-                    cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                val nameCol = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                val numberCol = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
                 while (cursor.moveToNext()) {
                     val name = cursor.getString(nameCol) ?: continue
                     val number = cursor.getString(numberCol) ?: continue
@@ -2547,28 +1275,18 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                     }
                 }
             }
-
             syncScope.launch(Dispatchers.IO) {
                 try {
                     Socket().use { sock ->
-                        sock.connect(
-                            InetSocketAddress(
-                                laptopIp,
-                                Config.EXECUTE_RESPONSE_PORT
-                            ), 3000
-                        )
+                        sock.connect(InetSocketAddress(laptopIp, Config.EXECUTE_RESPONSE_PORT), 3000)
                         sock.getOutputStream().write(results.toString().toByteArray(Charsets.UTF_8))
                         sock.getOutputStream().flush()
                     }
-                } catch (e: Exception) {
-                    Log.e("EXECUTE", "Kontakte senden fehlgeschlagen", e)
-                }
+                } catch (e: Exception) { Log.e("EXECUTE", "Kontakte senden fehlgeschlagen", e) }
             }
         }
 
         "lookup_credentials" -> {
-            // Search PasswordDatabase + TwoFADatabase.
-            // Returns ONLY id / name / username — password never leaves the device.
             syncScope.launch(Dispatchers.IO) {
                 val queries = args.optJSONArray("queries")
                     ?.let { arr -> (0 until arr.length()).map { arr.getString(it).lowercase() } }
@@ -2578,10 +1296,7 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                 val allTwoFa = TwoFADatabase.getDatabase(context).twoFADao().getAll()
 
                 val matchedPasswords = allPasswords.filter { entry ->
-                    queries.any { q ->
-                        entry.name.contains(q, ignoreCase = true) ||
-                                entry.username.contains(q, ignoreCase = true)
-                    }
+                    queries.any { q -> entry.name.contains(q, ignoreCase = true) || entry.username.contains(q, ignoreCase = true) }
                 }
                 val matchedTwoFa = allTwoFa.filter { entry ->
                     queries.any { q -> entry.name.contains(q, ignoreCase = true) }
@@ -2590,42 +1305,24 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                 val response = JSONObject().apply {
                     put("matchedCredentials", JSONArray(matchedPasswords.map { entry ->
                         JSONObject().apply {
-                            put("id", entry.id)
-                            put("name", entry.name)
-                            put("username", entry.username)
-                            // ⚠️  Password intentionally omitted
+                            put("id", entry.id); put("name", entry.name); put("username", entry.username)
                         }
                     }))
                     put("matchedTwoFaCodes", JSONArray(matchedTwoFa.map { entry ->
-                        JSONObject().apply {
-                            put("id", entry.id)
-                            put("name", entry.name)
-                        }
+                        JSONObject().apply { put("id", entry.id); put("name", entry.name) }
                     }))
                 }
 
                 val jsonBytes = response.toString().toByteArray(Charsets.UTF_8)
-                // 4-byte big-endian length prefix, matching _recv_exact() on the Python side
                 val sizePrefix = ByteBuffer.allocate(4).putInt(jsonBytes.size).array()
 
                 try {
                     Socket().use { sock ->
-                        sock.connect(
-                            InetSocketAddress(
-                                laptopIp,
-                                Config.EXECUTE_RESPONSE_PORT
-                            ), 3000
-                        )
+                        sock.connect(InetSocketAddress(laptopIp, Config.EXECUTE_RESPONSE_PORT), 3000)
                         sock.getOutputStream().write(sizePrefix + jsonBytes)
                         sock.getOutputStream().flush()
                     }
-                    Log.d(
-                        "EXECUTE",
-                        "lookup_credentials: sent ${matchedPasswords.size} creds, ${matchedTwoFa.size} 2FA"
-                    )
-                } catch (e: Exception) {
-                    Log.e("EXECUTE", "lookup_credentials: send failed", e)
-                }
+                } catch (e: Exception) { Log.e("EXECUTE", "lookup_credentials: send failed", e) }
             }
         }
 
@@ -2634,20 +1331,13 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                 val credentialId = args.optInt("credential_id", -1)
                 val twofaId = args.optInt("twofa_id", -1)
 
-                if (credentialId == -1) {
-                    Log.w("EXECUTE", "reveal_credentials: no credential_id provided")
-                    return@launch
-                }
+                if (credentialId == -1) return@launch
 
                 val entry = PasswordDatabase.getDatabase(context).passwordDao().getAll()
                     .firstOrNull { it.id == credentialId }
 
                 if (entry == null) {
-                    showSimpleNotificationExtern(
-                        "❌ Zugangsdaten",
-                        "Eintrag #$credentialId nicht gefunden",
-                        10.seconds, context
-                    )
+                    showSimpleNotificationExtern("❌ Zugangsdaten", "Eintrag #$credentialId nicht gefunden", 10.seconds, context)
                     return@launch
                 }
 
@@ -2658,8 +1348,6 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                 } else null
 
                 showCredentialsOverlay(context, entry.username, entry.password, totpCode ?: "")
-
-                Log.d("EXECUTE", "reveal_credentials: showed '${entry.name}' locally")
             }
         }
 
@@ -2674,7 +1362,6 @@ fun showCredentialsOverlay(context: Context, us: String, pw: String, totp: Strin
     }
 
     val windowManager = context.getSystemService(WINDOW_SERVICE) as WindowManager
-
     var testOverlayView: ComposeView? = null
     var testOverlayLifecycle: OverlayLifecycleOwner? = OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
 
@@ -2684,17 +1371,11 @@ fun showCredentialsOverlay(context: Context, us: String, pw: String, totp: Strin
         setViewTreeViewModelStoreOwner(testOverlayLifecycle)
         setContent {
             Box(
-                modifier = Modifier
-                    .height(210.dp)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Cloud),
+                modifier = Modifier.height(210.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Cloud),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp), // Abstand zur Box
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -2702,56 +1383,30 @@ fun showCredentialsOverlay(context: Context, us: String, pw: String, totp: Strin
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp) // Abstand zwischen den Blöcken
-                                .clip(RoundedCornerShape(12.dp)) // runde Ecken für jeden Text
+                                .padding(vertical = 4.dp)
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(MaterialTheme.colorScheme.primary)
                                 .clickable {
-                                    val clipboard =
-                                        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(
-                                        ClipData.newPlainText(
-                                            "username",
-                                            value
-                                        )
-                                    )
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("username", value))
                                 }
-                                .padding(vertical = 8.dp) // innen Padding, damit Text nicht an den Rändern klebt
+                                .padding(vertical = 8.dp)
                         ) {
-                            Text(
-                                text = value,
-                                textAlign = TextAlign.Center,
-                                color = Color.White,
-                                fontSize = 30.sp,
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            Text(text = value, textAlign = TextAlign.Center, color = Color.White, fontSize = 30.sp, modifier = Modifier.fillMaxWidth())
                         }
                     }
                 }
 
                 IconButton(
                     onClick = {
-                        try {
-                            testOverlayView?.let { windowManager.removeView(it) }
-                        } catch (_: Exception) {
-                        }
-                        try {
-                            testOverlayLifecycle?.onDestroy()
-                        } catch (_: Exception) {
-                        }
-                        testOverlayView = null
-                        testOverlayLifecycle = null
+                        try { testOverlayView?.let { windowManager.removeView(it) } } catch (_: Exception) {}
+                        try { testOverlayLifecycle?.onDestroy() } catch (_: Exception) {}
+                        testOverlayView = null; testOverlayLifecycle = null
                     },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .size(40.dp)
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(40.dp)
                         .background(Color.Black.copy(alpha = 0.6f), shape = RoundedCornerShape(50))
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Schließen",
-                        tint = Color.White
-                    )
+                    Icon(imageVector = Icons.Default.Close, contentDescription = "Schließen", tint = Color.White)
                 }
             }
         }
@@ -2761,16 +1416,139 @@ fun showCredentialsOverlay(context: Context, us: String, pw: String, totp: Strin
         WindowManager.LayoutParams.MATCH_PARENT,
         WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
         PixelFormat.TRANSLUCENT
-    ).apply {
-        gravity = Gravity.CENTER
+    ).apply { gravity = Gravity.CENTER }
+
+    try { windowManager.addView(testOverlayView, params) } catch (_: Exception) {}
+}
+
+fun buildSessionStatsText(sessions: List<ListenSession>): String {
+    val totals = mutableMapOf<String, Triple<Long, String, Int>>()
+    for (s in sessions) {
+        val cur = totals[s.label] ?: Triple(0L, s.type, 0)
+        totals[s.label] = Triple(cur.first + s.listenedMs, s.type, cur.third + 1)
     }
 
-    try {
-        windowManager.addView(testOverlayView, params)
-    } catch (_: Exception) {
+    val sorted = totals.entries.sortedByDescending { it.value.first }.take(15)
+    val allTimes = sessions.map { it.startedAt }.sorted()
+    val fmt = SimpleDateFormat("HH:mm", Locale.GERMANY)
+
+    val lines = mutableListOf(
+        "Zeitraum: ${fmt.format(allTimes.first())} – ${fmt.format(allTimes.last())}",
+        "Tracks gesamt: ${totals.size}"
+    )
+
+    for ((label, info) in sorted) {
+        val mins = info.first / 1000.0 / 60.0
+        val typ = if (info.second == "music") "Musik" else "Podcast"
+        lines += "- [$typ] $label: ${"%.1f".format(mins)} min, ${info.third}x"
+    }
+
+    return """Hör-Stats von heute (bereits berechnet):
+${lines.joinToString("\n")}
+
+Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn beides da ist. Nur fließender Text, keine Liste, kein Markdown."""
+}
+
+fun triggerBuild(context: Context) {
+    if (laptopIp.isEmpty()) {
+        showSimpleNotificationExtern("❌ Build", "Laptop nicht verbunden", 10.seconds, context)
+        return
+    }
+
+    syncScope.launch(Dispatchers.IO) {
+        var sock: Socket? = null
+        try {
+            showSimpleNotificationExtern("🔨 Build gestartet", "Warte auf APK...", 10.seconds, context)
+
+            sock = Socket().apply {
+                receiveBufferSize = 2 * 1024 * 1024
+                sendBufferSize = 64 * 1024
+                soTimeout = 180_000
+            }
+
+            Log.d("BUILD", "Versuche Build auf $laptopIp:${Config.BUILD_PORT}")
+            sock.connect(InetSocketAddress(laptopIp, Config.BUILD_PORT), 5000)
+
+            sock.getOutputStream().write("BUILD\n".toByteArray())
+            sock.getOutputStream().flush()
+
+            val apkFile = File(context.cacheDir, "cloud_update.apk")
+            val reader = sock.inputStream.bufferedReader()
+            val headerLine = reader.readLine() ?: run {
+                sock.close()
+                showSimpleNotificationExtern("❌ Build fehlgeschlagen", "Keine Antwort", 10.seconds, context)
+                return@launch
+            }
+
+            if (headerLine.startsWith("ERROR:")) {
+                sock.close()
+                showSimpleNotificationExtern("❌ Build fehlgeschlagen", headerLine.substringAfter("ERROR:"), 10.seconds, context)
+                return@launch
+            }
+
+            val apkSize = headerLine.substringAfter("OK:").toLongOrNull() ?: 0L
+            Log.d("BUILD", "Erwarte APK: ${apkSize / 1024 / 1024}MB")
+
+            var bytesRead = 0L
+            apkFile.outputStream().buffered(1024 * 1024).use { fileOut ->
+                val buffer = ByteArray(1024 * 1024)
+                var read: Int
+                while (sock.inputStream.read(buffer).also { read = it } != -1) {
+                    fileOut.write(buffer, 0, read)
+                    bytesRead += read
+                    if (apkSize > 0) {
+                        val progress = (bytesRead * 100 / apkSize).toInt()
+                        if (progress % 10 == 0) Log.d("BUILD", "Progress: $progress%")
+                    }
+                }
+            }
+
+            sock.close()
+
+            if (apkFile.length() == 0L) {
+                showSimpleNotificationExtern("❌ Build fehlgeschlagen", "Leere APK", 10.seconds, context)
+                return@launch
+            }
+
+            withContext(Dispatchers.Main) {
+                showSimpleNotificationExtern("✅ Build fertig", "Starte Installation...", 5.seconds, context)
+                installApk(context, apkFile)
+            }
+
+        } catch (e: Exception) {
+            sock?.close()
+            Log.e("BUILD", "Fehler", e)
+            showSimpleNotificationExtern("❌ Build Fehler", e.message ?: "", 10.seconds, context)
+        }
+    }
+}
+
+private fun installApk(context: Context, apkFile: File) {
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", apkFile)
+    context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, "application/vnd.android.package-archive")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+    })
+}
+
+suspend fun askServer(history: List<ChatMessage>, question: String): String {
+    return withContext(Dispatchers.IO) {
+        try {
+            if (laptopIp == "") throw Exception("Keine laptopIp vorhanden")
+            val request = "${question}. Here is the chat history:$history "
+            val sock = Socket(laptopIp, Config.AI_PORT)
+            sock.getOutputStream().write(request.toByteArray(Charsets.UTF_8))
+            sock.shutdownOutput()
+            val response = sock.getInputStream().readBytes().toString(Charsets.UTF_8)
+            sock.close()
+            response
+        } catch (e: Exception) {
+            var msg = ""
+            e.message?.let { msg = if (it.contains("failed to connect")) "Keine Verbindung mit Server möglich" else "Fehler: ${e.message}" }
+            msg
+        }
     }
 }
 
@@ -2782,30 +1560,11 @@ fun sendAiExecuteCommand(context: Context, userInput: String) {
 
     syncScope.launch(Dispatchers.IO) {
         try {
-            val payload = JSONObject().apply {
-                put("prompt", userInput)
-            }.toString().toByteArray(Charsets.UTF_8)
-
             Socket().use { sock ->
-                sock.connect(
-                    InetSocketAddress(
-                        laptopIp,
-                        Config.EXECUTE_PORT_SEND_FROM_HANDY
-                    ), 3000
-                )
-                sock.getOutputStream().write(payload)
+                sock.connect(InetSocketAddress(laptopIp, Config.EXECUTE_PORT_SEND_FROM_HANDY), 3000)
+                sock.getOutputStream().write(JSONObject().apply { put("prompt", userInput) }.toString().toByteArray(Charsets.UTF_8))
                 sock.shutdownOutput()
             }
-
-        } catch (e: Exception) {
-            ERRORINSERT(
-                ERRORINSERTDATA(
-                    service_name = "sendAiExecuteCommand",
-                    error_message = e.stackTraceToString(),
-                    created_at = Instant.now().toString(),
-                    severity = "ERROR"
-                )
-            )
-        }
+        } catch (e: Exception) { logError("sendAiExecuteCommand", e) }
     }
 }
