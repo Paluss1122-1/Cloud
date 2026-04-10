@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.provider.MediaStore
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
@@ -120,6 +121,7 @@ import com.cloud.quiethoursnotificationhelper.loadAllAiResponses
 import com.cloud.quiethoursnotificationhelper.loadTodayOrYesterdayEntry
 import com.cloud.service.MediaPlayerService
 import com.google.gson.GsonBuilder
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -199,7 +201,7 @@ fun MediaTab(viewModel: MediaViewModel = viewModel()) {
                     )
                 }
             }
-        ) { _ ->
+        ) { padding ->
             Crossfade(
                 targetState = state.currentTab,
                 label = "tab_transition"
@@ -1120,11 +1122,7 @@ private fun MusicTab(
                                         else
                                             selectedSongs + song.path
                                     } else {
-                                        val index = state.songs.indexOf(song) + 1
-                                        MediaPlayerService.playFromAllSongs(
-                                            context,
-                                            index.coerceAtLeast(1)
-                                        )
+                                        MediaPlayerService.playFromAllSongs(context, song.path)
                                     }
                                 },
                                 onLongClick = {
