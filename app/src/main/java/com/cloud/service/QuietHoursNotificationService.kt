@@ -21,6 +21,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
@@ -59,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
+import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -106,7 +108,6 @@ import com.cloud.quiethoursnotificationhelper.showNextGalleryImage
 import com.cloud.quiethoursnotificationhelper.showPreviousGalleryImage
 import com.cloud.quiethoursnotificationhelper.showUnreadMessages
 import com.cloud.quiethoursnotificationhelper.startAiResponseListener
-import com.cloud.quiethoursnotificationhelper.startDiscoveryListener
 import com.cloud.quiethoursnotificationhelper.startMailNotifyListener
 import com.cloud.quiethoursnotificationhelper.startTriggerListenerIfHomeWifi
 import com.cloud.quiethoursnotificationhelper.stopVoiceNote
@@ -147,6 +148,18 @@ class QuietHoursNotificationService : Service() {
                 )
             } catch (_: Exception) {
             }
+        }
+    }
+
+    fun requestIgnoreBatteryOptimizations(context: Context) {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (!pm.isIgnoringBatteryOptimizations(context.packageName)) {
+            context.startActivity(
+                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = "package:${context.packageName}".toUri()
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+            )
         }
     }
 
@@ -332,6 +345,7 @@ class QuietHoursNotificationService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        requestIgnoreBatteryOptimizations(this)
         Config.init(this)
         sharedPreferences = getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
         createNotificationChannel(this)
@@ -354,7 +368,6 @@ class QuietHoursNotificationService : Service() {
         restoreSyncIfNeeded(this)
         startTriggerListenerIfHomeWifi(this)
         startAiResponseListener(this)
-        startDiscoveryListener()
         scheduleDailySummaryAlarm(this)
         startMailNotifyListener(this)
 
