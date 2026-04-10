@@ -11,6 +11,8 @@ import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -34,6 +36,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -44,6 +47,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -56,11 +60,12 @@ import com.google.accompanist.swiperefresh.SwipeRefresh
 import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.URL
-
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 data class HourData(
     val dateFull: String,
     val date: String,
@@ -262,14 +267,28 @@ fun WeatherTabContent(
         refreshWeather()
     }
 
-    val swipeRefreshState = rememberSwipeRefreshState(isRefreshing = isLoading)
+    val alpha = remember { Animatable(0f) }
 
-    SwipeRefresh(
-        state = swipeRefreshState,
+    LaunchedEffect(Unit) {
+        delay(100)
+        alpha.animateTo(
+            1f, animationSpec = tween(
+                durationMillis = 300,
+                easing = FastOutSlowInEasing
+            )
+        )
+    }
+
+    PullToRefreshBox(
+        isRefreshing = isLoading,
         onRefresh = {
             selectionState = SelectionState(hour = null, dayIndex = null)
             refreshWeather()
-        }
+        },
+        modifier = Modifier
+            .fillMaxSize()
+            .alpha(alpha.value),
+        indicator = {}
     ) {
         Column(
             modifier = Modifier
