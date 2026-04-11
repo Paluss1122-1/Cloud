@@ -1,3 +1,5 @@
+@file:Suppress("AssignedValueIsNeverRead")
+
 package com.cloud.contactstab
 
 import androidx.compose.animation.core.Animatable
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -62,7 +65,7 @@ fun ContactsTabContent(
         delay(100)
         alpha.animateTo(
             1f, animationSpec = tween(
-                durationMillis = 300,
+                durationMillis = 150,
                 easing = FastOutSlowInEasing
             )
         )
@@ -138,14 +141,14 @@ fun ContactsTabContent(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(state.contacts) { contact ->
+                    items(state.contacts) {
                         ContactCard(
-                            contact = contact,
+                            contact = it,
                             onEdit = {
-                                selectedContact = contact
+                                selectedContact = it
                                 showDialog = true
                             },
-                            onDelete = { onDeleteContact(contact.id) }
+                            onDelete = { onDeleteContact(it.id) }
                         )
                     }
                 }
@@ -171,10 +174,17 @@ fun ContactCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val alpha = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        alpha.animateTo(1f, animationSpec = tween(300))
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onEdit() },
+            .clickable { onEdit() }
+            .alpha(alpha.value),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF3A3A3A))
     ) {
         Column(
