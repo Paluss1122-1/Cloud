@@ -2,6 +2,8 @@ package com.cloud.gallery
 
 import android.app.Activity
 import android.content.ContentUris
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
 import android.provider.MediaStore
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -24,22 +26,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,6 +59,7 @@ import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.cloud.ERRORINSERT
 import com.cloud.ERRORINSERTDATA
+import com.cloud.privatecloudapp.saveThumbnailToCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -72,6 +73,18 @@ data class GalleryMediaItem(
     val dateAdded: Long
 )
 
+private fun getVideoFirstFrame(uri: String, context: android.content.Context): Bitmap? {
+    return try {
+        val retriever = MediaMetadataRetriever()
+        retriever.setDataSource(context, uri.toUri())
+        val bitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+        retriever.release()
+        bitmap
+    } catch (_: Exception) {
+        null
+    }
+}
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun GalleryTab() {
@@ -81,6 +94,7 @@ fun GalleryTab() {
     var showFullscreenMedia by remember { mutableStateOf(false) }
     var fullscreenMediaUri by remember { mutableStateOf<String?>(null) }
     var isFullscreenVideo by remember { mutableStateOf(false) }
+    val thumbnailCache = remember { mutableStateMapOf<String, Bitmap>() }
 
     val deleteLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
@@ -143,17 +157,24 @@ fun GalleryTab() {
                                     )
 
                                     if (mediaItem.isVideo) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .background(Color.Black.copy(alpha = 0.3f)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.PlayArrow,
-                                                contentDescription = "Video",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(48.dp)
+                                        val thumbnail by produceState<Bitmap?>(thumbnailCache[mediaItem.uri], mediaItem.uri) {
+                                            if (value == null) {
+                                                value = withContext(Dispatchers.IO) {
+                                                    val bmp = getVideoFirstFrame(mediaItem.uri, context)
+                                                    if (bmp != null) {
+                                                        saveThumbnailToCache(context, mediaItem.uri, bmp)
+                                                        thumbnailCache[mediaItem.uri] = bmp
+                                                    }
+                                                    bmp
+                                                }
+                                            }
+                                        }
+                                        thumbnail?.let {
+                                            AsyncImage(
+                                                model = it,
+                                                contentDescription = null,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
                                             )
                                         }
                                     }
