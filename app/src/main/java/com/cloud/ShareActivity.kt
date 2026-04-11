@@ -210,6 +210,11 @@ class ShareActivity : ComponentActivity() {
 
                         if (success) {
                             successCount++
+                            withContext(Dispatchers.IO) {
+                                try {
+                                    contentResolver.delete(uri, null, null)
+                                } catch (_: Exception) { }
+                            }
                         } else {
                             failCount++
                         }
