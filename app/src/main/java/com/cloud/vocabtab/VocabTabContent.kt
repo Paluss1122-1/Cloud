@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import androidx.core.graphics.scale
 import com.cloud.quiethoursnotificationhelper.flashcardVokabelnFlow
+import com.cloud.quiethoursnotificationhelper.trySendImageToLaptop
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -172,7 +173,7 @@ fun VocabTab() {
                                 val bytes = java.io.ByteArrayOutputStream().also {
                                     bmp.compress(Bitmap.CompressFormat.JPEG, 90, it)
                                 }.toByteArray()
-                                val sent = false
+                                val sent = trySendImageToLaptop(bytes)
                                 if (sent) {
                                     val result = flashcardVokabelnFlow.first { it != null }
                                     vokabeln = result ?: emptyList()
