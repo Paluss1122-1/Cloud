@@ -1,5 +1,6 @@
 package com.cloud.quiethoursnotificationhelper
 
+import android.annotation.SuppressLint
 import android.app.NotificationManager
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -15,6 +16,7 @@ import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
+import android.webkit.WebView
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
 import androidx.activity.compose.LocalActivityResultRegistryOwner
@@ -70,7 +72,9 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
+import java.io.File
 import java.io.StringReader
+import java.lang.ref.WeakReference
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -662,6 +666,17 @@ private fun getAvailableCommands(context: Context): List<Command> {
             }
 
             windowManager.addView(testOverlayView, params)
+        },
+        Command(
+            name = "spotify",
+            aliases = listOf("sp", "spot"),
+            description = "Zeigt Spotify Embed Overlay (Syntax: spotify [track-id])"
+        ) {
+            showSimpleNotificationExtern(
+                "ℹ️ Spotify",
+                "Syntax: spotify [track-id]\nBeispiel: spotify 2iM4bRLB5uT7fd7QoAgT0X",
+                context = context
+            )
         },
     )
 }
@@ -1594,6 +1609,18 @@ fun executeCommand(commandText: String, context: Context) {
             }
             return
         }
+        "spotify", "sp", "spot" -> {
+            val trackId = argument ?: run {
+                showSimpleNotificationExtern(
+                    "ℹ️ Spotify",
+                    "Syntax: spotify [track-id]",
+                    context = context
+                )
+                return
+            }
+            showSpotifyOverlay(trackId, context)
+            return
+        }
     }
 
     val commands = getAvailableCommands(context)
@@ -1869,4 +1896,67 @@ fun formatMs(ms: Long): String {
     val h = ms / 3_600_000
     val m = (ms % 3_600_000) / 60_000
     return if (h > 0) "${h}h ${m}min" else "${m}min"
+}
+
+private var spotifyOverlayView: WeakReference<WebView>? = null
+
+@SuppressLint("SetJavaScriptEnabled")
+private fun showSpotifyOverlay(trackId: String, context: Context) {
+    if (!Settings.canDrawOverlays(context)) {
+        showSimpleNotificationExtern("Fehler", "Overlay-Berechtigung fehlt!", context = context)
+        return
+    }
+
+    val file = File(context.filesDir, "spotify_embed.html")
+    file.writeText("""
+    <html><body style="margin:0;background:#000;">
+        <iframe
+            data-testid="embed-iframe"
+            style="border-radius:12px"
+            src="https://open.spotify.com/embed/track/$trackId?utm_source=generator"
+            width="100%" height="352" frameBorder="0" allowfullscreen=""
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            loading="lazy">
+        </iframe>
+    </body></html>
+""".trimIndent())
+
+    spotifyOverlayView?.get()?.let {
+        (context.getSystemService(WINDOW_SERVICE) as WindowManager).removeView(it)
+        spotifyOverlayView = null
+    }
+
+    val html = """
+        <html><body style="margin:0;background:#000;">
+        <iframe
+            style="border-radius:12px"
+            src="https://open.spotify.com/embed/track/$trackId?utm_source=generator"
+            width="100%" height="352" frameBorder="0" allowfullscreen=""
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            loading="lazy">
+        </iframe>
+        </body></html>
+    """.trimIndent()
+
+    val webView = WebView(context).apply {
+        settings.javaScriptEnabled = true
+        settings.mediaPlaybackRequiresUserGesture = false
+        loadDataWithBaseURL("https://open.spotify.com", html, "text/html", "utf-8", null)
+    }
+
+
+    webView.loadUrl("file://${file.absolutePath}")
+
+    val wm = context.getSystemService(WINDOW_SERVICE) as WindowManager
+    val params = WindowManager.LayoutParams(
+        WindowManager.LayoutParams.MATCH_PARENT,
+        420,
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        PixelFormat.TRANSLUCENT
+    ).apply { gravity = Gravity.BOTTOM }
+
+    spotifyOverlayView = WeakReference(webView)
+    Handler(Looper.getMainLooper()).post { wm.addView(webView, params) }
 }
