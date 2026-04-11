@@ -1058,35 +1058,6 @@ fun VideoPlayerDialogLocal(
     }
 }
 
-@Composable
-fun FilterButton(
-    text: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier,
-        onClick = onClick
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    if (isSelected) gruen else Color.DarkGray.copy(alpha = 0.5f)
-                )
-                .padding(vertical = 8.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = text,
-                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.7f),
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
-    }
-}
-
 suspend fun saveThumbnailToCache(context: Context, videoPath: String, bitmap: Bitmap) {
     withContext(Dispatchers.IO) {
         try {
