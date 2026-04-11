@@ -24,7 +24,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ButtonDefaults.buttonColors
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -43,6 +45,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
@@ -78,16 +81,57 @@ private fun saveHistory(context: Context, scope: CoroutineScope, history: List<C
 
 @Composable
 fun AITabContent() {
+
     var currentMode by remember { mutableStateOf("Nvidia") }
+    data class Model(
+        val realname: String,
+        val vision: Boolean = false,
+        val name: String = realname.substringAfter("/", realname)
+    )
     var currentMsg by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+
+    val nvidiaModels = listOf(
+        Model("meta/llama-3.1-8b-instruct"),
+        Model("utter-project/eurollm-9b-instruct"),
+        Model("google/gemma-2-9b-it"),
+        Model("openai/gpt-oss-120b"),
+        Model("openai/gpt-oss-20b"),
+        Model("minimaxai/minimax-m2.5"),
+        Model("bigcode/starcoder2-7b"),
+        Model("nvidia/nemoretriever-ocr-v1", true),
+        Model("nvidia/nemotron-3-nano-30b-a3b", true)
+    )
+    val serverModels = listOf(
+        Model("qwen2.5:7b"),
+        Model("qwen2.5-coder:3b"),
+        Model("qwen2.5-coder:7b"),
+        Model("qwen2.5-coder:14b"),
+        Model("qwen3-coder-next:cloud"),
+        Model("qwen3-vl:235b-cloud", true),
+        Model("llava:13b", true),
+        Model("llama3.2-vision:11b", true),
+    )
+
+    val availableModels = when (currentMode) {
+        "Nvidia" -> nvidiaModels
+        "Server" -> serverModels
+        else -> {
+            emptyList()
+        }
+    }
+
+    var selectedModel by remember { mutableStateOf(availableModels[0]) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var isLoading by remember { mutableStateOf(false) }
     val history = remember { mutableStateListOf<ChatMessage>() }
     var historyLoaded by remember { mutableStateOf(false) }
+    var showAiModels by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
+        selectedModel = availableModels[0]
         if (historyLoaded) return@LaunchedEffect
         historyLoaded = true
 
@@ -99,29 +143,78 @@ fun AITabContent() {
             history.addAll(loadedList)
         } catch (e: Exception) {
             e.printStackTrace()
-
         }
     }
 
     suspend fun send(txt: String): String {
         if (!isOnline(context)) return "Kein Netzwerk"
         return when (currentMode) {
-            "Nvidia" -> sendNvidiaChatMessageAITab(history, txt) ?: "Fehler"
-            "Server" -> askServer(history, txt)
+            "Nvidia" -> sendNvidiaChatMessageAITab(history, txt, selectedModel.realname) ?: "Fehler"
+            "Server" -> askServer(history, txt, selectedModel.realname)
             else -> "Wähle einen Modus"
         }
     }
 
     val alpha = remember { Animatable(0f) }
 
+    val sendmsg = {
+        val userText = currentMsg.trim()
+        if (userText.isNotEmpty()) {
+            val modeAtSend = currentMode
+
+            val userMsg = ChatMessage(
+                text = userText,
+                ts = System.currentTimeMillis(),
+                own = true
+            )
+            history.add(userMsg)
+            saveHistory(context, scope, history)
+            currentMsg = ""
+            isLoading = true
+
+            scope.launch {
+                try {
+                    val responseText = withContext(Dispatchers.IO) {
+                        send(userText)
+                    }
+
+                    val aiMsg = ChatMessage(
+                        text = responseText,
+                        ts = System.currentTimeMillis(),
+                        own = false,
+                        mode = modeAtSend
+                    )
+
+                    history.add(aiMsg)
+                    isLoading = false
+                    saveHistory(context, scope, history)
+                } catch (e: Exception) {
+                    isLoading = false
+                    history.add(
+                        ChatMessage(
+                            "Fehler: ${e.message}",
+                            System.currentTimeMillis(),
+                            false,
+                            modeAtSend
+                        )
+                    )
+                }
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         delay(100)
         alpha.animateTo(
             1f, animationSpec = tween(
-                durationMillis = 300,
+                durationMillis = 150,
                 easing = FastOutSlowInEasing
             )
         )
+    }
+
+    LaunchedEffect(currentMode) {
+        selectedModel = availableModels[0]
     }
 
     Box(
@@ -134,11 +227,10 @@ fun AITabContent() {
         Column(verticalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(
-                    modifier = Modifier
-                        .padding(8.dp),
+                    modifier = Modifier.padding(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf("Nvidia", "Server").forEach { mode ->
+                    listOf("Nvidia", "Server").forEachIndexed { index, mode ->
                         val containerColor by animateColorAsState(
                             targetValue = if (currentMode == mode) Color(0xFF555555) else Color(
                                 0xFF333333
@@ -146,14 +238,68 @@ fun AITabContent() {
                             animationSpec = tween(durationMillis = 300),
                             label = "containerColor"
                         )
-                        PloppingButton(
-                            onClick = { currentMode = mode },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = containerColor
-                            ),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(mode, color = Color.White)
+                        Box {
+                            PloppingButton(
+                                onClick = {
+                                    if (currentMode == mode) showAiModels = true
+                                    currentMode = mode
+                                },
+                                colors = buttonColors(containerColor = containerColor),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(mode, color = Color.White)
+                            }
+
+                            if (index == 0) {
+                                DropdownMenu(
+                                    expanded = showAiModels,
+                                    onDismissRequest = { showAiModels = false },
+                                    containerColor = Color(0xFF333333),
+                                    shape = RoundedCornerShape(30.dp),
+                                    modifier = Modifier.padding(10.dp, 0.dp)
+                                ) {
+                                    var showedDiv = false
+                                    availableModels.forEach {
+                                        if (it.vision && !showedDiv) {
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(vertical = 16.dp),
+                                                thickness = 1.dp,
+                                                color = Color.White.copy(alpha = 0.3f)
+                                            )
+                                            showedDiv = true
+                                        }
+                                        val containerColorModel by animateColorAsState(
+                                            targetValue = if (selectedModel == it) Color(
+                                                0xFF555555
+                                            ) else Color(0xFF333333),
+                                            animationSpec = tween(durationMillis = 300),
+                                            label = "containerColor"
+                                        )
+                                        PloppingButton(
+                                            onClick = {
+                                                selectedModel = it
+                                            },
+                                            onFinishedClick = {showAiModels = false},
+                                            colors = buttonColors(containerColor = containerColorModel),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            val sizeRegex = Regex("""-\d+b""")
+                                            val sizeRegex1 = Regex("""\d+b""")
+                                            val name = it.name
+                                                .replace(sizeRegex, "")
+                                                .replace("-", " ")
+                                                .substringBeforeLast(":")
+                                            val sizeString: String? = if (currentMode == "Nvidia") sizeRegex1.find(it.name)?.value else it.name.substringAfter(":")
+                                            val size = if (sizeString != null && sizeString != "null") {
+                                                " (${sizeString.replace("-", " ")})"
+                                            } else {
+                                                ""
+                                            }
+                                            Text("$name$size", textAlign = TextAlign.Left, modifier = Modifier.fillMaxWidth())
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -244,49 +390,7 @@ fun AITabContent() {
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                     keyboardActions = KeyboardActions(
                         onGo = {
-                            val userText = currentMsg.trim()
-                            if (userText.isNotEmpty()) {
-                                val modeAtSend = currentMode
-
-                                val userMsg = ChatMessage(
-                                    text = userText,
-                                    ts = System.currentTimeMillis(),
-                                    own = true
-                                )
-                                history.add(userMsg)
-                                saveHistory(context, scope, history)
-                                currentMsg = ""
-                                isLoading = true
-
-                                scope.launch {
-                                    try {
-                                        val responseText = withContext(Dispatchers.IO) {
-                                            send(userText)
-                                        }
-
-                                        val aiMsg = ChatMessage(
-                                            text = responseText,
-                                            ts = System.currentTimeMillis(),
-                                            own = false,
-                                            mode = modeAtSend
-                                        )
-
-                                        history.add(aiMsg)
-                                        isLoading = false
-                                        saveHistory(context, scope, history)
-                                    } catch (e: Exception) {
-                                        isLoading = false
-                                        history.add(
-                                            ChatMessage(
-                                                "Fehler: ${e.message}",
-                                                System.currentTimeMillis(),
-                                                false,
-                                                modeAtSend
-                                            )
-                                        )
-                                    }
-                                }
-                            }
+                            sendmsg()
                         }
                     )
                 )
@@ -296,49 +400,7 @@ fun AITabContent() {
                         .background(Color(0xFF333333), RoundedCornerShape(50))
                         .combinedClickable(
                             onClick = {
-                                val userText = currentMsg.trim()
-                                if (userText.isNotEmpty()) {
-                                    val modeAtSend = currentMode
-
-                                    val userMsg = ChatMessage(
-                                        text = userText,
-                                        ts = System.currentTimeMillis(),
-                                        own = true
-                                    )
-                                    history.add(userMsg)
-                                    saveHistory(context, scope, history)
-                                    currentMsg = ""
-                                    isLoading = true
-
-                                    scope.launch {
-                                        try {
-                                            val responseText = withContext(Dispatchers.IO) {
-                                                send(userText)
-                                            }
-
-                                            val aiMsg = ChatMessage(
-                                                text = responseText,
-                                                ts = System.currentTimeMillis(),
-                                                own = false,
-                                                mode = modeAtSend
-                                            )
-
-                                            history.add(aiMsg)
-                                            isLoading = false
-                                            saveHistory(context, scope, history)
-                                        } catch (e: Exception) {
-                                            isLoading = false
-                                            history.add(
-                                                ChatMessage(
-                                                    "Fehler: ${e.message}",
-                                                    System.currentTimeMillis(),
-                                                    false,
-                                                    modeAtSend
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
+                                sendmsg()
                             },
                             onLongClick = {
                                 history.clear()
