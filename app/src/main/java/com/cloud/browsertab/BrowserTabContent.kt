@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontWeight.Companion.Bold
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,7 +64,7 @@ fun BrowserTabContent(
         delay(100)
         alpha.animateTo(
             1f, animationSpec = tween(
-                durationMillis = 300,
+                durationMillis = 150,
                 easing = FastOutSlowInEasing
             )
         )
@@ -107,7 +108,7 @@ fun BrowserTabContent(
                 .fillMaxWidth()
                 .height(56.dp)
         ) {
-            Text("Öffnen", fontSize = 20.sp)
+            Text("Öffnen", fontSize = 20.sp, fontWeight = Bold)
         }
 
         Spacer(modifier = Modifier.height(32.dp))
