@@ -105,10 +105,7 @@ import java.io.File
 import java.io.InputStreamReader
 import java.io.PrintWriter
 import java.net.ConnectException
-import java.net.DatagramPacket
-import java.net.DatagramSocket
 import java.net.HttpURLConnection
-import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
@@ -1082,7 +1079,8 @@ suspend fun sendNvidiaChatMessage(
 
 suspend fun sendNvidiaChatMessageAITab(
     history: List<ChatMessage>,
-    userMessage: String
+    userMessage: String,
+    model: String = "nvidia/nemotron-3-nano-30b-a3b"
 ): String? {
     val messages = JSONArray().apply {
         put(JSONObject().apply {
@@ -1097,7 +1095,7 @@ suspend fun sendNvidiaChatMessageAITab(
         }
         put(JSONObject().apply { put("role", "user"); put("content", userMessage) })
     }
-    return callNvidiaApi("nvidia/nemotron-3-nano-30b-a3b", messages)
+    return callNvidiaApi(model, messages)
 }
 
 private fun handleMediaCommand(context: Context, json: JSONObject) {
@@ -1405,11 +1403,11 @@ fun distanceBetween(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Flo
     return (earthRadius * 2 * atan2(sqrt(a), sqrt(1 - a))).toFloat()
 }
 
-suspend fun askServer(history: List<ChatMessage>, question: String): String {
+suspend fun askServer(history: List<ChatMessage>, question: String, model: String): String {
     return withContext(Dispatchers.IO) {
         try {
             if (laptopIp == "") throw Exception("Keine laptopIp is vorhanden")
-            val request = "${question}. Here is the chat history:$history "
+            val request = "MODEL=$model ${question}. Here is the chat history:$history "
             val sock = Socket(laptopIp, Config.AI_PORT)
             sock.getOutputStream().write(request.toByteArray(Charsets.UTF_8))
             sock.shutdownOutput()
