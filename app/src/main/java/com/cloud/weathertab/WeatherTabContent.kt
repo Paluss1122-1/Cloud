@@ -273,7 +273,7 @@ fun WeatherTabContent(
         delay(100)
         alpha.animateTo(
             1f, animationSpec = tween(
-                durationMillis = 300,
+                durationMillis = 150,
                 easing = FastOutSlowInEasing
             )
         )
