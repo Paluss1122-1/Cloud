@@ -1,7 +1,6 @@
 package com.cloud.quiethoursnotificationhelper
 
 import android.Manifest
-import android.R
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Context.AUDIO_SERVICE
@@ -188,7 +187,7 @@ private fun showFriendMessagesNotification(messages: List<ChatService.Message>, 
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_dialog_email)
+            .setSmallIcon(android.R.drawable.ic_dialog_email)
             .setContentTitle("💬 Letzte ${messages.size} Nachrichten von friend")
             .setContentText(messages.lastOrNull()?.content ?: "")
             .setStyle(

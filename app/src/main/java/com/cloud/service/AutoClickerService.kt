@@ -1,6 +1,8 @@
 package com.cloud.service
 
+import android.annotation.SuppressLint
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
@@ -24,6 +26,22 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
+import androidx.core.graphics.toColorInt
+
+private class MarkerView(context: Context) : LinearLayout(context) {
+    init {
+        orientation = VERTICAL
+        setBackgroundColor("#AA4CAF50".toColorInt())
+        setPadding(10, 10, 10, 10)
+        gravity = Gravity.CENTER
+    }
+
+    override fun performClick(): Boolean {
+        super.performClick()
+        return true
+    }
+}
 
 class AutoClickerService : Service() {
     private var windowManager: WindowManager? = null
@@ -63,7 +81,7 @@ class AutoClickerService : Service() {
         overlayView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(30, 30, 30, 30)
-            setBackgroundColor(Color.parseColor("#EE1A1A1A"))
+            setBackgroundColor("#EE1A1A1A".toColorInt())
 
             addView(TextView(this@AutoClickerService).apply {
                 text = "🎯 Auto Clicker"
@@ -152,6 +170,7 @@ class AutoClickerService : Service() {
         }
     }
 
+    @SuppressLint("SetTextI18n")
     private fun showAddPointDialog() {
         val dialogLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -250,11 +269,7 @@ class AutoClickerService : Service() {
     private fun createMarker(point: ClickPoint, index: Int): View {
         val markerSize = 80
 
-        val markerView = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#AA4CAF50"))
-            setPadding(10, 10, 10, 10)
-            gravity = Gravity.CENTER
+        val markerView = MarkerView(this).apply {
 
             addView(TextView(this@AutoClickerService).apply {
                 text = "${index + 1}"
@@ -315,8 +330,12 @@ class AutoClickerService : Service() {
                     windowManager?.updateViewLayout(markerView, params)
 
                     val touchDuration = System.currentTimeMillis() - touchStartTime
-                    val moved = Math.abs(event.rawX - initialTouchX) > 10 ||
-                            Math.abs(event.rawY - initialTouchY) > 10
+                    val moved = abs(event.rawX - initialTouchX) > 10 ||
+                            abs(event.rawY - initialTouchY) > 10
+
+                    if (!moved && touchDuration < 1000) {
+                        markerView.performClick()
+                    }
 
                     if (touchDuration > 1000 && !moved) {
                         clickPoints.removeAt(index)

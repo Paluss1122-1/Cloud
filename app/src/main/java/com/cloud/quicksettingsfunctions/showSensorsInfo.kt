@@ -87,7 +87,6 @@ private fun getSensorTypeString(type: Int): String {
 
 private fun showSensorNotification(context: Context, content: String) {
     val channelId = "sensors_info_channel"
-    val notificationId = 1040
     val channel = NotificationChannel(
         channelId,
         "Sensor-Informationen",

@@ -56,8 +56,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import com.cloud.Config.WEATHERAPI_KEY
 import com.cloud.Config.cms
-import com.google.accompanist.swiperefresh.SwipeRefresh
-import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -65,7 +63,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.URL
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 data class HourData(
     val dateFull: String,
     val date: String,
@@ -836,7 +833,7 @@ suspend fun weathernot(context: Context, day: String, hour: String, weatherData:
     }
 
     val hourInt = hour.toIntOrNull() ?: return
-    if (hourInt < 1 || hourInt > 24) {
+    if (hourInt !in 1..24) {
         return
     }
 

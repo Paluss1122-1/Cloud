@@ -9,7 +9,6 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.provider.MediaStore
-import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
@@ -63,12 +62,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomAppBar
-import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.ModalBottomSheetDefaults
 import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -121,7 +118,6 @@ import com.cloud.quiethoursnotificationhelper.loadAllAiResponses
 import com.cloud.quiethoursnotificationhelper.loadTodayOrYesterdayEntry
 import com.cloud.service.MediaPlayerService
 import com.google.gson.GsonBuilder
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -201,7 +197,7 @@ fun MediaTab(viewModel: MediaViewModel = viewModel()) {
                     )
                 }
             }
-        ) { padding ->
+        ) { _ ->
             Crossfade(
                 targetState = state.currentTab,
                 label = "tab_transition"
@@ -949,7 +945,7 @@ private fun LibraryTab(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        item { Row() {
+        item { Row {
             SectionHeader("Podcast-Shows")
             Button(onClick = { PodcastShowManager.resetToDefault()}) {
                 Text("Reset")
