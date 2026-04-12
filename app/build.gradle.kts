@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     id("kotlin-parcelize")
     alias(libs.plugins.hilt.android)
+    id("com.autonomousapps.dependency-analysis") version "3.7.0"
 }
 
 val localProps = Properties().apply {
@@ -18,15 +19,6 @@ kotlin {
 }
 
 android {
-    /*signingConfigs {
-        create("release") {
-            storeFile =
-                file("C:\\Users\\pauls\\AndroidStudioProjects\\Cloud\\keystore\\my-release-key.jks")
-            storePassword = localProps["KEY_STORE_PASSWORD"] as String
-            keyAlias = localProps["KEY_ALIAS"] as String
-            keyPassword = localProps["KEY_PASSWORD"] as String
-        }
-    }*/
     namespace = "com.cloud"
     compileSdk = 36
 
@@ -42,11 +34,6 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField(
-                "String",
-                "SUPABASE_PUBLISHABLE_KEY",
-                "\"${project.properties["SUPABASE_PUBLISHABLE_KEY"]}\""
-            )
         }
         create("minifiedDebug") {
             initWith(buildTypes.getByName("debug"))
@@ -57,25 +44,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            buildConfigField(
-                "String",
-                "SUPABASE_PUBLISHABLE_KEY",
-                "\"${project.properties["SUPABASE_PUBLISHABLE_KEY"]}\""
-            )
         }
-        /*release {
-            isMinifyEnabled = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-            buildConfigField(
-                "String",
-                "SUPABASE_PUBLISHABLE_KEY",
-                "\"${project.properties["SUPABASE_PUBLISHABLE_KEY"]}\""
-            )
-            signingConfig = signingConfigs.getByName("release")
-        }*/
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -105,7 +74,7 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
+    //implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -113,20 +82,19 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.work.runtime.ktx)
-    implementation(libs.androidx.room.ktx)
-    implementation(libs.androidx.compose.runtime.saved.instance.state)
+    //implementation(libs.androidx.room.ktx)
+    //implementation(libs.androidx.compose.runtime.saved.instance.state)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.play.services.location)
     implementation(libs.androidx.tools.core)
     implementation(libs.androidx.media3.session)
-    implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.foundation.layout)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.runtime)
     implementation(libs.androidx.ui)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
+    //testImplementation(libs.junit)
+    //androidTestImplementation(libs.androidx.junit)
+    //androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     implementation(libs.storage.kt)
     implementation(libs.postgrest.kt)
@@ -145,13 +113,13 @@ dependencies {
     implementation(libs.zxing.android.embedded)
     debugImplementation(libs.androidx.compose.ui.tooling)
     ksp(libs.androidx.room.compiler)
-    implementation(libs.ktor.client.core)
-    implementation(libs.ktor.client.websockets)
+    //implementation(libs.ktor.client.core)
+    //implementation(libs.ktor.client.websockets)
     implementation(libs.ktor.client.okhttp)
-    implementation(libs.ktor.utils)
-    implementation(libs.accompanist.swiperefresh)
+    //implementation(libs.ktor.utils)
+    //implementation(libs.accompanist.swiperefresh)
     implementation(libs.gson)
-    implementation(libs.text.recognition)
+    //implementation(libs.text.recognition)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.hilt.android)
     implementation(libs.ktor.client.content.negotiation)
@@ -161,16 +129,16 @@ dependencies {
 
     ksp(libs.hilt.compiler)
 
-    implementation(libs.mp3agic)
+    //implementation(libs.mp3agic)
 
-    implementation(libs.shizuku.provider)
+    //implementation(libs.shizuku.provider)
 
     implementation(libs.androidx.core.splashscreen)
 
     implementation(libs.android.mail)
-    implementation(libs.android.activation)
+    //implementation(libs.android.activation)
 
     implementation(libs.androidx.autofill)
 
-    implementation(libs.androidx.slice.builders)
+    //implementation(libs.androidx.slice.builders)
 }
