@@ -13,7 +13,7 @@ import com.cloud.spotidownloader.ui.theme.NewSpotifyDownloaderTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivitySPOTIFY : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
