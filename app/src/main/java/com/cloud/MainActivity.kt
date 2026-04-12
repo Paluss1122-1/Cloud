@@ -30,6 +30,7 @@ import com.cloud.errorreports.ErrorMonitorService
 import com.cloud.jsoneditor.JsonEditorContent
 import com.cloud.privatecloudapp.LandingPageOrApp
 import com.cloud.quicksettingsfunctions.BatteryDataRepository
+import com.cloud.ui.theme.Typography
 import com.cloud.ui.theme.c
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.storage.Storage
@@ -53,7 +54,11 @@ class MainActivity : FragmentActivity() {
     private var showJsonEditor by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val isColdStart = savedInstanceState == null
 
+        if (isColdStart) {
+            installSplashScreen()
+        }
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             CoroutineScope(Dispatchers.IO).launch {
                 ERRORINSERT(
@@ -130,7 +135,8 @@ class MainActivity : FragmentActivity() {
                 colorScheme = MaterialTheme.colorScheme.copy(
                     primary = c(),
                     onSurface = Color.White
-                )
+                ),
+                typography = Typography,
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -140,7 +146,7 @@ class MainActivity : FragmentActivity() {
                         JsonEditorContent(
                             filePath = jsonFilePath!!,
                             fileUri = jsonFileUri,
-                            context = this@MainActivity,
+                            context = this,
                             onClose = {
                                 showJsonEditor = false
                                 jsonFilePath = null
