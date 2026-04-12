@@ -59,6 +59,7 @@ class MainActivity : FragmentActivity() {
         if (isColdStart) {
             installSplashScreen()
         }
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             CoroutineScope(Dispatchers.IO).launch {
                 ERRORINSERT(
@@ -71,10 +72,11 @@ class MainActivity : FragmentActivity() {
                 )
             }
             Thread.sleep(2000)
+
+            defaultHandler?.uncaughtException(thread, throwable)
+
             android.os.Process.killProcess(android.os.Process.myPid())
         }
-
-        installSplashScreen()
         enableEdgeToEdge()
         splashScreen.setOnExitAnimationListener { splashScreenView ->
             val animator = AnimatorSet().apply {
