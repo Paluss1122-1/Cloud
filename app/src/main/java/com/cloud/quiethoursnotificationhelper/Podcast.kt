@@ -1,7 +1,6 @@
 package com.cloud.quiethoursnotificationhelper
 
 import android.Manifest
-import android.R
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
@@ -158,7 +157,7 @@ fun showPodcastQueue(context: Context) {
             }.joinToString("\n")
 
             val notification = NotificationCompat.Builder(context, "quiet_hours_channel")
-                .setSmallIcon(R.drawable.ic_menu_info_details)
+                .setSmallIcon(android.R.drawable.ic_menu_info_details)
                 .setContentTitle("📋 Podcast Queue (${queuePaths.size})")
                 .setContentText(
                     queuePaths.firstOrNull()?.substringAfterLast("/")?.substringBeforeLast(".")

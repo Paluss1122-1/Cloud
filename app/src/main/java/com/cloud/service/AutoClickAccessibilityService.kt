@@ -2,11 +2,13 @@ package com.cloud.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Path
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 
+@SuppressLint("AccessibilityPolicy")
 class AutoClickAccessibilityService : AccessibilityService() {
 
     companion object {
