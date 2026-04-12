@@ -2,9 +2,16 @@ package com.cloud.aitab
 
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -43,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Color.Companion.White
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -81,15 +89,23 @@ private fun saveHistory(context: Context, scope: CoroutineScope, history: List<C
 
 @Composable
 fun AITabContent() {
-
     var currentMode by remember { mutableStateOf("Nvidia") }
+
     data class Model(
         val realname: String,
         val vision: Boolean = false,
         val name: String = realname.substringAfter("/", realname)
     )
+
     var currentMsg by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        selectedImageUri = uri
+    }
 
     val nvidiaModels = listOf(
         Model("meta/llama-3.1-8b-instruct"),
@@ -99,8 +115,11 @@ fun AITabContent() {
         Model("openai/gpt-oss-20b"),
         Model("minimaxai/minimax-m2.5"),
         Model("bigcode/starcoder2-7b"),
+        Model("nvidia/nemotron-3-nano-30b-a3b"),
         Model("nvidia/nemoretriever-ocr-v1", true),
-        Model("nvidia/nemotron-3-nano-30b-a3b", true)
+        Model("meta/llama-3.2-90b-vision-instruct", true),
+        Model("meta/llama-4-maverick-17b-128e-instruct", true),
+        Model("qwen/qwen3.5-397b-a17b", true),
     )
     val serverModels = listOf(
         Model("qwen2.5:7b"),
@@ -146,11 +165,12 @@ fun AITabContent() {
         }
     }
 
-    suspend fun send(txt: String): String {
+    suspend fun send(txt: String, pic: String? = null): String {
         if (!isOnline(context)) return "Kein Netzwerk"
         return when (currentMode) {
-            "Nvidia" -> sendNvidiaChatMessageAITab(history, txt, selectedModel.realname) ?: "Fehler"
-            "Server" -> askServer(history, txt, selectedModel.realname)
+            "Nvidia" -> sendNvidiaChatMessageAITab(history, txt, selectedModel.realname, pic)
+                ?: "Fehler"
+            "Server" -> askServer(history, txt, selectedModel.realname, pic)
             else -> "Wähle einen Modus"
         }
     }
@@ -159,11 +179,26 @@ fun AITabContent() {
 
     val sendmsg = {
         val userText = currentMsg.trim()
-        if (userText.isNotEmpty()) {
+        if (userText.isNotEmpty() || selectedImageUri != null) {
             val modeAtSend = currentMode
 
+            val imageBase64 = selectedImageUri?.let { uri ->
+                try {
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        val bmp = BitmapFactory.decodeStream(input)
+                        val bytes = java.io.ByteArrayOutputStream().also {
+                            bmp.compress(Bitmap.CompressFormat.JPEG, 90, it)
+                        }.toByteArray()
+                        Base64.encodeToString(bytes, Base64.NO_WRAP)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    null
+                }
+            }
+
             val userMsg = ChatMessage(
-                text = userText,
+                text = userText.ifEmpty { "Beschreibe das Bild" },
                 ts = System.currentTimeMillis(),
                 own = true
             )
@@ -175,8 +210,12 @@ fun AITabContent() {
             scope.launch {
                 try {
                     val responseText = withContext(Dispatchers.IO) {
-                        send(userText)
+                        send(
+                            userText.ifEmpty { "Beschreibe das Bild" },
+                            if (selectedModel.vision && selectedImageUri != null) imageBase64 else null
+                        )
                     }
+                    selectedImageUri = null
 
                     val aiMsg = ChatMessage(
                         text = responseText,
@@ -247,7 +286,7 @@ fun AITabContent() {
                                 colors = buttonColors(containerColor = containerColor),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
-                                Text(mode, color = Color.White)
+                                Text(mode, color = White)
                             }
 
                             if (index == 0) {
@@ -264,7 +303,7 @@ fun AITabContent() {
                                             HorizontalDivider(
                                                 modifier = Modifier.padding(vertical = 16.dp),
                                                 thickness = 1.dp,
-                                                color = Color.White.copy(alpha = 0.3f)
+                                                color = White.copy(alpha = 0.3f)
                                             )
                                             showedDiv = true
                                         }
@@ -278,8 +317,9 @@ fun AITabContent() {
                                         PloppingButton(
                                             onClick = {
                                                 selectedModel = it
+                                                if (!selectedModel.vision) selectedImageUri = null
                                             },
-                                            onFinishedClick = {showAiModels = false},
+                                            onFinishedClick = { showAiModels = false },
                                             colors = buttonColors(containerColor = containerColorModel),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
@@ -289,13 +329,21 @@ fun AITabContent() {
                                                 .replace(sizeRegex, "")
                                                 .replace("-", " ")
                                                 .substringBeforeLast(":")
-                                            val sizeString: String? = if (currentMode == "Nvidia") sizeRegex1.find(it.name)?.value else it.name.substringAfter(":")
-                                            val size = if (sizeString != null && sizeString != "null") {
-                                                " (${sizeString.replace("-", " ")})"
-                                            } else {
-                                                ""
-                                            }
-                                            Text("$name$size", textAlign = TextAlign.Left, modifier = Modifier.fillMaxWidth())
+                                            val sizeString: String? =
+                                                if (currentMode == "Nvidia") sizeRegex1.find(it.name)?.value else it.name.substringAfter(
+                                                    ":"
+                                                )
+                                            val size =
+                                                if (sizeString != null && sizeString != "null") {
+                                                    " (${sizeString.replace("-", " ")})"
+                                                } else {
+                                                    ""
+                                                }
+                                            Text(
+                                                "$name$size",
+                                                textAlign = TextAlign.Left,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
                                         }
                                     }
                                 }
@@ -321,7 +369,7 @@ fun AITabContent() {
                         Column(horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
                             Text(
                                 text = msg.text,
-                                color = Color.White,
+                                color = White,
                                 fontSize = 15.sp,
                                 modifier = Modifier
                                     .background(
@@ -353,7 +401,7 @@ fun AITabContent() {
                         ) {
                             Text(
                                 text = "…",
-                                color = Color.White,
+                                color = White,
                                 fontSize = 20.sp,
                                 modifier = Modifier
                                     .background(Color(0xFF444444), RoundedCornerShape(10.dp))
@@ -364,6 +412,12 @@ fun AITabContent() {
                 }
             }
 
+            val uploadButtonWeight by animateDpAsState(
+                targetValue = if (selectedModel.vision) 48.dp else 0.dp,
+                animationSpec = tween(durationMillis = 300),
+                label = "textFieldWeight"
+            )
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -371,6 +425,24 @@ fun AITabContent() {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                PloppingButton(
+                    onClick = {
+                        imagePickerLauncher.launch("image/*")
+                    },
+                    modifier = Modifier
+                        .size(uploadButtonWeight)
+                        .background(
+                            if (selectedImageUri != null) Color(0xFF555555) else Color(0xFF333333),
+                            RoundedCornerShape(50)
+                        )
+                ) {
+                    Text(
+                        if (selectedImageUri != null) "✓" else "📷",
+                        color = White,
+                        fontSize = 16.sp
+                    )
+                }
+
                 TextField(
                     value = currentMsg,
                     onValueChange = { currentMsg = it },
@@ -379,9 +451,9 @@ fun AITabContent() {
                     shape = RoundedCornerShape(24.dp),
                     placeholder = { Text("Nachricht eingeben...", color = Color(0xFF888888)) },
                     colors = TextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        cursorColor = Color.White,
+                        focusedTextColor = White,
+                        unfocusedTextColor = White,
+                        cursorColor = White,
                         focusedContainerColor = Color(0xFF2A2A2A),
                         unfocusedContainerColor = Color(0xFF2A2A2A),
                         focusedIndicatorColor = Color.Transparent,
@@ -409,7 +481,7 @@ fun AITabContent() {
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("+", color = Color(0xFF888888), fontSize = 16.sp)
+                    Text("+", color = White, fontSize = 16.sp)
                 }
             }
         }
