@@ -4,6 +4,7 @@ package com.cloud.vocabtab
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -65,14 +66,9 @@ import androidx.core.content.edit
 import androidx.core.graphics.scale
 import com.cloud.quiethoursnotificationhelper.flashcardVokabelnFlow
 import com.cloud.quiethoursnotificationhelper.trySendImageToLaptop
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import kotlin.math.abs
 
 
 data class Vokabel(val latein: String, val deutsch: String)
@@ -174,15 +170,17 @@ fun VocabTab() {
                                     bmp.compress(Bitmap.CompressFormat.JPEG, 90, it)
                                 }.toByteArray()
                                 val sent = trySendImageToLaptop(bytes)
+                                Toast.makeText(context,"$sent", Toast.LENGTH_LONG).show()
                                 if (sent) {
                                     val result = flashcardVokabelnFlow.first { it != null }
                                     vokabeln = result ?: emptyList()
+                                    Toast.makeText(context,"$vokabeln", Toast.LENGTH_LONG).show()
                                     if (vokabeln.isNotEmpty()) screen = VokabelTabScreen.REVIEW
                                     else {
                                         errorMessage = "LLM-Extraktion leer, versuche lokal..."
-                                        vokabeln = extractVokabelnFromBitmap(bmp)
                                         if (vokabeln.isNotEmpty()) screen = VokabelTabScreen.REVIEW
                                         else errorMessage = "Keine Vokabeln erkannt."
+                                        Toast.makeText(context,"$errorMessage", Toast.LENGTH_LONG).show()
                                     }
                                 } else {
                                     fun Bitmap.scaleForApi(maxPx: Int = 1280): Bitmap {
@@ -306,7 +304,7 @@ fun VocabTab() {
                                             }
                                         } catch (e: Exception) {
                                             errorMessage = "Parse-Fehler: ${e.message}\nRaw: ${
-                                                nvidiaResult?.take(300)
+                                                nvidiaResult.take(300)
                                             }"
                                         }
                                     } else {
@@ -1329,97 +1327,6 @@ fun uriToBitmap(context: Context, uri: Uri): Bitmap? {
     } catch (_: Exception) {
         null
     }
-}
-
-suspend fun extractVokabelnFromBitmap(bitmap: Bitmap): List<Vokabel> {
-    val image = InputImage.fromBitmap(bitmap, 0)
-    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-    val result = recognizer.process(image).await()
-
-    data class OcrLine(
-        val text: String,
-        val left: Int,
-        val right: Int,
-        val top: Int,
-        val bottom: Int
-    ) {
-        val cx get() = (left + right) / 2
-    }
-
-    val w = bitmap.width.toFloat()
-
-    val zoneLatinMax = (w * 0.45f).toInt()
-    val zoneDeutschMin = (w * 0.44f).toInt()
-    val zoneDeutschMax = (w * 0.82f).toInt()
-
-    val allLines = result.textBlocks
-        .flatMap { it.lines }
-        .mapNotNull { line ->
-            val b = line.boundingBox ?: return@mapNotNull null
-            OcrLine(line.text.trim(), b.left, b.right, b.top, b.bottom)
-        }
-
-    val headerKeywords = setOf("lernwörter", "lernwörter", "lernwort")
-    fun OcrLine.isNoise() =
-        text.length < 2 || headerKeywords.any { text.lowercase().contains(it) }
-
-    val leftLines = allLines.filter { it.cx <= zoneLatinMax && !it.isNoise() }.sortedBy { it.top }
-    val rightLines = allLines.filter { it.left in zoneDeutschMin..zoneDeutschMax && !it.isNoise() }
-        .sortedBy { it.top }
-
-    data class Block(val text: String, val top: Int, val bottom: Int)
-
-    val gapThreshold = bitmap.height * 0.045f
-
-    fun List<OcrLine>.mergeBlocks(): List<Block> {
-        val blocks = mutableListOf<Block>()
-        var buf = "";
-        var top = 0;
-        var bottom = 0
-        for (line in this) {
-            when {
-                buf.isEmpty() -> {
-                    buf = line.text; top = line.top; bottom = line.bottom
-                }
-
-                line.top - bottom < gapThreshold -> {
-                    buf += ", ${line.text}"; bottom = line.bottom
-                }
-
-                else -> {
-                    blocks += Block(buf, top, bottom)
-                    buf = line.text; top = line.top; bottom = line.bottom
-                }
-            }
-        }
-        if (buf.isNotEmpty()) blocks += Block(buf, top, bottom)
-        return blocks
-    }
-
-    val latinBlocks = leftLines.mergeBlocks()
-    val germanBlocks = rightLines.mergeBlocks()
-
-    return latinBlocks.mapNotNull { latin ->
-        val matched = germanBlocks.maxByOrNull { german ->
-            val overlapTop = maxOf(latin.top, german.top)
-            val overlapBottom = minOf(latin.bottom, german.bottom)
-            val overlap = maxOf(0, overlapBottom - overlapTop)
-            if (overlap > 0) overlap.toFloat()
-            else -minOf(
-                abs(latin.top - german.bottom),
-                abs(latin.bottom - german.top)
-            ).toFloat()
-        } ?: return@mapNotNull null
-
-        val dist = minOf(
-            abs(latin.top - matched.bottom),
-            abs(latin.bottom - matched.top),
-            abs((latin.top + latin.bottom) / 2 - (matched.top + matched.bottom) / 2)
-        )
-        if (dist > bitmap.height * 0.08f) return@mapNotNull null
-
-        Vokabel(latin.text, matched.text)
-    }.distinctBy { it.latein }
 }
 
 fun loadWeakVokabeln(prefs: android.content.SharedPreferences, setCreatedAt: Long): List<Vokabel> {
