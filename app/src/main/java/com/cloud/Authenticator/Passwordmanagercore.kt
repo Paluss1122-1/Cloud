@@ -47,15 +47,13 @@ data class PasswordEntry(
     val updatedAt: Long = System.currentTimeMillis()
 )
 
-
-
 fun PasswordEntry.toJsonObject(): JSONObject {
     return JSONObject().apply {
         put("id", id)
         put("name", name)
         put("url", url)
         put("username", username)
-        put("password", password) // bereits verschlüsselt!
+        put("password", password)
         put("notes", notes)
         put("createdAt", createdAt)
         put("updatedAt", updatedAt)
