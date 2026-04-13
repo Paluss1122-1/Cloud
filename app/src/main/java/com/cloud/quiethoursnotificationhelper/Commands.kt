@@ -620,12 +620,12 @@ private fun getAvailableCommands(context: Context): List<Command> {
                         LocalActivityResultRegistryOwner provides activityResultRegistryOwner
                     ) {
                         Box(Modifier.fillMaxSize()) {
-                            OtherBucketViewer {
+                            OtherBucketViewer(onBackPressed = {
                                 testOverlayView?.let { windowManager.removeView(it) }
                                 testOverlayLifecycle?.onDestroy()
                                 testOverlayView = null
                                 testOverlayLifecycle = null
-                            }
+                            })
                             IconButton(
                                 onClick = {
                                     testOverlayView?.let { windowManager.removeView(it) }
