@@ -7,7 +7,6 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
-import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalAnimationApi
@@ -63,6 +62,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.URL
+
 data class HourData(
     val dateFull: String,
     val date: String,
@@ -209,11 +209,6 @@ fun WeatherTabContent(
 
     LaunchedEffect(selectionState.hour, selectionState.dayIndex) {
         val canGoBack = selectionState.hour != null || selectionState.dayIndex != null
-        Log.d("TOUCH", "--START")
-        Log.d("TOUCH", "canGoBack $canGoBack")
-        Log.d("TOUCH", "selectedHour $selectionState.hour")
-        Log.d("TOUCH", "selectedDayIndex $selectionState.dayIndex")
-        Log.d("TOUCH", "--FINISH")
         viewModel.updateBackState(
             canNavigateBack = canGoBack,
             onNavigateBack = {
