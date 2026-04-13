@@ -2,6 +2,7 @@
 
 package com.cloud.privatecloudapp
 
+import TabNavigationViewModel
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -79,6 +80,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -112,7 +114,8 @@ data class LocalFileInfo(
 @OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class)
 @Composable
 fun OtherBucketViewer(
-    onBackPressed: () -> Unit
+    onBackPressed: () -> Unit,
+    viewModel: TabNavigationViewModel = viewModel()
 ) {
     var fileList by remember { mutableStateOf<List<LocalFileInfo>>(emptyList()) }
     var isUploading by remember { mutableStateOf(false) }
@@ -140,6 +143,15 @@ fun OtherBucketViewer(
                     .build()
             }
             .build()
+    }
+
+    LaunchedEffect(showFullscreenImage, showVideoPlayer) {
+        viewModel.updateBackState(
+            canNavigateBack = true,
+            onNavigateBack = {
+                onBackPressed()
+            }
+        )
     }
 
     BackHandler {
