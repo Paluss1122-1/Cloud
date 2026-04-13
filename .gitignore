@@ -10,3 +10,5 @@ local.properties
 app/src/main/java/com/cloud/sm.py
 scan_cache.json
 scan_report.json
+project_summary.md
+summarize.py
