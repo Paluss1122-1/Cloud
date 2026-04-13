@@ -2,7 +2,7 @@
 
 package com.cloud.privatecloudapp
 
-import TabNavigationViewModel
+import com.cloud.TabNavigationViewModel
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -51,7 +51,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -67,14 +66,12 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -92,23 +89,15 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -116,9 +105,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -137,8 +124,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
@@ -159,7 +144,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -175,8 +159,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
 import com.cloud.Config
 import com.cloud.Config.cms
-import com.cloud.Config.realDevice
-import com.cloud.PasswordStorage
 import com.cloud.R
 import com.cloud.aitab.AITabContent
 import com.cloud.audiorecorder.AudioRecorderContent
@@ -191,6 +173,7 @@ import com.cloud.datecalculator.DateCalculatorContent
 import com.cloud.exploretab.ExploreTabContent
 import com.cloud.gallery.GalleryTab
 import com.cloud.gmailtab.GmailTabContent
+import com.cloud.loadLastMenuItem
 import com.cloud.mediaplayer.AiResponseHistorySheet
 import com.cloud.mediaplayer.MediaAnalyticsManager
 import com.cloud.mediaplayer.MediaTab
@@ -199,15 +182,12 @@ import com.cloud.movietab.MovieDiscoveryTabContent
 import com.cloud.notes.NotizenApp
 import com.cloud.objects.FavoriteManager
 import com.cloud.quicksettingsfunctions.BatteryChartScreen
-import com.cloud.quicksettingsfunctions.BatteryDataRepository
 import com.cloud.quicksettingsfunctions.showNetworkInfo
 import com.cloud.quicksettingsfunctions.showSensorsInfo
-import com.cloud.service.ChatService
-import com.cloud.service.QuietHoursNotificationService
+import com.cloud.remotedesktop.RemoteDesktopTabContent
 import com.cloud.spotifydownloader.SpotifyDownloaderApp
 import com.cloud.spotifydownloadertab.SpotifyDownloaderTab
 import com.cloud.ui.theme.Cloud
-import com.cloud.ui.theme.c
 import com.cloud.vocabtab.VocabTab
 import com.cloud.weathertab.WeatherTabContent
 import io.github.jan.supabase.storage.Storage
@@ -229,8 +209,8 @@ import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 
-private const val KEY_RECENT_TABS = "recent_tabs"
-private const val MAX_RECENT_TABS = 5
+const val KEY_RECENT_TABS = "recent_tabs"
+const val MAX_RECENT_TABS = 5
 
 enum class MenuItem(
     val title: String,
@@ -329,7 +309,7 @@ enum class MenuItem(
     ),
     MEDIARECORDER(
         "Media Recorder",
-        "🎵 ",
+        "🎵",
         { MediaRecorderContent() }
     ),
     SPOTIFYDOWNLOADER(
@@ -339,27 +319,27 @@ enum class MenuItem(
     ),
     AUTOKLICKER(
         "Autoklicker",
-        "⌨️ ",
+        "⌨️",
         { AutoClickerTabContent() }
     ),
     MEDIAPLAYERTAB(
         "Media Player",
-        "️️🎶 ",
+        "️️🎶",
         { MediaTab() }
     ),
     GMAIL(
         "Gmail",
-        "️️✉️ ",
+        "️️✉️",
         { GmailTabContent() }
     ),
     Vocabs(
         "Vokabeln",
-        "️️🏫️ ",
+        "️️🏫️",
         { VocabTab() }
     ),
     SPOTIY(
         "Spotify 2.0",
-        "️️🏫️ ",
+        "️️🏫️",
         { SpotifyDownloaderApp() }
     ),
     EXPLORE(
@@ -373,6 +353,13 @@ enum class MenuItem(
         "Kalender",
         "📅",
         { CalendarTabContent() }
+    ),
+    REMOTEDESKTOP(
+        "Remote Desktop",
+        "🖥️",
+        { RemoteDesktopTabContent() }
+    ),
+}
 
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -381,7 +368,7 @@ fun PrivateCloudApp(
     storage: Storage,
     startTarget: String?,
     initialMenuItem: MenuItem? = null,
-    onBackToLanding: (() -> Unit)? = null,
+    onMenuClick: (() -> Unit)? = null,
     viewModel: TabNavigationViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -389,7 +376,6 @@ fun PrivateCloudApp(
         mutableStateOf(initialMenuItem ?: loadLastMenuItem(context))
     }
     var isFullScreen by rememberSaveable { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
     var webViewUrl by rememberSaveable { mutableStateOf("https://www.google.com") }
     var currentUrl by rememberSaveable { mutableStateOf(webViewUrl) }
     var webViewState by remember { mutableStateOf<WebView?>(null) }
@@ -429,17 +415,6 @@ fun PrivateCloudApp(
         saveLastUrl(context, currentUrl)
     }
 
-    val drawerState = rememberDrawerState(
-        initialValue = DrawerValue.Closed,
-        confirmStateChange = { futureValue ->
-            if (isFullScreen && selectedMenuItem == MenuItem.BROWSER) {
-                futureValue == DrawerValue.Closed
-            } else {
-                true
-            }
-        }
-    )
-
     if (isFullScreen) {
         Box(modifier = Modifier.fillMaxSize()) {
             when (selectedMenuItem) {
@@ -451,11 +426,9 @@ fun PrivateCloudApp(
                         onEnterFullScreen = { isFullScreen = true }
                     )
                 }
-
                 MenuItem.PRIVATE_CLOUD -> {
                     MainCloudScreen(storage = storage)
                 }
-
                 else -> selectedMenuItem.content(setGesturesEnabled)
             }
         }
@@ -470,173 +443,99 @@ fun PrivateCloudApp(
             }
         }
     } else {
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            gesturesEnabled = selectedMenuItem != MenuItem.BROWSER || gesturesEnabled,
-            scrimColor = Color.Black.copy(alpha = 0.6f),
-            drawerContent = {
-                ModalDrawerSheet(
-                    drawerContainerColor = Color.DarkGray,
-                    modifier = Modifier.fillMaxWidth(0.75f)
-                ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            Text(
-                                text = "Cloud",
-                                modifier = Modifier
-                                    .padding(16.dp)
-                                    .clickable { onBackToLanding?.invoke() },
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Cloud.copy(0.8f))
+                .then(
+                    if (gesturesEnabled) {
+                        Modifier.pointerInput(navigationState.canNavigateBack) {
+                            var gestureHandled = false
+                            detectHorizontalDragGestures(
+                                onDragStart = { gestureHandled = false },
+                                onHorizontalDrag = { _, dragAmount ->
+                                    if (!gestureHandled && dragAmount > 20f) {
+                                        gestureHandled = true
+                                        if (navigationState.canNavigateBack) {
+                                            viewModel.triggerBack()
+                                        } else {
+                                            onMenuClick?.invoke()
+                                        }
+                                    }
+                                },
+                                onDragEnd = { gestureHandled = false },
+                                onDragCancel = { gestureHandled = false }
                             )
-
-                            HorizontalDivider(thickness = 1.dp, color = Color.Gray)
-
-                            Spacer(Modifier.height(8.dp))
-
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .navigationBarsPadding()
-                            ) {
-                                items(MenuItem.entries) { item ->
-                                    NavigationDrawerItem(
-                                        icon = {
-                                            Text(
-                                                text = item.icon,
-                                                fontSize = 24.sp
-                                            )
-                                        },
-                                        label = {
-                                            Text(
-                                                text = item.title,
-                                                color = Color.White
-                                            )
-                                        },
-                                        selected = selectedMenuItem == item,
-                                        onClick = {
-                                            selectedMenuItem = item
-                                            saveLastMenuItem(context, item)
-                                            saveRecentTab(context, item)
-                                            scope.launch {
-                                                drawerState.close()
-                                            }
-                                        },
-                                        colors = NavigationDrawerItemDefaults.colors(
-                                            selectedContainerColor = c(),
-                                            unselectedContainerColor = Color.Transparent,
-                                            selectedTextColor = Color.White,
-                                            unselectedTextColor = Color.White
-                                        ),
-                                        modifier = Modifier.padding(
-                                            horizontal = 12.dp,
-                                            vertical = 4.dp
-                                        )
-                                    )
-                                }
-                            }
                         }
+                    } else {
+                        Modifier
                     }
+                )
+        ) {
+            val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+            val bgpicture = remember {
+                when (currentHour) {
+                    in 11..16 -> R.drawable.mittag
+                    else -> R.drawable.night
                 }
             }
-        ) {
+            Image(
+                painter = painterResource(id = bgpicture),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Cloud.copy(0.8f))
-                    .then(
-                        if (gesturesEnabled) {
-                            Modifier.pointerInput(navigationState.canNavigateBack, drawerState) {
-                                var gestureHandled = false
-                                detectHorizontalDragGestures(
-                                    onDragStart = { gestureHandled = false },
-                                    onHorizontalDrag = { _, dragAmount ->
-                                        if (!gestureHandled && dragAmount > 20f) {
-                                            gestureHandled = true
-                                            if (navigationState.canNavigateBack) {
-                                                viewModel.triggerBack()
-                                            } else {
-                                                scope.launch { if (!drawerState.isOpen) drawerState.open() }
-                                            }
-                                        }
-                                    },
-                                    onDragEnd = { gestureHandled = false },
-                                    onDragCancel = { gestureHandled = false }
-                                )
-                            }
-                        } else {
-                            Modifier
-                        }
-                    )
-            ) {
-                val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
-                val bgpicture = remember {
-                    when (currentHour) {
-                        in 11..16 -> R.drawable.mittag
-                        else -> R.drawable.night
-                    }
-                }
-                Image(
-                    painter = painterResource(id = bgpicture),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Cloud.copy(0.5f))
-                )
-                Scaffold(
-                    topBar = {
-                        TopAppBar(
-                            title = {
-                                Text(
-                                    text = "${selectedMenuItem.icon} ${selectedMenuItem.title}",
-                                    color = Color.White
-                                )
-                            },
-                            navigationIcon = {
-                                IconButton(onClick = {
-                                    scope.launch {
-                                        drawerState.open()
-                                    }
-                                }) {
+                    .background(Cloud.copy(0.5f))
+            )
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            Text(
+                                text = "${selectedMenuItem.icon} ${selectedMenuItem.title}",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        navigationIcon = {
+                            if (onMenuClick != null) {
+                                IconButton(onClick = { onMenuClick() }) {
                                     Icon(
                                         imageVector = Icons.Default.Menu,
                                         contentDescription = "Menü öffnen",
                                         tint = Color.White
                                     )
                                 }
-                            },
-                            colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = Color.Transparent
-                            ),
-                            windowInsets = WindowInsets.statusBars
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Menu,
+                                    contentDescription = "Menü öffnen",
+                                    tint = Color.White,
+                                    modifier = Modifier.alpha(0f).size(48.dp)
+                                )
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color.Transparent
+                        ),
+                        windowInsets = WindowInsets.statusBars
+                    )
+                },
+                containerColor = Color.Transparent
+            ) { paddingValues ->
+                Box(modifier = Modifier.padding(paddingValues)) {
+                    when (selectedMenuItem) {
+                        MenuItem.WEATHER -> WeatherTabContent(viewModel = viewModel)
+                        MenuItem.BROWSER -> BrowserTabContent(
+                            url = webViewUrl,
+                            onUrlChange = { webViewUrl = it },
+                            onEnterFullScreen = { isFullScreen = true }
                         )
-                    },
-                    containerColor = Color.Transparent
-                ) { paddingValues ->
-                    Box(modifier = Modifier.padding(paddingValues)) {
-                        when (selectedMenuItem) {
-                            MenuItem.WEATHER -> WeatherTabContent(viewModel = viewModel)
-                            MenuItem.BROWSER -> BrowserTabContent(
-                                url = webViewUrl,
-                                onUrlChange = { webViewUrl = it },
-                                onEnterFullScreen = { isFullScreen = true },
-                                //viewModel = viewModel // optional, falls Browser auch BackState braucht
-                            )
-
-                            MenuItem.PRIVATE_CLOUD -> MainCloudScreen(
-                                storage = storage,
-                                //viewModel = viewModel
-                            )
-
-                            else -> selectedMenuItem.content(setGesturesEnabled)
-                        }
+                        MenuItem.PRIVATE_CLOUD -> MainCloudScreen(storage = storage)
+                        else -> selectedMenuItem.content(setGesturesEnabled)
                     }
                 }
             }
@@ -1010,7 +909,7 @@ fun MainCloudScreen(storage: Storage) {
             delay(100)
             alpha.animateTo(
                 1f, animationSpec = tween(
-                    durationMillis = 300,
+                    durationMillis = 150,
                     easing = FastOutSlowInEasing
                 )
             )
@@ -1960,7 +1859,6 @@ fun MainCloudScreen(storage: Storage) {
     }
     if (pendingOtherBucket || showOtherBucket) {
         if (pendingOtherBucket) {
-            // Off-screen rendern für Bitmap-Capture
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -2061,7 +1959,7 @@ fun QuickSettingsTabContent() {
         delay(100)
         alpha.animateTo(
             1f, animationSpec = tween(
-                durationMillis = 300,
+                durationMillis = 150,
                 easing = FastOutSlowInEasing
             )
         )
@@ -2081,6 +1979,7 @@ fun QuickSettingsTabContent() {
                 "Sensoren\nInfos" to { showSensorsInfo(context) },
                 "Display\nInfos" to { showDisplayInfo(context) }
             ))
+        Spacer(Modifier.height(8.dp))
         QuickSettingRow(
             listOf(
                 "🔋\nBatterie\nInfo" to { showBatteryInfo(context) },
@@ -2088,6 +1987,7 @@ fun QuickSettingsTabContent() {
                 "📱\nGeräte\nInfo" to { showDeviceInfo(context) }
             )
         )
+        Spacer(Modifier.height(8.dp))
         QuickSettingRow(
             listOf(
                 "Downtime" to { showNumberDialog = true },
@@ -2491,61 +2391,8 @@ fun showDeviceInfo(context: Context) {
 }
 
 
-fun openDeveloperOptions(context: Context) {
-    try {
-        context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        })
-    } catch (_: Exception) {
-        Toast.makeText(context, "Entwickleroptionen nicht aktiviert", Toast.LENGTH_SHORT).show()
-    }
-}
-
-/**
- * Öffnet Datennutzung
- */
-fun openDataUsage(context: Context) {
-    try {
-        context.startActivity(Intent(Settings.ACTION_DATA_USAGE_SETTINGS).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        })
-    } catch (_: Exception) {
-        Toast.makeText(context, "Datennutzung nicht verfügbar", Toast.LENGTH_SHORT).show()
-    }
-}
-
-/**
- * Öffnet Speicher-Einstellungen
- */
-fun openStorageSettings(context: Context) {
-    try {
-        context.startActivity(Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        })
-    } catch (_: Exception) {
-        Toast.makeText(context, "Speicher-Einstellungen nicht verfügbar", Toast.LENGTH_SHORT).show()
-    }
-}
-
-private const val PREFS_NAME = "cloud_app_prefs"
-private const val KEY_LAST_MENU_ITEM = "last_menu_item"
-
-fun saveLastMenuItem(context: Context, menuItem: MenuItem) {
-    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        .edit {
-            putString(KEY_LAST_MENU_ITEM, menuItem.name)
-        }
-}
-
-fun loadLastMenuItem(context: Context): MenuItem {
-    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    val savedName = prefs.getString(KEY_LAST_MENU_ITEM, MenuItem.PRIVATE_CLOUD.name)
-    return try {
-        MenuItem.valueOf(savedName ?: MenuItem.PRIVATE_CLOUD.name)
-    } catch (_: Exception) {
-        MenuItem.PRIVATE_CLOUD
-    }
-}
+const val PREFS_NAME = "cloud_app_prefs"
+const val KEY_LAST_MENU_ITEM = "last_menu_item"
 
 private const val KEY_LAST_URL = "last_browser_url"
 
@@ -2790,8 +2637,9 @@ fun GoodNightScreen(ai: String) {
 
 @Composable
 fun PloppingButton(
-    onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    onFinishedClick: () -> Unit = {},
     colors: ButtonColors = ButtonDefaults.buttonColors(),
     shape: Shape = ButtonDefaults.shape,
     enabled: Boolean = true,
@@ -2832,6 +2680,7 @@ fun PloppingButton(
                             dampingRatio = Spring.DampingRatioLowBouncy
                         )
                     )
+                    onFinishedClick()
                 }
             }
             .padding(contentPadding),
