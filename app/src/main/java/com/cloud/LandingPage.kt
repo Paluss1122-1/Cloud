@@ -52,7 +52,6 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Color.Companion.Black
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -71,6 +70,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import com.cloud.Config.realDevice
+import com.cloud.privatecloudapp.KEY_LAST_MENU_ITEM
+import com.cloud.privatecloudapp.KEY_RECENT_TABS
+import com.cloud.privatecloudapp.MAX_RECENT_TABS
 import com.cloud.privatecloudapp.MenuItem
 import com.cloud.privatecloudapp.PREFS_NAME
 import com.cloud.privatecloudapp.PrivateCloudApp
@@ -84,9 +86,6 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Calendar
-
-private const val KEY_RECENT_TABS = "recent_tabs"
-private const val MAX_RECENT_TABS = 5
 
 fun saveRecentTab(context: Context, menuItem: MenuItem) {
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -114,6 +113,23 @@ fun loadRecentTabs(context: Context): List<MenuItem> {
                 null
             }
         }
+}
+
+fun saveLastMenuItem(context: Context, menuItem: MenuItem) {
+    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .edit {
+            putString(KEY_LAST_MENU_ITEM, menuItem.name)
+        }
+}
+
+fun loadLastMenuItem(context: Context): MenuItem {
+    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    val savedName = prefs.getString(KEY_LAST_MENU_ITEM, MenuItem.PRIVATE_CLOUD.name)
+    return try {
+        MenuItem.valueOf(savedName ?: MenuItem.PRIVATE_CLOUD.name)
+    } catch (_: Exception) {
+        MenuItem.PRIVATE_CLOUD
+    }
 }
 
 fun getDeviceName(): String {
@@ -458,7 +474,7 @@ fun LandingPage(
     }
     val txtcolors = remember {
         when (currentHour) {
-            in 11..16 -> Black; else -> Color.White
+            in 11..16 -> Color.Black; else -> Color.White
         }
     }
     val bgpicture = remember {
