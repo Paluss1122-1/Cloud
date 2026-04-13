@@ -1,3 +1,5 @@
+@file:Suppress("AssignedValueIsNeverRead")
+
 package com.cloud.autoclickertab
 
 import android.content.Intent
