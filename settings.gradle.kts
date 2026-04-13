@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Cloud"
 include(":app")
+include(":extern_accessibily")
