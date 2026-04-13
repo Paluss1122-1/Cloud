@@ -2,7 +2,7 @@
 
 package com.cloud.privatecloudapp
 
-import TabNavigationViewModel
+import com.cloud.TabNavigationViewModel
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
