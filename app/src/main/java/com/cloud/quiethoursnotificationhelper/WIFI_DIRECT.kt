@@ -60,6 +60,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.cloud.Config
+import com.cloud.Config.DISCOVERY_PORT
 import com.cloud.Config.FLASHCARD_RECEIVE_PORT
 import com.cloud.Config.SYNC_PORT
 import com.cloud.Config.TODOS
@@ -370,6 +371,9 @@ data class AiResponseEntry(
 fun startTriggerListenerIfHomeWifi(context: Context) {
     checkIfNearLocation(context) { atHome ->
         ConnectionGuard.updateLocationStatus(atHome)
+        discoverLaptopIp(context) { discovered ->
+            if (discovered != null) laptopIp = discovered
+        }
         startTriggerListener(context)
         registerWifiReconnectReceiver(context)
     }
@@ -2146,4 +2150,55 @@ fun sendAiExecuteCommand(context: Context, userInput: String) {
             logError("sendAiExecuteCommand", e)
         }
     }
+}
+
+private const val LAPTOP_IP_CACHE_KEY = "laptop_ip_cache_time"
+private const val LAPTOP_IP_TTL = 15 * 60 * 60 * 1000L
+
+fun discoverLaptopIp(context: Context, onResult: (String?) -> Unit) {
+    val prefs = context.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)
+    val cachedIp = prefs.getString(KEY_LAPTOP_IP, "")
+    val cachedAt = prefs.getLong(LAPTOP_IP_CACHE_KEY, 0L)
+    if (!cachedIp.isNullOrEmpty() && System.currentTimeMillis() - cachedAt < LAPTOP_IP_TTL) {
+        onResult(cachedIp)
+        return
+    }
+
+    syncScope.launch(Dispatchers.IO) {
+        try {
+            val udp = java.net.DatagramSocket()
+            udp.broadcast = true
+            udp.soTimeout = 3000
+
+            val subnet = getSubnetBroadcast(context)
+            val sendBuf = "DISCOVER_SERVER".toByteArray()
+            udp.send(java.net.DatagramPacket(sendBuf, sendBuf.size, java.net.InetAddress.getByName(subnet), DISCOVERY_PORT))
+
+            val recvBuf = ByteArray(64)
+            val recvPacket = java.net.DatagramPacket(recvBuf, recvBuf.size)
+            udp.receive(recvPacket)
+            val response = String(recvPacket.data, 0, recvPacket.length)
+            udp.close()
+
+            if (response == "SERVER_HERE") {
+                val ip = recvPacket.address.hostAddress ?: return@launch onResult(null)
+                prefs.edit {
+                    putString(KEY_LAPTOP_IP, ip)
+                    putLong(LAPTOP_IP_CACHE_KEY, System.currentTimeMillis())
+                }
+                laptopIp = ip
+                onResult(ip)
+            } else {
+                onResult(null)
+            }
+        } catch (_: Exception) {
+            onResult(null)
+        }
+    }
+}
+
+private fun getSubnetBroadcast(context: Context): String {
+    val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+    val ip = wm.connectionInfo.ipAddress
+    return "${ip and 0xff}.${ip shr 8 and 0xff}.${ip shr 16 and 0xff}.255"
 }
