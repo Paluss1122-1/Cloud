@@ -848,7 +848,7 @@ class MediaPlayerService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = mediaSession
 
     override fun onDestroy() {
-        super.onDestroy()
+        isServiceDestroyed = true
         isRunning = false
 
         try {
@@ -856,8 +856,6 @@ class MediaPlayerService : MediaSessionService() {
             handler.removeCallbacksAndMessages(null)
         } catch (_: Exception) {
         }
-
-        isServiceDestroyed = true
 
         try {
             bluetoothReceiver?.let { unregisterReceiver(it) }
@@ -871,12 +869,6 @@ class MediaPlayerService : MediaSessionService() {
         } catch (_: Exception) {
         } finally {
             screenReceiver = null
-        }
-
-        try {
-            val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
-            nm?.cancel(MEDIA_PLAYER)
-        } catch (_: Exception) {
         }
 
         try {
@@ -908,6 +900,7 @@ class MediaPlayerService : MediaSessionService() {
         }
 
         try {
+            musicPlayer?.stop()
             musicPlayer?.release()
         } catch (_: Exception) {
         } finally {
@@ -915,6 +908,7 @@ class MediaPlayerService : MediaSessionService() {
         }
 
         try {
+            podcastPlayer?.stop()
             podcastPlayer?.release()
         } catch (_: Exception) {
         } finally {
@@ -926,6 +920,17 @@ class MediaPlayerService : MediaSessionService() {
         } catch (_: Exception) {
         } finally {
             mediaSession = null
+        }
+
+        try {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } catch (_: Exception) {
+        }
+
+        try {
+            val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
+            nm?.cancel(MEDIA_PLAYER)
+        } catch (_: Exception) {
         }
 
         super.onDestroy()
@@ -2440,7 +2445,6 @@ class MediaPlayerService : MediaSessionService() {
             podcastSessionStartedAt = 0L; return
         }
 
-        val showId = PodcastShowManager.resolveShowForEpisode(podcast.path, podcast.name)
         val showName = resolveShowDisplayName(podcast)
 
         MediaAnalyticsManager.addSession(
