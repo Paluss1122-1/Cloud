@@ -580,7 +580,21 @@ fun syncTodosWithLaptop(context: Context) {
         Log.d("SYNC", "❌ Keine Laptop-IP gesetzt")
         ConnectionGuard.recordFailure()
         syncInProgress = false
-        return
+        discoverLaptopIp(context) { discovered ->
+            if (discovered != null) {
+                Toast.makeText(context, discovered, Toast.LENGTH_LONG).show()
+                laptopIp = discovered
+                syncTodosWithLaptop(context)
+            } else {
+                showSimpleNotificationExtern(
+                    "❌ Laptop nicht gefunden",
+                    "Ist der Server gestartet?",
+                    10.seconds,
+                    context
+                )
+                return@discoverLaptopIp
+            }
+        }
     }
 
     showSimpleNotificationExtern("🔄 Sync gestartet", "Verbinde mit Laptop...", 10.seconds, context)
@@ -591,16 +605,38 @@ fun syncTodosWithLaptop(context: Context) {
             if (!pingSuccess) {
                 Log.d("SYNC", "❌ Ping fehlgeschlagen (500ms timeout)")
                 ConnectionGuard.recordFailure()
-                isLaptopConnected = true
+                syncInProgress = false
+                isLaptopConnected = false
+
+                // Cache löschen, damit discoverLaptopIp echte UDP-Discovery macht
+                appContext?.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)?.edit {
+                    remove(KEY_LAPTOP_IP)
+                    remove(LAPTOP_IP_CACHE_KEY)
+                }
+
                 withContext(Dispatchers.Main) {
                     showSimpleNotificationExtern(
                         "❌ Laptop nicht erreichbar",
-                        "Ping fehlgeschlagen",
+                        "Suche neue IP per UDP...",
                         5.seconds,
                         context
                     )
+                    discoverLaptopIp(context) { discovered ->
+                        if (discovered != null) {
+                            Toast.makeText(context, discovered, Toast.LENGTH_LONG).show()
+                            laptopIp = discovered
+                            syncTodosWithLaptop(context)
+                        } else {
+                            showSimpleNotificationExtern(
+                                "❌ Laptop nicht gefunden",
+                                "Ist der Server gestartet?",
+                                10.seconds,
+                                context
+                            )
+                            return@discoverLaptopIp
+                        }
+                    }
                 }
-                return@launch
             }
 
             Log.d("SYNC", "✅ Ping erfolgreich, starte Datenübertragung")
@@ -1211,13 +1247,13 @@ suspend fun sendNvidiaChatMessage(
                 "Du bist ein hilfreicher Chat-Assistent. Antworte kurz, klar und auf Deutsch und verwende keine Markdown Syntax."
             )
         })
+        put(JSONObject().apply { put("role", "user"); put("content", userMessage) })
         history.forEach { msg ->
             put(JSONObject().apply {
                 put("role", if (msg.isOwnMessage) "user" else "assistant")
                 put("content", msg.text)
             })
         }
-        put(JSONObject().apply { put("role", "user"); put("content", userMessage) })
     }
     return callNvidiaApi("meta/llama-3.1-8b-instruct", messages)
 }
@@ -1525,6 +1561,7 @@ fun pushMediaStateToLaptop(context: Context) {
                 close()
             }
         } catch (_: SocketTimeoutException) {
+        } catch (_: ConnectException) {
         } catch (e: Exception) {
             logError("pushMediaStateToLaptop", e)
         }
@@ -1593,11 +1630,17 @@ fun distanceBetween(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Flo
     return (earthRadius * 2 * atan2(sqrt(a), sqrt(1 - a))).toFloat()
 }
 
-suspend fun askServer(history: List<ChatMessage>, question: String, model: String, pic: String?): String {
+suspend fun askServer(
+    history: List<ChatMessage>,
+    question: String,
+    model: String,
+    pic: String?
+): String {
     return withContext(Dispatchers.IO) {
         try {
             if (laptopIp == "") throw Exception("Keine laptopIp is vorhanden")
-            val request = "MODEL=$model PICTURE=${pic ?: "NONE"} ${question}. Here is the chat history:$history "
+            val request =
+                "MODEL=$model PICTURE=${pic ?: "NONE"} ${question}. Here is the chat history:$history "
             val sock = Socket(laptopIp, Config.AI_PORT)
             sock.getOutputStream().write(request.toByteArray(Charsets.UTF_8))
             sock.shutdownOutput()
@@ -2172,7 +2215,14 @@ fun discoverLaptopIp(context: Context, onResult: (String?) -> Unit) {
 
             val subnet = getSubnetBroadcast(context)
             val sendBuf = "DISCOVER_SERVER".toByteArray()
-            udp.send(java.net.DatagramPacket(sendBuf, sendBuf.size, java.net.InetAddress.getByName(subnet), DISCOVERY_PORT))
+            udp.send(
+                java.net.DatagramPacket(
+                    sendBuf,
+                    sendBuf.size,
+                    java.net.InetAddress.getByName(subnet),
+                    DISCOVERY_PORT
+                )
+            )
 
             val recvBuf = ByteArray(64)
             val recvPacket = java.net.DatagramPacket(recvBuf, recvBuf.size)
@@ -2198,7 +2248,8 @@ fun discoverLaptopIp(context: Context, onResult: (String?) -> Unit) {
 }
 
 private fun getSubnetBroadcast(context: Context): String {
-    val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+    val wm =
+        context.applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
     val ip = wm.connectionInfo.ipAddress
     return "${ip and 0xff}.${ip shr 8 and 0xff}.${ip shr 16 and 0xff}.255"
 }
