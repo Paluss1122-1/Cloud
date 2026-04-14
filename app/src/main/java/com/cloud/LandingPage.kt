@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -148,6 +149,9 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     var hasLoadedApp by rememberSaveable { mutableStateOf(startTarget != null) }
     var selectedMenuItem by rememberSaveable { mutableStateOf<MenuItem?>(null) }
     var masterPw by remember { mutableStateOf(PasswordStorage.loadPassword(context)) }
+    val landingListState = rememberSaveable(saver = LazyListState.Saver) {
+        LazyListState()
+    }
     realDevice = getDeviceName().trim().equals("Samsung SM-S921U1", ignoreCase = true)
 
     if (realDevice) {
@@ -167,7 +171,6 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
         BatteryDataRepository.init(context)
     }
 
-    // ── Initialisierung bei startTarget ──────────────────────────────────────
     LaunchedEffect(startTarget) {
         if (startTarget != null && selectedMenuItem == null) {
             selectedMenuItem = when (startTarget) {
@@ -203,12 +206,10 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
         }
     }
 
-    // ── Forward-Transition (LandingPage → Tab) ──────────────────────────────
     var pendingOverlayItem by remember { mutableStateOf<MenuItem?>(null) }
     val overlayScale = remember { Animatable(0f) }
     val overlayAlpha = remember { Animatable(0f) }
 
-    // ── Backward-Transition (Tab → zurück) ──────────────────────────────────
     var closingBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     val closeScale = remember { Animatable(1f) }
     val closeAlpha = remember { Animatable(1f) }
@@ -218,7 +219,6 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
 
     Box(modifier = Modifier.fillMaxSize()) {
 
-        // ── App-Inhalt (immer im Hintergrund, sobald einmal geladen) ─────────
         if (hasLoadedApp) {
             val targetMenuItem = selectedMenuItem ?: startTarget?.let { target ->
                 when (target) {
@@ -227,7 +227,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                 }
             }
 
-            key(selectedMenuItem) {  // <-- Diese Zeile hinzufügen
+            key(selectedMenuItem) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -259,7 +259,6 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
             }
         }
 
-        // ── Landing-Overlay (von links reinslidend) ──────────────────────────
         if (isLandingVisible) {
             Box(
                 modifier = Modifier
@@ -273,18 +272,17 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                     onClose = { closeLanding() },
                     onTabSelected = { menuItem ->
                         pendingOverlayItem = menuItem
-                    }
+                    },
+                    state = landingListState
                 )
             }
         }
 
-        // ── Forward-Overlay (Tab-Zoom rein) ───────────────────────────────────
         if (pendingOverlayItem != null) {
             val item = pendingOverlayItem!!
             val graphicsLayer = rememberGraphicsLayer()
             var previewBitmap by remember(item) { mutableStateOf<ImageBitmap?>(null) }
 
-            // Off-screen rendering des neuen Tabs
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -304,15 +302,12 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
             }
 
             LaunchedEffect(item) {
-                // Warten bis Tab gerendert ist
                 repeat(5) { withFrameNanos { } }
                 val captured = graphicsLayer.toImageBitmap()
                 previewBitmap = captured
 
-                // Warten bis Bitmap gesetzt ist
                 snapshotFlow { previewBitmap }.filter { it != null }.first()
 
-                // Animation starten
                 overlayScale.snapTo(0.05f)
                 overlayAlpha.snapTo(1f)
 
@@ -320,26 +315,21 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                     1f, tween(durationMillis = 320, easing = FastOutSlowInEasing)
                 )
 
-                // Landing Page schließen
                 closeLanding(true)
 
-                // KORREKTUR: Tab korrekt setzen und speichern!
                 selectedMenuItem = item
                 saveRecentTab(context, item)
 
-                // KORREKTUR: hasLoadedApp setzen falls noch nicht gesetzt
                 if (!hasLoadedApp) {
                     hasLoadedApp = true
                 }
 
-                // Fade out der Bitmap
                 delay(80)
                 overlayAlpha.animateTo(0f, tween(durationMillis = 200))
                 overlayScale.snapTo(0f)
                 pendingOverlayItem = null
             }
 
-            // Zoom-Animation anzeigen
             if (previewBitmap != null) {
                 Box(
                     modifier = Modifier
@@ -361,7 +351,6 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
             }
         }
 
-        // ── Backward-Overlay (Tab schließen – schrumpft weg) ────────────────
         if (closingBitmap != null) {
             Box(
                 modifier = Modifier
@@ -450,8 +439,9 @@ fun MasterPasswordSetupScreen(onPasswordSaved: (String) -> Unit) {
 @Composable
 fun LandingPage(
     onTabSelected: (MenuItem) -> Unit,
-    showCloseButton: Boolean = false,   // NEU
-    onClose: () -> Unit = {}            // NEU
+    showCloseButton: Boolean = false,
+    onClose: () -> Unit = {},
+    state: LazyListState = rememberLazyListState()
 ) {
     val context = LocalContext.current
     var recentTabs by remember { mutableStateOf<List<MenuItem>>(emptyList()) }
@@ -529,9 +519,8 @@ fun LandingPage(
                     )
                 }
 
-                val listState = rememberLazyListState()
                 LazyColumn(
-                    state = listState,
+                    state = state,
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(bottom = 32.dp)
