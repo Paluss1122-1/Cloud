@@ -2,7 +2,6 @@
 
 package com.cloud.privatecloudapp
 
-import com.cloud.TabNavigationViewModel
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -160,6 +159,7 @@ import coil.compose.rememberAsyncImagePainter
 import com.cloud.Config
 import com.cloud.Config.cms
 import com.cloud.R
+import com.cloud.TabNavigationViewModel
 import com.cloud.aitab.AITabContent
 import com.cloud.audiorecorder.AudioRecorderContent
 import com.cloud.authenticator.AuthenticatorTab
@@ -1892,7 +1892,6 @@ fun MainCloudScreen(storage: Storage) {
                     tween(durationMillis = 320, easing = FastOutSlowInEasing)
                 )
 
-                // Animation fertig → echten Screen zeigen
                 pendingOtherBucket = false
                 shouldshow = true
 
@@ -1902,7 +1901,6 @@ fun MainCloudScreen(storage: Storage) {
                 otherBucketBitmap = null
             }
 
-            // Bitmap-Overlay
             if (otherBucketBitmap != null) {
                 Box(
                     modifier = Modifier
@@ -2511,12 +2509,12 @@ fun GlowingCard(
                 val canvasSize = size
                 drawContext.canvas.nativeCanvas.apply {
                     drawRoundRect(
-                        0f, // Left
-                        0f, // Top
-                        canvasSize.width, // Right
-                        canvasSize.height, // Bottom
-                        cornersRadius.toPx(), // Radius X
-                        cornersRadius.toPx(), // Radius Y
+                        0f,
+                        0f,
+                        canvasSize.width,
+                        canvasSize.height,
+                        cornersRadius.toPx(),
+                        cornersRadius.toPx(),
                         Paint().apply {
                             color = containerColor.toArgb()
                             isAntiAlias = true
@@ -2533,8 +2531,6 @@ fun GlowingCard(
         content()
     }
 }
-
-/////////////////////////////////////////////////////////////////////
 
 @Composable
 fun ClickableGlowingCard(
@@ -2554,12 +2550,12 @@ fun ClickableGlowingCard(
                 val canvasSize = size
                 drawContext.canvas.nativeCanvas.apply {
                     drawRoundRect(
-                        0f, // Left
-                        0f, // Top
-                        canvasSize.width, // Right
-                        canvasSize.height, // Bottom
-                        cornersRadius.toPx(), // Radius X
-                        cornersRadius.toPx(), // Radius Y
+                        0f,
+                        0f,
+                        canvasSize.width,
+                        canvasSize.height,
+                        cornersRadius.toPx(),
+                        cornersRadius.toPx(),
                         Paint().apply {
                             color = containerColor.toArgb()
                             isAntiAlias = true
