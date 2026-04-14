@@ -228,7 +228,7 @@ class QuietHoursNotificationService : Service() {
         const val ALARM_REQUEST_CODE = 1001
 
         const val THRESHOLD_MINUTES = 30
-        const val MAX_MESSAGES_PER_CONTACT = 50
+        const val MAX_MESSAGES_PER_CONTACT = 15
         const val MAX_VOICE_NOTE_FILES = 20
 
         const val ACTION_RESTORE_NOTIFICATION = "com.cloud.ACTION_RESTORE_NOTIFICATION"
