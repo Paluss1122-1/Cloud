@@ -1,12 +1,24 @@
-package com.cloud.ui.theme
+package com.cloud.core.ui
 
 import androidx.compose.material3.Typography
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import com.cloud.R
+import java.util.Calendar
+
+val Cloud = Color(0xFF2A2A2A)
+val gruen = Color(0xFF228B22)
+
+fun c(): Color {
+    val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+
+    return when (currentHour) {
+        in 11..16 -> Color(0xFF4CAF50)
+        else -> Color(0xFF001FBB)
+    }
+}
 
 val AppFontFamily = FontFamily(
     Font(R.font.smb_regular, FontWeight.Normal),
