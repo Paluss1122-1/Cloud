@@ -1,6 +1,6 @@
 @file:Suppress("AssignedValueIsNeverRead")
 
-package com.cloud
+package com.cloud.core.activities
 
 import android.content.Intent
 import android.net.Uri
