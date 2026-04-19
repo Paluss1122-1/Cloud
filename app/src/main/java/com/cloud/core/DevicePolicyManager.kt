@@ -1,4 +1,4 @@
-package com.cloud
+package com.cloud.core
 
 import android.app.Activity
 import android.app.admin.DevicePolicyManager
@@ -8,6 +8,7 @@ import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import com.cloud.core.activities.MyDeviceAdminReceiver
 
 class PolicyManager(private val activity: ComponentActivity) {
 
