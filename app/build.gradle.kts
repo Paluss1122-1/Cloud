@@ -14,10 +14,6 @@ val localProps = Properties().apply {
     load(rootProject.file("local.properties").inputStream())
 }
 
-kotlin {
-    jvmToolchain(17)
-}
-
 android {
     namespace = "com.cloud"
     compileSdk = 36
@@ -74,7 +70,6 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
-    //implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -82,8 +77,6 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.work.runtime.ktx)
-    //implementation(libs.androidx.room.ktx)
-    //implementation(libs.androidx.compose.runtime.saved.instance.state)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.play.services.location)
     implementation(libs.androidx.tools.core)
@@ -92,9 +85,6 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.runtime)
     implementation(libs.androidx.ui)
-    //testImplementation(libs.junit)
-    //androidTestImplementation(libs.androidx.junit)
-    //androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     implementation(libs.storage.kt)
     implementation(libs.postgrest.kt)
@@ -113,32 +103,16 @@ dependencies {
     implementation(libs.zxing.android.embedded)
     debugImplementation(libs.androidx.compose.ui.tooling)
     ksp(libs.androidx.room.compiler)
-    //implementation(libs.ktor.client.core)
-    //implementation(libs.ktor.client.websockets)
     implementation(libs.ktor.client.okhttp)
-    //implementation(libs.ktor.utils)
-    //implementation(libs.accompanist.swiperefresh)
     implementation(libs.gson)
-    //implementation(libs.text.recognition)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.hilt.android)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.osmdroid.android)
-
     ksp(libs.hilt.compiler)
-
-    //implementation(libs.mp3agic)
-
-    //implementation(libs.shizuku.provider)
-
     implementation(libs.androidx.core.splashscreen)
-
     implementation(libs.android.mail)
-    //implementation(libs.android.activation)
-
     implementation(libs.androidx.autofill)
-
-    //implementation(libs.androidx.slice.builders)
 }
