@@ -1,12 +1,15 @@
-package com.cloud
+package com.cloud.core.activities
 
 import android.Manifest
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
+import android.app.admin.DeviceAdminReceiver
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Process
+import android.provider.OpenableColumns
 import android.view.View
 import android.view.animation.AnticipateInterpolator
 import android.widget.Toast
@@ -26,13 +29,17 @@ import androidx.core.app.ActivityCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
-import com.cloud.errorreports.ErrorMonitorService
-import com.cloud.jsoneditor.JsonEditorContent
+import com.cloud.core.objects.Config
+import com.cloud.core.functions.ERRORINSERT
+import com.cloud.core.functions.ERRORINSERTDATA
+import com.cloud.core.ui.LandingPageOrApp
+import com.cloud.core.PolicyManager
+import com.cloud.core.objects.SupabaseConfigALT
+import com.cloud.core.ui.Typography
+import com.cloud.core.ui.c
 import com.cloud.quicksettingsfunctions.BatteryDataRepository
-import com.cloud.ui.theme.Typography
-import com.cloud.ui.theme.c
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.storage.Storage
+import com.cloud.services.ErrorMonitorService
+import com.cloud.tabs.JsonEditorContent
 import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,22 +49,16 @@ import java.io.FileOutputStream
 import java.time.Instant
 import java.util.Calendar
 
-var storage: Storage? = null
+class MyDeviceAdminReceiver : DeviceAdminReceiver()
 
 class MainActivity : FragmentActivity() {
-    private lateinit var policyManager: PolicyManager
-    val supabase: SupabaseClient = SupabaseConfigALT.client
+    val sbclient = SupabaseConfigALT.client
 
     private var jsonFilePath by mutableStateOf<String?>(null)
     private var jsonFileUri by mutableStateOf<Uri?>(null)
     private var showJsonEditor by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        val isColdStart = savedInstanceState == null
-
-        if (isColdStart) {
-            installSplashScreen()
-        }
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             CoroutineScope(Dispatchers.IO).launch {
@@ -74,9 +75,16 @@ class MainActivity : FragmentActivity() {
 
             defaultHandler?.uncaughtException(thread, throwable)
 
-            android.os.Process.killProcess(android.os.Process.myPid())
+            Process.killProcess(Process.myPid())
         }
+
+        if (savedInstanceState == null) {
+            installSplashScreen()
+        }
+        super.onCreate(savedInstanceState)
+
         enableEdgeToEdge()
+
         splashScreen.setOnExitAnimationListener { splashScreenView ->
             val animator = AnimatorSet().apply {
                 playTogether(
@@ -93,39 +101,44 @@ class MainActivity : FragmentActivity() {
             animator.doOnEnd { splashScreenView.remove() }
             animator.start()
         }
-        super.onCreate(savedInstanceState)
 
         val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         when (currentHour) {
-            in 11..16 -> WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = true
-            else -> WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
+            in 11..16 -> WindowCompat.getInsetsController(
+                window,
+                window.decorView
+            ).isAppearanceLightStatusBars = true
+
+            else -> WindowCompat.getInsetsController(
+                window,
+                window.decorView
+            ).isAppearanceLightStatusBars = false
         }
-        policyManager = PolicyManager(this)
 
-        policyManager.checkAndRequestAdminRights()
+        PolicyManager(this).checkAndRequestAdminRights()
         BatteryDataRepository.init(this)
+        Config.init(this)
 
-        val audioPermission = Manifest.permission.READ_MEDIA_AUDIO
-        val imagesPermission = Manifest.permission.READ_MEDIA_IMAGES
-        val locationPermission = Manifest.permission.ACCESS_FINE_LOCATION
-        val cameraPermission = Manifest.permission.CAMERA
-        val contactsPermission = Manifest.permission.READ_CONTACTS
+        val permissions = arrayOf(
+            Manifest.permission.READ_MEDIA_AUDIO,
+            Manifest.permission.READ_MEDIA_IMAGES,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.CAMERA,
+            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.POST_NOTIFICATIONS
+        )
 
         val launcher = registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
         ) { _ -> }
 
-        Config.init(this)
-
-        launcher.launch(
-            arrayOf(
-                audioPermission,
-                imagesPermission,
-                locationPermission,
-                cameraPermission,
-                contactsPermission
-            )
-        )
+        permissions.forEach {
+            if (ActivityCompat.checkSelfPermission(this, it)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                launcher.launch(arrayOf(it))
+            }
+        }
 
         checkPermissionsAndHandleIntent(intent)
 
@@ -155,8 +168,7 @@ class MainActivity : FragmentActivity() {
                             }
                         )
                     } else {
-                        LandingPageOrApp(supabase.storage, startTarget)
-                        storage = supabase.storage
+                        LandingPageOrApp(sbclient.storage, startTarget)
                     }
                 }
             }
@@ -167,16 +179,6 @@ class MainActivity : FragmentActivity() {
             startForegroundService(serviceIntent)
         } catch (e: Exception) {
             e.printStackTrace()
-        }
-
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                101
-            )
         }
     }
 
@@ -245,7 +247,7 @@ class MainActivity : FragmentActivity() {
 
         val fileName = try {
             contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                 cursor.moveToFirst()
                 cursor.getString(nameIndex)
             } ?: "temp_${System.currentTimeMillis()}.json"
