@@ -1,4 +1,4 @@
-package com.cloud
+package com.cloud.core.ui
 
 import android.content.Context
 import android.graphics.Paint
@@ -38,6 +38,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -70,17 +71,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
-import com.cloud.Config.realDevice
-import com.cloud.privatecloudapp.KEY_LAST_MENU_ITEM
-import com.cloud.privatecloudapp.KEY_RECENT_TABS
-import com.cloud.privatecloudapp.MAX_RECENT_TABS
-import com.cloud.privatecloudapp.MenuItem
-import com.cloud.privatecloudapp.PREFS_NAME
-import com.cloud.privatecloudapp.PrivateCloudApp
-import com.cloud.quicksettingsfunctions.BatteryDataRepository
-import com.cloud.service.ChatService
-import com.cloud.service.QuietHoursNotificationService
-import com.cloud.ui.theme.Cloud
+import com.cloud.R
+import com.cloud.core.objects.Config
+import com.cloud.core.objects.Config.realDevice
+import com.cloud.core.objects.PasswordStorage
+import com.cloud.services.ChatService
+import com.cloud.services.QuietHoursNotificationService
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
@@ -116,23 +112,6 @@ fun loadRecentTabs(context: Context): List<MenuItem> {
         }
 }
 
-fun saveLastMenuItem(context: Context, menuItem: MenuItem) {
-    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        .edit {
-            putString(KEY_LAST_MENU_ITEM, menuItem.name)
-        }
-}
-
-fun loadLastMenuItem(context: Context): MenuItem {
-    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    val savedName = prefs.getString(KEY_LAST_MENU_ITEM, MenuItem.PRIVATE_CLOUD.name)
-    return try {
-        MenuItem.valueOf(savedName ?: MenuItem.PRIVATE_CLOUD.name)
-    } catch (_: Exception) {
-        MenuItem.PRIVATE_CLOUD
-    }
-}
-
 fun getDeviceName(): String {
     val manufacturer = Build.MANUFACTURER.replaceFirstChar { it.uppercaseChar() }
     val model = Build.MODEL
@@ -152,6 +131,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     val landingListState = rememberSaveable(saver = LazyListState.Saver) {
         LazyListState()
     }
+    var reloadKey by remember { mutableIntStateOf(0) }
     realDevice = getDeviceName().trim().equals("Samsung SM-S921U1", ignoreCase = true)
 
     if (realDevice) {
@@ -168,7 +148,6 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     LaunchedEffect(Unit) {
         QuietHoursNotificationService.startService(context)
         ChatService.startService(context)
-        BatteryDataRepository.init(context)
     }
 
     LaunchedEffect(startTarget) {
@@ -227,7 +206,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                 }
             }
 
-            key(selectedMenuItem) {
+            key(selectedMenuItem, reloadKey) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -245,13 +224,6 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                             storage = storage,
                             startTarget = null,
                             initialMenuItem = targetMenuItem,
-                            onMenuClick = { openLanding() }
-                        )
-                    } else {
-                        PrivateCloudApp(
-                            storage = storage,
-                            startTarget = startTarget,
-                            initialMenuItem = null,
                             onMenuClick = { openLanding() }
                         )
                     }
@@ -319,6 +291,8 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
 
                 selectedMenuItem = item
                 saveRecentTab(context, item)
+
+                reloadKey++
 
                 if (!hasLoadedApp) {
                     hasLoadedApp = true
