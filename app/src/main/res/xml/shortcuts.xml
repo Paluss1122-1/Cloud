@@ -11,7 +11,7 @@
         <intent
             android:action="android.intent.action.VIEW"
             android:targetPackage="com.cloud"
-            android:targetClass="com.cloud.MainActivity">
+            android:targetClass="com.cloud.core.activities.MainActivity">
 
             <extra
                 android:name="target"
