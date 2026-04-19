@@ -90,8 +90,9 @@
         android:windowSoftInputMode="adjustResize">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".core.activities.MainActivity"
             android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|smallestScreenSize"
             android:theme="@style/Theme.Cloud">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -142,7 +143,7 @@
         </activity>
 
         <service
-            android:name=".service.MediaPlayerService"
+            android:name=".services.MediaPlayerService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback">
@@ -152,17 +153,14 @@
         </service>
 
         <service
-            android:name=".service.QuietHoursNotificationService"
+            android:name=".services.QuietHoursNotificationService"
             android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Überwacht Ruhezeiten für WhatsApp Nachrichten" />
-        </service>
+            android:exported="true"
+            android:foregroundServiceType="dataSync"
+            tools:ignore="ExportedService"/>
 
         <service
-            android:name=".service.WhatsAppNotificationListener"
+            android:name=".services.WhatsAppNotificationListener"
             android:exported="true"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
@@ -175,7 +173,7 @@
             android:exported="false" />
 
         <receiver
-            android:name=".MyDeviceAdminReceiver"
+            android:name=".core.activities.MyDeviceAdminReceiver"
             android:exported="true"
             android:permission="android.permission.BIND_DEVICE_ADMIN">
             <meta-data
@@ -187,7 +185,7 @@
         </receiver>
 
         <receiver
-            android:name=".BootReceiver"
+            android:name=".core.BootReceiver"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
@@ -206,7 +204,7 @@
         </provider>
 
         <activity
-            android:name=".ShareActivity"
+            android:name=".core.activities.ShareActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:taskAffinity=""
@@ -236,19 +234,19 @@
         </activity>
 
         <service
-            android:name=".audiorecorder.AudioForegroundService"
+            android:name=".tabs.audiorecordertab.AudioForegroundService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
         <service
-            android:name=".service.ChatService"
+            android:name=".services.ChatService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
         <service
-            android:name=".errorreports.ErrorMonitorService"
+            android:name=".services.ErrorMonitorService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
@@ -262,19 +260,19 @@
         </receiver>
 
         <service
-            android:name=".service.AutoClickerService"
+            android:name=".services.AutoClickerService"
             android:enabled="true"
             android:exported="false" />
 
         <service
-            android:name=".service.AutoClickAccessibilityService"
+            android:name=".services.AutoClickAccessibilityService"
             android:exported="false" />
 
-        <receiver android:name=".service.BlockedNotificationReceiver"
+        <receiver android:name=".services.BlockedNotificationReceiver"
             android:exported="false" />
 
         <activity
-            android:name=".ImageProviderActivity"
+            android:name=".inactive.ImageProviderActivity"
             android:exported="true"
             android:label="Cloud"
             android:theme="@style/Theme.Cloud">
@@ -287,7 +285,7 @@
         </activity>
 
         <service
-            android:name=".authenticator.CloudAutofillService"
+            android:name=".tabs.authenticator.CloudAutofillService"
             android:exported="true"
             android:label="Cloud Authenticator"
             android:permission="android.permission.BIND_AUTOFILL_SERVICE">
