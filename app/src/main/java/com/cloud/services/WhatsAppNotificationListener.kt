@@ -1,8 +1,6 @@
-package com.cloud.service
+package com.cloud.services
 
-import android.app.Activity
 import android.content.Intent
-import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.graphics.PixelFormat
 import android.net.Uri
@@ -12,19 +10,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import android.view.Gravity
-import android.view.View
-import android.view.ViewGroup
-import android.view.WindowInsets
-import android.view.WindowInsetsController
 import android.view.WindowManager
-import android.webkit.CookieManager
-import android.webkit.WebChromeClient
-import android.webkit.WebChromeClient.CustomViewCallback
-import android.webkit.WebResourceRequest
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.widget.FrameLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,47 +21,63 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Laptop
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.cloud.Config.BLOCKED_MESSAGES
-import com.cloud.Config.NOTIFICATION_PORT
-import com.cloud.database.WhatsAppMessage
-import com.cloud.database.WhatsAppMessageRepository
-import com.cloud.objects.NotificationRepository
+import com.cloud.core.ui.Cloud
+import com.cloud.core.objects.Config.BLOCKED_MESSAGES
+import com.cloud.core.objects.Config.NOTIFICATION_PORT
+import com.cloud.core.functions.showSimpleNotificationExtern
+import com.cloud.core.objects.NotificationRepository
 import com.cloud.quiethoursnotificationhelper.isLaptopConnected
 import com.cloud.quiethoursnotificationhelper.laptopIp
-import com.cloud.showSimpleNotificationExtern
-import com.cloud.ui.theme.Cloud
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import java.lang.ref.WeakReference
+
+data class WhatsAppMessage(
+    val id: Int = 0,
+    val sender: String,
+    val text: String,
+    val timestamp: Long
+)
 
 class WhatsAppNotificationListener : NotificationListenerService() {
 
     @Volatile
     private var listenerConnected = false
 
-    private lateinit var repository: WhatsAppMessageRepository
+    private val _messages = MutableStateFlow<List<WhatsAppMessage>>(emptyList())
+
+    private fun insert(message: WhatsAppMessage) {
+        val newMessages = _messages.value.toMutableList().apply {
+            add(message)
+            while (size > 100) removeAt(0)
+        }
+        _messages.value = newMessages
+    }
+
+    private fun getAll(): List<WhatsAppMessage> {
+        return _messages.value
+            .sortedByDescending { it.timestamp }
+            .take(100)
+    }
 
     val replyActions = java.util.concurrent.ConcurrentHashMap<String, ReplyData>()
     val messagesByContact =
@@ -197,11 +199,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 Log.w("NotifForwarder", "❌ $targetIp: ${e.message}")
             }
         }
-    }
-
-    override fun onCreate() {
-        super.onCreate()
-        repository = WhatsAppMessageRepository()
     }
 
     override fun onDestroy() {
@@ -377,9 +374,9 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             )
 
             forwardScope.launch {
-                val exists = repository.getAll().any { it.sender == title && it.text == text }
+                val exists = getAll().any { it.sender == title && it.text == text }
                 if (!exists && !title.contains("Du")) {
-                    repository.insert(
+                    insert(
                         WhatsAppMessage(
                             sender = title,
                             text = text,
@@ -535,7 +532,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 }
 
 class BlockedNotificationReceiver : android.content.BroadcastReceiver() {
-
     override fun onReceive(context: android.content.Context, intent: Intent) {
         val prefs = context.getSharedPreferences(
             "blocked_notifications_prefs",
