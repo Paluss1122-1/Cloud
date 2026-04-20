@@ -9,19 +9,19 @@ import android.os.Handler
 import android.os.Looper
 import androidx.core.app.RemoteInput
 import androidx.core.content.edit
-import com.cloud.service.QuietHoursNotificationService
-import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_CHANGE_END
-import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_CHANGE_START
-import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_EXECUTE_COMMAND
-import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_MARK_PARTS_READ
-import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_MESSAGE_SENT
-import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_NOTIFICATION_DISMISSED
-import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_RESTORE_NOTIFICATION
-import com.cloud.service.QuietHoursNotificationService.Companion.EXTRA_MESSAGE_ID
-import com.cloud.service.QuietHoursNotificationService.Companion.EXTRA_SENDER
-import com.cloud.service.QuietHoursNotificationService.Companion.NOTIFICATION_ID
-import com.cloud.service.QuietHoursNotificationService.Companion.readMessageIds
-import com.cloud.showSimpleNotificationExtern
+import com.cloud.core.functions.showSimpleNotificationExtern
+import com.cloud.services.QuietHoursNotificationService
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_CHANGE_END
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_CHANGE_START
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_EXECUTE_COMMAND
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_MARK_PARTS_READ
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_MESSAGE_SENT
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_NOTIFICATION_DISMISSED
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_RESTORE_NOTIFICATION
+import com.cloud.services.QuietHoursNotificationService.Companion.EXTRA_MESSAGE_ID
+import com.cloud.services.QuietHoursNotificationService.Companion.EXTRA_SENDER
+import com.cloud.services.QuietHoursNotificationService.Companion.NOTIFICATION_ID
+import com.cloud.services.QuietHoursNotificationService.Companion.readMessageIds
 
 class QuietActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
