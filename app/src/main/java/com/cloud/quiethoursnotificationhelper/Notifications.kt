@@ -16,28 +16,30 @@ import android.util.Log
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
-import com.cloud.service.QuietHoursNotificationService
-import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_CHANGE_END
-import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_CONTENT_INTENT
-import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_EXECUTE_COMMAND
-import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_NOTIFICATION_DISMISSED
-import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_RESTORE_NOTIFICATION
-import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_SYNC_LAPTOP
-import com.cloud.service.QuietHoursNotificationService.Companion.ALARM_REQUEST_CODE
-import com.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
-import com.cloud.service.QuietHoursNotificationService.Companion.CONFIRMATION_CHANNEL_ID
-import com.cloud.service.QuietHoursNotificationService.Companion.DELETE_CONFIRMATION_CHANNEL_ID
-import com.cloud.service.QuietHoursNotificationService.Companion.GALLERY_CHANNEL_ID
-import com.cloud.service.QuietHoursNotificationService.Companion.MAIL_CHANNEL_ID
-import com.cloud.service.QuietHoursNotificationService.Companion.NOTIFICATION_ID
-import com.cloud.service.QuietHoursNotificationService.Companion.SSN_CHANNEL_ID
-import com.cloud.service.QuietHoursNotificationService.Companion.THRESHOLD_MINUTES
-import com.cloud.service.QuietHoursNotificationService.Companion.VOICE_NOTE_CHANNEL_ID
-import com.cloud.service.QuietHoursNotificationService.Companion.calculateNextStatusChange
-import com.cloud.service.QuietHoursNotificationService.Companion.handler
-import com.cloud.service.QuietHoursNotificationService.Companion.isCurrentlyQuietHours
-import com.cloud.service.QuietHoursNotificationService.Companion.workerHandler
-import com.cloud.showSimpleNotificationExtern
+import com.cloud.core.functions.showSimpleNotificationExtern
+import com.cloud.services.ChatService
+import com.cloud.services.ErrorNotificationManager
+import com.cloud.services.QuietHoursNotificationService
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_CHANGE_END
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_CONTENT_INTENT
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_EXECUTE_COMMAND
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_NOTIFICATION_DISMISSED
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_RESTORE_NOTIFICATION
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_SYNC_LAPTOP
+import com.cloud.services.QuietHoursNotificationService.Companion.ALARM_REQUEST_CODE
+import com.cloud.services.QuietHoursNotificationService.Companion.CHANNEL_ID
+import com.cloud.services.QuietHoursNotificationService.Companion.CONFIRMATION_CHANNEL_ID
+import com.cloud.services.QuietHoursNotificationService.Companion.DELETE_CONFIRMATION_CHANNEL_ID
+import com.cloud.services.QuietHoursNotificationService.Companion.GALLERY_CHANNEL_ID
+import com.cloud.services.QuietHoursNotificationService.Companion.MAIL_CHANNEL_ID
+import com.cloud.services.QuietHoursNotificationService.Companion.NOTIFICATION_ID
+import com.cloud.services.QuietHoursNotificationService.Companion.SSN_CHANNEL_ID
+import com.cloud.services.QuietHoursNotificationService.Companion.THRESHOLD_MINUTES
+import com.cloud.services.QuietHoursNotificationService.Companion.VOICE_NOTE_CHANNEL_ID
+import com.cloud.services.QuietHoursNotificationService.Companion.calculateNextStatusChange
+import com.cloud.services.QuietHoursNotificationService.Companion.handler
+import com.cloud.services.QuietHoursNotificationService.Companion.isCurrentlyQuietHours
+import com.cloud.services.QuietHoursNotificationService.Companion.workerHandler
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -150,98 +152,149 @@ private fun scheduleWithHandler(delayMillis: Long, checkRunnable: Runnable) {
 }
 
 fun createNotificationChannel(context: Context) {
-    val channel = NotificationChannel(
-        CHANNEL_ID,
-        "Ruhezeiten Überwachung",
-        NotificationManager.IMPORTANCE_LOW
-    ).apply {
-        description = "Überwacht Ruhezeiten "
-        setShowBadge(false)
-        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-    }
-
     val notificationManager = context.getSystemService(NotificationManager::class.java)
-    notificationManager.createNotificationChannel(channel)
 
-    val msgschannel = NotificationChannel(
-        "Nachrichten",
-        "Nachrichten",
-        NotificationManager.IMPORTANCE_LOW
-    ).apply {
-        description = "Nachrichten"
-        setShowBadge(true)
-        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-    }
+    notificationManager.createNotificationChannel(
+        NotificationChannel(
+            CHANNEL_ID,
+            "Ruhezeiten Überwachung",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Überwacht Ruhezeiten "
+            setShowBadge(false)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        })
 
-    notificationManager.createNotificationChannel(msgschannel)
+    notificationManager.createNotificationChannel(
+        NotificationChannel(
+            "Nachrichten",
+            "Nachrichten",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Nachrichten"
+            setShowBadge(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        })
 
-    val confirmationChannel = NotificationChannel(
-        CONFIRMATION_CHANNEL_ID,
-        "Versandbestätigungen",
-        NotificationManager.IMPORTANCE_DEFAULT
-    ).apply {
-        description = "Bestätigungen für gesendete WhatsApp Nachrichten"
-        setShowBadge(true)
-        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-    }
+    notificationManager.createNotificationChannel(
+        NotificationChannel(
+            CONFIRMATION_CHANNEL_ID,
+            "Versandbestätigungen",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "Bestätigungen für gesendete WhatsApp Nachrichten"
+            setShowBadge(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        })
 
-    notificationManager.createNotificationChannel(confirmationChannel)
+    notificationManager.createNotificationChannel(
+        NotificationChannel(
+            VOICE_NOTE_CHANNEL_ID,
+            "Sprachnachrichten Player",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Steuerung für WhatsApp Sprachnachrichten"
+            setShowBadge(false)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        })
 
-    val voiceNoteChannel = NotificationChannel(
-        VOICE_NOTE_CHANNEL_ID,
-        "Sprachnachrichten Player",
-        NotificationManager.IMPORTANCE_LOW
-    ).apply {
-        description = "Steuerung für WhatsApp Sprachnachrichten"
-        setShowBadge(false)
-        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-    }
+    notificationManager.createNotificationChannel(
+        NotificationChannel(
+            GALLERY_CHANNEL_ID,
+            "Galerie",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Deine persönliche Galerie"
+            setShowBadge(false)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        })
 
-    notificationManager.createNotificationChannel(voiceNoteChannel)
+    notificationManager.createNotificationChannel(
+        NotificationChannel(
+            SSN_CHANNEL_ID,
+            "Show Simple Notification",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Einfache Benachrichtigung"
+            setShowBadge(false)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        })
 
-    val galleryChannel = NotificationChannel(
-        GALLERY_CHANNEL_ID,
-        "Galerie",
-        NotificationManager.IMPORTANCE_LOW
-    ).apply {
-        description = "Deine persönliche Galerie"
-        setShowBadge(false)
-        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-    }
-    notificationManager.createNotificationChannel(galleryChannel)
+    notificationManager.createNotificationChannel(
+        NotificationChannel(
+            DELETE_CONFIRMATION_CHANNEL_ID,
+            "Löschbestätigungen",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Bestätigungen zum Löschen von Bildern"
+            setShowBadge(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        })
 
-    val showsimplenotChannel = NotificationChannel(
-        SSN_CHANNEL_ID,
-        "Show Simple Notification",
-        NotificationManager.IMPORTANCE_LOW
-    ).apply {
-        description = "Einfache Benachrichtigung"
-        setShowBadge(false)
-        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-    }
-    notificationManager.createNotificationChannel(showsimplenotChannel)
+    notificationManager.createNotificationChannel(
+        NotificationChannel(
+            MAIL_CHANNEL_ID,
+            "AI Zusammenfassungen von E-Mails",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "AI generierte Zusammenfassungen von E-Mails"
+            setShowBadge(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        })
 
-    val deleteConfirmationChannel = NotificationChannel(
-        DELETE_CONFIRMATION_CHANNEL_ID,
-        "Löschbestätigungen",
-        NotificationManager.IMPORTANCE_HIGH
-    ).apply {
-        description = "Bestätigungen zum Löschen von Bildern"
-        setShowBadge(true)
-        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-    }
-    notificationManager.createNotificationChannel(deleteConfirmationChannel)
+    notificationManager.createNotificationChannel(
+        NotificationChannel(
+            "network_info_channel",
+            "Netzwerk-Informationen",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Zeigt aktuelle Netzwerkdetails an"
+        })
 
-    val mailChannel = NotificationChannel(
-        MAIL_CHANNEL_ID,
-        "AI Zusammenfassungen von E-Mails",
-        NotificationManager.IMPORTANCE_HIGH
-    ).apply {
-        description = "AI generierte Zusammenfassungen von E-Mails"
-        setShowBadge(true)
-        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-    }
-    notificationManager.createNotificationChannel(mailChannel)
+    notificationManager.createNotificationChannel(
+        NotificationChannel(
+            ErrorNotificationManager.CHANNEL_ID,
+            "Error Reports",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Benachrichtigungen für neue Fehlerberichte"
+            enableVibration(true)
+            enableLights(true)
+        })
+
+    notificationManager.createNotificationChannel(
+        NotificationChannel(
+            "display_info_channel",
+            "Display-Informationen",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Zeigt technische Display-Daten an"
+        })
+
+    notificationManager.createNotificationChannel(
+        NotificationChannel(
+            ChatService.CHANNEL_ID,
+            "Chat Service",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Hintergrund-Service für Chat-Nachrichten"
+            setShowBadge(false)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            setSound(null, null)
+        })
+
+    notificationManager.createNotificationChannel(
+        NotificationChannel(
+            "chat_messages",
+            "Chat Nachrichten",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Benachrichtigungen für neue Chat-Nachrichten"
+            setShowBadge(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            enableVibration(true)
+            enableLights(true)
+        })
 }
 
 @SuppressLint("LaunchActivityFromNotification")
@@ -301,6 +354,7 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
         .setOngoing(true)
         .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
         .addAction(commandAction)
+        .setGroup("quiet_hours_main_group")
 
     val now = Calendar.getInstance()
     val nextChange = calculateNextStatusChange(
