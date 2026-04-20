@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Context.CAMERA_SERVICE
 import android.content.Context.MODE_PRIVATE
 import android.content.Context.WINDOW_SERVICE
+import android.content.Intent
 import android.graphics.PixelFormat
 import android.hardware.camera2.CameraManager
 import android.os.Handler
@@ -39,32 +40,31 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.cloud.Config
-import com.cloud.Config.SHOWCOMMANDS
-import com.cloud.audiorecorder.createAudioFile
-import com.cloud.audiorecorder.startAudioService
-import com.cloud.audiorecorder.stopAudioService
-import com.cloud.mediaplayer.AlgorithmicPlaylistRegistry
-import com.cloud.mediaplayer.MediaAnalyticsManager
-import com.cloud.mediaplayer.MediaAnalyticsManager.rebuildSessions
-import com.cloud.mediaplayer.PodcastShowManager
-import com.cloud.privatecloudapp.OtherBucketViewer
-import com.cloud.privatecloudapp.showBatteryInfo
-import com.cloud.service.MediaPlayerService
-import com.cloud.service.MusicPlayerServiceCompat
-import com.cloud.service.OverlayLifecycleOwner
-import com.cloud.service.PodcastPlayerServiceCompat
-import com.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
-import com.cloud.service.QuietHoursNotificationService.Companion.commandHistory
-import com.cloud.service.QuietHoursNotificationService.Companion.showtestOverlay
-import com.cloud.showSimpleNotificationExtern
-import com.cloud.weathertab.fetchWeatherForecast
-import com.cloud.weathertab.getLastKnownLocation
-import com.cloud.weathertab.weathernot
+import com.cloud.core.objects.Config
+import com.cloud.core.objects.Config.SHOWCOMMANDS
+import com.cloud.core.ui.showBatteryInfo
+import com.cloud.core.functions.showSimpleNotificationExtern
+import com.cloud.services.MediaPlayerService
+import com.cloud.services.MusicPlayerServiceCompat
+import com.cloud.services.OverlayLifecycleOwner
+import com.cloud.services.PodcastPlayerServiceCompat
+import com.cloud.services.QuietHoursNotificationService.Companion.CHANNEL_ID
+import com.cloud.services.QuietHoursNotificationService.Companion.commandHistory
+import com.cloud.services.QuietHoursNotificationService.Companion.showtestOverlay
+import com.cloud.tabs.AlgorithmicPlaylistRegistry
+import com.cloud.tabs.MediaAnalyticsManager
+import com.cloud.tabs.MediaAnalyticsManager.rebuildSessions
+import com.cloud.tabs.OtherBucketViewer
+import com.cloud.tabs.PodcastShowManager
+import com.cloud.tabs.audiorecordertab.AudioForegroundService
+import com.cloud.tabs.fetchWeatherForecast
+import com.cloud.tabs.getLastKnownLocation
+import com.cloud.tabs.weathernot
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -75,6 +75,7 @@ import org.xml.sax.InputSource
 import java.io.File
 import java.io.StringReader
 import java.lang.ref.WeakReference
+import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -711,11 +712,14 @@ fun executeCommand(commandText: String, context: Context) {
             if (argument != null) {
                 when (argument.lowercase()) {
                     "start" -> {
-                        val file = createAudioFile(context)
-                        startAudioService(context, file.absolutePath)
+                        val file = File(context.getExternalFilesDir(null), "audio_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.m4a")
+                        val intent = Intent(context, AudioForegroundService::class.java).apply {
+                            putExtra("filePath", file.absolutePath)
+                        }
+                        ContextCompat.startForegroundService(context, intent)
                     }
                     "stop" -> {
-                        stopAudioService(context)
+                        context.stopService(Intent(context, AudioForegroundService::class.java))
                     }
                     else -> showSimpleNotificationExtern(
                         "❌ Fehler",
@@ -1409,7 +1413,7 @@ fun executeCommand(commandText: String, context: Context) {
                             val sessionCount = labelSessions.size
                             val lastPlayedAt = labelSessions.maxOf { it.startedAt }
                             val lastPlayed =
-                                java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMANY)
+                                SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMANY)
                                     .format(Date(lastPlayedAt))
                             val maxRepeat = labelSessions.maxOf { it.repeatCount }
                             val repeatInfo =
@@ -1441,7 +1445,7 @@ fun executeCommand(commandText: String, context: Context) {
                             val sessionCount = showSessions.size
                             val lastPlayedAt = showSessions.maxOf { it.startedAt }
                             val lastPlayed =
-                                java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMANY)
+                                SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMANY)
                                     .format(Date(lastPlayedAt))
                             showSimpleNotificationExtern(
                                 "📊 $showName",
