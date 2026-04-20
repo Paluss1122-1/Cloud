@@ -1,14 +1,21 @@
-package com.cloud.vocabtab
+@file:Suppress("AssignedValueIsNeverRead")
+
+package com.cloud.tabs
 
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.Bitmap
+import android.graphics.ImageDecoder
 import android.net.Uri
-import android.widget.Toast
+import android.util.Base64
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -34,6 +41,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,9 +59,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Color.Companion.Transparent
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -64,14 +75,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import androidx.core.graphics.scale
+import com.cloud.core.objects.Config
 import com.cloud.quiethoursnotificationhelper.flashcardVokabelnFlow
 import com.cloud.quiethoursnotificationhelper.trySendImageToLaptop
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 
-data class Vokabel(val latein: String, val deutsch: String)
+data class Vokabel(val latein: String, val deutsch: String, val id: Int)
 data class VokabelSet(
     val name: String,
     val vokabeln: List<Vokabel>,
@@ -96,7 +117,6 @@ fun VocabTab() {
 
     var screen by remember { mutableStateOf(VokabelTabScreen.HOME) }
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var rawText by remember { mutableStateOf("") }
     var vokabeln by remember { mutableStateOf<List<Vokabel>>(emptyList()) }
     var isExtracting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -109,7 +129,6 @@ fun VocabTab() {
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let {
                 bitmap = uriToBitmap(context, it)
-                rawText = ""
                 vokabeln = emptyList()
                 screen = VokabelTabScreen.UPLOAD
             }
@@ -129,18 +148,17 @@ fun VocabTab() {
         )
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Transparent)
-    ) {
-        when (screen) {
+    Crossfade(
+        targetState = screen,
+        label = "tab_transition"
+    ) { current ->
+        when (current) {
             VokabelTabScreen.HOME -> HomeScreen(
                 savedSets = savedSets,
                 prefs = prefs,
                 onNewSet = { screen = VokabelTabScreen.UPLOAD },
                 onOpenSet = { set ->
-                    activeSet = set; vokabeln = set.vokabeln; screen = VokabelTabScreen.REVIEW
+                    activeSet = set; vokabeln = set.vokabeln; screen = VokabelTabScreen.LEARN
                 },
                 onLearnWeak = { set ->
                     activeSet = set
@@ -155,7 +173,6 @@ fun VocabTab() {
 
             VokabelTabScreen.UPLOAD -> UploadScreen(
                 bitmap = bitmap,
-                rawText = rawText,
                 isExtracting = isExtracting,
                 errorMessage = errorMessage,
                 onPickImage = { imagePicker.launch("image/*") },
@@ -166,21 +183,16 @@ fun VocabTab() {
                         errorMessage = null
                         scope.launch {
                             try {
-                                val bytes = java.io.ByteArrayOutputStream().also {
+                                val bytes = ByteArrayOutputStream().also {
                                     bmp.compress(Bitmap.CompressFormat.JPEG, 90, it)
                                 }.toByteArray()
                                 val sent = trySendImageToLaptop(bytes)
-                                Toast.makeText(context,"$sent", Toast.LENGTH_LONG).show()
                                 if (sent) {
                                     val result = flashcardVokabelnFlow.first { it != null }
                                     vokabeln = result ?: emptyList()
-                                    Toast.makeText(context,"$vokabeln", Toast.LENGTH_LONG).show()
                                     if (vokabeln.isNotEmpty()) screen = VokabelTabScreen.REVIEW
                                     else {
-                                        errorMessage = "LLM-Extraktion leer, versuche lokal..."
-                                        if (vokabeln.isNotEmpty()) screen = VokabelTabScreen.REVIEW
-                                        else errorMessage = "Keine Vokabeln erkannt."
-                                        Toast.makeText(context,"$errorMessage", Toast.LENGTH_LONG).show()
+                                        errorMessage = "Lokale Extraktion leer..."
                                     }
                                 } else {
                                     fun Bitmap.scaleForApi(maxPx: Int = 1280): Bitmap {
@@ -193,32 +205,33 @@ fun VocabTab() {
                                     }
 
                                     val scaledBmp = bmp.scaleForApi(1280)
-                                    val bytes2 = java.io.ByteArrayOutputStream().also {
+                                    val bytes2 = ByteArrayOutputStream().also {
                                         scaledBmp.compress(Bitmap.CompressFormat.JPEG, 92, it)
                                     }.toByteArray()
-                                    val base64 = android.util.Base64.encodeToString(
+                                    val base64 = Base64.encodeToString(
                                         bytes2,
-                                        android.util.Base64.NO_WRAP
+                                        Base64.NO_WRAP
                                     )
+                                    Log.d("TOTOTO", "$base64")
                                     val nvidiaResult =
-                                        withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        withContext(Dispatchers.IO) {
                                             try {
-                                                val messagesJson = org.json.JSONArray().apply {
-                                                    put(org.json.JSONObject().apply {
+                                                val messagesJson = JSONArray().apply {
+                                                    put(JSONObject().apply {
                                                         put("role", "user")
-                                                        put("content", org.json.JSONArray().apply {
-                                                            put(org.json.JSONObject().apply {
+                                                        put("content", JSONArray().apply {
+                                                            put(JSONObject().apply {
                                                                 put("type", "image_url")
                                                                 put(
                                                                     "image_url",
-                                                                    org.json.JSONObject().apply {
+                                                                    JSONObject().apply {
                                                                         put(
                                                                             "url",
                                                                             "data:image/jpeg;base64,$base64"
                                                                         )
                                                                     })
                                                             })
-                                                            put(org.json.JSONObject().apply {
+                                                            put(JSONObject().apply {
                                                                 put("type", "text")
                                                                 put(
                                                                     "text", """
@@ -243,7 +256,7 @@ fun VocabTab() {
                                                         })
                                                     })
                                                 }
-                                                val body = org.json.JSONObject().apply {
+                                                val body = JSONObject().apply {
                                                     put(
                                                         "model",
                                                         "meta/llama-3.2-90b-vision-instruct"
@@ -252,12 +265,12 @@ fun VocabTab() {
                                                     put("stream", false)
                                                 }
                                                 val conn =
-                                                    java.net.URL("https://integrate.api.nvidia.com/v1/chat/completions")
-                                                        .openConnection() as java.net.HttpURLConnection
+                                                    URL("https://integrate.api.nvidia.com/v1/chat/completions")
+                                                        .openConnection() as HttpURLConnection
                                                 conn.requestMethod = "POST"
                                                 conn.setRequestProperty(
                                                     "Authorization",
-                                                    "Bearer ${com.cloud.Config.NVIDIA}"
+                                                    "Bearer ${Config.NVIDIA}"
                                                 )
                                                 conn.setRequestProperty(
                                                     "Content-Type",
@@ -275,7 +288,7 @@ fun VocabTab() {
                                                 } else {
                                                     val raw =
                                                         conn.inputStream.bufferedReader().readText()
-                                                    org.json.JSONObject(raw).getJSONArray("choices")
+                                                    JSONObject(raw).getJSONArray("choices")
                                                         .getJSONObject(0).getJSONObject("message")
                                                         .getString("content").trim()
                                                 }
@@ -288,7 +301,7 @@ fun VocabTab() {
                                             val startIdx = nvidiaResult.indexOf('[')
                                             val endIdx = nvidiaResult.lastIndexOf(']')
                                             if (startIdx != -1 && endIdx > startIdx) {
-                                                val arr = org.json.JSONArray(
+                                                val arr = JSONArray(
                                                     nvidiaResult.substring(
                                                         startIdx,
                                                         endIdx + 1
@@ -298,7 +311,8 @@ fun VocabTab() {
                                                     val o = arr.getJSONObject(it)
                                                     Vokabel(
                                                         o.getString("latein"),
-                                                        o.getString("deutsch")
+                                                        o.getString("deutsch"),
+                                                        it
                                                     )
                                                 }
                                             }
@@ -331,15 +345,20 @@ fun VocabTab() {
                 onSave = { saveNameInput = activeSet?.name ?: ""; showSaveDialog = true },
                 onBack = {
                     screen =
-                        if (activeSet != null) VokabelTabScreen.HOME else VokabelTabScreen.UPLOAD
-                }
+                        if (activeSet != null) VokabelTabScreen.LEARN else VokabelTabScreen.UPLOAD
+                },
+                checkExist = activeSet != null
             )
 
             VokabelTabScreen.LEARN -> LearnScreen(
                 vokabeln = vokabeln,
                 prefs = prefs,
                 setCreatedAt = activeSet?.createdAt ?: 0L,
-                onBack = { screen = VokabelTabScreen.REVIEW }
+                onBack = {
+                    screen =
+                        if (activeSet != null) VokabelTabScreen.HOME else VokabelTabScreen.REVIEW
+                },
+                setName = activeSet?.name
             )
         }
     }
@@ -348,7 +367,7 @@ fun VocabTab() {
 @Composable
 fun HomeScreen(
     savedSets: List<VokabelSet>,
-    prefs: android.content.SharedPreferences,
+    prefs: SharedPreferences,
     onNewSet: () -> Unit,
     onOpenSet: (VokabelSet) -> Unit,
     onLearnWeak: (VokabelSet) -> Unit,
@@ -357,7 +376,7 @@ fun HomeScreen(
     var setToDelete by remember { mutableStateOf<VokabelSet?>(null) }
 
     if (setToDelete != null) {
-        androidx.compose.material3.AlertDialog(
+        AlertDialog(
             onDismissRequest = { setToDelete = null },
             containerColor = BgSurface,
             title = { Text("Set löschen?", color = TextPrimary, fontWeight = FontWeight.Bold) },
@@ -384,23 +403,6 @@ fun HomeScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 20.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Vokabeln",
-                    color = TextPrimary,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text("${savedSets.size} gespeicherte Sets", color = TextTertiary, fontSize = 13.sp)
-            }
-        }
-
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -445,7 +447,7 @@ fun HomeScreen(
             }
         } else {
             Text(
-                "Gespeicherte Sets",
+                "Gespeicherte Sets (${savedSets.size})",
                 color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
             )
@@ -529,7 +531,6 @@ fun HomeScreen(
 @Composable
 fun UploadScreen(
     bitmap: Bitmap?,
-    rawText: String,
     isExtracting: Boolean,
     errorMessage: String?,
     onPickImage: () -> Unit,
@@ -552,7 +553,6 @@ fun UploadScreen(
                     tint = TextPrimary
                 )
             }
-            Text("Neues Set", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
 
         LazyColumn(
@@ -669,10 +669,45 @@ fun ReviewScreen(
     vokabeln: List<Vokabel>,
     setName: String?,
     onVokabelnChanged: (List<Vokabel>) -> Unit,
-    onStartLearning: () -> Unit,
+    onStartLearning: (() -> Unit)? = null,
     onSave: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    checkExist: Boolean = true
 ) {
+    var currentVokabeln by remember { mutableStateOf(vokabeln) }
+    val initVocabs by remember { mutableStateOf(vokabeln) }  // Nutzt jetzt den Parameter direkt
+
+    fun calculateChanges(original: List<Vokabel>, current: List<Vokabel>): Int {
+        var changeCount = 0
+
+        // Zähle gelöschte Vokabeln
+        original.forEach { origVokabel ->
+            if (current.none { it.id == origVokabel.id }) {
+                changeCount++
+            }
+        }
+
+        // Zähle geänderte Vokabeln
+        current.forEach { currVokabel ->
+            val origVokabel = original.firstOrNull { it.id == currVokabel.id }
+            if (origVokabel != null) {
+                if (origVokabel.latein != currVokabel.latein || origVokabel.deutsch != currVokabel.deutsch) {
+                    changeCount++
+                }
+            } else {
+                // Neu hinzugefügte Vokabel (falls das jemals passiert)
+                changeCount++
+            }
+        }
+
+        return changeCount
+    }
+
+    // Berechne changes direkt, statt zu akkumulieren
+    val changes = remember(currentVokabeln, initVocabs) {
+        calculateChanges(initVocabs, currentVokabeln)
+    }
+
     BackHandler {
         onBack()
     }
@@ -696,57 +731,58 @@ fun ReviewScreen(
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text("${vokabeln.size} Vokabeln", color = TextTertiary, fontSize = 12.sp)
+                Text("${currentVokabeln.size} Vokabeln", color = TextTertiary, fontSize = 12.sp)
             }
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
                     .background(BgSurface)
-                    .clickable { onSave() }
+                    .clickable {
+                        if (changes > 0) {
+                            onVokabelnChanged(currentVokabeln)
+                        } else {
+                            onSave()
+                        }
+                    }
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 Text(
-                    "💾 Speichern",
+                    if (changes > 0) "Bestätigen ($changes)" else if (checkExist) "Umbenennen" else "💾 Speichern",
                     color = MaterialTheme.colorScheme.primary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
-            Spacer(Modifier.width(8.dp))
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(
-                        if (vokabeln.isNotEmpty()) SolidColor(MaterialTheme.colorScheme.primary) else Brush.horizontalGradient(
-                            listOf(BgCard, BgCard)
+            if (onStartLearning != null) {
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            if (currentVokabeln.isNotEmpty()) SolidColor(MaterialTheme.colorScheme.primary)
+                            else Brush.horizontalGradient(listOf(BgCard, BgCard))
                         )
+                        .clickable(enabled = currentVokabeln.isNotEmpty()) { onStartLearning() }
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        "Lernen →",
+                        color = if (currentVokabeln.isNotEmpty()) TextPrimary else TextTertiary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
-                    .clickable(enabled = vokabeln.isNotEmpty()) { onStartLearning() }
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    "Lernen →",
-                    color = if (vokabeln.isNotEmpty()) TextPrimary else TextTertiary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+                }
             }
         }
-
-        Text(
-            "Tippe zum Bearbeiten",
-            color = TextTertiary, fontSize = 12.sp,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
-        )
 
         LazyColumn(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            items(vokabeln, key = { "${it.latein}${it.deutsch}" }) { vokabel ->
+            items(currentVokabeln, key = { it.id }) { vokabel ->  // Nutze id als key
                 var editMode by remember { mutableStateOf(false) }
-                var editLatein by remember { mutableStateOf(vokabel.latein) }
-                var editDeutsch by remember { mutableStateOf(vokabel.deutsch) }
+                var editLatein by remember(vokabel.latein) { mutableStateOf(vokabel.latein) }
+                var editDeutsch by remember(vokabel.deutsch) { mutableStateOf(vokabel.deutsch) }
 
                 BackHandler(editMode) {
                     editMode = false
@@ -785,7 +821,10 @@ fun ReviewScreen(
                                         .weight(1f)
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(Color(0xFFB71C1C).copy(alpha = 0.15f))
-                                        .clickable { onVokabelnChanged(vokabeln.filter { it != vokabel }) }
+                                        .clickable {
+                                            currentVokabeln = currentVokabeln.filter { it.id != vokabel.id }
+                                            editMode = false
+                                        }
                                         .padding(vertical = 10.dp),
                                     contentAlignment = Alignment.Center
                                 ) { Text("Löschen", color = Color(0xFFEF9A9A), fontSize = 13.sp) }
@@ -795,11 +834,16 @@ fun ReviewScreen(
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(MaterialTheme.colorScheme.primary)
                                         .clickable {
-                                            val idx = vokabeln.indexOf(vokabel)
-                                            onVokabelnChanged(vokabeln.toMutableList().also {
-                                                it[idx] =
-                                                    Vokabel(editLatein.trim(), editDeutsch.trim())
-                                            })
+                                            val idx = currentVokabeln.indexOfFirst { it.id == vokabel.id }
+                                            if (idx >= 0) {
+                                                currentVokabeln = currentVokabeln.toMutableList().also {
+                                                    it[idx] = Vokabel(
+                                                        editLatein.trim(),
+                                                        editDeutsch.trim(),
+                                                        vokabel.id
+                                                    )
+                                                }
+                                            }
                                             editMode = false
                                         }
                                         .padding(vertical = 10.dp),
@@ -833,7 +877,7 @@ fun ReviewScreen(
                                     .background(BgCard)
                             )
                             Text(
-                                vokabel.deutsch,
+                                vokabel.deutsch,  // Entfernt: + vokabel.id
                                 modifier = Modifier.weight(1f),
                                 textAlign = TextAlign.End,
                                 color = TextSecondary,
@@ -848,14 +892,18 @@ fun ReviewScreen(
     }
 }
 
+@SuppressLint("UnusedContentLambdaTargetStateParameter")
 @Composable
 fun LearnScreen(
     vokabeln: List<Vokabel>,
-    prefs: android.content.SharedPreferences,
+    prefs: SharedPreferences,
     setCreatedAt: Long,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    setName: String?
 ) {
-    var shuffled by remember { mutableStateOf(vokabeln.shuffled()) }
+    var setToReview by remember { mutableStateOf(false) }
+    var vokabeln by remember { mutableStateOf(vokabeln) }
+    var shuffled by remember { mutableStateOf(vokabeln) }
     var currentIndex by remember { mutableIntStateOf(0) }
     var showDeutsch by remember { mutableStateOf(false) }
     var showAnswer by remember { mutableStateOf(false) }
@@ -865,8 +913,12 @@ fun LearnScreen(
     val done = currentIndex >= shuffled.size
     var correctVokabeln by remember { mutableStateOf<List<Vokabel>>(emptyList()) }
     var wrongVokabeln by remember { mutableStateOf<List<Vokabel>>(emptyList()) }
+    LaunchedEffect(vokabeln) {
+        shuffled = vokabeln.shuffled()
+        showAnswer = showDeutsch
+    }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().alpha(if (setToReview) 0f else 1f)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = 4.dp, top = 8.dp, end = 16.dp)
@@ -875,7 +927,7 @@ fun LearnScreen(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = TextPrimary)
             }
             Text(
-                "Karteikarten",
+                "$setName",
                 color = TextPrimary,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
@@ -895,6 +947,19 @@ fun LearnScreen(
                     fontWeight = FontWeight.SemiBold
                 )
             }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(BgSurface)
+                    .clickable { setToReview = true }
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    Icons.Default.MoreVert,
+                    "Back to Review Screen",
+                    tint = AccentViolet
+                )
+            }
         }
 
         if (!done) {
@@ -902,7 +967,7 @@ fun LearnScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(3.dp)
-                    .background(BgSurface)
+                    .background(Transparent)
             ) {
                 Box(
                     modifier = Modifier
@@ -931,8 +996,8 @@ fun LearnScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(240.dp)
-                    .padding(horizontal = 20.dp)
+                    .weight(1f)
+                    .padding(horizontal = 20.dp, vertical = 80.dp)
                     .graphicsLayer { rotationY = flipped; cameraDistance = 12f * density }
                     .clickable { showAnswer = !showAnswer },
                 contentAlignment = Alignment.Center
@@ -964,7 +1029,7 @@ fun LearnScreen(
                             )
                             Spacer(Modifier.height(20.dp))
                             Text(
-                                "Tippe zum Aufdecken",
+                                if (currentIndex >= 1) "" else "Tippe zum Aufdecken",
                                 color = TextPrimary.copy(0.4f),
                                 fontSize = 12.sp
                             )
@@ -1011,7 +1076,8 @@ fun LearnScreen(
             AnimatedContent(
                 targetState = showAnswer,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "btns"
+                label = "btns",
+                modifier = Modifier.padding(bottom = 50.dp)
             ) {
                 Row(
                     modifier = Modifier
@@ -1087,11 +1153,8 @@ fun LearnScreen(
             }
         } else {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                var weakCount by remember { mutableIntStateOf(0) }
-
                 LaunchedEffect(true) {
                     updateWeakVokabeln(prefs, setCreatedAt, correctVokabeln, wrongVokabeln)
-                    weakCount = loadWeakVokabeln(prefs, setCreatedAt).size
                 }
                 Column(
                     modifier = Modifier
@@ -1185,14 +1248,23 @@ fun LearnScreen(
                         contentAlignment = Alignment.Center
                     ) { Text("Zurück zur Übersicht", color = TextSecondary, fontSize = 14.sp) }
                 }
-                if (weakCount > 0) {
-                    Text(
-                        "📌 $weakCount schwache Vokabeln gespeichert",
-                        color = Color(0xFFEF5350), fontSize = 13.sp,
-                        textAlign = TextAlign.Center
-                    )
-                }
             }
+        }
+    }
+
+    if (setToReview) {
+        Box(Modifier.fillMaxSize()) {
+            ReviewScreen(
+                vokabeln = vokabeln,
+                onBack = { setToReview = false },
+                onVokabelnChanged = { new ->
+                    vokabeln = new
+                    shuffled = new.shuffled()
+                },
+                onSave = {},
+                setName = setName,
+                checkExist = true
+            )
         }
     }
 }
@@ -1200,7 +1272,7 @@ fun LearnScreen(
 @Composable
 fun SaveSetDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
     var name by remember { mutableStateOf(initial) }
-    androidx.compose.material3.AlertDialog(
+    AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = BgSurface,
         title = { Text("Set speichern", color = TextPrimary, fontWeight = FontWeight.Bold) },
@@ -1247,20 +1319,25 @@ fun SaveSetDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () ->
 
 private const val SETS_KEY = "vocab_sets"
 
-fun saveVokabelSet(prefs: android.content.SharedPreferences, set: VokabelSet): List<VokabelSet> {
+fun saveVokabelSet(prefs: SharedPreferences, set: VokabelSet): List<VokabelSet> {
     val existing = loadVokabelSets(prefs).toMutableList()
     val idx = existing.indexOfFirst { it.name == set.name }
     if (idx >= 0) existing[idx] = set else existing.add(0, set)
-    val json = org.json.JSONArray().also { arr ->
+    val json = JSONArray().also { arr ->
         existing.forEach { s ->
-            arr.put(org.json.JSONObject().apply {
+            arr.put(JSONObject().apply {
                 put("name", s.name)
                 put("createdAt", s.createdAt)
-                put("vokabeln", org.json.JSONArray().also { va ->
+                put("vokabeln", JSONArray().also { va ->
                     s.vokabeln.forEach { v ->
                         va.put(
-                            org.json.JSONObject()
-                                .apply { put("latein", v.latein); put("deutsch", v.deutsch) })
+                            JSONObject()
+                                .apply {
+                                    put("latein", v.latein); put(
+                                    "deutsch",
+                                    v.deutsch
+                                ); put("id", v.id)
+                                })
                     }
                 })
             })
@@ -1270,10 +1347,10 @@ fun saveVokabelSet(prefs: android.content.SharedPreferences, set: VokabelSet): L
     return existing
 }
 
-fun loadVokabelSets(prefs: android.content.SharedPreferences): List<VokabelSet> {
+fun loadVokabelSets(prefs: SharedPreferences): List<VokabelSet> {
     val raw = prefs.getString(SETS_KEY, null) ?: return emptyList()
     return try {
-        val arr = org.json.JSONArray(raw)
+        val arr = JSONArray(raw)
         (0 until arr.length()).map {
             val o = arr.getJSONObject(it)
             val va = o.getJSONArray("vokabeln")
@@ -1282,7 +1359,7 @@ fun loadVokabelSets(prefs: android.content.SharedPreferences): List<VokabelSet> 
                 createdAt = o.getLong("createdAt"),
                 vokabeln = (0 until va.length()).map { i ->
                     val v = va.getJSONObject(i)
-                    Vokabel(v.getString("latein"), v.getString("deutsch"))
+                    Vokabel(v.getString("latein"), v.getString("deutsch"), v.getInt("id"))
                 }
             )
         }
@@ -1291,17 +1368,17 @@ fun loadVokabelSets(prefs: android.content.SharedPreferences): List<VokabelSet> 
     }
 }
 
-fun deleteVokabelSet(prefs: android.content.SharedPreferences, set: VokabelSet): List<VokabelSet> {
+fun deleteVokabelSet(prefs: SharedPreferences, set: VokabelSet): List<VokabelSet> {
     val updated = loadVokabelSets(prefs).filter { it.createdAt != set.createdAt }
-    val json = org.json.JSONArray().also { arr ->
+    val json = JSONArray().also { arr ->
         updated.forEach { s ->
-            arr.put(org.json.JSONObject().apply {
+            arr.put(JSONObject().apply {
                 put("name", s.name)
                 put("createdAt", s.createdAt)
-                put("vokabeln", org.json.JSONArray().also { va ->
+                put("vokabeln", JSONArray().also { va ->
                     s.vokabeln.forEach { v ->
                         va.put(
-                            org.json.JSONObject()
+                            JSONObject()
                                 .apply { put("latein", v.latein); put("deutsch", v.deutsch) })
                     }
                 })
@@ -1313,12 +1390,12 @@ fun deleteVokabelSet(prefs: android.content.SharedPreferences, set: VokabelSet):
 }
 
 private fun formatSetDate(ts: Long): String =
-    java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.GERMANY).format(java.util.Date(ts))
+    SimpleDateFormat("dd.MM.yyyy", Locale.GERMANY).format(Date(ts))
 
 fun uriToBitmap(context: Context, uri: Uri): Bitmap? {
     return try {
-        android.graphics.ImageDecoder.decodeBitmap(
-            android.graphics.ImageDecoder.createSource(
+        ImageDecoder.decodeBitmap(
+            ImageDecoder.createSource(
                 context.contentResolver,
                 uri
             )
@@ -1329,13 +1406,13 @@ fun uriToBitmap(context: Context, uri: Uri): Bitmap? {
     }
 }
 
-fun loadWeakVokabeln(prefs: android.content.SharedPreferences, setCreatedAt: Long): List<Vokabel> {
+fun loadWeakVokabeln(prefs: SharedPreferences, setCreatedAt: Long): List<Vokabel> {
     val raw = prefs.getString("weak_$setCreatedAt", null) ?: return emptyList()
     return try {
-        val arr = org.json.JSONArray(raw)
+        val arr = JSONArray(raw)
         (0 until arr.length()).map {
             val o = arr.getJSONObject(it)
-            Vokabel(o.getString("latein"), o.getString("deutsch"))
+            Vokabel(o.getString("latein"), o.getString("deutsch"), o.getInt("id"))
         }
     } catch (_: Exception) {
         emptyList()
@@ -1343,21 +1420,21 @@ fun loadWeakVokabeln(prefs: android.content.SharedPreferences, setCreatedAt: Lon
 }
 
 fun saveWeakVokabeln(
-    prefs: android.content.SharedPreferences,
+    prefs: SharedPreferences,
     setCreatedAt: Long,
     list: List<Vokabel>
 ) {
-    val json = org.json.JSONArray().also { arr ->
+    val json = JSONArray().also { arr ->
         list.forEach { v ->
             arr.put(
-                org.json.JSONObject().apply { put("latein", v.latein); put("deutsch", v.deutsch) })
+                JSONObject().apply { put("latein", v.latein); put("deutsch", v.deutsch) })
         }
     }.toString()
     prefs.edit { putString("weak_$setCreatedAt", json) }
 }
 
 fun updateWeakVokabeln(
-    prefs: android.content.SharedPreferences,
+    prefs: SharedPreferences,
     setCreatedAt: Long,
     correct: List<Vokabel>,
     wrong: List<Vokabel>
