@@ -10,7 +10,9 @@ import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.telephony.TelephonyManager
 import androidx.core.app.ActivityCompat
-import com.cloud.privatecloudapp.showNetworkNotificationNow
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import com.cloud.core.objects.Config.cms
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
@@ -121,7 +123,7 @@ fun showNetworkInfo(context: Context) {
 
     info.append("🌍 Öffentliche IP: Wird abgerufen…\n")
 
-    showNetworkNotificationNow(context, info.toString())
+    val notId = cms()
 
     Executors.newSingleThreadExecutor().execute {
         var publicIp: String
@@ -140,6 +142,24 @@ fun showNetworkInfo(context: Context) {
 
         val updatedInfo = info.toString()
             .replace("🌍 Öffentliche IP: Wird abgerufen…", "🌍 Öffentliche IP: $publicIp")
-        showNetworkNotificationNow(context, updatedInfo, final = true)
+        showNetworkNotificationNow(context, updatedInfo, notId)
+    }
+}
+
+fun showNetworkNotificationNow(context: Context, content: String, notId: Int) {
+    val channelId = "network_info_channel"
+    val builder = NotificationCompat.Builder(context, channelId)
+        .setSmallIcon(android.R.drawable.ic_menu_compass)
+        .setContentTitle("📡 Netzwerk-Info")
+        .setContentText(content.lines().firstOrNull() ?: "Netzwerkinfo")
+        .setStyle(NotificationCompat.BigTextStyle().bigText(content))
+        .setPriority(NotificationCompat.PRIORITY_LOW)
+
+    if (ActivityCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+    ) {
+        NotificationManagerCompat.from(context).notify(notId, builder.build())
     }
 }
