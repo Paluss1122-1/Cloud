@@ -12,11 +12,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.PixelFormat
 import android.net.ConnectivityManager
+import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.Uri
-import android.net.wifi.WifiManager
 import android.os.PowerManager
 import android.provider.AlarmClock
 import android.provider.ContactsContract
@@ -53,38 +53,34 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.cloud.Config
-import com.cloud.Config.DISCOVERY_PORT
-import com.cloud.Config.FLASHCARD_RECEIVE_PORT
-import com.cloud.Config.SYNC_PORT
-import com.cloud.Config.TODOS
-import com.cloud.Config.UPDATE_PORT
-import com.cloud.ERRORINSERT
-import com.cloud.ERRORINSERTDATA
-import com.cloud.aitab.ChatMessage
-import com.cloud.audiorecorder.createAudioFile
-import com.cloud.audiorecorder.startAudioService
-import com.cloud.audiorecorder.stopAudioService
-import com.cloud.authenticator.PasswordDatabase
-import com.cloud.authenticator.TotpGenerator.generateTOTP
-import com.cloud.authenticator.TwoFADatabase
-import com.cloud.mediaplayer.AlgorithmicPlaylistRegistry
-import com.cloud.mediaplayer.ListenSession
-import com.cloud.mediaplayer.MediaAnalyticsManager
-import com.cloud.mediaplayer.MediaAnalyticsManager.getSessions
-import com.cloud.service.MediaPlayerService
-import com.cloud.service.OverlayLifecycleOwner
-import com.cloud.service.QuietHoursNotificationService.Companion.CHANNEL_ID
-import com.cloud.service.WhatsAppNotificationListener
-import com.cloud.showSimpleNotificationExtern
-import com.cloud.ui.theme.Cloud
-import com.cloud.vocabtab.Vokabel
+import com.cloud.core.functions.ERRORINSERT
+import com.cloud.core.functions.ERRORINSERTDATA
+import com.cloud.core.functions.showSimpleNotificationExtern
+import com.cloud.core.objects.Config
+import com.cloud.core.objects.Config.FLASHCARD_RECEIVE_PORT
+import com.cloud.core.objects.Config.SYNC_PORT
+import com.cloud.core.objects.Config.TODOS
+import com.cloud.core.objects.Config.UPDATE_PORT
+import com.cloud.core.objects.SupabaseConfigALT
+import com.cloud.core.ui.Cloud
+import com.cloud.services.MediaPlayerService
+import com.cloud.services.OverlayLifecycleOwner
+import com.cloud.services.QuietHoursNotificationService.Companion.CHANNEL_ID
+import com.cloud.services.WhatsAppNotificationListener
+import com.cloud.tabs.AlgorithmicPlaylistRegistry
+import com.cloud.tabs.ListenSession
+import com.cloud.tabs.MediaAnalyticsManager
+import com.cloud.tabs.MediaAnalyticsManager.getSessions
+import com.cloud.tabs.Vokabel
+import com.cloud.tabs.aitab.ChatMessage
+import com.cloud.tabs.authenticator.PasswordDatabase
+import com.cloud.tabs.authenticator.TotpGenerator.generateTOTP
+import com.cloud.tabs.authenticator.TwoFADatabase
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
@@ -98,16 +94,21 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
-import java.io.File
+import java.io.IOException
 import java.io.InputStreamReader
 import java.io.PrintWriter
+import java.net.BindException
 import java.net.ConnectException
 import java.net.HttpURLConnection
+import java.net.Inet4Address
 import java.net.InetSocketAddress
+import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
@@ -129,6 +130,12 @@ import kotlin.time.Duration.Companion.seconds
 val isLaptopConnectedFlow = MutableStateFlow(false)
 val aiResponseFlow = MutableStateFlow<AiResponseEntry?>(null)
 val flashcardVokabelnFlow = MutableStateFlow<List<Vokabel>?>(null)
+
+private val serverMutexes = mutableMapOf<Int, kotlinx.coroutines.sync.Mutex>()
+
+private fun getServerMutex(port: Int) = synchronized(serverMutexes) {
+    serverMutexes.getOrPut(port) { kotlinx.coroutines.sync.Mutex() }
+}
 
 var isLaptopConnected: Boolean
     get() = isLaptopConnectedFlow.value
@@ -159,12 +166,8 @@ private var executeJob: Job? = null
 
 private val activeServers = mutableListOf<ServerSocket>()
 
-private var wifiLock: WifiManager.WifiLock? = null
 private var cpuWakeLock: PowerManager.WakeLock? = null
 private var appContext: Context? = null
-private var triggerWakeLock: PowerManager.WakeLock? = null
-private var homeWifiWakeLock: PowerManager.WakeLock? = null
-private var triggerWifiLock: WifiManager.WifiLock? = null
 
 private const val PREFS_SYNC = "sync_prefs"
 private const val KEY_SYNC_ACTIVE = "sync_active"
@@ -202,37 +205,60 @@ private fun launchServer(
     errorTag: String,
     handler: suspend CoroutineScope.(Socket) -> Unit
 ): Job = scope.launch(Dispatchers.IO) {
-    while (isActive) {
-        var server: ServerSocket? = null
-        try {
-            server = ServerSocket().apply {
-                reuseAddress = true
-                bind(InetSocketAddress(port))
-            }
-            synchronized(activeServers) { activeServers.add(server) }
-            while (isActive) {
-                try {
-                    val client = server.accept()
-                    scope.launch {
-                        try {
-                            handler(client)
-                        } catch (e: Exception) {
-                            logError(errorTag, e)
-                        }
+    val mutex = getServerMutex(port)
+
+    mutex.withLock {
+        while (isActive) {
+            var server: ServerSocket? = null
+            try {
+                synchronized(activeServers) {
+                    activeServers.find {
+                        runCatching { it.localPort }.getOrNull() == port
+                    }?.let {
+                        activeServers.remove(it)
+                        runCatching { it.close() }
                     }
-                } catch (_: SocketException) {
-                    break
+                }
+
+                server = ServerSocket().apply {
+                    reuseAddress = true
+                    bind(InetSocketAddress(port))
+                    soTimeout = 100 // Add timeout to allow clean shutdown
+                }
+                synchronized(activeServers) { activeServers.add(server) }
+
+                while (isActive) {
+                    try {
+                        val client = server.accept()
+                        scope.launch {
+                            try {
+                                handler(client)
+                            } catch (e: Exception) {
+                                logError(errorTag, e)
+                            }
+                        }
+                    } catch (_: SocketTimeoutException) {
+                        // Normal timeout, check isActive and continue
+                        continue
+                    } catch (_: SocketException) {
+                        // Socket closed, exit inner loop
+                        break
+                    }
+                }
+            } catch (e: BindException) {
+                // Port still in use, wait longer before retry
+                logError("$errorTag-bind", e)
+                delay(5000)
+            } catch (e: Exception) {
+                logError(errorTag, e)
+            } finally {
+                server?.let {
+                    synchronized(activeServers) { activeServers.remove(it) }
+                    runCatching { it.close() }
                 }
             }
-        } catch (e: Exception) {
-            logError(errorTag, e)
-        } finally {
-            server?.let {
-                synchronized(activeServers) { activeServers.remove(it) }
-                it.close()
-            }
+            if (isActive) delay(2000)
         }
-        if (isActive) delay(2000)
     }
 }
 
@@ -289,9 +315,6 @@ private object ConnectionGuard {
 
     private const val MIN_RETRY_DELAY_MS = 5_000L
     private const val MAX_RETRY_DELAY_MS = 300_000L
-    private const val QUICK_PING_TIMEOUT_MS = 500
-
-    fun isAtHomeLocation(): Boolean = isAtHomeLocation
 
     fun updateWifiStatus(connected: Boolean) {
         isWifiConnected = connected
@@ -305,14 +328,7 @@ private object ConnectionGuard {
 
     fun canAttemptConnection(): Boolean {
         if (!isWifiConnected && !isAtHomeLocation) return false
-        val now = System.currentTimeMillis()
-        return (now - lastFailedAttempt) >= calculateBackoffDelay()
-    }
-
-    private fun calculateBackoffDelay(): Long {
-        if (consecutiveFailures == 0) return 0L
-        return (MIN_RETRY_DELAY_MS * (1 shl (consecutiveFailures - 1)))
-            .coerceIn(MIN_RETRY_DELAY_MS, MAX_RETRY_DELAY_MS)
+        return true
     }
 
     fun recordFailure() {
@@ -326,18 +342,13 @@ private object ConnectionGuard {
         lastFailedAttempt = 0L
     }
 
-    fun getBackoffInfo(): String {
-        if (consecutiveFailures == 0) return "Bereit"
-        val delay = calculateBackoffDelay()
-        val remaining = delay - (System.currentTimeMillis() - lastFailedAttempt)
-        return if (remaining > 0) "Warte ${remaining / 1000}s (Fehler: $consecutiveFailures)"
-        else "Bereit (nach $consecutiveFailures Fehlern)"
-    }
-
-    suspend fun quickPingTest(ip: String, port: Int): Boolean = withContext(Dispatchers.IO) {
-        try {
-            Socket().apply { connect(InetSocketAddress(ip, port), QUICK_PING_TIMEOUT_MS) }.close()
-            true
+    fun quickPingTest(ip: String, port: Int): Boolean {
+        return try {
+            val addr = Inet4Address.getByName(ip)  // forces IPv4
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress(addr, port), 1500)
+                true
+            }
         } catch (_: Exception) {
             false
         }
@@ -371,8 +382,8 @@ data class AiResponseEntry(
 fun startTriggerListenerIfHomeWifi(context: Context) {
     checkIfNearLocation(context) { atHome ->
         ConnectionGuard.updateLocationStatus(atHome)
-        discoverLaptopIp(context) { discovered ->
-            if (discovered != null) laptopIp = discovered
+        syncScope.launch {
+            laptopIp = fetchLaptopIpFromSupabase() ?: ""
         }
         startTriggerListener(context)
         registerWifiReconnectReceiver(context)
@@ -391,6 +402,25 @@ fun registerWifiReconnectReceiver(context: Context) {
     val callback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
             ConnectionGuard.updateWifiStatus(true)
+            fun getLocalIp(): String {
+                return try {
+                    NetworkInterface.getNetworkInterfaces()
+                        ?.asSequence()
+                        ?.flatMap { it.inetAddresses.asSequence() }
+                        ?.firstOrNull { addr ->
+                            !addr.isLoopbackAddress && addr.hostAddress?.contains(':') == false
+                        }
+                        ?.hostAddress ?: "Unbekannt"
+                } catch (e: Exception) {
+                    Log.e("CLOUDSA", "[NET] IP-Fehler", e)
+                    "Unbekannt"
+                }
+            }
+
+            val localIp = getLocalIp()
+            if (localIp != "Unbekannt") {
+                syncScope.launch { insertMobileIpToSupabase(localIp) }
+            }
 
             val now = System.currentTimeMillis()
             if (now - lastTriggerTime < MIN_TRIGGER_INTERVAL) return
@@ -398,9 +428,6 @@ fun registerWifiReconnectReceiver(context: Context) {
             checkIfNearLocation(context) { atHome ->
                 ConnectionGuard.updateLocationStatus(atHome)
                 if (!atHome) {
-                    // Nicht zuhause → WakeLock sofort wieder freigeben
-                    homeWifiWakeLock.safeRelease()
-                    homeWifiWakeLock = null
                     return@checkIfNearLocation
                 }
                 if (ConnectionGuard.canAttemptConnection() && !isLaptopConnected) {
@@ -414,6 +441,24 @@ fun registerWifiReconnectReceiver(context: Context) {
             syncInProgress = false
             pendingSyncJob?.cancel()
             stopAllSyncServices(context)
+        }
+
+        override fun onLinkPropertiesChanged(
+            network: Network,
+            linkProperties: LinkProperties
+        ) {
+            Log.d("CLOUDSA", "${linkProperties.linkAddresses}")
+            val localIp = linkProperties.linkAddresses
+                .map { it.address.hostAddress }
+                .firstOrNull { ip ->
+                    ip != null && (ip.startsWith("192.168.") || ip.startsWith("10."))
+                }
+
+            if (localIp != null) {
+                syncScope.launch {
+                    insertMobileIpToSupabase(localIp)
+                }
+            }
         }
     }
 
@@ -499,8 +544,7 @@ fun startTriggerListener(context: Context) {
                         }
                     } catch (_: SocketException) {
                         break
-                    } catch (e: Exception) {
-                        Log.e("TRIGGER", "Fehler beim Accept", e)
+                    } catch (_: Exception) {
                     }
                 }
             } catch (e: Exception) {
@@ -542,12 +586,14 @@ fun restoreSyncIfNeeded(context: Context) {
 }
 
 fun stopAllSyncServices(context: Context) {
+    appContext = null
     stopUpdateListener(false)
 
     listOf(
         mediaCommandJob, mediaStateJob, aiResponseJob, flashcardResponseJob,
         clipboardJob, mailNotifyJob, executeJob
     ).forEach { it?.cancel() }
+
     mediaCommandJob = null; mediaStateJob = null; aiResponseJob = null
     flashcardResponseJob = null; clipboardJob = null; mailNotifyJob = null; executeJob = null
 
@@ -559,9 +605,11 @@ fun stopAllSyncServices(context: Context) {
         activeServers.clear()
     }
 
-    triggerWakeLock.safeRelease(); triggerWakeLock = null
+    synchronized(serverMutexes) {
+        serverMutexes.clear()
+    }
+
     cpuWakeLock.safeRelease(); cpuWakeLock = null
-    homeWifiWakeLock.safeRelease(); homeWifiWakeLock = null
 
     isLaptopConnected = false
 
@@ -576,141 +624,106 @@ fun stopAllSyncServices(context: Context) {
 fun syncTodosWithLaptop(context: Context) {
     if (syncInProgress) return
     syncInProgress = true
-    if (laptopIp.isEmpty()) {
-        Log.d("SYNC", "❌ Keine Laptop-IP gesetzt")
-        ConnectionGuard.recordFailure()
-        syncInProgress = false
-        discoverLaptopIp(context) { discovered ->
-            if (discovered != null) {
-                Toast.makeText(context, discovered, Toast.LENGTH_LONG).show()
-                laptopIp = discovered
-                syncTodosWithLaptop(context)
-            } else {
-                showSimpleNotificationExtern(
-                    "❌ Laptop nicht gefunden",
-                    "Ist der Server gestartet?",
-                    10.seconds,
-                    context
-                )
-                return@discoverLaptopIp
-            }
-        }
-    }
-
-    showSimpleNotificationExtern("🔄 Sync gestartet", "Verbinde mit Laptop...", 10.seconds, context)
 
     syncScope.launch {
         try {
-            val pingSuccess = ConnectionGuard.quickPingTest(laptopIp, SYNC_PORT)
-            if (!pingSuccess) {
-                Log.d("SYNC", "❌ Ping fehlgeschlagen (500ms timeout)")
-                ConnectionGuard.recordFailure()
-                syncInProgress = false
-                isLaptopConnected = false
+            // Lokale Kopie — NICHT global überschreiben
+            var resolvedIp = laptopIp
 
-                // Cache löschen, damit discoverLaptopIp echte UDP-Discovery macht
-                appContext?.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)?.edit {
-                    remove(KEY_LAPTOP_IP)
-                    remove(LAPTOP_IP_CACHE_KEY)
-                }
-
+            if (resolvedIp.isEmpty()) {
                 withContext(Dispatchers.Main) {
-                    showSimpleNotificationExtern(
-                        "❌ Laptop nicht erreichbar",
-                        "Suche neue IP per UDP...",
-                        5.seconds,
-                        context
-                    )
-                    discoverLaptopIp(context) { discovered ->
-                        if (discovered != null) {
-                            Toast.makeText(context, discovered, Toast.LENGTH_LONG).show()
-                            laptopIp = discovered
-                            syncTodosWithLaptop(context)
-                        } else {
-                            showSimpleNotificationExtern(
-                                "❌ Laptop nicht gefunden",
-                                "Ist der Server gestartet?",
-                                10.seconds,
-                                context
-                            )
-                            return@discoverLaptopIp
-                        }
-                    }
+                    showSimpleNotificationExtern("🔍 Suche Laptop...", "Discovery wird gestartet", 8.seconds, context)
                 }
+
+                resolvedIp = withTimeoutOrNull(5000L) {
+                    fetchLaptopIpFromSupabase()
+                } ?: ""
+
+                if (resolvedIp.isEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        showSimpleNotificationExtern("❌ Keine IP gefunden", "Supabase lieferte keine IP", 10.seconds, context)
+                    }
+                    return@launch
+                }
+
+                // Nur wenn wirklich eine IP gefunden wurde
+                laptopIp = resolvedIp
             }
 
-            Log.d("SYNC", "✅ Ping erfolgreich, starte Datenübertragung")
+            val pingSuccess = ConnectionGuard.quickPingTest(resolvedIp, SYNC_PORT)
+
+            if (!pingSuccess) {
+                withContext(Dispatchers.Main) {
+                    showSimpleNotificationExtern(
+                        "❌ Ping fehlgeschlagen",
+                        "Laptop nicht erreichbar: $resolvedIp",
+                        10.seconds, context
+                    )
+                }
+                return@launch  // NICHT nochmal fetchen
+            }
 
             val todos = getTodos(context)
             val socket = Socket()
-            socket.connect(InetSocketAddress(laptopIp, SYNC_PORT), 3000)
+            socket.connect(InetSocketAddress(Inet4Address.getByName(resolvedIp), SYNC_PORT), 3000)
+            socket.soTimeout = 8000
+
             val writer = PrintWriter(socket.getOutputStream(), true)
+            val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+
             writer.println(todosToJsonArray(todos).toString())
             writer.flush()
+
+            val response = reader.readLine() ?: throw IOException("Keine Antwort vom Server")
             socket.close()
 
-            ConnectionGuard.recordSuccess()
-            isLaptopConnected = true
+            when (response) {
+                "OK" -> {
+                    ConnectionGuard.recordSuccess()
+                    isLaptopConnected = true
 
-            if (homeWifiWakeLock == null || homeWifiWakeLock?.isHeld == false) {
-                val pm =
-                    context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
-                homeWifiWakeLock = pm.newWakeLock(
-                    PowerManager.PARTIAL_WAKE_LOCK,
-                    "TodoSync:HomeWifiWakeLock"
-                ).also { it.acquire(8 * 60 * 60 * 1000L) }
+                    startMediaCommandListener(context)
+                    startExecuteListener(context)
+                    startMediaStateServer(context)
+                    startClipboardListener(context)
+
+                    if (listenerJob == null || listenerJob?.isActive == false) {
+                        startUpdateListener(context, 60)
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        WhatsAppNotificationListener.forwardNotificationsToLaptop1()
+                        showSimpleNotificationExtern(
+                            "✅ Sync erfolgreich",
+                            "${todos.size} To-dos übertragen",
+                            10.seconds, context, silent = false
+                        )
+                    }
+
+                    pushMediaStateToLaptop(context)
+                }
+
+                "EMPTY" -> throw IOException("Server erhielt leere Daten")
+                "TIMEOUT" -> throw IOException("Server-Timeout beim Lesen")
+                "ERROR" -> throw IOException("Server konnte Daten nicht verarbeiten")
+                else -> throw IOException("Unbekannte Antwort: $response")
             }
-
-            startMediaCommandListener(context)
-            startExecuteListener(context)
-            startMediaStateServer(context)
-            startClipboardListener(context)
-
-            if (listenerJob == null || listenerJob?.isActive == false) {
-                startUpdateListener(context, 60)
-            }
-
-            withContext(Dispatchers.Main) {
-                WhatsAppNotificationListener.forwardNotificationsToLaptop1()
-                showSimpleNotificationExtern(
-                    "✅ Sync erfolgreich",
-                    "${todos.size} To-dos übertragen\n🔄 Listener aktiv für 60min",
-                    10.seconds, context, silent = false
-                )
-            }
-
-            pushMediaStateToLaptop(context)
-
-        } catch (e: ConnectException) {
+        } catch (_: ConnectException) {
             ConnectionGuard.recordFailure()
-            Log.d("SYNC", "❌ Connection failed: ${e.message}")
-            withContext(Dispatchers.Main) {
-                showSimpleNotificationExtern(
-                    "❌ Sync fehlgeschlagen",
-                    "Laptop nicht erreichbar (nächster Versuch: ${ConnectionGuard.getBackoffInfo()})",
-                    10.seconds, context
-                )
-            }
-        } catch (_: SocketTimeoutException) {
+        } catch(_: SocketTimeoutException) {
             ConnectionGuard.recordFailure()
-            withContext(Dispatchers.Main) {
-                showSimpleNotificationExtern(
-                    "❌ Sync Timeout",
-                    "Laptop antwortet nicht",
-                    10.seconds,
-                    context
-                )
-            }
         } catch (e: Exception) {
-            ConnectionGuard.recordFailure()
-            logError("syncTodosWithLaptop", e)
-            withContext(Dispatchers.Main) {
-                showSimpleNotificationExtern(
-                    "❌ Sync Fehler",
-                    e.message ?: "Unbekannter Fehler",
-                    10.seconds,
-                    context
-                )
+            val msg = e.message
+            if (msg == null || !msg.contains("Connection reset")) {
+                ConnectionGuard.recordFailure()
+                logError("syncTodosWithLaptop", e)
+                withContext(Dispatchers.Main) {
+                    showSimpleNotificationExtern(
+                        "❌ Sync Fehler",
+                        msg ?: "Unbekannter Fehler",
+                        10.seconds, context
+                    )
+                }
             }
         } finally {
             syncInProgress = false
@@ -722,12 +735,6 @@ fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
     stopUpdateListener(true)
     appContext = context.applicationContext
     saveSyncState(context, durationMinutes)
-
-    val wifiManager =
-        context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-    wifiLock =
-        wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "TodoSync:WifiLock")
-    wifiLock?.acquire()
 
     val powerManager =
         context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -745,7 +752,6 @@ fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
             val timeoutJob = launch {
                 delay(durationMinutes * 60_000L)
                 stopUpdateListener(false)
-                isLaptopConnected = true
                 withContext(Dispatchers.Main) {
                     showSimpleNotificationExtern(
                         "⏸️ Sync-Listener gestoppt",
@@ -795,7 +801,6 @@ fun stopUpdateListener(boolean: Boolean = false) {
             putBoolean(KEY_SYNC_ACTIVE, false)
         }
         isLaptopConnected = boolean
-        wifiLock?.release(); wifiLock = null
         cpuWakeLock.safeRelease(); cpuWakeLock = null
         listenerJob?.cancel(); listenerJob = null
         updateServerSocket?.close(); updateServerSocket = null
@@ -1152,18 +1157,33 @@ fun loadAllAiResponses(context: Context): List<AiResponseEntry> {
     }
 }
 
-fun getTodayKey(): String = SimpleDateFormat("yyyy-MM-dd", Locale.GERMANY).format(Date())
+fun getTodayKey(): String {
+    val tz = java.util.TimeZone.getTimeZone("Europe/Berlin")
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.GERMANY).apply {
+        timeZone = tz
+    }
+    return sdf.format(Date())
+}
 
 private fun getYesterdayKey(): String {
-    val cal = Calendar.getInstance()
+    val tz = java.util.TimeZone.getTimeZone("Europe/Berlin")
+    val cal = Calendar.getInstance(tz)
     cal.add(Calendar.DAY_OF_YEAR, -1)
-    return SimpleDateFormat("yyyy-MM-dd", Locale.GERMANY).format(cal.time)
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.GERMANY).apply {
+        timeZone = tz
+    }
+    return sdf.format(cal.time)
 }
 
 suspend fun trySendImageToLaptop(imageBytes: ByteArray): Boolean {
     return withContext(Dispatchers.IO) {
         try {
-            if (laptopIp == "") return@withContext false
+            var resolvedIp = laptopIp
+
+            if (resolvedIp.isEmpty()) {
+                resolvedIp = fetchLaptopIpFromSupabase() ?: return@withContext false
+                laptopIp = resolvedIp
+            }
 
             flashcardResponseSocket?.close()
             val serverSocket = ServerSocket().apply {
@@ -1175,12 +1195,16 @@ suspend fun trySendImageToLaptop(imageBytes: ByteArray): Boolean {
             startFlashcardResponseListener(serverSocket)
 
             Socket().apply {
-                connect(InetSocketAddress(laptopIp, Config.FLASHCARD_SEND_PORT), 3000)
+                connect(InetSocketAddress(resolvedIp, Config.FLASHCARD_SEND_PORT), 3000)
                 getOutputStream().write(imageBytes)
                 shutdownOutput()
                 close()
             }
             true
+        } catch (_: SocketTimeoutException) {
+            false
+        } catch (_: ConnectException) {
+            false
         } catch (e: Exception) {
             logError("trySendImageToLaptop", e)
             flashcardVokabelnFlow.emit(null)
@@ -1200,7 +1224,7 @@ private fun startFlashcardResponseListener(boundSocket: ServerSocket) {
                 parseVokabelnFromJson(client.inputStream.readBytes().toString(Charsets.UTF_8))
             client.close()
             flashcardVokabelnFlow.emit(vokabeln.ifEmpty { null })
-        } catch (_: SocketTimeoutException) {
+        } catch (e: SocketTimeoutException) {
             flashcardVokabelnFlow.emit(null)
         } catch (e: Exception) {
             logError("startFlashcardResponseListener", e)
@@ -1214,8 +1238,9 @@ private fun startFlashcardResponseListener(boundSocket: ServerSocket) {
 
 private fun parseVokabelnFromJson(json: String): List<Vokabel> = try {
     val arr = JSONArray(json)
+    Log.d("TOTOTO", "$arr")
     (0 until arr.length()).map { i ->
-        arr.getJSONObject(i).run { Vokabel(getString("latein"), getString("deutsch")) }
+        arr.getJSONObject(i).run { Vokabel(getString("latein"), getString("deutsch"), i) }
     }
 } catch (e: Exception) {
     logError("parseVokabelnFromJson", e)
@@ -1247,13 +1272,15 @@ suspend fun sendNvidiaChatMessage(
                 "Du bist ein hilfreicher Chat-Assistent. Antworte kurz, klar und auf Deutsch und verwende keine Markdown Syntax."
             )
         })
-        put(JSONObject().apply { put("role", "user"); put("content", userMessage) })
+
         history.forEach { msg ->
             put(JSONObject().apply {
                 put("role", if (msg.isOwnMessage) "user" else "assistant")
                 put("content", msg.text)
             })
         }
+
+        put(JSONObject().apply { put("role", "user"); put("content", userMessage) })
     }
     return callNvidiaApi("meta/llama-3.1-8b-instruct", messages)
 }
@@ -1272,29 +1299,27 @@ suspend fun sendNvidiaChatMessageAITab(
                 "Du bist ein hilfreicher Chat-Assistent. Antworte kurz, klar und auf Deutsch."
             )
         })
+
+        history.forEach { msg ->
+            put(JSONObject().apply {
+                put("role", if (msg.own) "user" else "assistant")
+                put("content", msg.text)
+            })
+        }
+
         put(JSONObject().apply { put("role", "user"); put("content", userMessage) })
+
         if (pic != null) {
             put(JSONObject().apply {
                 put("role", "user")
                 put("content", JSONArray().apply {
                     put(JSONObject().apply {
                         put("type", "image_url")
-                        put(
-                            "image_url",
-                            JSONObject().apply {
-                                put(
-                                    "url",
-                                    "data:image/jpeg;base64,$pic"
-                                )
-                            })
+                        put("image_url", JSONObject().apply {
+                            put("url", "data:image/jpeg;base64,$pic")
+                        })
                     })
                 })
-            })
-        }
-        history.forEach { msg ->
-            put(JSONObject().apply {
-                put("role", if (msg.own) "user" else "assistant")
-                put("content", "\nChat History \n ${msg.text}")
             })
         }
     }
@@ -1357,7 +1382,7 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
             }
         }
 
-        else -> Log.w("MEDIA_CMD", "Unbekannte Aktion: $action")
+        else -> {}
     }
 }
 
@@ -1378,7 +1403,6 @@ fun startMediaStateServer(context: Context) {
                 flush()
             }
             client.close()
-            Log.d("MEDIA_STATE", "📤 Antwort gesendet für: $command")
         }
 }
 
@@ -1593,7 +1617,6 @@ fun checkIfNearLocation(
         override fun onLocationResult(locationResult: LocationResult) {
             val location = locationResult.lastLocation
             if (location != null) {
-                Log.d("CLOUD", "$location")
                 callback(
                     distanceBetween(
                         location.latitude,
@@ -1607,6 +1630,11 @@ fun checkIfNearLocation(
             }
             fusedLocationClient.removeLocationUpdates(this)
         }
+    }
+
+    syncScope.launch(Dispatchers.Main) {
+        delay(10000)
+        runCatching { fusedLocationClient.removeLocationUpdates(locationCallback) }
     }
 
     @SuppressLint("MissingPermission")
@@ -1656,120 +1684,6 @@ suspend fun askServer(
             msg
         }
     }
-}
-
-fun triggerBuild(context: Context) {
-    if (laptopIp.isEmpty()) {
-        showSimpleNotificationExtern("❌ Build", "Laptop nicht verbunden", 10.seconds, context)
-        return
-    }
-
-    syncScope.launch(Dispatchers.IO) {
-        var sock: Socket? = null
-        try {
-            showSimpleNotificationExtern(
-                "🔨 Build gestartet",
-                "Warte auf APK...",
-                10.seconds,
-                context
-            )
-
-            sock = Socket().apply {
-                receiveBufferSize = 2 * 1024 * 1024
-                sendBufferSize = 64 * 1024
-                soTimeout = 180_000
-            }
-
-            Log.d("BUILD", "Versuche Build auf $laptopIp:${Config.BUILD_PORT}")
-            sock.connect(InetSocketAddress(laptopIp, Config.BUILD_PORT), 5000)
-            Log.d("BUILD", "Socket connected: ${System.currentTimeMillis()}")
-
-            sock.getOutputStream().write("BUILD\n".toByteArray())
-            sock.getOutputStream().flush()
-
-            val apkFile = File(context.cacheDir, "cloud_update.apk")
-            val reader = sock.inputStream.bufferedReader()
-            val headerLine = reader.readLine() ?: run {
-                sock.close()
-                showSimpleNotificationExtern(
-                    "❌ Build fehlgeschlagen",
-                    "Keine Antwort",
-                    10.seconds,
-                    context
-                )
-                return@launch
-            }
-
-            Log.d("BUILD", "Header received: $headerLine")
-
-            if (headerLine.startsWith("ERROR:")) {
-                sock.close()
-                showSimpleNotificationExtern(
-                    "❌ Build fehlgeschlagen",
-                    headerLine.substringAfter("ERROR:"),
-                    10.seconds,
-                    context
-                )
-                return@launch
-            }
-
-            val apkSize = headerLine.substringAfter("OK:").toLongOrNull() ?: 0L
-            Log.d("BUILD", "Erwarte APK: ${apkSize / 1024 / 1024}MB")
-
-            var bytesRead = 0L
-            apkFile.outputStream().buffered(1024 * 1024).use { fileOut ->
-                val buffer = ByteArray(1024 * 1024)
-                var read: Int
-                while (sock.inputStream.read(buffer).also { read = it } != -1) {
-                    fileOut.write(buffer, 0, read)
-                    bytesRead += read
-                    if (apkSize > 0) {
-                        val progress = (bytesRead * 100 / apkSize).toInt()
-                        if (progress % 10 == 0) Log.d("BUILD", "Progress: $progress%")
-                    }
-                }
-            }
-
-            sock.close()
-            Log.d(
-                "BUILD",
-                "APK written: ${apkFile.length()} bytes in ${System.currentTimeMillis()}ms"
-            )
-
-            if (apkFile.length() == 0L) {
-                showSimpleNotificationExtern(
-                    "❌ Build fehlgeschlagen",
-                    "Leere APK",
-                    10.seconds,
-                    context
-                )
-                return@launch
-            }
-
-            withContext(Dispatchers.Main) {
-                showSimpleNotificationExtern(
-                    "✅ Build fertig",
-                    "Starte Installation...",
-                    5.seconds,
-                    context
-                )
-                installApk(context, apkFile)
-            }
-
-        } catch (e: Exception) {
-            sock?.close()
-            Log.e("BUILD", "Fehler", e)
-            showSimpleNotificationExtern("❌ Build Fehler", e.message ?: "", 10.seconds, context)
-        }
-    }
-}
-
-private fun installApk(context: Context, apkFile: File) {
-    val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", apkFile)
-    context.startActivity(Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(uri, "application/vnd.android.package-archive")
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-    })
 }
 
 fun buildSessionStatsText(sessions: List<ListenSession>): String {
@@ -1906,13 +1820,6 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
             })
         }
 
-        "start_audio_recording" -> startAudioService(
-            context,
-            createAudioFile(context).absolutePath
-        )
-
-        "stop_audio_recording" -> stopAudioService(context)
-
         "get_contacts" -> {
             val query = args.optString("query", "").lowercase()
             val results = JSONArray()
@@ -1950,8 +1857,7 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                             .write(results.toString().toByteArray(Charsets.UTF_8))
                         sock.getOutputStream().flush()
                     }
-                } catch (e: Exception) {
-                    Log.e("EXECUTE", "Kontakte senden fehlgeschlagen", e)
+                } catch (_: Exception) {
                 }
             }
         }
@@ -2009,12 +1915,7 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                         sock.getOutputStream().write(sizePrefix + jsonBytes)
                         sock.getOutputStream().flush()
                     }
-                    Log.d(
-                        "EXECUTE",
-                        "lookup_credentials: sent ${matchedPasswords.size} creds, ${matchedTwoFa.size} 2FA"
-                    )
-                } catch (e: Exception) {
-                    Log.e("EXECUTE", "lookup_credentials: send failed", e)
+                } catch (_: Exception) {
                 }
             }
         }
@@ -2025,7 +1926,6 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                 val twofaId = args.optInt("twofa_id", -1)
 
                 if (credentialId == -1) {
-                    Log.w("EXECUTE", "reveal_credentials: no credential_id provided")
                     return@launch
                 }
 
@@ -2049,11 +1949,10 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                 } else null
 
                 showCredentialsOverlay(context, entry.username, entry.password, totpCode ?: "")
-                Log.d("EXECUTE", "reveal_credentials: showed '${entry.name}' locally")
             }
         }
 
-        else -> Log.w("EXECUTE", "Unbekanntes Tool: $tool")
+        else -> {}
     }
 }
 
@@ -2064,6 +1963,10 @@ fun showCredentialsOverlay(context: Context, us: String, pw: String, totp: Strin
     }
 
     val windowManager = context.getSystemService(WINDOW_SERVICE) as WindowManager
+    val overlayLifecycle = OverlayLifecycleOwner().also {
+        it.onCreate()
+        it.onResume()
+    }
     var testOverlayView: ComposeView? = null
     var testOverlayLifecycle: OverlayLifecycleOwner? =
         OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
@@ -2161,6 +2064,7 @@ fun showCredentialsOverlay(context: Context, us: String, pw: String, totp: Strin
     try {
         windowManager.addView(testOverlayView, params)
     } catch (_: Exception) {
+        overlayLifecycle.onDestroy()
     }
 }
 
@@ -2195,61 +2099,76 @@ fun sendAiExecuteCommand(context: Context, userInput: String) {
     }
 }
 
-private const val LAPTOP_IP_CACHE_KEY = "laptop_ip_cache_time"
-private const val LAPTOP_IP_TTL = 15 * 60 * 60 * 1000L
+private suspend fun fetchLaptopIpFromSupabase(): String? = withContext(Dispatchers.IO) {
+    var connection: HttpURLConnection? = null
+    try {
+        val url = "${SupabaseConfigALT.SUPABASE_URL}/rest/v1/device_ips?device_id=eq.laptop&select=ip_address"
 
-fun discoverLaptopIp(context: Context, onResult: (String?) -> Unit) {
-    val prefs = context.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)
-    val cachedIp = prefs.getString(KEY_LAPTOP_IP, "")
-    val cachedAt = prefs.getLong(LAPTOP_IP_CACHE_KEY, 0L)
-    if (!cachedIp.isNullOrEmpty() && System.currentTimeMillis() - cachedAt < LAPTOP_IP_TTL) {
-        onResult(cachedIp)
-        return
-    }
+        connection = URL(url).openConnection() as HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.setRequestProperty("apikey", SupabaseConfigALT.SUPABASE_PUBLISHABLE_KEY)
+        connection.setRequestProperty("Authorization", "Bearer ${SupabaseConfigALT.SUPABASE_PUBLISHABLE_KEY}")
 
-    syncScope.launch(Dispatchers.IO) {
-        try {
-            val udp = java.net.DatagramSocket()
-            udp.broadcast = true
-            udp.soTimeout = 3000
+        if (connection.responseCode == 200) {
+            val response = connection.inputStream.bufferedReader().readText()
+            val jsonArray = JSONArray(response)
 
-            val subnet = getSubnetBroadcast(context)
-            val sendBuf = "DISCOVER_SERVER".toByteArray()
-            udp.send(
-                java.net.DatagramPacket(
-                    sendBuf,
-                    sendBuf.size,
-                    java.net.InetAddress.getByName(subnet),
-                    DISCOVERY_PORT
-                )
-            )
-
-            val recvBuf = ByteArray(64)
-            val recvPacket = java.net.DatagramPacket(recvBuf, recvBuf.size)
-            udp.receive(recvPacket)
-            val response = String(recvPacket.data, 0, recvPacket.length)
-            udp.close()
-
-            if (response == "SERVER_HERE") {
-                val ip = recvPacket.address.hostAddress ?: return@launch onResult(null)
-                prefs.edit {
-                    putString(KEY_LAPTOP_IP, ip)
-                    putLong(LAPTOP_IP_CACHE_KEY, System.currentTimeMillis())
-                }
-                laptopIp = ip
-                onResult(ip)
+            return@withContext if (jsonArray.length() > 0) {
+                jsonArray.getJSONObject(0).optString("ip_address", "")
             } else {
-                onResult(null)
+                null
             }
-        } catch (_: Exception) {
-            onResult(null)
+        }
+        null
+    } catch (e: Exception) {
+        Log.e("CLOUDSA", "Error fetching laptop IP: ${e.message}", e)
+        logError("SupabaseFetch", e)
+        null
+    } finally {
+        connection?.disconnect()
+    }
+}
+
+private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
+    withContext(Dispatchers.IO) {
+        var connection: HttpURLConnection? = null
+        try {
+            val url = "${SupabaseConfigALT.SUPABASE_URL}/rest/v1/device_ips"
+
+            connection = URL(url).openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.setRequestProperty("apikey", SupabaseConfigALT.SUPABASE_PUBLISHABLE_KEY)
+            connection.setRequestProperty(
+                "Authorization",
+                "Bearer ${SupabaseConfigALT.SUPABASE_PUBLISHABLE_KEY}"
+            )
+            connection.setRequestProperty("Content-Type", "application/json")
+
+            val jsonPayload = JSONObject().apply {
+                put("device_id", "handy")
+                put("ip_address", ipAddress)
+            }
+
+            connection.outputStream.bufferedWriter().use { writer ->
+                writer.write(jsonPayload.toString())
+                writer.flush()
+            }
+
+            return@withContext if (connection.responseCode == 201) {
+                Log.d("CLOUDSA", "Mobile IP successfully inserted: $ipAddress")
+                true
+            } else {
+                Log.e(
+                    "CLOUDSA",
+                    "Failed to insert mobile IP. Response code: ${connection.responseCode}"
+                )
+                false
+            }
+        } catch (e: Exception) {
+            Log.e("CLOUDSA", "Error inserting mobile IP: ${e.message}", e)
+            logError("SupabaseInsert", e)
+            false
+        } finally {
+            connection?.disconnect()
         }
     }
-}
-
-private fun getSubnetBroadcast(context: Context): String {
-    val wm =
-        context.applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
-    val ip = wm.connectionInfo.ipAddress
-    return "${ip and 0xff}.${ip shr 8 and 0xff}.${ip shr 16 and 0xff}.255"
-}
