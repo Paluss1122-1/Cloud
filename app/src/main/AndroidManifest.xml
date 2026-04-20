@@ -156,7 +156,7 @@
             android:name=".services.QuietHoursNotificationService"
             android:enabled="true"
             android:exported="true"
-            android:foregroundServiceType="dataSync"
+            android:foregroundServiceType="specialUse"
             tools:ignore="ExportedService"/>
 
         <service
