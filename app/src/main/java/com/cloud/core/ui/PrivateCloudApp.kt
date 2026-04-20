@@ -1,12 +1,11 @@
 @file:Suppress("AssignedValueIsNeverRead")
 
-package com.cloud.privatecloudapp
+package com.cloud.core.ui
 
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Activity.RESULT_OK
-import android.app.ActivityManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -16,21 +15,12 @@ import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.graphics.Paint
 import android.media.MediaScannerConnection
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.net.Uri
-import android.net.wifi.WifiInfo
-import android.net.wifi.WifiManager
 import android.os.BatteryManager
-import android.os.Build
 import android.os.Environment
-import android.provider.Settings
-import android.view.Display
-import android.view.Surface
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsetsController
-import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -42,6 +32,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -72,8 +63,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -83,7 +72,6 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
@@ -101,7 +89,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -141,8 +128,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -151,45 +136,50 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
 import androidx.core.content.edit
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
-import com.cloud.Config
-import com.cloud.Config.cms
 import com.cloud.R
-import com.cloud.TabNavigationViewModel
-import com.cloud.aitab.AITabContent
-import com.cloud.audiorecorder.AudioRecorderContent
-import com.cloud.authenticator.AuthenticatorTab
-import com.cloud.autoclickertab.AutoClickerTabContent
-import com.cloud.browsertab.BrowserTabContent
-import com.cloud.calender.CalendarTabContent
-import com.cloud.contactstab.ContactsRepository
-import com.cloud.contactstab.ContactsTabContent
-import com.cloud.contactstab.ContactsViewModel
-import com.cloud.datecalculator.DateCalculatorContent
-import com.cloud.exploretab.ExploreTabContent
-import com.cloud.gallery.GalleryTab
-import com.cloud.gmailtab.GmailTabContent
-import com.cloud.loadLastMenuItem
-import com.cloud.mediaplayer.AiResponseHistorySheet
-import com.cloud.mediaplayer.MediaAnalyticsManager
-import com.cloud.mediaplayer.MediaTab
-import com.cloud.mediarecorder.MediaRecorderContent
-import com.cloud.movietab.MovieDiscoveryTabContent
-import com.cloud.notes.NotizenApp
-import com.cloud.objects.FavoriteManager
-import com.cloud.quicksettingsfunctions.BatteryChartScreen
-import com.cloud.quicksettingsfunctions.showNetworkInfo
-import com.cloud.quicksettingsfunctions.showSensorsInfo
-import com.cloud.remotedesktop.RemoteDesktopTabContent
-import com.cloud.spotifydownloader.SpotifyDownloaderApp
-import com.cloud.spotifydownloadertab.SpotifyDownloaderTab
-import com.cloud.ui.theme.Cloud
-import com.cloud.vocabtab.VocabTab
-import com.cloud.weathertab.WeatherTabContent
+import com.cloud.tabs.authenticator.AuthenticatorTab
+import com.cloud.core.objects.Config
+import com.cloud.core.objects.Config.cms
+import com.cloud.core.TabNavigationViewModel
+import com.cloud.tabs.exploretab.ExploreTabContent
+import com.cloud.core.objects.FavoriteManager
+import com.cloud.privatecloudapp.FileIcon
+import com.cloud.privatecloudapp.FullscreenImageDialog
+import com.cloud.privatecloudapp.fileExistsInDCIM
+import com.cloud.privatecloudapp.fileExistsLocallyWithSameSize
+import com.cloud.privatecloudapp.getFileNameFromUri
+import com.cloud.privatecloudapp.getLocalFileWithPath
+import com.cloud.privatecloudapp.getMimeType
+import com.cloud.privatecloudapp.isImageFile
+import com.cloud.privatecloudapp.isOnline
+import com.cloud.tabs.AiResponseHistorySheet
+import com.cloud.tabs.AutoClickerTabContent
+import com.cloud.tabs.BrowserTabContent
+import com.cloud.tabs.CalendarTabContent
+import com.cloud.tabs.ContactsRepository
+import com.cloud.tabs.ContactsTabContent
+import com.cloud.tabs.ContactsViewModel
+import com.cloud.tabs.DateCalculatorContent
+import com.cloud.tabs.GalleryTab
+import com.cloud.tabs.GmailTabContent
+import com.cloud.tabs.MediaAnalyticsManager
+import com.cloud.tabs.MediaRecorderContent
+import com.cloud.tabs.MediaTab
+import com.cloud.tabs.MovieDiscoveryTabContent
+import com.cloud.tabs.NotizenApp
+import com.cloud.tabs.OtherBucketViewer
+import com.cloud.tabs.QuickSettingsTabContent
+import com.cloud.tabs.RemoteDesktopTabContent
+import com.cloud.tabs.SpotifyDownloaderApp
+import com.cloud.tabs.SpotifyDownloaderTab
+import com.cloud.tabs.VocabTab
+import com.cloud.tabs.WeatherTabContent
+import com.cloud.tabs.aitab.AITabContent
+import com.cloud.tabs.audiorecordertab.AudioRecorderContent
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -199,13 +189,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
-import java.net.Inet4Address
 import java.time.Instant
 import java.time.ZoneId
 import java.util.Calendar
-import java.util.Date
-import java.util.Locale
-import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 
@@ -367,13 +353,13 @@ enum class MenuItem(
 fun PrivateCloudApp(
     storage: Storage,
     startTarget: String?,
-    initialMenuItem: MenuItem? = null,
+    initialMenuItem: MenuItem,
     onMenuClick: (() -> Unit)? = null,
     viewModel: TabNavigationViewModel = viewModel()
 ) {
     val context = LocalContext.current
     var selectedMenuItem by rememberSaveable {
-        mutableStateOf(initialMenuItem ?: loadLastMenuItem(context))
+        mutableStateOf(initialMenuItem)
     }
     var isFullScreen by rememberSaveable { mutableStateOf(false) }
     var webViewUrl by rememberSaveable { mutableStateOf("https://www.google.com") }
@@ -398,6 +384,9 @@ fun PrivateCloudApp(
         val controller = activity?.window?.insetsController ?: return@LaunchedEffect
         if (isFullScreen) {
             controller.hide(android.view.WindowInsets.Type.systemBars())
+            controller.systemBarsBehavior =
+                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            (activity as? AppCompatActivity)?.supportActionBar?.hide()
         } else {
             controller.show(android.view.WindowInsets.Type.systemBars())
         }
@@ -426,9 +415,11 @@ fun PrivateCloudApp(
                         onEnterFullScreen = { isFullScreen = true }
                     )
                 }
+
                 MenuItem.PRIVATE_CLOUD -> {
                     MainCloudScreen(storage = storage)
                 }
+
                 else -> selectedMenuItem.content(setGesturesEnabled)
             }
         }
@@ -514,7 +505,9 @@ fun PrivateCloudApp(
                                     imageVector = Icons.Default.Menu,
                                     contentDescription = "Menü öffnen",
                                     tint = Color.White,
-                                    modifier = Modifier.alpha(0f).size(48.dp)
+                                    modifier = Modifier
+                                        .alpha(0f)
+                                        .size(48.dp)
                                 )
                             }
                         },
@@ -534,6 +527,7 @@ fun PrivateCloudApp(
                             onUrlChange = { webViewUrl = it },
                             onEnterFullScreen = { isFullScreen = true }
                         )
+
                         MenuItem.PRIVATE_CLOUD -> MainCloudScreen(storage = storage)
                         else -> selectedMenuItem.content(setGesturesEnabled)
                     }
@@ -582,7 +576,7 @@ fun PrivateCloudApp(
                                 customView = null
                                 customViewCallback?.onCustomViewHidden()
                                 customViewCallback = null
-
+                                isFullScreen = false
                                 activity.window.insetsController?.show(
                                     android.view.WindowInsets.Type.systemBars()
                                 )
@@ -666,20 +660,40 @@ fun PrivateCloudApp(
                 Button(
                     onClick = {
                         isDesktopMode = !isDesktopMode
+                        val currentUrl =
+                            webView.url ?: return@Button  // falls keine URL geladen ist
 
                         webView.settings.apply {
                             if (isDesktopMode) {
+                                // Desktop-Modus (Windows 11 PC)
                                 userAgentString =
-                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
                                 useWideViewPort = true
                                 loadWithOverviewMode = true
                             } else {
+                                // Mobile-Modus (wie vorher)
                                 userAgentString =
                                     "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
                                 useWideViewPort = true
                                 loadWithOverviewMode = true
                             }
                         }
+
+                        val desktopUA =
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
+
+                        webView.evaluateJavascript(
+                            """
+            Object.defineProperty(navigator, 'userAgent', {
+                value: '${if (isDesktopMode) desktopUA else webView.settings.userAgentString}',
+                configurable: true
+            });
+            Object.defineProperty(navigator, 'platform', {
+                value: '${if (isDesktopMode) "Win32" else "Linux armv8l"}',
+                configurable: true
+            });
+        """.trimIndent(), null
+                        )
 
                         webView.loadUrl(currentUrl)
                     },
@@ -689,7 +703,7 @@ fun PrivateCloudApp(
                 ) {
                     Icon(
                         imageVector = if (isDesktopMode) Icons.Filled.Laptop else Icons.Filled.Phone,
-                        contentDescription = null,
+                        contentDescription = if (isDesktopMode) "Desktop-Modus" else "Mobile-Modus",
                         tint = Color.White
                     )
                 }
