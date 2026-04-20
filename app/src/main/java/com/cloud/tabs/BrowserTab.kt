@@ -1,4 +1,4 @@
-package com.cloud.browsertab
+package com.cloud.tabs
 
 import android.content.Context
 import androidx.compose.animation.core.Animatable
@@ -33,7 +33,7 @@ import androidx.compose.ui.text.font.FontWeight.Companion.Bold
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.cloud.privatecloudapp.loadLastUrl
+import com.cloud.core.ui.loadLastUrl
 import kotlinx.coroutines.delay
 
 @Composable
@@ -122,6 +122,9 @@ fun BrowserTabContent(
             }
             QuickLinkButton("Gmail", Color(0xFFFFA500)) {
                 loadAndOpenUrl("https://www.gmail.com")
+            }
+            QuickLinkButton("Disney", Color(0xFF5900FF)) {
+                loadAndOpenUrl("https://www.disneyplus.com/de-de/home?")
             }
         }
 
