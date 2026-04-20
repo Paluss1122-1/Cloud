@@ -172,7 +172,6 @@ private fun saveServerIp(ip: String) {
 @Composable
 fun GmailTabContent() {
     val context = LocalContext.current
-    remember { context.getSharedPreferences(PREFS_EMAIL, Context.MODE_PRIVATE) }
     val scope = rememberCoroutineScope()
 
     var serverIp by remember { mutableStateOf(loadServerIp()) }
