@@ -48,11 +48,11 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.cloud.core.activities.MainActivity
+import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.core.objects.Config.COMPLETED_PODCASTS
 import com.cloud.core.objects.Config.MEDIA_PLAYER
 import com.cloud.core.objects.Config.PLALISTS
 import com.cloud.core.objects.Config.PODCASTS
-import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.quiethoursnotificationhelper.pushMediaStateToLaptop
 import com.cloud.quiethoursnotificationhelper.sendNvidiaChatMessageAITab
 import com.cloud.tabs.AlgorithmicPlaylistRegistry
@@ -947,6 +947,7 @@ class MediaPlayerService : MediaSessionService() {
     private fun switchToMusic() {
         if (isPlayingPodcast) {
             savePodcastCurrentPosition()
+            savePodcastSession()
             podcastPlayer?.pause()
             isPlayingPodcast = false
         }
