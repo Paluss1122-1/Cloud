@@ -1,8 +1,7 @@
-package com.cloud.service
+package com.cloud.services
 
 import android.Manifest
 import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
@@ -18,10 +17,10 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import androidx.core.content.edit
-import com.cloud.Config.CHAT_SERVICE
-import com.cloud.Config.CHAT_SERVICE_HISTORY
-import com.cloud.Config.cms
-import com.cloud.SupabaseConfigALT
+import com.cloud.core.objects.Config.CHAT_SERVICE
+import com.cloud.core.objects.Config.CHAT_SERVICE_HISTORY
+import com.cloud.core.objects.Config.cms
+import com.cloud.core.objects.SupabaseConfigALT
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
@@ -45,7 +44,7 @@ import java.util.Locale
 class ChatService : Service() {
 
     companion object {
-        private const val CHANNEL_ID = "chat_service_channel"
+        const val CHANNEL_ID = "chat_service_channel"
         private const val ACTION_REPLY = "com.cloud.ACTION_CHAT_REPLY"
         private const val ACTION_SHOW_HISTORY = "com.cloud.ACTION_SHOW_HISTORY"
         private const val KEY_REPLY_TEXT = "key_reply_text"
@@ -125,7 +124,6 @@ class ChatService : Service() {
 
         sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         loadSeenMessageIds()
-        createNotificationChannel()
 
         val filter = IntentFilter().apply {
             addAction(ACTION_REPLY)
@@ -180,37 +178,6 @@ class ChatService : Service() {
         } catch (e: Exception) {
         }
     }
-
-
-    private fun createNotificationChannel() {
-        val serviceChannel = NotificationChannel(
-            CHANNEL_ID,
-            "Chat Service",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Hintergrund-Service für Chat-Nachrichten"
-            setShowBadge(false)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            setSound(null, null)
-        }
-
-        val messageChannel = NotificationChannel(
-            "chat_messages",
-            "Chat Nachrichten",
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "Benachrichtigungen für neue Chat-Nachrichten"
-            setShowBadge(true)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            enableVibration(true)
-            enableLights(true)
-        }
-
-        val notificationManager = getSystemService(NotificationManager::class.java)
-        notificationManager.createNotificationChannel(serviceChannel)
-        notificationManager.createNotificationChannel(messageChannel)
-    }
-
 
     fun createServiceNotification(): Notification {
         val replyRemoteInput = RemoteInput.Builder(KEY_REPLY_TEXT)
