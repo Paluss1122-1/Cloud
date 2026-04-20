@@ -1,6 +1,7 @@
-package com.cloud.errorreports
+package com.cloud.services
 
 import android.Manifest
+import android.R
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -13,10 +14,10 @@ import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
-import com.cloud.Config.cms
-import com.cloud.ERRORINSERT
-import com.cloud.ERRORINSERTDATA
-import com.cloud.SupabaseConfigALT
+import com.cloud.core.objects.Config.cms
+import com.cloud.core.functions.ERRORINSERT
+import com.cloud.core.functions.ERRORINSERTDATA
+import com.cloud.core.objects.SupabaseConfigALT
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
@@ -39,28 +40,7 @@ data class ErrorReport(
 
 class ErrorNotificationManager(private val context: Context) {
     companion object {
-        private const val CHANNEL_ID = "error_reports_channel"
-        private const val CHANNEL_NAME = "Error Reports"
-    }
-
-    init {
-        createNotificationChannel()
-    }
-
-    private fun createNotificationChannel() {
-        val importance = NotificationManager.IMPORTANCE_HIGH
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            CHANNEL_NAME,
-            importance
-        ).apply {
-            description = "Benachrichtigungen für neue Fehlerberichte"
-            enableVibration(true)
-            enableLights(true)
-        }
-
-        val notificationManager = context.getSystemService(NotificationManager::class.java)
-        notificationManager.createNotificationChannel(channel)
+        const val CHANNEL_ID = "error_reports_channel"
     }
 
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
@@ -88,7 +68,7 @@ class ErrorNotificationManager(private val context: Context) {
             )
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                .setSmallIcon(R.drawable.ic_dialog_alert)
                 .setContentTitle("$severityEmoji Neuer Fehler: ${errorReport.service_name}")
                 .setContentText(errorReport.error_message)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -178,7 +158,7 @@ class ErrorMonitorService : Service() {
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Error Monitor aktiv")
             .setContentText("Überwacht Fehlerberichte im Hintergrund")
-            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .setSmallIcon(R.drawable.ic_menu_info_details)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
 
