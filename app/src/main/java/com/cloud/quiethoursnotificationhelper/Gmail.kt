@@ -1,6 +1,6 @@
 package com.cloud.quiethoursnotificationhelper
 
-import com.cloud.Config
+import com.cloud.core.objects.Config
 import java.util.Properties
 import javax.mail.Flags
 import javax.mail.Folder
