@@ -1,7 +1,6 @@
 *.iml
 .gradle
 /build
-app/src/main/java/com/cloud/Config.kt
 keystore/
 .idea/
 postcommit.py
@@ -12,3 +11,4 @@ scan_cache.json
 scan_report.json
 project_summary.md
 summarize.py
+app/src/main/java/com/cloud/core/objects/Config.kt
