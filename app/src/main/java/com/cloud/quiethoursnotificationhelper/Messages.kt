@@ -14,19 +14,19 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
-import com.cloud.Config.cms
-import com.cloud.ERRORINSERT
-import com.cloud.ERRORINSERTDATA
-import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_MARK_PARTS_READ
-import com.cloud.service.QuietHoursNotificationService.Companion.ACTION_MESSAGE_SENT
-import com.cloud.service.QuietHoursNotificationService.Companion.EXTRA_MESSAGE_ID
-import com.cloud.service.QuietHoursNotificationService.Companion.EXTRA_SENDER
-import com.cloud.service.QuietHoursNotificationService.Companion.MAX_MESSAGES_PER_CONTACT
-import com.cloud.service.QuietHoursNotificationService.Companion.isSupportedMessenger
-import com.cloud.service.QuietHoursNotificationService.Companion.readMessageIds
-import com.cloud.service.QuietHoursNotificationService.Companion.workerHandler
-import com.cloud.service.WhatsAppNotificationListener
-import com.cloud.showSimpleNotificationExtern
+import com.cloud.core.objects.Config.cms
+import com.cloud.core.functions.ERRORINSERT
+import com.cloud.core.functions.ERRORINSERTDATA
+import com.cloud.core.functions.showSimpleNotificationExtern
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_MARK_PARTS_READ
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_MESSAGE_SENT
+import com.cloud.services.QuietHoursNotificationService.Companion.EXTRA_MESSAGE_ID
+import com.cloud.services.QuietHoursNotificationService.Companion.EXTRA_SENDER
+import com.cloud.services.QuietHoursNotificationService.Companion.MAX_MESSAGES_PER_CONTACT
+import com.cloud.services.QuietHoursNotificationService.Companion.isSupportedMessenger
+import com.cloud.services.QuietHoursNotificationService.Companion.readMessageIds
+import com.cloud.services.QuietHoursNotificationService.Companion.workerHandler
+import com.cloud.services.WhatsAppNotificationListener
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -274,7 +274,7 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
             return
         }
 
-        val creatorPackage = replyData.pendingIntent?.creatorPackage
+        val creatorPackage = replyData.pendingIntent.creatorPackage
         if (creatorPackage == null) {
             Log.e("Messages", "creatorPackage ist null für key='$key'")
             showSimpleNotificationExtern("⚠️ Kein Package", "PendingIntent hat kein creatorPackage", context = context, silent = false)
@@ -282,14 +282,14 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
         }
 
         val supported =
-            replyData?.pendingIntent?.creatorPackage?.let { isSupportedMessenger(it) } ?: false
+            replyData.pendingIntent.creatorPackage?.let { isSupportedMessenger(it) } ?: false
         Log.d("Messages", "creatorPackage='$creatorPackage', supported=$supported")
 
         if (!supported) {
-            Log.w("Messages", "Unsupported messenger: ${replyData?.pendingIntent?.creatorPackage}")
+            Log.w("Messages", "Unsupported messenger: ${replyData.pendingIntent.creatorPackage}")
             showSimpleNotificationExtern(
                 "⚠️ Nicht unterstützt",
-                "Messenger wird nicht unterstützt: ${replyData?.pendingIntent?.creatorPackage}",
+                "Messenger wird nicht unterstützt: ${replyData.pendingIntent.creatorPackage}",
                 20.seconds, context,
                 silent = false
             )
