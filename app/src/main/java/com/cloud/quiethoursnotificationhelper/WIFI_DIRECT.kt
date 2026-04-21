@@ -627,7 +627,18 @@ fun syncTodosWithLaptop(context: Context) {
 
     syncScope.launch {
         try {
-            // Lokale Kopie — NICHT global überschreiben
+            syncScope.launch {
+                val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                val network = connectivityManager.activeNetwork ?: return@launch
+                val linkProperties = connectivityManager.getLinkProperties(network) ?: return@launch
+
+                val localip = linkProperties.linkAddresses
+                    .map { it.address.hostAddress }
+                    .firstOrNull { ip ->
+                        ip != null && (ip.startsWith("192.") || ip.startsWith("10."))
+                    }
+                insertMobileIpToSupabase(localip ?: return@launch)
+            }
             var resolvedIp = laptopIp
 
             if (resolvedIp.isEmpty()) {
