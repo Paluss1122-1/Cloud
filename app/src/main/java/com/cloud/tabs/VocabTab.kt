@@ -16,7 +16,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -52,6 +55,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -79,6 +83,7 @@ import com.cloud.core.objects.Config
 import com.cloud.quiethoursnotificationhelper.flashcardVokabelnFlow
 import com.cloud.quiethoursnotificationhelper.trySendImageToLaptop
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -87,9 +92,6 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 
 data class Vokabel(val latein: String, val deutsch: String, val id: Int)
@@ -97,6 +99,28 @@ data class VokabelSet(
     val name: String,
     val vokabeln: List<Vokabel>,
     val createdAt: Long = System.currentTimeMillis()
+)
+
+data class VokabelProgress(
+    val vokabelId: Int,
+    val correctCount: Int = 0,
+    val wrongCount: Int = 0,
+    val lastPracticed: Long = 0L
+)
+
+data class SetProgress(
+    val setCreatedAt: Long,
+    val vokabelProgress: Map<Int, VokabelProgress> = emptyMap(),
+    val totalSessions: Int = 0,
+    val lastSession: Long = 0L
+)
+
+data class SessionState(
+    val shuffledIds: List<Int>,
+    val currentIndex: Int,
+    val correctIds: List<Int>,
+    val wrongIds: List<Int>,
+    val showDeutsch: Boolean
 )
 
 enum class VokabelTabScreen { HOME, UPLOAD, REVIEW, LEARN }
@@ -124,6 +148,8 @@ fun VocabTab() {
     var activeSet by remember { mutableStateOf<VokabelSet?>(null) }
     var showSaveDialog by remember { mutableStateOf(false) }
     var saveNameInput by remember { mutableStateOf("") }
+    var lastWidth by remember { mutableFloatStateOf(0f) }
+    var currentWidth by remember { mutableFloatStateOf(0f) }
 
     val imagePicker =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -168,7 +194,11 @@ fun VocabTab() {
                 onDeleteSet = { set ->
                     saveWeakVokabeln(prefs, set.createdAt, emptyList())
                     savedSets = deleteVokabelSet(prefs, set)
-                }
+                },
+                onUpdate = { int ->
+                    currentWidth = int
+                },
+                lastWidth = lastWidth
             )
 
             VokabelTabScreen.UPLOAD -> UploadScreen(
@@ -355,6 +385,7 @@ fun VocabTab() {
                 prefs = prefs,
                 setCreatedAt = activeSet?.createdAt ?: 0L,
                 onBack = {
+                    lastWidth = currentWidth
                     screen =
                         if (activeSet != null) VokabelTabScreen.HOME else VokabelTabScreen.REVIEW
                 },
@@ -371,7 +402,9 @@ fun HomeScreen(
     onNewSet: () -> Unit,
     onOpenSet: (VokabelSet) -> Unit,
     onLearnWeak: (VokabelSet) -> Unit,
-    onDeleteSet: (VokabelSet) -> Unit
+    onDeleteSet: (VokabelSet) -> Unit,
+    onUpdate: (Float) -> Unit,
+    lastWidth: Float
 ) {
     var setToDelete by remember { mutableStateOf<VokabelSet?>(null) }
 
@@ -456,6 +489,25 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(savedSets, key = { it.createdAt }) { set ->
+                    val session = remember { loadSessionState(prefs, set.createdAt) }
+                    val progressFloat by remember(session) {
+                        mutableFloatStateOf(
+                            if (session != null && set.vokabeln.isNotEmpty())
+                                session.currentIndex.toFloat() / set.vokabeln.size
+                            else 0f
+                        )
+                    }
+
+                    val progressPercentFloat = remember { Animatable(lastWidth) }
+                    LaunchedEffect(progressFloat) {
+                        delay(200)
+                        progressPercentFloat.animateTo(
+                            progressFloat,
+                            animationSpec = tween(400, easing = EaseInOutCubic)
+                        )
+                        if (progressPercentFloat.value != 0f) onUpdate(progressPercentFloat.value)
+                    }
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -465,61 +517,128 @@ fun HomeScreen(
                             .padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(
-                                            AccentViolet,
-                                            AccentVioletDim
-                                        )
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("📖", fontSize = 22.sp)
-                        }
-                        Spacer(Modifier.width(14.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                set.name,
-                                color = TextPrimary,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                "${set.vokabeln.size} Vokabeln · ${formatSetDate(set.createdAt)}",
-                                color = TextTertiary, fontSize = 12.sp
-                            )
-                        }
-                        val weakCount = loadWeakVokabeln(prefs, set.createdAt).size
-                        if (weakCount > 0) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFFB71C1C).copy(alpha = 0.2f))
-                                    .clickable { onLearnWeak(set) }
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    "✗ $weakCount",
-                                    color = Color(0xFFEF5350),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(
+                                            Brush.linearGradient(
+                                                listOf(
+                                                    AccentViolet,
+                                                    AccentVioletDim
+                                                )
+                                            )
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("📖", fontSize = 22.sp)
+                                }
+                                Spacer(Modifier.width(14.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        set.name,
+                                        color = TextPrimary,
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                                val weakCount = loadWeakVokabeln(prefs, set.createdAt).size
+                                if (weakCount > 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFFB71C1C).copy(alpha = 0.2f))
+                                            .clickable { onLearnWeak(set) }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            "✗ $weakCount",
+                                            color = Color(0xFFEF5350),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Spacer(Modifier.width(6.dp))
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFFB71C1C).copy(alpha = 0.15f))
+                                        .clickable { setToDelete = set },
+                                    contentAlignment = Alignment.Center
+                                ) { Text("🗑", fontSize = 14.sp) }
                             }
-                            Spacer(Modifier.width(6.dp))
+
+                            Spacer(Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(8.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(
+                                            Brush.linearGradient(
+                                                listOf(
+                                                    AccentViolet.copy(0.2f),
+                                                    AccentVioletDim.copy(0.2f)
+                                                )
+                                            )
+                                        )
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(progressPercentFloat.value)
+                                            .fillMaxHeight()
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(
+                                                Brush.linearGradient(
+                                                    listOf(
+                                                        AccentViolet,
+                                                        AccentVioletDim
+                                                    )
+                                                )
+                                            )
+                                    )
+                                }
+
+                                Spacer(Modifier.width(10.dp))
+
+                                val hasSession =
+                                    remember { loadSessionState(prefs, set.createdAt) != null }
+                                if (hasSession) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(AccentViolet.copy(alpha = 0.2f))
+                                            .clickable { onOpenSet(set) }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            "▶ ${
+                                                loadSessionState(
+                                                    prefs,
+                                                    set.createdAt
+                                                )?.currentIndex ?: 0
+                                            }/${set.vokabeln.size}",
+                                            color = AccentViolet,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Spacer(Modifier.width(6.dp))
+                                }
+                            }
+
                         }
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFFB71C1C).copy(alpha = 0.15f))
-                                .clickable { setToDelete = set },
-                            contentAlignment = Alignment.Center
-                        ) { Text("🗑", fontSize = 14.sp) }
                     }
                 }
                 item { Spacer(Modifier.height(16.dp)) }
@@ -687,7 +806,6 @@ fun ReviewScreen(
             }
         }
 
-        // Zähle geänderte Vokabeln
         current.forEach { currVokabel ->
             val origVokabel = original.firstOrNull { it.id == currVokabel.id }
             if (origVokabel != null) {
@@ -695,7 +813,6 @@ fun ReviewScreen(
                     changeCount++
                 }
             } else {
-                // Neu hinzugefügte Vokabel (falls das jemals passiert)
                 changeCount++
             }
         }
@@ -703,7 +820,6 @@ fun ReviewScreen(
         return changeCount
     }
 
-    // Berechne changes direkt, statt zu akkumulieren
     val changes = remember(currentVokabeln, initVocabs) {
         calculateChanges(initVocabs, currentVokabeln)
     }
@@ -822,7 +938,8 @@ fun ReviewScreen(
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(Color(0xFFB71C1C).copy(alpha = 0.15f))
                                         .clickable {
-                                            currentVokabeln = currentVokabeln.filter { it.id != vokabel.id }
+                                            currentVokabeln =
+                                                currentVokabeln.filter { it.id != vokabel.id }
                                             editMode = false
                                         }
                                         .padding(vertical = 10.dp),
@@ -834,15 +951,17 @@ fun ReviewScreen(
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(MaterialTheme.colorScheme.primary)
                                         .clickable {
-                                            val idx = currentVokabeln.indexOfFirst { it.id == vokabel.id }
+                                            val idx =
+                                                currentVokabeln.indexOfFirst { it.id == vokabel.id }
                                             if (idx >= 0) {
-                                                currentVokabeln = currentVokabeln.toMutableList().also {
-                                                    it[idx] = Vokabel(
-                                                        editLatein.trim(),
-                                                        editDeutsch.trim(),
-                                                        vokabel.id
-                                                    )
-                                                }
+                                                currentVokabeln =
+                                                    currentVokabeln.toMutableList().also {
+                                                        it[idx] = Vokabel(
+                                                            editLatein.trim(),
+                                                            editDeutsch.trim(),
+                                                            vokabel.id
+                                                        )
+                                                    }
                                             }
                                             editMode = false
                                         }
@@ -903,27 +1022,67 @@ fun LearnScreen(
 ) {
     var setToReview by remember { mutableStateOf(false) }
     var vokabeln by remember { mutableStateOf(vokabeln) }
-    var shuffled by remember { mutableStateOf(vokabeln) }
-    var currentIndex by remember { mutableIntStateOf(0) }
-    var showDeutsch by remember { mutableStateOf(false) }
+    val savedSession = remember { loadSessionState(prefs, setCreatedAt) }
+    val allVokabeln = vokabeln
+    var shuffled by remember {
+        mutableStateOf(
+            savedSession?.shuffledIds?.mapNotNull { id -> allVokabeln.firstOrNull { it.id == id } }
+                ?: vokabeln.shuffled()
+        )
+    }
+    var currentIndex by remember { mutableIntStateOf(savedSession?.currentIndex ?: 0) }
+    var showDeutsch by remember { mutableStateOf(savedSession?.showDeutsch ?: false) }
     var showAnswer by remember { mutableStateOf(false) }
-    var correct by remember { mutableIntStateOf(0) }
-    var wrong by remember { mutableIntStateOf(0) }
+    var correctVokabeln by remember {
+        mutableStateOf(
+            (savedSession?.correctIds ?: emptyList()).mapNotNull { id ->
+                allVokabeln.firstOrNull { it.id == id }
+            }
+        )
+    }
+    var wrongVokabeln by remember {
+        mutableStateOf(
+            (savedSession?.wrongIds ?: emptyList()).mapNotNull { id ->
+                allVokabeln.firstOrNull { it.id == id }
+            }
+        )
+    }
+    var correct by remember { mutableIntStateOf(savedSession?.correctIds?.size ?: 0) }
+    var wrong by remember { mutableIntStateOf(savedSession?.wrongIds?.size ?: 0) }
     val flipped by animateFloatAsState(targetValue = if (showAnswer) 180f else 0f, label = "flip")
     val done = currentIndex >= shuffled.size
-    var correctVokabeln by remember { mutableStateOf<List<Vokabel>>(emptyList()) }
-    var wrongVokabeln by remember { mutableStateOf<List<Vokabel>>(emptyList()) }
     LaunchedEffect(vokabeln) {
         shuffled = vokabeln.shuffled()
         showAnswer = showDeutsch
     }
 
-    Column(modifier = Modifier.fillMaxSize().alpha(if (setToReview) 0f else 1f)) {
+    val handleBack = {
+        if (done) clearSessionState(prefs, setCreatedAt)
+        if (!done) {
+            saveSessionState(
+                prefs, setCreatedAt,
+                SessionState(
+                    shuffledIds = shuffled.map { it.id },
+                    currentIndex = currentIndex,
+                    correctIds = correctVokabeln.map { it.id },
+                    wrongIds = wrongVokabeln.map { it.id },
+                    showDeutsch = showDeutsch
+                )
+            )
+        }
+        onBack()
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .alpha(if (setToReview) 0f else 1f)
+    ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = 4.dp, top = 8.dp, end = 16.dp)
         ) {
-            IconButton(onClick = onBack) {
+            IconButton(onClick = handleBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = TextPrimary)
             }
             Text(
@@ -1155,6 +1314,7 @@ fun LearnScreen(
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 LaunchedEffect(true) {
                     updateWeakVokabeln(prefs, setCreatedAt, correctVokabeln, wrongVokabeln)
+                    updateSetProgress(prefs, setCreatedAt, correctVokabeln, wrongVokabeln)
                 }
                 Column(
                     modifier = Modifier
@@ -1203,8 +1363,11 @@ fun LearnScreen(
                             .clip(RoundedCornerShape(14.dp))
                             .background(MaterialTheme.colorScheme.primary)
                             .clickable {
-                                shuffled = vokabeln.shuffled(); currentIndex = 0; correct =
-                                0; wrong = 0; showAnswer = false
+                                clearSessionState(prefs, setCreatedAt)
+                                shuffled = vokabeln.shuffled()
+                                currentIndex = 0; correct = 0; wrong = 0
+                                correctVokabeln = emptyList(); wrongVokabeln = emptyList()
+                                showAnswer = false
                             }
                             .padding(vertical = 14.dp),
                         contentAlignment = Alignment.Center
@@ -1243,7 +1406,7 @@ fun LearnScreen(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
                             .background(BgCard)
-                            .clickable { onBack() }
+                            .clickable { handleBack() }
                             .padding(vertical = 14.dp),
                         contentAlignment = Alignment.Center
                     ) { Text("Zurück zur Übersicht", color = TextSecondary, fontSize = 14.sp) }
@@ -1379,18 +1542,24 @@ fun deleteVokabelSet(prefs: SharedPreferences, set: VokabelSet): List<VokabelSet
                     s.vokabeln.forEach { v ->
                         va.put(
                             JSONObject()
-                                .apply { put("latein", v.latein); put("deutsch", v.deutsch) })
+                                .apply {
+                                    put("latein", v.latein); put(
+                                    "deutsch",
+                                    v.deutsch
+                                ); put("id", v.id)
+                                })
                     }
                 })
             })
         }
     }.toString()
-    prefs.edit { putString(SETS_KEY, json) }
+    prefs.edit {
+        putString(SETS_KEY, json)
+        remove("progress_${set.createdAt}")
+        remove("weak_${set.createdAt}")
+    }
     return updated
 }
-
-private fun formatSetDate(ts: Long): String =
-    SimpleDateFormat("dd.MM.yyyy", Locale.GERMANY).format(Date(ts))
 
 fun uriToBitmap(context: Context, uri: Uri): Bitmap? {
     return try {
@@ -1443,4 +1612,116 @@ fun updateWeakVokabeln(
     correct.forEach { v -> current.removeAll { it.latein == v.latein } }
     wrong.forEach { v -> if (current.none { it.latein == v.latein }) current.add(v) }
     saveWeakVokabeln(prefs, setCreatedAt, current)
+}
+
+fun loadSetProgress(prefs: SharedPreferences, setCreatedAt: Long): SetProgress {
+    val raw = prefs.getString("progress_$setCreatedAt", null) ?: return SetProgress(setCreatedAt)
+    return try {
+        val obj = JSONObject(raw)
+        val progressMap = mutableMapOf<Int, VokabelProgress>()
+        val vokabelProgressJson = obj.getJSONObject("vokabelProgress")
+        vokabelProgressJson.keys().forEach { key ->
+            val vp = vokabelProgressJson.getJSONObject(key)
+            progressMap[key.toInt()] = VokabelProgress(
+                vokabelId = vp.getInt("vokabelId"),
+                correctCount = vp.getInt("correctCount"),
+                wrongCount = vp.getInt("wrongCount"),
+                lastPracticed = vp.getLong("lastPracticed")
+            )
+        }
+        SetProgress(
+            setCreatedAt = obj.getLong("setCreatedAt"),
+            vokabelProgress = progressMap,
+            totalSessions = obj.getInt("totalSessions"),
+            lastSession = obj.getLong("lastSession")
+        )
+    } catch (_: Exception) {
+        SetProgress(setCreatedAt)
+    }
+}
+
+fun saveSetProgress(prefs: SharedPreferences, progress: SetProgress) {
+    val json = JSONObject().apply {
+        put("setCreatedAt", progress.setCreatedAt)
+        put("totalSessions", progress.totalSessions)
+        put("lastSession", progress.lastSession)
+        put("vokabelProgress", JSONObject().also { vpObj ->
+            progress.vokabelProgress.forEach { (id, vp) ->
+                vpObj.put(id.toString(), JSONObject().apply {
+                    put("vokabelId", vp.vokabelId)
+                    put("correctCount", vp.correctCount)
+                    put("wrongCount", vp.wrongCount)
+                    put("lastPracticed", vp.lastPracticed)
+                })
+            }
+        })
+    }.toString()
+    prefs.edit { putString("progress_${progress.setCreatedAt}", json) }
+}
+
+fun updateSetProgress(
+    prefs: SharedPreferences,
+    setCreatedAt: Long,
+    correct: List<Vokabel>,
+    wrong: List<Vokabel>
+) {
+    val current = loadSetProgress(prefs, setCreatedAt)
+    val updatedMap = current.vokabelProgress.toMutableMap()
+    val now = System.currentTimeMillis()
+
+    correct.forEach { vokabel ->
+        val existing = updatedMap[vokabel.id] ?: VokabelProgress(vokabel.id)
+        updatedMap[vokabel.id] = existing.copy(
+            correctCount = existing.correctCount + 1,
+            lastPracticed = now
+        )
+    }
+
+    wrong.forEach { vokabel ->
+        val existing = updatedMap[vokabel.id] ?: VokabelProgress(vokabel.id)
+        updatedMap[vokabel.id] = existing.copy(
+            wrongCount = existing.wrongCount + 1,
+            lastPracticed = now
+        )
+    }
+
+    val updatedProgress = current.copy(
+        vokabelProgress = updatedMap,
+        totalSessions = current.totalSessions + 1,
+        lastSession = now
+    )
+
+    saveSetProgress(prefs, updatedProgress)
+}
+
+fun saveSessionState(prefs: SharedPreferences, setCreatedAt: Long, state: SessionState) {
+    val json = JSONObject().apply {
+        put("shuffledIds", JSONArray(state.shuffledIds))
+        put("currentIndex", state.currentIndex)
+        put("correctIds", JSONArray(state.correctIds))
+        put("wrongIds", JSONArray(state.wrongIds))
+        put("showDeutsch", state.showDeutsch)
+    }.toString()
+    prefs.edit { putString("session_$setCreatedAt", json) }
+}
+
+fun loadSessionState(prefs: SharedPreferences, setCreatedAt: Long): SessionState? {
+    val raw = prefs.getString("session_$setCreatedAt", null) ?: return null
+    return try {
+        val obj = JSONObject(raw)
+        fun JSONArray.toIntList() = (0 until length()).map { getInt(it) }
+        SessionState(
+            shuffledIds = obj.getJSONArray("shuffledIds").toIntList(),
+            currentIndex = obj.getInt("currentIndex"),
+            correctIds = obj.getJSONArray("correctIds").toIntList(),
+            wrongIds = obj.getJSONArray("wrongIds").toIntList(),
+            showDeutsch = obj.getBoolean("showDeutsch")
+        )
+    } catch (_: Exception) {
+        null
+    }
+}
+
+fun clearSessionState(prefs: SharedPreferences, setCreatedAt: Long) {
+    prefs.edit { remove("session_$setCreatedAt") }
 }
