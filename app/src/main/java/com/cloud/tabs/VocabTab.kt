@@ -41,12 +41,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -150,6 +153,23 @@ fun VocabTab() {
     var saveNameInput by remember { mutableStateOf("") }
     var lastWidth by remember { mutableFloatStateOf(0f) }
     var currentWidth by remember { mutableFloatStateOf(0f) }
+    var showMergeDialog by remember { mutableStateOf(false) }
+
+    if (showMergeDialog) {
+        MergeVocabSetsDialog(
+            context = context,
+            prefs = prefs,
+            allSets = savedSets,
+            onDismiss = { showMergeDialog = false },
+            onMergeComplete = { mergedSet ->
+                savedSets = saveVokabelSet(prefs, mergedSet)
+                activeSet = mergedSet
+                vokabeln = mergedSet.vokabeln
+                screen = VokabelTabScreen.LEARN
+                showMergeDialog = false
+            }
+        )
+    }
 
     val imagePicker =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -198,7 +218,8 @@ fun VocabTab() {
                 onUpdate = { int ->
                     currentWidth = int
                 },
-                lastWidth = lastWidth
+                lastWidth = lastWidth,
+                onMergeClick = { showMergeDialog = true }
             )
 
             VokabelTabScreen.UPLOAD -> UploadScreen(
@@ -216,7 +237,7 @@ fun VocabTab() {
                                 val bytes = ByteArrayOutputStream().also {
                                     bmp.compress(Bitmap.CompressFormat.JPEG, 90, it)
                                 }.toByteArray()
-                                val sent = trySendImageToLaptop(bytes)
+                                val sent = if (!Config.realDevice) false else trySendImageToLaptop(bytes)
                                 if (sent) {
                                     val result = flashcardVokabelnFlow.first { it != null }
                                     vokabeln = result ?: emptyList()
@@ -404,9 +425,11 @@ fun HomeScreen(
     onLearnWeak: (VokabelSet) -> Unit,
     onDeleteSet: (VokabelSet) -> Unit,
     onUpdate: (Float) -> Unit,
-    lastWidth: Float
+    lastWidth: Float,
+    onMergeClick: () -> Unit = {}
 ) {
     var setToDelete by remember { mutableStateOf<VokabelSet?>(null) }
+    val listState = rememberLazyListState()
 
     if (setToDelete != null) {
         AlertDialog(
@@ -435,170 +458,102 @@ fun HomeScreen(
         )
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.primary)
-                .clickable { onNewSet() }
-                .padding(vertical = 18.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.primary)
+                    .clickable { onNewSet() }
+                    .padding(vertical = 18.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Text("📷", fontSize = 22.sp)
-                Text(
-                    "Neues Set scannen",
-                    color = TextPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-
-        if (savedSets.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("📚", fontSize = 56.sp)
+                    Text("📷", fontSize = 22.sp)
                     Text(
-                        "Noch keine Sets",
+                        "Neues Set scannen",
                         color = TextPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
-                    Text("Scan ein Vokabelbild zum Starten", color = TextTertiary, fontSize = 14.sp)
                 }
             }
-        } else {
-            Text(
-                "Gespeicherte Sets (${savedSets.size})",
-                color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
-            )
-            LazyColumn(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(savedSets, key = { it.createdAt }) { set ->
-                    val session = remember { loadSessionState(prefs, set.createdAt) }
-                    val progressFloat by remember(session) {
-                        mutableFloatStateOf(
-                            if (session != null && set.vokabeln.isNotEmpty())
-                                session.currentIndex.toFloat() / set.vokabeln.size
-                            else 0f
-                        )
-                    }
 
-                    val progressPercentFloat = remember { Animatable(lastWidth) }
-                    LaunchedEffect(progressFloat) {
-                        delay(200)
-                        progressPercentFloat.animateTo(
-                            progressFloat,
-                            animationSpec = tween(400, easing = EaseInOutCubic)
-                        )
-                        if (progressPercentFloat.value != 0f) onUpdate(progressPercentFloat.value)
-                    }
+            Spacer(Modifier.height(24.dp))
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.primary)
-                            .clickable { onOpenSet(set) }
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            if (savedSets.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(
-                                            Brush.linearGradient(
-                                                listOf(
-                                                    AccentViolet,
-                                                    AccentVioletDim
-                                                )
-                                            )
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("📖", fontSize = 22.sp)
-                                }
-                                Spacer(Modifier.width(14.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        set.name,
-                                        color = TextPrimary,
-                                        fontSize = 20.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                                val weakCount = loadWeakVokabeln(prefs, set.createdAt).size
-                                if (weakCount > 0) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFFB71C1C).copy(alpha = 0.2f))
-                                            .clickable { onLearnWeak(set) }
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(
-                                            "✗ $weakCount",
-                                            color = Color(0xFFEF5350),
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                    Spacer(Modifier.width(6.dp))
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFFB71C1C).copy(alpha = 0.15f))
-                                        .clickable { setToDelete = set },
-                                    contentAlignment = Alignment.Center
-                                ) { Text("🗑", fontSize = 14.sp) }
-                            }
+                        Text("📚", fontSize = 56.sp)
+                        Text(
+                            "Noch keine Sets",
+                            color = TextPrimary,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Scan ein Vokabelbild zum Starten",
+                            color = TextTertiary,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            } else {
+                Text(
+                    "Gespeicherte Sets (${savedSets.size})",
+                    color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                )
+                LazyColumn(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(savedSets, key = { it.createdAt }) { set ->
+                        val session = remember { loadSessionState(prefs, set.createdAt) }
+                        val progressFloat by remember(session) {
+                            mutableFloatStateOf(
+                                if (session != null && set.vokabeln.isNotEmpty())
+                                    session.currentIndex.toFloat() / set.vokabeln.size
+                                else 0f
+                            )
+                        }
 
-                            Spacer(Modifier.height(12.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(8.dp)
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(
-                                            Brush.linearGradient(
-                                                listOf(
-                                                    AccentViolet.copy(0.2f),
-                                                    AccentVioletDim.copy(0.2f)
-                                                )
-                                            )
-                                        )
+                        val progressPercentFloat = remember { Animatable(lastWidth) }
+                        LaunchedEffect(progressFloat) {
+                            delay(200)
+                            progressPercentFloat.animateTo(
+                                progressFloat,
+                                animationSpec = tween(400, easing = EaseInOutCubic)
+                            )
+                            if (progressPercentFloat.value != 0f) onUpdate(progressPercentFloat.value)
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(MaterialTheme.colorScheme.primary)
+                                .clickable { onOpenSet(set) }
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .fillMaxWidth(progressPercentFloat.value)
-                                            .fillMaxHeight()
-                                            .clip(RoundedCornerShape(4.dp))
+                                            .size(48.dp)
+                                            .clip(RoundedCornerShape(12.dp))
                                             .background(
                                                 Brush.linearGradient(
                                                     listOf(
@@ -606,42 +561,131 @@ fun HomeScreen(
                                                         AccentVioletDim
                                                     )
                                                 )
-                                            )
-                                    )
-                                }
-
-                                Spacer(Modifier.width(10.dp))
-
-                                val hasSession =
-                                    remember { loadSessionState(prefs, set.createdAt) != null }
-                                if (hasSession) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(AccentViolet.copy(alpha = 0.2f))
-                                            .clickable { onOpenSet(set) }
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ),
+                                        contentAlignment = Alignment.Center
                                     ) {
+                                        Text("📖", fontSize = 22.sp)
+                                    }
+                                    Spacer(Modifier.width(14.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            "▶ ${
-                                                loadSessionState(
-                                                    prefs,
-                                                    set.createdAt
-                                                )?.currentIndex ?: 0
-                                            }/${set.vokabeln.size}",
-                                            color = AccentViolet,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold
+                                            set.name,
+                                            color = TextPrimary,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.SemiBold
                                         )
                                     }
-                                    Spacer(Modifier.width(6.dp))
+                                    val weakCount = loadWeakVokabeln(prefs, set.createdAt).size
+                                    if (weakCount > 0) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(Color(0xFFB71C1C).copy(alpha = 0.2f))
+                                                .clickable { onLearnWeak(set) }
+                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                "✗ $weakCount",
+                                                color = Color(0xFFEF5350),
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        Spacer(Modifier.width(6.dp))
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFFB71C1C).copy(alpha = 0.15f))
+                                            .clickable { setToDelete = set },
+                                        contentAlignment = Alignment.Center
+                                    ) { Text("🗑", fontSize = 14.sp) }
                                 }
-                            }
 
+                                Spacer(Modifier.height(12.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(8.dp)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(
+                                                Brush.linearGradient(
+                                                    listOf(
+                                                        AccentViolet.copy(0.2f),
+                                                        AccentVioletDim.copy(0.2f)
+                                                    )
+                                                )
+                                            )
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth(progressPercentFloat.value)
+                                                .fillMaxHeight()
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(
+                                                    Brush.linearGradient(
+                                                        listOf(
+                                                            AccentViolet,
+                                                            AccentVioletDim
+                                                        )
+                                                    )
+                                                )
+                                        )
+                                    }
+
+                                    Spacer(Modifier.width(10.dp))
+
+                                    val hasSession =
+                                        remember { loadSessionState(prefs, set.createdAt) != null }
+                                    if (hasSession) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(AccentViolet.copy(alpha = 0.2f))
+                                                .clickable { onOpenSet(set) }
+                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                "▶ ${
+                                                    loadSessionState(
+                                                        prefs,
+                                                        set.createdAt
+                                                    )?.currentIndex ?: 0
+                                                }/${set.vokabeln.size}",
+                                                color = AccentViolet,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        Spacer(Modifier.width(6.dp))
+                                    }
+                                }
+
+                            }
                         }
                     }
+                    item { Spacer(Modifier.height(16.dp)) }
                 }
-                item { Spacer(Modifier.height(16.dp)) }
+            }
+        }
+        if (savedSets.size >= 2) {
+            FloatingActionButton(
+                onClick = onMergeClick,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(20.dp),
+                containerColor = AccentViolet,
+                contentColor = TextPrimary
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Shuffle,
+                    contentDescription = "Sets mischen"
+                )
             }
         }
     }
@@ -1479,6 +1523,203 @@ fun SaveSetDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () ->
         }
     )
 }
+@Composable
+fun MergeVocabSetsDialog(
+    context: Context,
+    prefs: SharedPreferences,
+    allSets: List<VokabelSet>,
+    onDismiss: () -> Unit,
+    onMergeComplete: (VokabelSet) -> Unit
+) {
+    var selectedSets by remember { mutableStateOf(setOf<Long>()) }
+    var mergeName by remember {
+        mutableStateOf("Gemischtes Set ${(System.currentTimeMillis() % 1000)}")
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = BgSurface,
+        title = {
+            Text(
+                "Vokabel-Sets mischen",
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(400.dp)
+            ) {
+                OutlinedTextField(
+                    value = mergeName,
+                    onValueChange = { mergeName = it },
+                    label = { Text("Name", color = TextTertiary) },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
+                )
+
+                Text(
+                    "Sets auswählen (min. 2):",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = TextPrimary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(allSets, key = { it.createdAt }) { set ->
+                        val isSelected = selectedSets.contains(set.createdAt)
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    if (isSelected) AccentViolet.copy(alpha = 0.2f)
+                                    else BgCard
+                                )
+                                .clickable {
+                                    selectedSets = if (isSelected) {
+                                        selectedSets - set.createdAt
+                                    } else {
+                                        selectedSets + set.createdAt
+                                    }
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(
+                                        if (isSelected) AccentViolet else BgSurface
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isSelected) {
+                                    Text("✓", color = TextPrimary, fontSize = 12.sp)
+                                }
+                            }
+
+                            Spacer(Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    set.name,
+                                    color = TextPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    "${set.vokabeln.size} Vokabeln",
+                                    color = TextTertiary,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(
+                        if (selectedSets.size >= 2 && mergeName.isNotBlank())
+                            SolidColor(AccentViolet)
+                        else
+                            Brush.horizontalGradient(listOf(BgCard, BgCard))
+                    )
+                    .clickable(enabled = selectedSets.size >= 2 && mergeName.isNotBlank()) {
+                        val mergedSet = createMergedVocabSet(
+                            prefs = prefs,
+                            name = mergeName.trim(),
+                            selectedCreatedAts = selectedSets.toList(),
+                            allSets = allSets
+                        )
+                        onMergeComplete(mergedSet)
+                    }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    "Mischen (${selectedSets.size})",
+                    color = if (selectedSets.size >= 2 && mergeName.isNotBlank())
+                        TextPrimary else TextTertiary,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        },
+        dismissButton = {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(BgCard)
+                    .clickable { onDismiss() }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text("Abbrechen", color = TextSecondary)
+            }
+        }
+    )
+}
+
+fun createMergedVocabSet(
+    prefs: SharedPreferences,
+    name: String,
+    selectedCreatedAts: List<Long>,
+    allSets: List<VokabelSet>
+): VokabelSet {
+    val mergedVokabeln = mutableListOf<Vokabel>()
+    var nextId = 0
+
+    selectedCreatedAts.forEach { createdAt ->
+        val set = allSets.firstOrNull { it.createdAt == createdAt }
+        set?.vokabeln?.forEach { vokabel ->
+            mergedVokabeln.add(
+                Vokabel(
+                    latein = vokabel.latein,
+                    deutsch = vokabel.deutsch,
+                    id = nextId++
+                )
+            )
+        }
+    }
+
+    mergedVokabeln.shuffle()
+
+    val mergedSet = VokabelSet(
+        name = name,
+        vokabeln = mergedVokabeln,
+        createdAt = System.currentTimeMillis()
+    )
+
+    prefs.edit {
+        putString(
+            "merged_sources_${mergedSet.createdAt}",
+            selectedCreatedAts.joinToString(",")
+        )
+    }
+
+    return mergedSet
+}
+
+fun isMergedSet(prefs: SharedPreferences, setCreatedAt: Long): Boolean {
+    return prefs.contains("merged_sources_$setCreatedAt")
+}
+
+fun getMergedSetSources(prefs: SharedPreferences, setCreatedAt: Long): List<Long> {
+    val sourcesString = prefs.getString("merged_sources_$setCreatedAt", "") ?: ""
+    return if (sourcesString.isEmpty()) emptyList()
+    else sourcesString.split(",").mapNotNull { it.toLongOrNull() }
+}
+
 
 private const val SETS_KEY = "vocab_sets"
 
