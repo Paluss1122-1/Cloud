@@ -2142,6 +2142,7 @@ private suspend fun fetchLaptopIpFromSupabase(): String? = withContext(Dispatche
 
 private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
     withContext(Dispatchers.IO) {
+        if (!Config.realDevice) return@withContext true
         var connection: HttpURLConnection? = null
         try {
             val url = "${SupabaseConfigALT.SUPABASE_URL}/rest/v1/device_ips"
