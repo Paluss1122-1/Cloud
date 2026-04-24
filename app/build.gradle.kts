@@ -7,7 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     id("kotlin-parcelize")
     alias(libs.plugins.hilt.android)
-    id("com.autonomousapps.dependency-analysis") version "3.7.0"
+    id("com.autonomousapps.dependency-analysis") version "3.9.0"
 }
 
 val localProps = Properties().apply {
@@ -79,7 +79,6 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.play.services.location)
-    implementation(libs.androidx.tools.core)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.compose.foundation.layout)
     implementation(libs.androidx.compose.ui.graphics)
@@ -105,7 +104,6 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.ktor.client.okhttp)
     implementation(libs.gson)
-    implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.hilt.android)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
