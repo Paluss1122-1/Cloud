@@ -4,7 +4,7 @@ import android.content.Context
 import kotlinx.coroutines.flow.Flow
 import kotlin.math.floor
 
-const val TILE_SIZE = 0.001 // ~100m (10x größer als vorher)
+const val TILE_SIZE = 0.001
 
 fun locationToTile(lat: Double, lon: Double): Pair<Long, Long> =
     floor(lat / TILE_SIZE).toLong() to floor(lon / TILE_SIZE).toLong()
