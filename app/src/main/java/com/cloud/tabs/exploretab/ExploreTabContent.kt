@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -109,11 +110,12 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                 StatCard("🌍 Erkundet", "%.8f%%".format(exploredPercent), Modifier.weight(1f))
                 StatCard("📅 Heute", vm.todayCount.toString(), Modifier.weight(1f))
             }
-
+ 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
+                    .clipToBounds()
             ) {
                 AndroidView(
                     factory = { context ->
