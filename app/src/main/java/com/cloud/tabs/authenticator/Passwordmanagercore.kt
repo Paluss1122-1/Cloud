@@ -15,7 +15,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Update
 import com.cloud.core.objects.Config
-import com.cloud.core.functions.ERRORINSERT
+import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.core.objects.SupabaseConfigALT
 import com.cloud.privatecloudapp.isOnline
@@ -142,7 +142,7 @@ object CloudCrypto {
             decryptWithKey(ciphertext, cachedKey)
         } catch (e: Exception) {
             CoroutineScope(Dispatchers.IO).launch {
-                ERRORINSERT(ERRORINSERTDATA("CloudCrypto", "Decrypt fehlgeschlagen: ${e.message}", Instant.now().toString(), "ERROR"))
+                errorInsert(ERRORINSERTDATA("CloudCrypto", "Decrypt fehlgeschlagen: ${e.message}", Instant.now().toString(), "ERROR"))
             }
             null
         }
@@ -277,7 +277,7 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
                 SupabaseConfigALT.client.postgrest.from("password_entries")
                     .select().decodeList<PasswordEntrySupabase>()
             } catch (e: Exception) {
-                ERRORINSERT(
+                errorInsert(
                     ERRORINSERTDATA(
                         "PasswordRepository",
                         "Cloud-Laden fehlgeschlagen: ${e.message}",
@@ -324,12 +324,12 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
                 try {
                     SupabaseConfigALT.client.postgrest.from("password_entries").insert(toUpload)
                 } catch (e: Exception) {
-                    ERRORINSERT(ERRORINSERTDATA("PasswordRepository", "Batch-Upload fehlgeschlagen: ${e.message}", Instant.now().toString(), "ERROR"))
+                    errorInsert(ERRORINSERTDATA("PasswordRepository", "Batch-Upload fehlgeschlagen: ${e.message}", Instant.now().toString(), "ERROR"))
                 }
             }
             SyncResult(uploaded = missingInCloud.size, downloaded = 0, total = localPasswords.size)
         } catch (e: Exception) {
-            ERRORINSERT(
+            errorInsert(
                 ERRORINSERTDATA(
                     "PasswordRepository",
                     "Sync-Exception: ${e.message}",

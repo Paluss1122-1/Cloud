@@ -52,7 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
-import com.cloud.core.functions.ERRORINSERT
+import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.core.ui.c
 import kotlinx.coroutines.CoroutineScope
@@ -314,7 +314,7 @@ fun MediaRecorderContent(
                                 showTrimDialog = false
                             } catch (e: Exception) {
                                 CoroutineScope(Dispatchers.IO).launch {
-                                    ERRORINSERT(
+                                    errorInsert(
                                         ERRORINSERTDATA(
                                             "MediaRecorderContent",
                                             "Fehler bei Konvertieren von m4a zu mp3: ${e.message}",
@@ -403,7 +403,7 @@ fun MediaRecorderContent(
                             audioRecorder?.startRecording(audioFile)
                         } catch (e: Exception) {
                             CoroutineScope(Dispatchers.IO).launch {
-                                ERRORINSERT(
+                                errorInsert(
                                     ERRORINSERTDATA(
                                         "MediaRecorderContent",
                                         "Fehler bei Starten von Recording: ${e.message}",
@@ -974,7 +974,7 @@ class AudioRecorder {
 
     private fun reportError(message: String, throwable: Throwable, servicename: String) {
         CoroutineScope(Dispatchers.IO).launch {
-            ERRORINSERT(
+            errorInsert(
                 ERRORINSERTDATA(
                     "AudioRecorder.$servicename",
                     "$message: ${throwable::class.simpleName} - ${throwable.message ?: "ohne Nachricht"}",

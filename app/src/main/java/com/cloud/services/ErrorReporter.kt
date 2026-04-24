@@ -15,7 +15,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
 import com.cloud.core.objects.Config.cms
-import com.cloud.core.functions.ERRORINSERT
+import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.core.objects.SupabaseConfigALT
 import io.github.jan.supabase.realtime.PostgresAction
@@ -81,7 +81,7 @@ class ErrorNotificationManager(private val context: Context) {
                 .notify(cms(), notification)
         } catch (e: Exception) {
             CoroutineScope(Dispatchers.IO).launch {
-                ERRORINSERT(
+                errorInsert(
                     ERRORINSERTDATA(
                         "NotificationManager",
                         "❌ Fehler bei Anzeigen von Error Notification: ${e.message}",
@@ -111,7 +111,7 @@ class ErrorMonitorService : Service() {
             createServiceNotificationChannel()
         } catch (e: Exception) {
             CoroutineScope(Dispatchers.IO).launch {
-                ERRORINSERT(
+                errorInsert(
                     ERRORINSERTDATA(
                         "ErrorMonitorService",
                         "Fehler in onCreate(): ${e.message}",
@@ -131,7 +131,7 @@ class ErrorMonitorService : Service() {
             return START_STICKY
         } catch (e: Exception) {
             CoroutineScope(Dispatchers.IO).launch {
-                ERRORINSERT(
+                errorInsert(
                     ERRORINSERTDATA(
                         "ErrorMonitorService",
                         "Fehler in onStartCommand(): ${e.message}",
@@ -189,7 +189,7 @@ class ErrorMonitorService : Service() {
                 channel.subscribe()
             } catch (e: Exception) {
                 CoroutineScope(Dispatchers.IO).launch {
-                    ERRORINSERT(
+                    errorInsert(
                         ERRORINSERTDATA(
                             "ErrorMonitorService",
                             "❌ Realtime Fehler: ${e.message}",
@@ -220,7 +220,7 @@ class ErrorMonitorService : Service() {
             }
         } catch (e: Exception) {
             CoroutineScope(Dispatchers.IO).launch {
-                ERRORINSERT(
+                errorInsert(
                     ERRORINSERTDATA(
                         "ErrorMonitorService",
                         "Fehler beim Verarbeiten des Errors: ${e.message}",

@@ -45,7 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.cloud.core.functions.ERRORINSERT
+import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -139,7 +139,7 @@ fun ContactsTabContent(
                 Text("Fehler: ${state.error}", color = Color.Red)
                 LaunchedEffect(Unit) {
                     scope.launch {
-                        ERRORINSERT(
+                        errorInsert(
                             ERRORINSERTDATA(
                                 "tabcontentoriginal",
                                 "❌ Fehler beim Laden von Kontakten: ${state.error}",
@@ -328,7 +328,7 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
                 state = state.copy(loading = false, contacts = contacts)
             } catch (e: Exception) {
                 state = state.copy(loading = false, error = e.message)
-                ERRORINSERT(
+                errorInsert(
                     ERRORINSERTDATA(
                         "ContactsViewModel",
                         "❌ Fehler beim Laden von von Kontakten: ${e.message}",
@@ -348,7 +348,7 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
                     loadContacts()
                 } else {
                     state = state.copy(error = "Fehler beim Speichern")
-                    ERRORINSERT(
+                    errorInsert(
                         ERRORINSERTDATA(
                             "ContactsViewModel",
                             "❌ Fehler beim Speichern von Kontakten",
@@ -359,7 +359,7 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
                 }
             } catch (e: Exception) {
                 state = state.copy(error = e.message)
-                ERRORINSERT(
+                errorInsert(
                     ERRORINSERTDATA(
                         "ContactsViewModel",
                         "❌ Fehler beim Speichern von Kontakten: ${e.message}",
@@ -379,7 +379,7 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
                     loadContacts()
                 } else {
                     state = state.copy(error = "Fehler beim Löschen")
-                    ERRORINSERT(
+                    errorInsert(
                         ERRORINSERTDATA(
                             "ContactsViewModel",
                             "❌ Fehler beim Löschen von Kontakten",
@@ -390,7 +390,7 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
                 }
             } catch (e: Exception) {
                 state = state.copy(error = e.message)
-                ERRORINSERT(
+                errorInsert(
                     ERRORINSERTDATA(
                         "ContactsViewModel",
                         "❌ Fehler beim Löschen von Kontakten: ${e.message}",
@@ -541,7 +541,7 @@ class ContactsRepository(private val context: Context) {
             context.contentResolver.applyBatch(ContactsContract.AUTHORITY, ops)
             true
         } catch (e: Exception) {
-            ERRORINSERT(
+            errorInsert(
                 ERRORINSERTDATA(
                     "ContactsTabContent",
                     "Fehler beim Speichern von Kontakt: $contact: ${e.message}",
@@ -617,7 +617,7 @@ class ContactsRepository(private val context: Context) {
             )
             true
         } catch (e: Exception) {
-            ERRORINSERT(
+            errorInsert(
                 ERRORINSERTDATA(
                     "ContactsTabContent",
                     "Fehler bei Löschen von Kontakten: ${e.message}",

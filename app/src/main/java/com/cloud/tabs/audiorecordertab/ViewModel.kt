@@ -17,7 +17,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.content.PermissionChecker
 import androidx.lifecycle.AndroidViewModel
-import com.cloud.core.functions.ERRORINSERT
+import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -161,7 +161,7 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
             onError = {
                 isProcessing = false
                 scope.launch {
-                    ERRORINSERT(
+                    errorInsert(
                         data = ERRORINSERTDATA(
                             "AudioRecorderContent.shareDialog.onError",
                             it,

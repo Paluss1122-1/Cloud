@@ -55,7 +55,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.cloud.core.functions.ERRORINSERT
+import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -118,7 +118,7 @@ fun AuthenticatorTab() {
 
     if (activity == null) {
         LaunchedEffect(Unit) {
-            ERRORINSERT(
+            errorInsert(
                 ERRORINSERTDATA(
                     "AuthenticatorTab",
                     "❌ FragmentActivity fehlt",
@@ -188,7 +188,7 @@ fun AuthenticatorTab() {
                         shouldShowPrompt = false
                         isAuthenticated = false
                         coroutineScope.launch {
-                            ERRORINSERT(
+                            errorInsert(
                                 ERRORINSERTDATA(
                                     "AuthenticatorTab",
                                     "❌ AUTH: $error",

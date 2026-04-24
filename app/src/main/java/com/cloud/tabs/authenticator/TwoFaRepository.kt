@@ -27,7 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.cloud.core.functions.ERRORINSERT
+import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.core.objects.SupabaseConfigALT
 import com.cloud.privatecloudapp.isOnline
@@ -82,7 +82,7 @@ suspend fun loadTwoFaEntriesFromSupabase(): List<TwoFAEntry> {
                 .decodeList<TwoFaEntrySupabase>()
             supabaseEntries.mapNotNull { it.toLocal() }
         } catch (e: Exception) {
-            ERRORINSERT(
+            errorInsert(
                 ERRORINSERTDATA(
                     "TwoFaRepository",
                     "Fehler bei Laden von Einträgen aus Supabase: ${e.message}",
@@ -114,7 +114,7 @@ suspend fun saveTwoFaEntryToSupabase(entry: TwoFAEntry, db: TwoFADatabase? = nul
 
             true
         } catch (e: Exception) {
-            ERRORINSERT(
+            errorInsert(
                 ERRORINSERTDATA(
                     "TwoFARepository",
                     "❌ Supabase Fehler: ${e.message}",
@@ -131,7 +131,7 @@ suspend fun updateTwoFaEntryInSupabase(entry: TwoFAEntry): Boolean {
     return withContext(Dispatchers.IO) {
         try {
             if (entry.supabaseId == null) {
-                ERRORINSERT(
+                errorInsert(
                     ERRORINSERTDATA(
                         "TwoFARepository",
                         "Keine Supabase-ID vorhanden, überspringe Update",
@@ -156,7 +156,7 @@ suspend fun updateTwoFaEntryInSupabase(entry: TwoFAEntry): Boolean {
 
             true
         } catch (e: Exception) {
-            ERRORINSERT(
+            errorInsert(
                 ERRORINSERTDATA(
                     "TwoFARepository",
                     "❌ Supabase Update-Fehler: ${e.message}",
@@ -207,7 +207,7 @@ suspend fun syncTwoFaEntriesWithConfirmation(context: Context, db: TwoFADatabase
                         downloadedCount++
                     }
                 } catch (e: Exception) {
-                    ERRORINSERT(
+                    errorInsert(
                         ERRORINSERTDATA(
                             "TwoFARepository",
                             "❌ Fehler beim lokalen Speichern: ${entry.name} (${e.message})",
@@ -225,7 +225,7 @@ suspend fun syncTwoFaEntriesWithConfirmation(context: Context, db: TwoFADatabase
                 pendingDecisions = missingInSupabase
             )
         } catch (e: Exception) {
-            ERRORINSERT(
+            errorInsert(
                 ERRORINSERTDATA(
                     "TwoFARepository",
                     "❌ Fehler beim Synchronisieren: ${e.message}",
@@ -273,7 +273,7 @@ suspend fun processSyncDecision(
                 }
             }
         } catch (e: Exception) {
-            ERRORINSERT(
+            errorInsert(
                 ERRORINSERTDATA(
                     "TwoFaRepository",
                     "Fehler in processSyncDecision: ${e.message}",
@@ -429,7 +429,7 @@ suspend fun deleteTwoFaEntryFromSupabase(entry: TwoFAEntry): Boolean {
                 }
             true
         } catch (e: Exception) {
-            ERRORINSERT(
+            errorInsert(
                 ERRORINSERTDATA(
                     "TwoFARepository",
                     "❌ Supabase Delete-Fehler: ${e.message}",

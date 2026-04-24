@@ -6,14 +6,14 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class ERRORINSERTDATA(
-    val service_name: String,
-    val error_message: String,
-    val created_at: String,
+    val serviceName: String,
+    val errorMessage: String,
+    val createdAt: String,
     val severity: String,
     val id: Int? = null
 )
 
-suspend fun ERRORINSERT(data: ERRORINSERTDATA): Int {
+suspend fun errorInsert(data: ERRORINSERTDATA): Int {
     try {
         SupabaseConfigALT.client.from("error_reports").insert(data)
         return 1
