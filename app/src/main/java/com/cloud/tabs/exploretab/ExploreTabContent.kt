@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -25,7 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -36,6 +35,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cloud.core.objects.Config
+import com.cloud.core.ui.NeonBox
 import com.google.android.gms.location.LocationServices
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -114,6 +115,7 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
+                    .clipToBounds()
             ) {
                 AndroidView(
                     factory = { context ->
@@ -122,15 +124,13 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                             setTileSource(TileSourceFactory.MAPNIK)
                             setMultiTouchControls(true)
                             controller.setZoom(15.0)
-                            controller.setCenter(GeoPoint(48.137, 11.576))
+                            controller.setCenter(GeoPoint(Config.LAT, Config.LON))
 
-                            // Verhindere Tile-Skalierung beim Zoomen für smootheres Rendering
                             isTilesScaledToDpi = false
                             setScrollableAreaLimitDouble(null)
                         }.also { mapView = it }
                     },
                     update = { mv ->
-                        // Entferne alte Overlays
                         mv.overlays.removeAll(
                             mv.overlays.filterIsInstance<ExploreOverlay>().toSet()
                         )
@@ -148,17 +148,39 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
 }
 
 @Composable
-private fun StatCard(label: String, value: String, modifier: Modifier) {
-    Column(
+private fun StatCard(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    NeonBox(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF1E1E1E))
-            .padding(vertical = 10.dp, horizontal = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .fillMaxWidth()
+            .padding(vertical = 4.dp, horizontal = 2.dp),
+        cornerRadius = 20.dp,
+        borderWidth = 3.dp,
+        neonColors = listOf(Color(0xFF00FFAA), Color(0xFF00CCFF)),
+        backgroundAlpha = 0.25f,        // etwas transparenter, damit es edel aussieht
+
     ) {
-        Text(label, color = Color(0xFF9090A0), fontSize = 11.sp)
-        Spacer(Modifier.height(4.dp))
-        Text(value, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Column(
+            modifier = Modifier
+                .padding(vertical = 8.dp, horizontal = 10.dp),   // Innenabstand angepasst
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = label,
+                color = Color(0xFF9090A0),
+                fontSize = 11.sp
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = value,
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 

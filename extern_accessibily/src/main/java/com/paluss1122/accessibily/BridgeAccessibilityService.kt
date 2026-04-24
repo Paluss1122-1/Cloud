@@ -56,6 +56,7 @@ class BridgeAccessibilityService : AccessibilityService() {
                 "input_text"   -> inputText(cmd.getString("text"))
                 "scroll"       -> scroll(cmd)
                 "open_app"     -> startActivity(packageManager.getLaunchIntentForPackage(cmd.getString("package")))
+                "close_nots"   -> performGlobalAction(GLOBAL_ACTION_BACK)
             }
         } catch (e: Exception) {
             Log.e("Bridge", "execute failed: $e")
