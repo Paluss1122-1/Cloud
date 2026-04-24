@@ -11,10 +11,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -59,10 +62,11 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
-import com.cloud.core.functions.ERRORINSERT
+import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -159,7 +163,7 @@ fun GalleryTab() {
                                     )
 
                                     if (mediaItem.isVideo) {
-                                        val thumbnail by produceState<Bitmap?>(thumbnailCache[mediaItem.uri], mediaItem.uri) {
+                                        val thumbnail by produceState(thumbnailCache[mediaItem.uri], mediaItem.uri) {
                                             if (value == null) {
                                                 value = withContext(Dispatchers.IO) {
                                                     val bmp = getVideoFirstFrame(mediaItem.uri, context)
@@ -238,17 +242,25 @@ fun SharedTransitionScope.ImageFullscreen(
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
 
+    var showButton by remember { mutableStateOf(false) }
+
+    LaunchedEffect(animatedVisibilityScope) {
+        delay(600)
+        showButton = true
+    }
+
     BackHandler {
+        showButton = false
         scale = 1f
         offset = Offset.Zero
         onDismiss()
     }
 
-    val state = rememberTransformableState { zoomChange, offsetChange, _ ->
+    val state = rememberTransformableState { _, zoomChange, panChange, _ ->
         scale = (scale * zoomChange).coerceAtLeast(1f)
         val maxX = (scale - 1) * 500f
         val maxY = (scale - 1) * 500f
-        offset += offsetChange
+        offset += panChange
         offset = Offset(
             x = offset.x.coerceIn(-maxX, maxX),
             y = offset.y.coerceIn(-maxY, maxY)
@@ -330,13 +342,17 @@ fun SharedTransitionScope.ImageFullscreen(
             )
         }
 
-        Button(
-            onClick = onDelete,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(16.dp)
+        AnimatedVisibility(
+            visible = showButton,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp)
         ) {
-            Text("Löschen")
+            Button(
+                onClick = onDelete
+            ) {
+                Text("Löschen")
+            }
         }
     }
 }
@@ -414,7 +430,7 @@ fun loadImagesFromMediaStore(context: Context): List<GalleryMediaItem> {
         }
     } catch (e: Exception) {
         CoroutineScope(Dispatchers.IO).launch {
-            ERRORINSERT(ERRORINSERTDATA("GalleryTab", "Fehler bei Laden von Bildern: ${e.message}", Instant.now().toString(), "ERROR"))
+            errorInsert(ERRORINSERTDATA("GalleryTab", "Fehler bei Laden von Bildern: ${e.message}", Instant.now().toString(), "ERROR"))
         }
     }
     return images
@@ -442,7 +458,7 @@ fun loadVideosFromMediaStore(context: Context): List<GalleryMediaItem> {
         }
     } catch (e: Exception) {
         CoroutineScope(Dispatchers.IO).launch {
-            ERRORINSERT(ERRORINSERTDATA("GalleryTab", "Fehler bei Laden von Videos: ${e.message}", Instant.now().toString(), "ERROR"))
+            errorInsert(ERRORINSERTDATA("GalleryTab", "Fehler bei Laden von Videos: ${e.message}", Instant.now().toString(), "ERROR"))
         }
     }
     return videos
