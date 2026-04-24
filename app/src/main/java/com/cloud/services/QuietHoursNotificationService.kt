@@ -74,7 +74,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.DEL_GAL_CONF
 import com.cloud.core.objects.Config.cms
-import com.cloud.core.functions.ERRORINSERT
+import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.quiethoursnotificationhelper.AiResponseEntry
 import com.cloud.quiethoursnotificationhelper.GalleryImage
@@ -139,12 +139,12 @@ class QuietHoursNotificationService : Service() {
         val trimmed = if (stack.length > 8000) stack.take(8000) + "\n...[truncated]" else stack
         errorScope.launch {
             try {
-                ERRORINSERT(
+                errorInsert(
                     ERRORINSERTDATA(
-                        service_name = "QuietHoursNotificationService:$where",
-                        error_message = trimmed,
-                        created_at = Instant.now().toString(),
-                        severity = "ERROR"
+                        "QuietHoursNotificationService:$where",
+                        trimmed,
+                        Instant.now().toString(),
+                        "ERROR"
                     )
                 )
             } catch (_: Exception) {
@@ -265,12 +265,12 @@ class QuietHoursNotificationService : Service() {
                 Log.e("QuietHoursService", "checkRunnable failed", e)
                 CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
                     try {
-                        ERRORINSERT(
+                        errorInsert(
                             ERRORINSERTDATA(
-                                service_name = "QuietHoursNotificationService:checkRunnable",
-                                error_message = e.stackTraceToString().take(8000),
-                                created_at = Instant.now().toString(),
-                                severity = "ERROR"
+                                "QuietHoursNotificationService:checkRunnable",
+                                e.stackTraceToString().take(8000),
+                                Instant.now().toString(),
+                                "ERROR"
                             )
                         )
                     } catch (_: Exception) {

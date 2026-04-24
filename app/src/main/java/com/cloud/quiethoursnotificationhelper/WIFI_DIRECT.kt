@@ -58,8 +58,8 @@ import androidx.core.net.toUri
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.cloud.core.functions.ERRORINSERT
 import com.cloud.core.functions.ERRORINSERTDATA
+import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.FLASHCARD_RECEIVE_PORT
@@ -188,12 +188,12 @@ private fun PowerManager.WakeLock?.safeRelease() {
 
 private fun logError(service: String, e: Exception) {
     syncScope.launch {
-        ERRORINSERT(
+        errorInsert(
             ERRORINSERTDATA(
-                service_name = service,
-                error_message = e.stackTraceToString(),
-                created_at = Instant.now().toString(),
-                severity = "ERROR"
+                service,
+                e.stackTraceToString(),
+                Instant.now().toString(),
+                "ERROR"
             )
         )
     }
@@ -313,9 +313,6 @@ private object ConnectionGuard {
     private var isWifiConnected: Boolean = false
     private var isAtHomeLocation: Boolean = false
 
-    private const val MIN_RETRY_DELAY_MS = 5_000L
-    private const val MAX_RETRY_DELAY_MS = 300_000L
-
     fun updateWifiStatus(connected: Boolean) {
         isWifiConnected = connected
         if (!connected) consecutiveFailures = 0
@@ -327,8 +324,7 @@ private object ConnectionGuard {
     }
 
     fun canAttemptConnection(): Boolean {
-        if (!isWifiConnected && !isAtHomeLocation) return false
-        return true
+        return !(!isWifiConnected && !isAtHomeLocation)
     }
 
     fun recordFailure() {
@@ -627,37 +623,38 @@ fun syncTodosWithLaptop(context: Context) {
 
     syncScope.launch {
         try {
-            syncScope.launch {
-                val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-                val network = connectivityManager.activeNetwork ?: return@launch
-                val linkProperties = connectivityManager.getLinkProperties(network) ?: return@launch
+            val connectivityManager =
+                context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val network = connectivityManager.activeNetwork ?: return@launch
+            val linkProperties = connectivityManager.getLinkProperties(network) ?: return@launch
 
-                val localip = linkProperties.linkAddresses
-                    .map { it.address.hostAddress }
-                    .firstOrNull { ip ->
-                        ip != null && (ip.startsWith("192.") || ip.startsWith("10."))
-                    }
-                insertMobileIpToSupabase(localip ?: return@launch)
+            val localip = linkProperties.linkAddresses
+                .map { it.address.hostAddress }
+                .firstOrNull { ip ->
+                    ip != null && (ip.startsWith("192.") || ip.startsWith("10."))
+                }
+            if (localip != null) {
+                insertMobileIpToSupabase(localip)
             }
             var resolvedIp = laptopIp
 
             if (resolvedIp.isEmpty()) {
-                withContext(Dispatchers.Main) {
-                    showSimpleNotificationExtern("🔍 Suche Laptop...", "Discovery wird gestartet", 8.seconds, context)
-                }
-
                 resolvedIp = withTimeoutOrNull(5000L) {
                     fetchLaptopIpFromSupabase()
                 } ?: ""
 
                 if (resolvedIp.isEmpty()) {
                     withContext(Dispatchers.Main) {
-                        showSimpleNotificationExtern("❌ Keine IP gefunden", "Supabase lieferte keine IP", 10.seconds, context)
+                        showSimpleNotificationExtern(
+                            "❌ Keine IP gefunden",
+                            "Supabase lieferte keine IP",
+                            10.seconds,
+                            context
+                        )
                     }
                     return@launch
                 }
 
-                // Nur wenn wirklich eine IP gefunden wurde
                 laptopIp = resolvedIp
             }
 
@@ -721,7 +718,7 @@ fun syncTodosWithLaptop(context: Context) {
             }
         } catch (_: ConnectException) {
             ConnectionGuard.recordFailure()
-        } catch(_: SocketTimeoutException) {
+        } catch (_: SocketTimeoutException) {
             ConnectionGuard.recordFailure()
         } catch (e: Exception) {
             val msg = e.message
@@ -1235,7 +1232,7 @@ private fun startFlashcardResponseListener(boundSocket: ServerSocket) {
                 parseVokabelnFromJson(client.inputStream.readBytes().toString(Charsets.UTF_8))
             client.close()
             flashcardVokabelnFlow.emit(vokabeln.ifEmpty { null })
-        } catch (e: SocketTimeoutException) {
+        } catch (_: SocketTimeoutException) {
             flashcardVokabelnFlow.emit(null)
         } catch (e: Exception) {
             logError("startFlashcardResponseListener", e)
@@ -2113,12 +2110,16 @@ fun sendAiExecuteCommand(context: Context, userInput: String) {
 private suspend fun fetchLaptopIpFromSupabase(): String? = withContext(Dispatchers.IO) {
     var connection: HttpURLConnection? = null
     try {
-        val url = "${SupabaseConfigALT.SUPABASE_URL}/rest/v1/device_ips?device_id=eq.laptop&select=ip_address"
+        val url =
+            "${SupabaseConfigALT.SUPABASE_URL}/rest/v1/device_ips?device_id=eq.laptop&select=ip_address"
 
         connection = URL(url).openConnection() as HttpURLConnection
         connection.requestMethod = "GET"
         connection.setRequestProperty("apikey", SupabaseConfigALT.SUPABASE_PUBLISHABLE_KEY)
-        connection.setRequestProperty("Authorization", "Bearer ${SupabaseConfigALT.SUPABASE_PUBLISHABLE_KEY}")
+        connection.setRequestProperty(
+            "Authorization",
+            "Bearer ${SupabaseConfigALT.SUPABASE_PUBLISHABLE_KEY}"
+        )
 
         if (connection.responseCode == 200) {
             val response = connection.inputStream.bufferedReader().readText()
@@ -2155,10 +2156,12 @@ private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
                 "Bearer ${SupabaseConfigALT.SUPABASE_PUBLISHABLE_KEY}"
             )
             connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("Prefer", "resolution=merge-duplicates")
 
             val jsonPayload = JSONObject().apply {
                 put("device_id", "handy")
                 put("ip_address", ipAddress)
+                put("last_seen", Instant.now().toString())
             }
 
             connection.outputStream.bufferedWriter().use { writer ->
@@ -2170,10 +2173,11 @@ private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
                 Log.d("CLOUDSA", "Mobile IP successfully inserted: $ipAddress")
                 true
             } else {
-                Log.e(
-                    "CLOUDSA",
-                    "Failed to insert mobile IP. Response code: ${connection.responseCode}"
-                )
+                val errorBody = if (connection.responseCode >= 400) {
+                    connection.errorStream?.bufferedReader()?.use { it.readText() } ?: "No error body"
+                } else ""
+
+                Log.e("CLOUDSA", "Failed to insert mobile IP. Code: ${connection.responseCode}, Body: $errorBody")
                 false
             }
         } catch (e: Exception) {

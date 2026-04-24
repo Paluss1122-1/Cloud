@@ -13,7 +13,7 @@ import androidx.core.content.edit
 import com.cloud.core.objects.Config.COMPLETED_PODCASTS
 import com.cloud.core.objects.Config.PD_QUEUE
 import com.cloud.core.objects.Config.PODCASTS
-import com.cloud.core.functions.ERRORINSERT
+import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.services.PodcastPlayerServiceCompat.startService
@@ -48,7 +48,7 @@ fun clearPodcastSelectionNotifications(context: Context) {
         )
 
         CoroutineScope(Dispatchers.IO).launch {
-            ERRORINSERT(
+            errorInsert(
                 ERRORINSERTDATA(
                     "markMessageAsRead",
                     "Konnte Notifications nicht löschen: ${e.message}",
@@ -116,7 +116,7 @@ fun loadPodcastsFromMediaStore(context: Context): List<SimplePodcast> {
         }
     } catch (e: Exception) {
         CoroutineScope(Dispatchers.IO).launch {
-            ERRORINSERT(
+            errorInsert(
                 ERRORINSERTDATA(
                     "loadPodcastsFromMediaStore",
                     "Fehler bei Laden von Podcasts von MediaStore: ${e.message}",

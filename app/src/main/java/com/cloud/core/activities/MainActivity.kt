@@ -30,7 +30,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
 import com.cloud.core.objects.Config
-import com.cloud.core.functions.ERRORINSERT
+import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.core.ui.LandingPageOrApp
 import com.cloud.core.PolicyManager
@@ -62,7 +62,7 @@ class MainActivity : FragmentActivity() {
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             CoroutineScope(Dispatchers.IO).launch {
-                ERRORINSERT(
+                errorInsert(
                     ERRORINSERTDATA(
                         "UncaughtException: ${thread.name}",
                         throwable.stackTraceToString().take(8000),

@@ -15,7 +15,7 @@ import androidx.core.app.Person
 import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
 import com.cloud.core.objects.Config.cms
-import com.cloud.core.functions.ERRORINSERT
+import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_MARK_PARTS_READ
@@ -360,7 +360,7 @@ fun markMessageAsRead(messageId: String, readMessageIds: MutableSet<String>, con
         nm.cancel(notifId + 1000000)
     } catch (e: Exception) {
         CoroutineScope(Dispatchers.IO).launch {
-            ERRORINSERT(ERRORINSERTDATA("markMessageAsRead", "ERROR: ${e.message}", Instant.now().toString(), "ERROR"))
+            errorInsert(ERRORINSERTDATA("markMessageAsRead", "ERROR: ${e.message}", Instant.now().toString(), "ERROR"))
         }
     }
 }

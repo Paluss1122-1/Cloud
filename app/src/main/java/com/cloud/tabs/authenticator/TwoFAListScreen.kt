@@ -87,7 +87,7 @@ import androidx.core.content.edit
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import com.cloud.core.objects.Config.realDevice
-import com.cloud.core.functions.ERRORINSERT
+import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
 import com.google.zxing.ResultPoint
 import com.journeyapps.barcodescanner.BarcodeCallback
@@ -158,7 +158,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                     if (result.error != null) {
                         Toast.makeText(context, "Offline: ${result.error}", Toast.LENGTH_LONG)
                             .show()
-                        ERRORINSERT(
+                        errorInsert(
                             ERRORINSERTDATA(
                                 "TwoFAListScreen",
                                 "❌ Sync-Fehler: ${result.error}",
@@ -184,7 +184,7 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                 } catch (e: Exception) {
                     Toast.makeText(context, "Synchronisation fehlgeschlagen", Toast.LENGTH_LONG)
                         .show()
-                    ERRORINSERT(
+                    errorInsert(
                         ERRORINSERTDATA(
                             "TwoFAListScreen",
                             "❌ Sync-Exception: ${e.message}",
@@ -1061,7 +1061,7 @@ fun SilentCaptureScreen(
                                                     "❌ Ungültiges Format!",
                                                     Toast.LENGTH_LONG
                                                 ).show()
-                                                ERRORINSERT(
+                                                errorInsert(
                                                     ERRORINSERTDATA(
                                                         "Capture Activity",
                                                         "❌ Ungültiges Format! ($uri)",
@@ -1086,7 +1086,7 @@ fun SilentCaptureScreen(
                                                 "❌ Kein Secret gefunden!",
                                                 Toast.LENGTH_LONG
                                             ).show()
-                                            ERRORINSERT(
+                                            errorInsert(
                                                 ERRORINSERTDATA(
                                                     "Capture Activity",
                                                     "❌ Kein Secret! ($uri)",
@@ -1153,7 +1153,7 @@ fun SilentCaptureScreen(
                                             "❌ Fehler: ${e.message}",
                                             Toast.LENGTH_LONG
                                         ).show()
-                                        ERRORINSERT(
+                                        errorInsert(
                                             ERRORINSERTDATA(
                                                 "Capture Activity",
                                                 "❌ ${e.message}",
