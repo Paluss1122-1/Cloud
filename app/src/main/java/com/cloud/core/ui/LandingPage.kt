@@ -548,35 +548,59 @@ fun TabCard(
     LaunchedEffect(Unit) {
         alpha.animateTo(1f, animationSpec = tween(300))
     }
-    val containerColor = MaterialTheme.colorScheme.primary
+
+    val neonOrange = Color(0xFF001FBB)          // intensives Neon-Orange
+    val neonGlow = Color(0xFF00177E)           // etwas hellerer Glow
 
     Box(
         Modifier
             .alpha(alpha.value)
             .drawBehind {
                 val canvasSize = size
+
+                // === Erster Glow-Layer (starker äußerer Leuchteffekt) ===
                 drawContext.canvas.nativeCanvas.apply {
                     drawRoundRect(
                         0f, 0f, canvasSize.width, canvasSize.height,
-                        5.dp.toPx(), 5.dp.toPx(),
+                        8.dp.toPx(), 8.dp.toPx(),
                         Paint().apply {
-                            color = containerColor.toArgb()
+                            color = neonGlow.copy(alpha = 0.6f).toArgb()
                             isAntiAlias = true
-                            setShadowLayer(
-                                5.dp.toPx(), 0f, 0f,
-                                containerColor.copy(alpha = 0.85f).toArgb()
+                            maskFilter = android.graphics.BlurMaskFilter(
+                                18f, android.graphics.BlurMaskFilter.Blur.OUTER
+                            )
+                        }
+                    )
+                }
+
+                // === Zweiter Glow-Layer (mittlerer Glow) ===
+                drawContext.canvas.nativeCanvas.apply {
+                    drawRoundRect(
+                        0f, 0f, canvasSize.width, canvasSize.height,
+                        8.dp.toPx(), 8.dp.toPx(),
+                        Paint().apply {
+                            color = neonOrange.copy(alpha = 0.75f).toArgb()
+                            isAntiAlias = true
+                            maskFilter = android.graphics.BlurMaskFilter(
+                                10f, android.graphics.BlurMaskFilter.Blur.OUTER
                             )
                         }
                     )
                 }
             }
-            .border(1.dp, Color.Gray.copy(0.8f), RoundedCornerShape(5.dp))
+            // Neon-Orange Border
+            .border(
+                width = 1.5.dp,
+                color = neonOrange,
+                shape = RoundedCornerShape(8.dp)
+            )
     ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(72.dp),
-            colors = CardDefaults.cardColors(containerColor = containerColor),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
+            shape = RoundedCornerShape(8.dp),
             onClick = onClick
         ) {
             Row(
