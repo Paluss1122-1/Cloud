@@ -45,10 +45,10 @@ import androidx.core.content.edit
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.SHOWCOMMANDS
 import com.cloud.core.ui.showBatteryInfo
-import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.services.MediaPlayerService
 import com.cloud.services.MusicPlayerServiceCompat
 import com.cloud.services.OverlayLifecycleOwner
@@ -378,6 +378,13 @@ private fun getAvailableCommands(context: Context): List<Command> {
             description = "Zeigt alle To-dos"
         ) {
             showAllTodos(context)
+        },
+        Command(
+            name = "todones",
+            aliases = listOf("dones"),
+            description = "Zeigt alle To-dos"
+        ) {
+            showOpenTodos(context)
         },
         Command(
             name = "todone",
