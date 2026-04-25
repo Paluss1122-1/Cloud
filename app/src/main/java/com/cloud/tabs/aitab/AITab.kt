@@ -46,12 +46,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Color.Companion.Black
 import androidx.compose.ui.graphics.Color.Companion.White
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cloud.core.ui.NeonBox
 import com.cloud.core.ui.PloppingButton
 
 @Composable
@@ -174,32 +176,66 @@ fun AITabContent(vm: AITabViewModel = viewModel()) {
             ) {
                 items(vm.history) { msg ->
                     val isUser = msg.own
+
                     Box(
                         modifier = Modifier.fillMaxWidth(),
                         contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
                     ) {
-                        Column(horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
-                            Text(
-                                text = msg.text,
-                                color = White,
-                                fontSize = 15.sp,
+                        if (isUser) {
+                            // === Eigene Nachricht – klassisch & clean ===
+                            Box(
                                 modifier = Modifier
-                                    .background(
-                                        if (isUser) MaterialTheme.colorScheme.primary else Color(
-                                            0xFF444444
-                                        ),
-                                        RoundedCornerShape(10.dp)
-                                    )
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
                                     .widthIn(max = 280.dp)
-                            )
-                            if (!msg.own && msg.mode != null) {
+                                    .padding(
+                                        start = 40.dp,
+                                        end = 8.dp
+                                    )
+                            ) {
                                 Text(
-                                    text = msg.mode,
-                                    color = Color.Gray,
-                                    fontSize = 10.sp,
-                                    modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                                    text = msg.text,
+                                    color = White,
+                                    fontSize = 15.sp,
+                                    lineHeight = 21.sp,
+                                    modifier = Modifier
+                                        .background(
+                                            MaterialTheme.colorScheme.primary,   // oder Color(0xFF0066FF) etc.
+                                            RoundedCornerShape(14.dp)
+                                        )
+                                        .padding(horizontal = 14.dp, vertical = 10.dp)
                                 )
+                            }
+                        } else {
+                            NeonBox(
+                                modifier = Modifier
+                                    .widthIn(max = 280.dp)
+                                    .padding(
+                                        start = 8.dp,
+                                        end = 40.dp
+                                    ),
+                                cornerRadius = 14.dp,
+                                backgroundAlpha = 0.91f,
+                                borderWidth = 2.8.dp,
+                                neonColors = listOf(Color(0xFF00FFAA), Color(0xFF00CCFF)), // schönes Cyan → Blau
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                                ) {
+                                    Text(
+                                        text = msg.text,
+                                        color = Black,
+                                        fontSize = 15.sp,
+                                        lineHeight = 21.sp
+                                    )
+
+                                    if (msg.mode != null) {
+                                        Text(
+                                            text = msg.mode,
+                                            color = Color.Gray,
+                                            fontSize = 10.sp,
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
