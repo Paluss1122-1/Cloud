@@ -41,6 +41,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -110,10 +111,12 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.nativeCanvas
@@ -141,11 +144,9 @@ import androidx.core.content.edit
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
 import com.cloud.R
-import com.cloud.tabs.authenticator.AuthenticatorTab
+import com.cloud.core.TabNavigationViewModel
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.cms
-import com.cloud.core.TabNavigationViewModel
-import com.cloud.tabs.exploretab.ExploreTabContent
 import com.cloud.core.objects.FavoriteManager
 import com.cloud.privatecloudapp.FileIcon
 import com.cloud.privatecloudapp.FullscreenImageDialog
@@ -180,6 +181,8 @@ import com.cloud.tabs.VocabTab
 import com.cloud.tabs.WeatherTabContent
 import com.cloud.tabs.aitab.AITabContent
 import com.cloud.tabs.audiorecordertab.AudioRecorderContent
+import com.cloud.tabs.authenticator.AuthenticatorTab
+import com.cloud.tabs.exploretab.ExploreTabContent
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -2265,6 +2268,78 @@ fun PloppingButton(
                 }
             }
             .padding(contentPadding),
+        contentAlignment = Alignment.Center
+    ) {
+        content()
+    }
+}
+
+@Composable
+fun NeonBox(
+    modifier: Modifier = Modifier,
+    cornerRadius: Dp = 20.dp,
+    backgroundAlpha: Float = 0.22f,
+    borderWidth: Dp = 3.dp,
+    glowBlur1: Float = 42f,
+    glowBlur2: Float = 114f,
+    neonColors: List<Color>,
+    onClick: (() -> Unit)? = null,
+    content: @Composable () -> Unit
+) {
+    val gradientBrush = Brush.linearGradient(
+        colors = listOf(
+            neonColors[0].copy(alpha = backgroundAlpha),
+            neonColors[1].copy(alpha = backgroundAlpha)
+        )
+    )
+
+    Box(
+        modifier = modifier
+            // 1. Glow zuerst (hinter allem)
+            .drawBehind {
+                val w = size.width
+                val h = size.height
+                val r = cornerRadius.toPx()
+
+                // Äußerer Glow
+                drawIntoCanvas {
+                    it.nativeCanvas.apply {
+                        drawRoundRect(
+                            0f, 0f, w, h, r, r,
+                            Paint().apply {
+                                color = neonColors.last().copy(alpha = 0.55f).toArgb()
+                                isAntiAlias = true
+                                maskFilter = android.graphics.BlurMaskFilter(glowBlur1, android.graphics.BlurMaskFilter.Blur.OUTER)
+                            }
+                        )
+                    }
+                }
+
+                // Innerer Glow
+                drawIntoCanvas {
+                    it.nativeCanvas.apply {
+                        drawRoundRect(
+                            0f, 0f, w, h, r, r,
+                            Paint().apply {
+                                color = neonColors.first().copy(alpha = 0.65f).toArgb()
+                                isAntiAlias = true
+                                maskFilter = android.graphics.BlurMaskFilter(glowBlur2, android.graphics.BlurMaskFilter.Blur.OUTER)
+                            }
+                        )
+                    }
+                }
+            }
+            // 2. Clip + Background + Border in der richtigen Reihenfolge
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(gradientBrush)                    // ← Jetzt richtig sichtbar
+            .border(
+                width = borderWidth,
+                brush = Brush.linearGradient(neonColors),
+                shape = RoundedCornerShape(cornerRadius)
+            )
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+
+
         contentAlignment = Alignment.Center
     ) {
         content()
