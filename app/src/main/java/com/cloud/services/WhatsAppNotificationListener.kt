@@ -243,7 +243,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 val text = "${
                     sbn.notification.extras.getCharSequence("android.text")?.toString() ?: ""
                 } ${sbn.notification.extras.getCharSequence("android.bigText")?.toString() ?: ""}"
-                val code = Regex("\\b\\d{4,6}\\b").find(text)?.value ?: return
+                val code = Regex("\\b\\d{6}\\b").find(text)?.value ?: return
 
                 val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
@@ -256,7 +256,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                     setContent {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Column(Modifier.fillMaxSize().background(Cloud), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Text("$code", fontSize = 100.sp, color = Color.White)
+                                Text(code, fontSize = 100.sp, color = Color.White)
                             }
                             IconButton(
                                 onClick = {
