@@ -71,11 +71,11 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.cloud.core.functions.ERRORINSERTDATA
+import com.cloud.core.functions.errorInsert
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.DEL_GAL_CONF
 import com.cloud.core.objects.Config.cms
-import com.cloud.core.functions.errorInsert
-import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.quiethoursnotificationhelper.AiResponseEntry
 import com.cloud.quiethoursnotificationhelper.GalleryImage
 import com.cloud.quiethoursnotificationhelper.aiResponseFlow
@@ -112,7 +112,6 @@ import com.cloud.quiethoursnotificationhelper.syncTodosWithLaptop
 import com.cloud.quiethoursnotificationhelper.timeChangeReceiver
 import com.cloud.quiethoursnotificationhelper.updateNotification
 import com.cloud.quiethoursnotificationhelper.updateSingleSenderNotification
-import com.cloud.services.AutoClickAccessibilityService.Companion.closeNots
 import com.cloud.tabs.AudioRecorder
 import com.cloud.tabs.MediaAnalyticsManager
 import com.cloud.tabs.MediaAnalyticsManager.getSessions
@@ -309,11 +308,22 @@ class QuietHoursNotificationService : Service() {
                 set(Calendar.MILLISECOND, 0)
             }
 
-            if (isCurrentlyQuietHours) {
+            val currentHour = now.get(Calendar.HOUR_OF_DAY)
+            val spansOverMidnight = quietEnd < quietStart
+
+            val isQuietNow = if (spansOverMidnight) {
+                currentHour !in quietEnd..<quietStart
+            } else {
+                currentHour in quietStart..<quietEnd
+            }
+
+            if (isQuietNow) {
                 nextChange.set(Calendar.HOUR_OF_DAY, quietEnd)
                 nextChange.set(Calendar.MINUTE, 0)
 
-                if (nextChange.timeInMillis <= now.timeInMillis) {
+                if (spansOverMidnight && currentHour >= quietStart) {
+                    nextChange.add(Calendar.DAY_OF_YEAR, 1)
+                } else if (nextChange.timeInMillis <= now.timeInMillis) {
                     nextChange.add(Calendar.DAY_OF_YEAR, 1)
                 }
             } else {
@@ -587,7 +597,10 @@ class QuietHoursNotificationService : Service() {
                 }
 
                 ACTION_SYNC_LAPTOP -> {
-                    closeNots()
+                    sendBroadcast(Intent("com.paluss1122.accessibily.EXECUTE").apply {
+                        setPackage("com.paluss1122.accessibily")
+                        putExtra("cmd", """{"action":"close_nots"}""")
+                    })
                     syncTodosWithLaptop(this@QuietHoursNotificationService)
                     START_STICKY
                 }
@@ -945,7 +958,7 @@ class QuietHoursNotificationService : Service() {
         }
 
         errorScope.cancel()
-        exploreTracker.stop()
+        exploreTracker.stop(this)
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {

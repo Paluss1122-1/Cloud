@@ -3,9 +3,7 @@ package com.cloud.services
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.annotation.SuppressLint
-import android.content.Intent
 import android.graphics.Path
-import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 
 @SuppressLint("AccessibilityPolicy")
@@ -17,21 +15,6 @@ class AutoClickAccessibilityService : AccessibilityService() {
         fun getInstance(): AutoClickAccessibilityService? = instance
 
         fun isServiceEnabled(): Boolean = instance != null
-
-        fun closeNots() {
-            instance?.closeNotificationShade()
-        }
-    }
-
-    fun closeNotificationShade() {
-        if (instance != null) {
-            performGlobalAction(GLOBAL_ACTION_BACK)
-        } else {
-            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            this.startActivity(intent)
-        }
     }
 
     override fun onServiceConnected() {

@@ -1,4 +1,3 @@
-// ExploreLocationTracker.kt
 package com.cloud.tabs.exploretab
 
 import android.annotation.SuppressLint
@@ -28,7 +27,6 @@ object ExploreLocationTracker {
         val repo = ExploreRepository(appCtx)
         val client = LocationServices.getFusedLocationProviderClient(appCtx)
 
-        // Passive: kein aktiver GPS-drain, empfängt Fixes von anderen Apps gratis
         val request = LocationRequest.Builder(Priority.PRIORITY_PASSIVE, 60_000L)
             .setMinUpdateDistanceMeters(50f)
             .setWaitForAccurateLocation(false)
@@ -48,7 +46,6 @@ object ExploreLocationTracker {
             locationCallback = callback
         } catch (_: Exception) {}
 
-        // WorkManager als Doze-fähiger Fallback
         ExploreWorker.schedule(appCtx)
     }
 
