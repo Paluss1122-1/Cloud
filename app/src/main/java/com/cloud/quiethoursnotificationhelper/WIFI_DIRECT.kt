@@ -873,7 +873,46 @@ fun getTodos(context: Context): List<TodoItem> {
     return parseTodosFromJson(json)
 }
 
-fun getOpenTodos(context: Context): List<TodoItem> = getTodos(context).filter { !it.completed }
+fun showOpenTodos(context: Context) {
+    val todos = getTodos(context).filter { !it.completed }
+
+    if (todos.isEmpty()) {
+        showSimpleNotificationExtern(
+            "📝 To-dos",
+            "Keine To-dos vorhanden",
+            10.seconds,
+            context = context
+        )
+        return
+    }
+
+    val notificationManager = context.getSystemService(NotificationManager::class.java)
+
+    todos.forEachIndexed { index, todoItem ->
+        notificationManager.notify(
+            TODOS + index, NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_menu_agenda)
+                .setContentTitle(todoItem.text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(todoItem.text))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .setGroup("todos")
+                .build()
+        )
+    }
+
+    notificationManager.notify(
+        TODOS + 150, NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .setContentTitle("Erledigte Todos")
+            .setContentText("${todos.size} Erledigte Todos")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setGroup("todos")
+            .setGroupSummary(true)
+            .setAutoCancel(true)
+            .build()
+    )
+}
 
 fun saveTodos(context: Context, todos: List<TodoItem>) {
     val prefs = context.getSharedPreferences("todos_prefs", MODE_PRIVATE)
@@ -2174,10 +2213,14 @@ private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
                 true
             } else {
                 val errorBody = if (connection.responseCode >= 400) {
-                    connection.errorStream?.bufferedReader()?.use { it.readText() } ?: "No error body"
+                    connection.errorStream?.bufferedReader()?.use { it.readText() }
+                        ?: "No error body"
                 } else ""
 
-                Log.e("CLOUDSA", "Failed to insert mobile IP. Code: ${connection.responseCode}, Body: $errorBody")
+                Log.e(
+                    "CLOUDSA",
+                    "Failed to insert mobile IP. Code: ${connection.responseCode}, Body: $errorBody"
+                )
                 false
             }
         } catch (e: Exception) {
