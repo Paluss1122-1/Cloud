@@ -7,6 +7,7 @@ import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Paint
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.compose.animation.AnimatedVisibility
@@ -89,6 +90,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -96,6 +98,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
@@ -115,6 +119,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cloud.core.ui.NeonBox
 import com.cloud.quiethoursnotificationhelper.AiResponseEntry
 import com.cloud.quiethoursnotificationhelper.aiResponseFlow
 import com.cloud.quiethoursnotificationhelper.deleteAiResponse
@@ -3676,39 +3681,28 @@ fun AiResponseCard(
     entry: AiResponseEntry,
     onShowHistory: () -> Unit
 ) {
-    Box(
+    NeonBox(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(
-                Brush.linearGradient(
-                    listOf(
-                        NeonGreen.copy(alpha = 0.08f),
-                        NeonBlue.copy(alpha = 0.08f)
-                    )
-                )
-            )
-            .clickable { onShowHistory() }
-            .border(
-                width = 1.5.dp,
-                brush = Brush.linearGradient(listOf(NeonGreen, NeonBlue)),
-                shape = RoundedCornerShape(20.dp)
-            )
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        cornerRadius = 20.dp,
+        borderWidth = 3.dp,
+        onClick = onShowHistory,
+        neonColors = listOf(NeonGreen, NeonBlue)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = entry.text,
                 fontSize = 14.sp,
                 lineHeight = 22.sp,
-                style = TextStyle(
-                    brush = Brush.linearGradient(listOf(NeonGreen, NeonBlue))
-                )
+                style = TextStyle(brush = Brush.linearGradient(listOf(NeonGreen, NeonBlue)))
             )
+
             Text(
-                formatTimestamp(entry.timestamp),
+                text = formatTimestamp(entry.timestamp),
                 color = TextTertiary,
-                fontSize = 10.sp
+                fontSize = 10.sp,
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
     }
