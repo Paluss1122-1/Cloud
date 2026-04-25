@@ -370,7 +370,7 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
 
     if (isQuietHours) {
         builder
-            .setContentTitle("🌙 Ruhezeit aktiv")
+            .setContentTitle("🔥 Ready")
 
         val settingsIntent = Intent(Settings.ACTION_SETTINGS).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -416,8 +416,8 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
             .build()
 
         builder
-            .setContentTitle("Ruhezeit-Überwachung")
-            .setContentText("Aktiv von $currentEnd Uhr bis $currentStart Uhr")
+            .setContentTitle("👀 Warte...")
+            .setContentText("Read ab $currentEnd Uhr bis $currentStart Uhr")
             .addAction(endAction)
     }
 
@@ -430,7 +430,7 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
     )
     builder.addAction(
         android.R.drawable.ic_dialog_email,
-        "Laptop",
+        "Connect",
         syncPendingIntent
     )
 
