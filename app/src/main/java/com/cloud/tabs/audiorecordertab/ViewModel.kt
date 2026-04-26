@@ -314,15 +314,3 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
     }
 }
 
-fun startAudioRecording(context: Context) {
-    val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-    val file = File(context.getExternalFilesDir(null), "audio_$timestamp.m4a")
-    ContextCompat.startForegroundService(
-        context,
-        Intent(context, AudioForegroundService::class.java).apply { putExtra("filePath", file.absolutePath) }
-    )
-}
-
-fun stopAudioRecording(context: Context) {
-    context.stopService(Intent(context, AudioForegroundService::class.java))
-}
