@@ -35,13 +35,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 
 
 @Composable
@@ -232,7 +232,7 @@ fun FileItem(
             Text(
                 SimpleDateFormat(
                     "dd.MM.yyyy HH:mm",
-                    Locale.getDefault()
+                    LocalLocale.current.platformLocale
                 ).format(Date(file.lastModified())),
                 color = Color.Gray,
                 fontSize = 11.sp
