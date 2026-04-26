@@ -417,7 +417,7 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
 
         builder
             .setContentTitle("👀 Warte...")
-            .setContentText("Read ab $currentEnd Uhr bis $currentStart Uhr")
+            .setContentText("Ready ab $currentEnd Uhr bis $currentStart Uhr")
             .addAction(endAction)
     }
 
