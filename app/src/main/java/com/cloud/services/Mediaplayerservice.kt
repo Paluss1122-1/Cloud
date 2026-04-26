@@ -162,12 +162,6 @@ class MediaPlayerService : MediaSessionService() {
                 }
             )
 
-        fun searchAndPlaySong(context: Context, name: String) = context.startService(
-            Intent(context, MediaPlayerService::class.java).apply {
-                action = GET_ACTIVE_PLALIST
-                putExtra("SearchQuery", name)
-            })
-
         fun sendMusicPlayAction(context: Context) = context.startService(
             Intent(context, MediaPlayerService::class.java).apply { action = ACTION_MUSIC_PLAY }
         )
@@ -2339,7 +2333,7 @@ class MediaPlayerService : MediaSessionService() {
         override fun release() {}
         override fun getCurrentTracks(): Tracks = Tracks.EMPTY
         override fun getTrackSelectionParameters(): TrackSelectionParameters =
-            TrackSelectionParameters.DEFAULT_WITHOUT_CONTEXT
+            TrackSelectionParameters.DEFAULT
 
         override fun setTrackSelectionParameters(parameters: TrackSelectionParameters) {}
         override fun getMediaMetadata(): MediaMetadata = MediaMetadata.EMPTY
