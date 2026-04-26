@@ -53,7 +53,7 @@ fun playLatestVoiceNote(sender: String, context: Context) {
                     currentVoiceNoteIndex = 0
                     playVoiceNoteAtIndex(currentVoiceNoteIndex, context)
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 mainHandler.post {
                     showSimpleNotificationExtern(
                         "Fehler",
@@ -63,7 +63,7 @@ fun playLatestVoiceNote(sender: String, context: Context) {
                 }
             }
         }
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         showSimpleNotificationExtern(
             "Fehler",
             "Sprachnachricht konnte nicht abgespielt werden",
