@@ -34,7 +34,6 @@ import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.core.ui.LandingPageOrApp
 import com.cloud.core.PolicyManager
-import com.cloud.core.objects.SupabaseConfigALT
 import com.cloud.core.ui.Typography
 import com.cloud.core.ui.c
 import com.cloud.quicksettingsfunctions.BatteryDataRepository
@@ -52,7 +51,7 @@ import java.util.Calendar
 class MyDeviceAdminReceiver : DeviceAdminReceiver()
 
 class MainActivity : FragmentActivity() {
-    val sbclient = SupabaseConfigALT.client
+    val sbclient = Config.client
 
     private var jsonFilePath by mutableStateOf<String?>(null)
     private var jsonFileUri by mutableStateOf<Uri?>(null)
