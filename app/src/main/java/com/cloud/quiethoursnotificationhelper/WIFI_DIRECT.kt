@@ -66,7 +66,6 @@ import com.cloud.core.objects.Config.FLASHCARD_RECEIVE_PORT
 import com.cloud.core.objects.Config.SYNC_PORT
 import com.cloud.core.objects.Config.TODOS
 import com.cloud.core.objects.Config.UPDATE_PORT
-import com.cloud.core.objects.SupabaseConfigALT
 import com.cloud.core.ui.Cloud
 import com.cloud.services.MediaPlayerService
 import com.cloud.services.OverlayLifecycleOwner
@@ -2150,14 +2149,14 @@ private suspend fun fetchLaptopIpFromSupabase(): String? = withContext(Dispatche
     var connection: HttpURLConnection? = null
     try {
         val url =
-            "${SupabaseConfigALT.SUPABASE_URL}/rest/v1/device_ips?device_id=eq.laptop&select=ip_address"
+            "${Config.SUPABASE_URL}/rest/v1/device_ips?device_id=eq.laptop&select=ip_address"
 
         connection = URL(url).openConnection() as HttpURLConnection
         connection.requestMethod = "GET"
-        connection.setRequestProperty("apikey", SupabaseConfigALT.SUPABASE_PUBLISHABLE_KEY)
+        connection.setRequestProperty("apikey", Config.SUPABASE_PUBLISHABLE_KEY)
         connection.setRequestProperty(
             "Authorization",
-            "Bearer ${SupabaseConfigALT.SUPABASE_PUBLISHABLE_KEY}"
+            "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}"
         )
 
         if (connection.responseCode == 200) {
@@ -2185,14 +2184,14 @@ private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
         if (!Config.realDevice) return@withContext true
         var connection: HttpURLConnection? = null
         try {
-            val url = "${SupabaseConfigALT.SUPABASE_URL}/rest/v1/device_ips"
+            val url = "${Config.SUPABASE_URL}/rest/v1/device_ips"
 
             connection = URL(url).openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
-            connection.setRequestProperty("apikey", SupabaseConfigALT.SUPABASE_PUBLISHABLE_KEY)
+            connection.setRequestProperty("apikey", Config.SUPABASE_PUBLISHABLE_KEY)
             connection.setRequestProperty(
                 "Authorization",
-                "Bearer ${SupabaseConfigALT.SUPABASE_PUBLISHABLE_KEY}"
+                "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}"
             )
             connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("Prefer", "resolution=merge-duplicates")
