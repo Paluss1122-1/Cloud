@@ -179,7 +179,7 @@ fun showPodcastQueue(context: Context) {
             }
         }, 300)
 
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         showSimpleNotificationExtern(
             "❌ Fehler",
             "Queue konnte nicht angezeigt werden",
