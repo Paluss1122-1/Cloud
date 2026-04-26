@@ -1,13 +1,5 @@
 package com.cloud.spotifydownloader_own.domain
 
-data class TrackInfo(
-    val title: String,
-    val artist: String,
-    val album: String,
-    val thumbnailUrl: String,
-    val spotifyUrl: String
-)
-
 sealed class DownloadState {
     object Idle : DownloadState()
     object Searching : DownloadState()
