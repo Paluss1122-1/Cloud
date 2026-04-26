@@ -75,6 +75,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -90,8 +91,8 @@ import coil.ImageLoader
 import coil.compose.rememberAsyncImagePainter
 import coil.disk.DiskCache
 import coil.memory.MemoryCache.Builder
-import com.cloud.core.ui.PloppingButton
 import com.cloud.core.TabNavigationViewModel
+import com.cloud.core.ui.PloppingButton
 import com.cloud.core.ui.gruen
 import com.cloud.privatecloudapp.getVideoFirstFrame
 import com.cloud.privatecloudapp.isVideoFile
@@ -103,7 +104,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 import kotlin.math.abs
 import kotlin.time.ExperimentalTime
 
@@ -125,8 +125,8 @@ fun OtherBucketViewer(
     var fileList by remember { mutableStateOf<List<LocalFileInfo>>(emptyList()) }
     var isUploading by remember { mutableStateOf(false) }
     var uploadProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    var showFullscreenImage by rememberSaveable { mutableStateOf<LocalFileInfo?>(null) }
-    var showVideoPlayer by rememberSaveable { mutableStateOf<LocalFileInfo?>(null) }
+    var showFullscreenImage by remember { mutableStateOf<LocalFileInfo?>(null) }
+    var showVideoPlayer by remember { mutableStateOf<LocalFileInfo?>(null) }
     var selectedFilter by remember { mutableStateOf("Alle") }
     val context = LocalContext.current
     var currentVideoIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -408,7 +408,7 @@ fun OtherBucketViewer(
                         ) {
                             rowFiles.forEach { fileInfo ->
                                 val dateFormat =
-                                    SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+                                    SimpleDateFormat("dd.MM.yyyy HH:mm", LocalLocale.current.platformLocale)
                                 val fileDate = dateFormat.format(Date(fileInfo.lastModified))
 
                                 Card(
