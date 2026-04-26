@@ -6,111 +6,26 @@ import android.content.Context
 import android.content.Context.AUDIO_SERVICE
 import android.content.pm.PackageManager
 import android.media.AudioManager
-import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import com.cloud.core.objects.Config.cms
-import com.cloud.core.objects.SupabaseConfigALT
 import com.cloud.core.functions.showSimpleNotificationExtern
+import com.cloud.core.objects.Config
 import com.cloud.services.ChatService
 import com.cloud.services.QuietHoursNotificationService.Companion.CHANNEL_ID
-import com.cloud.services.QuietHoursNotificationService.Companion.audioRecorder
-import com.cloud.services.QuietHoursNotificationService.Companion.currentRecordingFile
-import com.cloud.tabs.AudioRecorder
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import java.io.File
-import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Date
-import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
-
-fun startAudioRecording(context: Context) {
-    try {
-        if (audioRecorder != null) {
-            showSimpleNotificationExtern(
-                "⚠️ Aufnahme läuft",
-                "Es läuft bereits eine Aufnahme",
-                context = context
-            )
-            return
-        }
-
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            showSimpleNotificationExtern(
-                "❌ Berechtigung fehlt",
-                "RECORD_AUDIO fehlt. Bitte gewähre die Berechtigung in den Einstellungen.",
-                context = context
-            )
-            return
-        }
-
-        val dir = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val outFile = File(dir, "rec_${timestamp}.m4a")
-
-        audioRecorder = AudioRecorder()
-        audioRecorder?.startRecording(outFile)
-        currentRecordingFile = outFile
-
-        showSimpleNotificationExtern(
-            "✅ Aufnahme gestartet",
-            "Datei: ${outFile.name}",
-            context = context
-        )
-    } catch (e: Exception) {
-        showSimpleNotificationExtern(
-            "❌ Fehler",
-            "Aufnahme konnte nicht gestartet werden",
-            context = context
-        )
-        audioRecorder = null
-        currentRecordingFile = null
-    }
-}
-
-fun stopAudioRecording(context: Context) {
-    try {
-        if (audioRecorder == null) {
-            showSimpleNotificationExtern(
-                "ℹ️ Keine Aufnahme",
-                "Es läuft keine Aufnahme",
-                context = context
-            )
-            return
-        }
-
-        audioRecorder?.stopRecording()
-        audioRecorder = null
-
-        val filename = currentRecordingFile?.name ?: "unbekannt"
-        showSimpleNotificationExtern(
-            "✅ Aufnahme beendet",
-            "Datei gespeichert: $filename",
-            context = context
-        )
-        currentRecordingFile = null
-    } catch (e: Exception) {
-        showSimpleNotificationExtern(
-            "❌ Fehler",
-            "Aufnahme konnte nicht gestoppt werden",
-            context = context
-        )
-    }
-}
 
 @OptIn(DelicateCoroutinesApi::class)
 fun showLastFriendMessages(context: Context) {
@@ -125,7 +40,7 @@ fun showLastFriendMessages(context: Context) {
                 )
             }
 
-            val supabase = SupabaseConfigALT.client
+            val supabase = Config.client
 
             val response = supabase.from("messages")
                 .select {
