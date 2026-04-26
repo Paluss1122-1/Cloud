@@ -254,7 +254,6 @@ class QuietHoursNotificationService : Service() {
         val handler = Handler(Looper.getMainLooper())
 
         var audioRecorder: AudioRecorder? = null
-        var currentRecordingFile: File? = null
 
         fun getCheckRunnable(context: Context): Runnable = Runnable {
             try {
