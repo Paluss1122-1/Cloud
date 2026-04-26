@@ -1,5 +1,6 @@
 package com.cloud.core.functions
 
+import com.cloud.core.objects.Config
 import com.cloud.core.objects.SupabaseConfigALT
 import io.github.jan.supabase.postgrest.from
 import kotlinx.serialization.Serializable
@@ -15,7 +16,7 @@ data class ERRORINSERTDATA(
 
 suspend fun errorInsert(data: ERRORINSERTDATA): Int {
     try {
-        SupabaseConfigALT.client.from("error_reports").insert(data)
+        Config.client.from("error_reports").insert(data)
         return 1
     } catch (_: Exception) {
     }
