@@ -1,7 +1,6 @@
 package com.cloud.core.functions
 
 import android.Manifest
-import android.R
 import android.annotation.SuppressLint
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -27,7 +26,7 @@ fun showSimpleNotificationExtern(
 ) {
 
     val notification = NotificationCompat.Builder(context, "show_simple_not_channel")
-        .setSmallIcon(R.drawable.ic_dialog_info)
+        .setSmallIcon(android.R.drawable.ic_dialog_info)
         .setContentTitle(title)
         .setContentText(text)
         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
