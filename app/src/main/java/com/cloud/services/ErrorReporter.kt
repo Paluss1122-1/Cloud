@@ -17,7 +17,7 @@ import androidx.core.net.toUri
 import com.cloud.core.objects.Config.cms
 import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
-import com.cloud.core.objects.SupabaseConfigALT
+import com.cloud.core.objects.Config
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
@@ -172,7 +172,7 @@ class ErrorMonitorService : Service() {
             try {
                 val tableName = "error_reports"
 
-                val channel = SupabaseConfigALT.client.channel("realtime:$tableName")
+                val channel = Config.client.channel("realtime:$tableName")
 
                 val changeFlow = channel
                     .postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
