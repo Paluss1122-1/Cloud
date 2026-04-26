@@ -17,10 +17,10 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import androidx.core.content.edit
+import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.CHAT_SERVICE
 import com.cloud.core.objects.Config.CHAT_SERVICE_HISTORY
 import com.cloud.core.objects.Config.cms
-import com.cloud.core.objects.SupabaseConfigALT
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
@@ -49,7 +49,6 @@ class ChatService : Service() {
         private const val ACTION_SHOW_HISTORY = "com.cloud.ACTION_SHOW_HISTORY"
         private const val KEY_REPLY_TEXT = "key_reply_text"
         private const val KEY_NOTIFICATION_ID = "key_notification_id"
-        private const val POLL_INTERVAL_MS = 3000L
 
         private const val PREFS_NAME = "ChatServicePrefs"
         private const val KEY_SEEN_MESSAGES = "seen_message_ids"
@@ -72,7 +71,7 @@ class ChatService : Service() {
     )
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val supabase = SupabaseConfigALT.client
+    private val supabase = Config.client
     private val myUserId = "you"
     private val friendUserId = "friend"
 
@@ -167,7 +166,7 @@ class ChatService : Service() {
             val ids = Json.decodeFromString<List<String>>(json ?: "[]")
             seenMessageIds.addAll(ids)
             Log.d("ChatService", "✅ Loaded ${seenMessageIds.size} seen messages")
-        } catch (e: Exception) {
+        } catch (_: Exception) {
         }
     }
 
@@ -175,7 +174,7 @@ class ChatService : Service() {
         try {
             val json = Json.encodeToString(seenMessageIds.toList())
             sharedPreferences.edit { putString(KEY_SEEN_MESSAGES, json) }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
         }
     }
 
@@ -305,7 +304,7 @@ class ChatService : Service() {
                 notificationManager.notify(CHAT_SERVICE_HISTORY, notification)
             }
 
-        } catch (e: Exception) {
+        } catch (_: Exception) {
         }
     }
 
@@ -356,7 +355,7 @@ class ChatService : Service() {
                                 }
                                 saveSeenMessageIds()
                             }
-                        } catch (e: Exception) {
+                        } catch (_: Exception) {
                         }
                     }.launchIn(serviceScope)
 
@@ -364,7 +363,7 @@ class ChatService : Service() {
                     Log.i("ChatService", "✅ Realtime channel subscribed")
 
                     true
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     false
                 }
             }
@@ -380,7 +379,7 @@ class ChatService : Service() {
 
         } catch (e: TimeoutCancellationException) {
             Log.e("ChatService", "Realtime setup timed out", e)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
         }
     }
 
@@ -436,7 +435,7 @@ class ChatService : Service() {
                 notificationManager.notify(cms(), notification)
             }
 
-        } catch (e: Exception) {
+        } catch (_: Exception) {
         }
     }
 
