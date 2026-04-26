@@ -17,7 +17,6 @@ import androidx.room.Update
 import com.cloud.core.objects.Config
 import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
-import com.cloud.core.objects.SupabaseConfigALT
 import com.cloud.privatecloudapp.isOnline
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.CoroutineScope
@@ -274,7 +273,7 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
             val localPasswords = passwordDb.passwordDao().getAll()
             val localTwoFa = twoFaDb.twoFADao().getAll()
             val cloudEntries = try {
-                SupabaseConfigALT.client.postgrest.from("password_entries")
+                Config.client.postgrest.from("password_entries")
                     .select().decodeList<PasswordEntrySupabase>()
             } catch (e: Exception) {
                 errorInsert(
@@ -322,7 +321,7 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
 
             if (toUpload.isNotEmpty()) {
                 try {
-                    SupabaseConfigALT.client.postgrest.from("password_entries").insert(toUpload)
+                    Config.client.postgrest.from("password_entries").insert(toUpload)
                 } catch (e: Exception) {
                     errorInsert(ERRORINSERTDATA("PasswordRepository", "Batch-Upload fehlgeschlagen: ${e.message}", Instant.now().toString(), "ERROR"))
                 }
