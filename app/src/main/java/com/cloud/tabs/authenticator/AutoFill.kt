@@ -1,6 +1,5 @@
 package com.cloud.tabs.authenticator
 
-import android.R
 import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.app.assist.AssistStructure
@@ -8,10 +7,12 @@ import android.graphics.drawable.Icon
 import android.os.CancellationSignal
 import android.service.autofill.AutofillService
 import android.service.autofill.Dataset
+import android.service.autofill.Field
 import android.service.autofill.FillCallback
 import android.service.autofill.FillRequest
 import android.service.autofill.FillResponse
 import android.service.autofill.InlinePresentation
+import android.service.autofill.Presentations
 import android.service.autofill.SaveCallback
 import android.service.autofill.SaveRequest
 import android.text.InputType
@@ -58,14 +59,24 @@ class CloudAutofillService : AutofillService() {
                 else db.passwordDao().search(structure.activityComponent.packageName)
             }
             entries.take(5).forEachIndexed { index, entry ->
-                val presentation = RemoteViews(packageName, R.layout.simple_list_item_2).apply {
-                    setTextViewText(R.id.text1, "☁️ ${entry.name}")
-                    setTextViewText(R.id.text2, entry.username.ifEmpty { "(kein Benutzername)" })
-                }
                 val ds = Dataset.Builder()
-                loginFields.usernameId?.let { ds.setValue(it, AutofillValue.forText(entry.username), presentation) }
-                loginFields.passwordId?.let { ds.setValue(it, AutofillValue.forText(entry.password), presentation) }
-                if (inlineRequest != null) createInlinePresentation(inlineRequest, index, entry)?.let { ds.setInlinePresentation(it) }
+
+                loginFields.usernameId?.let { id ->
+                    val field = Field.Builder()
+                        .setValue(AutofillValue.forText(entry.username))
+                        .setPresentations(buildPresentations(entry, index, inlineRequest))
+                        .build()
+                    ds.setField(id, field)
+                }
+
+                loginFields.passwordId?.let { id ->
+                    val field = Field.Builder()
+                        .setValue(AutofillValue.forText(entry.password))
+                        .setPresentations(buildPresentations(entry, index, inlineRequest))
+                        .build()
+                    ds.setField(id, field)
+                }
+
                 responseBuilder.addDataset(ds.build())
                 hasDataset = true
             }
@@ -83,15 +94,14 @@ class CloudAutofillService : AutofillService() {
             }
             matched.take(3).forEachIndexed { index, entry ->
                 val code = TotpGenerator.generateTOTP(entry.secret)
-                val presentation = RemoteViews(packageName, R.layout.simple_list_item_2).apply {
-                    setTextViewText(R.id.text1, "🛡️ ${entry.name}")
-                    setTextViewText(R.id.text2, code)
-                }
-                val ds = Dataset.Builder().setValue(otpFieldId, AutofillValue.forText(code), presentation)
-                if (inlineRequest != null) createInlinePresentation(
-                    inlineRequest, index,
-                    PasswordEntry(name = entry.name, username = code, password = "")
-                )?.let { ds.setInlinePresentation(it) }
+                val field = Field.Builder()
+                    .setValue(AutofillValue.forText(code))
+                    .setPresentations(buildPresentations(
+                        PasswordEntry(name = entry.name, username = code, password = ""),
+                        index, inlineRequest
+                    ))
+                    .build()
+                val ds = Dataset.Builder().setField(otpFieldId, field)
                 responseBuilder.addDataset(ds.build())
                 hasDataset = true
             }
@@ -222,12 +232,28 @@ class CloudAutofillService : AutofillService() {
             val content = InlineSuggestionUi.newContentBuilder(pendingIntent)
                 .setTitle(entry.name)
                 .setSubtitle(entry.username.ifEmpty { "Kein Benutzername" })
-                .setStartIcon(Icon.createWithResource(this, R.drawable.ic_lock_lock))
+                .setStartIcon(Icon.createWithResource(this, android.R.drawable.ic_lock_lock))
                 .build()
             InlinePresentation(content.slice, spec, false)
         } catch (e: Exception) {
             Log.e(TAG, "createInlineChip failed: ${e.message}")
             null
         }
+    }
+
+    private fun buildPresentations(
+        entry: PasswordEntry,
+        index: Int,
+        inlineRequest: InlineSuggestionsRequest?
+    ): Presentations {
+        val remoteView = RemoteViews(packageName, android.R.layout.simple_list_item_2).apply {
+            setTextViewText(android.R.id.text1, "☁️ ${entry.name}")
+            setTextViewText(android.R.id.text2, entry.username.ifEmpty { "(kein Benutzername)" })
+        }
+        val builder = Presentations.Builder().setMenuPresentation(remoteView)
+        inlineRequest?.let {
+            createInlinePresentation(it, index, entry)?.let { ip -> builder.setInlinePresentation(ip) }
+        }
+        return builder.build()
     }
 }
