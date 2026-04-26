@@ -13,7 +13,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
-import android.graphics.Paint
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.BatteryManager
@@ -36,18 +35,13 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -74,7 +68,6 @@ import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -109,19 +102,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.rememberGraphicsLayer
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -133,7 +120,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -2045,7 +2031,6 @@ fun showBatteryInfo(context: Context) {
 
 
 const val PREFS_NAME = "cloud_app_prefs"
-const val KEY_LAST_MENU_ITEM = "last_menu_item"
 
 private const val KEY_LAST_URL = "last_browser_url"
 
@@ -2077,92 +2062,6 @@ object WebViewCookieBackup {
             cm.setCookie(url, cookie.trim())
         }
         cm.flush()
-    }
-}
-
-@Composable
-fun GlowingCard(
-    glowingColor: Color,
-    modifier: Modifier = Modifier,
-    containerColor: Color = Color.White,
-    cornersRadius: Dp = 0.dp,
-    glowingRadius: Dp = 20.dp,
-    xShifting: Dp = 0.dp,
-    yShifting: Dp = 0.dp,
-    content: @Composable BoxScope.() -> Unit
-) {
-    Box(
-        modifier = modifier
-            .drawBehind {
-                val canvasSize = size
-                drawContext.canvas.nativeCanvas.apply {
-                    drawRoundRect(
-                        0f,
-                        0f,
-                        canvasSize.width,
-                        canvasSize.height,
-                        cornersRadius.toPx(),
-                        cornersRadius.toPx(),
-                        Paint().apply {
-                            color = containerColor.toArgb()
-                            isAntiAlias = true
-                            setShadowLayer(
-                                glowingRadius.toPx(),
-                                xShifting.toPx(), yShifting.toPx(),
-                                glowingColor.copy(alpha = 0.85f).toArgb()
-                            )
-                        }
-                    )
-                }
-            }
-    ) {
-        content()
-    }
-}
-
-@Composable
-fun ClickableGlowingCard(
-    glowingColor: Color,
-    modifier: Modifier = Modifier,
-    containerColor: Color = Color.White,
-    cornersRadius: Dp = 0.dp,
-    glowingRadius: Dp = 20.dp,
-    xShifting: Dp = 0.dp,
-    yShifting: Dp = 0.dp,
-    onClick: () -> Unit = {},
-    content: @Composable BoxScope.() -> Unit
-) {
-    Box(
-        modifier = modifier
-            .drawBehind {
-                val canvasSize = size
-                drawContext.canvas.nativeCanvas.apply {
-                    drawRoundRect(
-                        0f,
-                        0f,
-                        canvasSize.width,
-                        canvasSize.height,
-                        cornersRadius.toPx(),
-                        cornersRadius.toPx(),
-                        Paint().apply {
-                            color = containerColor.toArgb()
-                            isAntiAlias = true
-                            setShadowLayer(
-                                glowingRadius.toPx(),
-                                xShifting.toPx(), yShifting.toPx(),
-                                glowingColor.copy(alpha = 0.85f).toArgb()
-                            )
-                        }
-                    )
-                }
-            }
-    ) {
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(cornersRadius))
-                .clickable { onClick() }) {
-            content()
-        }
     }
 }
 
@@ -2216,132 +2115,5 @@ fun GoodNightScreen(ai: String) {
     }
     if (showStats) {
         AiResponseHistorySheet(context = context, onDismiss = { showStats = false })
-    }
-}
-
-@Composable
-fun PloppingButton(
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-    onFinishedClick: () -> Unit = {},
-    colors: ButtonColors = ButtonDefaults.buttonColors(),
-    shape: Shape = ButtonDefaults.shape,
-    enabled: Boolean = true,
-    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
-    content: @Composable () -> Unit,
-) {
-    val scale = remember { Animatable(1f) }
-    val scope = rememberCoroutineScope()
-    val containerColor = if (enabled) colors.containerColor else colors.disabledContainerColor
-
-    Box(
-        modifier = modifier
-            .graphicsLayer {
-                scaleX = scale.value
-                scaleY = scale.value
-                alpha = if (enabled) 1f else 0.38f
-            }
-            .clip(shape)
-            .background(containerColor)
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() },
-                enabled = enabled
-            ) {
-                scope.launch {
-                    scale.animateTo(
-                        0.82f,
-                        spring(
-                            stiffness = Spring.StiffnessHigh,
-                            dampingRatio = Spring.DampingRatioMediumBouncy
-                        )
-                    )
-                    onClick()
-                    scale.animateTo(
-                        1f,
-                        spring(
-                            stiffness = Spring.StiffnessMedium,
-                            dampingRatio = Spring.DampingRatioLowBouncy
-                        )
-                    )
-                    onFinishedClick()
-                }
-            }
-            .padding(contentPadding),
-        contentAlignment = Alignment.Center
-    ) {
-        content()
-    }
-}
-
-@Composable
-fun NeonBox(
-    modifier: Modifier = Modifier,
-    cornerRadius: Dp = 20.dp,
-    backgroundAlpha: Float = 0.22f,
-    borderWidth: Dp = 3.dp,
-    glowBlur1: Float = 42f,
-    glowBlur2: Float = 114f,
-    neonColors: List<Color>,
-    onClick: (() -> Unit)? = null,
-    content: @Composable () -> Unit
-) {
-    val gradientBrush = Brush.linearGradient(
-        colors = listOf(
-            neonColors[0].copy(alpha = backgroundAlpha),
-            neonColors[1].copy(alpha = backgroundAlpha)
-        )
-    )
-
-    Box(
-        modifier = modifier
-            // 1. Glow zuerst (hinter allem)
-            .drawBehind {
-                val w = size.width
-                val h = size.height
-                val r = cornerRadius.toPx()
-
-                // Äußerer Glow
-                drawIntoCanvas {
-                    it.nativeCanvas.apply {
-                        drawRoundRect(
-                            0f, 0f, w, h, r, r,
-                            Paint().apply {
-                                color = neonColors.last().copy(alpha = 0.55f).toArgb()
-                                isAntiAlias = true
-                                maskFilter = android.graphics.BlurMaskFilter(glowBlur1, android.graphics.BlurMaskFilter.Blur.OUTER)
-                            }
-                        )
-                    }
-                }
-
-                // Innerer Glow
-                drawIntoCanvas {
-                    it.nativeCanvas.apply {
-                        drawRoundRect(
-                            0f, 0f, w, h, r, r,
-                            Paint().apply {
-                                color = neonColors.first().copy(alpha = 0.65f).toArgb()
-                                isAntiAlias = true
-                                maskFilter = android.graphics.BlurMaskFilter(glowBlur2, android.graphics.BlurMaskFilter.Blur.OUTER)
-                            }
-                        )
-                    }
-                }
-            }
-            // 2. Clip + Background + Border in der richtigen Reihenfolge
-            .clip(RoundedCornerShape(cornerRadius))
-            .background(gradientBrush)                    // ← Jetzt richtig sichtbar
-            .border(
-                width = borderWidth,
-                brush = Brush.linearGradient(neonColors),
-                shape = RoundedCornerShape(cornerRadius)
-            )
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
-
-
-        contentAlignment = Alignment.Center
-    ) {
-        content()
     }
 }
