@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
-import com.cloud.core.objects.SupabaseConfigALT
+import com.cloud.core.objects.Config
 import com.cloud.privatecloudapp.isOnline
 import com.cloud.core.ui.c
 import io.github.jan.supabase.postgrest.postgrest
@@ -76,7 +76,7 @@ fun TwoFAEntry.toJsonObject(): JSONObject {
 suspend fun loadTwoFaEntriesFromSupabase(): List<TwoFAEntry> {
     return withContext(Dispatchers.IO) {
         try {
-            val supabaseEntries = SupabaseConfigALT.client.postgrest
+            val supabaseEntries = Config.client.postgrest
                 .from("two_fa_entries")
                 .select()
                 .decodeList<TwoFaEntrySupabase>()
@@ -100,7 +100,7 @@ suspend fun saveTwoFaEntryToSupabase(entry: TwoFAEntry, db: TwoFADatabase? = nul
         try {
             val supabaseEntry = entry.toSupabase()
 
-            val response = SupabaseConfigALT.client.postgrest
+            val response = Config.client.postgrest
                 .from("two_fa_entries")
                 .insert(supabaseEntry) {
                     select()
@@ -144,7 +144,7 @@ suspend fun updateTwoFaEntryInSupabase(entry: TwoFAEntry): Boolean {
 
             val supabaseEntry = entry.toSupabase()
 
-            SupabaseConfigALT.client.postgrest
+            Config.client.postgrest
                 .from("two_fa_entries")
                 .update({
                     set("account_name", supabaseEntry.account_name)
@@ -422,7 +422,7 @@ suspend fun deleteTwoFaEntryFromSupabase(entry: TwoFAEntry): Boolean {
                 Log.d("TwoFARepository", "entry.supabaseId == null"); return@withContext true
             }
             Log.d("TwoFARepository", "$entry")
-            SupabaseConfigALT.client.postgrest
+            Config.client.postgrest
                 .from("two_fa_entries")
                 .delete {
                     filter { eq("id", entry.supabaseId) }
