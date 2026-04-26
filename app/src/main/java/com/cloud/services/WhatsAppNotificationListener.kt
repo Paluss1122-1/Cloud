@@ -305,7 +305,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
                 try {
                     windowManager.addView(testOverlayView, params)
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     showSimpleNotificationExtern(
                         "Fehler",
                         "Overlay konnte nicht gestartet werden",
