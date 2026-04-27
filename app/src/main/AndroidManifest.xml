@@ -76,6 +76,7 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <application
+        android:name=".core.activities.Cloud"
         android:allowBackup="true"
         android:allowClearUserData="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
