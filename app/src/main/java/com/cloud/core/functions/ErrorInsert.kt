@@ -1,7 +1,6 @@
 package com.cloud.core.functions
 
 import com.cloud.core.objects.Config
-import com.cloud.core.objects.SupabaseConfigALT
 import io.github.jan.supabase.postgrest.from
 import kotlinx.serialization.Serializable
 
