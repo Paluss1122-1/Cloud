@@ -58,25 +58,6 @@ class MainActivity : FragmentActivity() {
     private var showJsonEditor by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            CoroutineScope(Dispatchers.IO).launch {
-                errorInsert(
-                    ERRORINSERTDATA(
-                        "UncaughtException: ${thread.name}",
-                        throwable.stackTraceToString().take(8000),
-                        Instant.now().toString(),
-                        "ERROR"
-                    )
-                )
-            }
-            Thread.sleep(2000)
-
-            defaultHandler?.uncaughtException(thread, throwable)
-
-            Process.killProcess(Process.myPid())
-        }
-
         if (savedInstanceState == null) {
             installSplashScreen()
         }
@@ -113,10 +94,6 @@ class MainActivity : FragmentActivity() {
                 window.decorView
             ).isAppearanceLightStatusBars = false
         }
-
-        PolicyManager(this).checkAndRequestAdminRights()
-        BatteryDataRepository.init(this)
-        Config.init(this)
 
         val permissions = arrayOf(
             Manifest.permission.READ_MEDIA_AUDIO,
