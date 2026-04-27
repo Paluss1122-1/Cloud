@@ -2,6 +2,7 @@ package com.cloud.quiethoursnotificationhelper
 
 import android.annotation.SuppressLint
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -53,6 +54,8 @@ import com.cloud.services.MediaPlayerService
 import com.cloud.services.MusicPlayerServiceCompat
 import com.cloud.services.OverlayLifecycleOwner
 import com.cloud.services.PodcastPlayerServiceCompat
+import com.cloud.services.QuietHoursNotificationService
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_SCHOOL_DAY_SUMMARY
 import com.cloud.services.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.cloud.services.QuietHoursNotificationService.Companion.commandHistory
 import com.cloud.services.QuietHoursNotificationService.Companion.showtestOverlay
@@ -100,6 +103,21 @@ private fun getAvailableCommands(context: Context): List<Command> {
             description = "Zeigt ungelesene Nachrichten"
         ) {
             showUnreadMessages(context)
+        },
+        Command(
+            name = "t",
+            aliases = listOf(),
+            description = "Zeigt ungelesene Nachrichten"
+        ) {
+            val intent = Intent(context, QuietHoursNotificationService::class.java).apply {
+                action = ACTION_SCHOOL_DAY_SUMMARY
+            }
+            val pending = PendingIntent.getService(
+                context, 9001, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            pending.send()
         },
         Command(
             name = "nvchat",
