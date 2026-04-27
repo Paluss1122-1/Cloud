@@ -1,6 +1,5 @@
 package com.cloud.tabs
 
-import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -156,11 +156,6 @@ private suspend fun fetchEmailsFromServer(
     }
 }
 
-// ─── Persisted Server IP ─────────────────────────────────────────────────────
-
-private const val PREFS_EMAIL = "email_prefs"
-private const val KEY_SERVER_IP = "server_ip"
-
 private fun loadServerIp(): String = laptopIp
 
 private fun saveServerIp(ip: String) {
@@ -171,7 +166,6 @@ private fun saveServerIp(ip: String) {
 
 @Composable
 fun GmailTabContent() {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     var serverIp by remember { mutableStateOf(loadServerIp()) }
@@ -466,7 +460,7 @@ fun EmailDetailView(email: EmailItem, onBack: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
             }
             Text(
                 text = "E-Mail",
