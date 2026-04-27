@@ -126,6 +126,9 @@ fun BrowserTabContent(
             QuickLinkButton("Disney", Color(0xFF5900FF)) {
                 loadAndOpenUrl("https://www.disneyplus.com/de-de/home?")
             }
+            QuickLinkButton("Podcasts Downloader", Color(0xFFD84E18)) {
+                loadAndOpenUrl("https://paluss1122-pddownloader.netlify.app/")
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
