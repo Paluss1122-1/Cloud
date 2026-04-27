@@ -1428,6 +1428,21 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
             }
         }
 
+        "setVolume" -> {
+            val level = json.optInt("level", -1)
+            if (level in 0..100) {
+                val audioManager =
+                    context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+                val maxVol = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                val targetVol = (level / 100.0 * maxVol).toInt().coerceIn(0, maxVol)
+                audioManager.setStreamVolume(
+                    android.media.AudioManager.STREAM_MUSIC,
+                    targetVol,
+                    0
+                )
+            }
+        }
+
         else -> {}
     }
 }
