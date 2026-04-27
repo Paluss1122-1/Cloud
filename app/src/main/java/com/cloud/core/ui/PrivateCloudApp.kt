@@ -6,8 +6,10 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Activity.RESULT_OK
+import android.app.DownloadManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -21,6 +23,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsetsController
 import android.webkit.CookieManager
+import android.webkit.URLUtil
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -127,6 +130,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import androidx.core.content.edit
+import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
 import com.cloud.R
@@ -619,10 +623,77 @@ fun PrivateCloudApp(
 
                     WebViewCookieBackup.restoreCookies(context, webViewUrl)
 
+                    setDownloadListener { url, userAgent, contentDisposition, mimetype, _ ->
+
+                        val filename = URLUtil.guessFileName(url, contentDisposition, mimetype)
+
+                        // Zuerst normal in Downloads/ runterladen
+                        val request = DownloadManager.Request(url.toUri()).apply {
+                            setMimeType(mimetype)
+                            setTitle(filename)
+                            setDescription("Wird heruntergeladen…")
+                            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                            setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+                            addRequestHeader("User-Agent", userAgent)
+                            addRequestHeader("Cookie", CookieManager.getInstance().getCookie(url) ?: "")
+                        }
+
+                        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                        val downloadId = dm.enqueue(request)
+
+                        // BroadcastReceiver: wird gefeuert wenn Download fertig
+                        val receiver = object : BroadcastReceiver() {
+                            override fun onReceive(ctx: Context, intent: Intent) {
+                                val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
+                                if (id != downloadId) return
+
+                                // Receiver sofort wieder abmelden
+                                ctx.unregisterReceiver(this)
+
+                                val query = DownloadManager.Query().setFilterById(downloadId)
+                                val cursor = dm.query(query)
+
+                                if (cursor.moveToFirst()) {
+                                    val statusCol = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                                    val status = cursor.getInt(statusCol)
+
+                                    if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                                        val src = File(
+                                            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                                            filename
+                                        )
+                                        val destDir = File(
+                                            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                                            "cloud/podcasts"
+                                        )
+                                        destDir.mkdirs()
+                                        val dest = File(destDir, filename)
+
+                                        val moved = src.renameTo(dest)
+
+                                        Toast.makeText(
+                                            ctx,
+                                            if (moved) "Gespeichert in cloud/podcasts/" else "Download OK, Verschieben fehlgeschlagen",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                                cursor.close()
+                            }
+                        }
+
+                        context.registerReceiver(
+                            receiver,
+                            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+                            Context.RECEIVER_NOT_EXPORTED
+                        )
+
+                        Toast.makeText(context, "Download gestartet", Toast.LENGTH_SHORT).show()
+                    }
+
                     loadUrl(webViewUrl)
                 }
             }
-
             DisposableEffect(isFullScreen) {
                 onDispose {
                     if (!isFullScreen) {
