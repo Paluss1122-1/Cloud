@@ -338,18 +338,6 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
     }
 }
 
-fun cleanupOldMessages() {
-    workerHandler.post {
-        val cutoff = System.currentTimeMillis() - (24 * 60 * 60 * 1000)
-        WhatsAppNotificationListener.messagesByContact.forEach { (_, msgs) ->
-            msgs.removeAll { it.timestamp < cutoff }
-            if (msgs.size > MAX_MESSAGES_PER_CONTACT)
-                msgs.subList(0, msgs.size - MAX_MESSAGES_PER_CONTACT).clear()
-        }
-        WhatsAppNotificationListener.messagesByContact.entries.removeIf { it.value.isEmpty() }
-    }
-}
-
 fun markMessageAsRead(messageId: String, readMessageIds: MutableSet<String>, context: Context) {
     try {
         readMessageIds.add(messageId)
