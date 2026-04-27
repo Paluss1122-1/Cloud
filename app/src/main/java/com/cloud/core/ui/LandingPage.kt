@@ -549,8 +549,8 @@ fun TabCard(
         alpha.animateTo(1f, animationSpec = tween(300))
     }
 
-    val neonOrange = Color(0xFF001FBB)          // intensives Neon-Orange
-    val neonGlow = Color(0xFF00177E)           // etwas hellerer Glow
+    val neonOrange = Color(0xFF001FBB)
+    val neonGlow = Color(0xFF00177E)
 
     Box(
         Modifier
@@ -558,7 +558,6 @@ fun TabCard(
             .drawBehind {
                 val canvasSize = size
 
-                // === Erster Glow-Layer (starker äußerer Leuchteffekt) ===
                 drawContext.canvas.nativeCanvas.apply {
                     drawRoundRect(
                         0f, 0f, canvasSize.width, canvasSize.height,
@@ -573,7 +572,6 @@ fun TabCard(
                     )
                 }
 
-                // === Zweiter Glow-Layer (mittlerer Glow) ===
                 drawContext.canvas.nativeCanvas.apply {
                     drawRoundRect(
                         0f, 0f, canvasSize.width, canvasSize.height,
@@ -588,7 +586,6 @@ fun TabCard(
                     )
                 }
             }
-            // Neon-Orange Border
             .border(
                 width = 1.5.dp,
                 color = neonOrange,
