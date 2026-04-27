@@ -617,7 +617,7 @@ fun stopAllSyncServices(context: Context) {
 }
 
 fun syncTodosWithLaptop(context: Context) {
-    if (syncInProgress) return
+    if (syncInProgress || !Config.realDevice) return
     syncInProgress = true
 
     syncScope.launch {
