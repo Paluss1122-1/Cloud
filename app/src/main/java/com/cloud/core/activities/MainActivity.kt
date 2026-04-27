@@ -52,6 +52,7 @@ class MyDeviceAdminReceiver : DeviceAdminReceiver()
 
 class MainActivity : FragmentActivity() {
     val sbclient = Config.client
+    private var startTarget by mutableStateOf<String?>(null)
 
     private var jsonFilePath by mutableStateOf<String?>(null)
     private var jsonFileUri by mutableStateOf<Uri?>(null)
@@ -119,6 +120,7 @@ class MainActivity : FragmentActivity() {
         checkPermissionsAndHandleIntent(intent)
 
         val startTarget = intent.getStringExtra("target")
+        this.startTarget = startTarget
 
         setContent {
             MaterialTheme(
@@ -143,6 +145,8 @@ class MainActivity : FragmentActivity() {
                                 jsonFileUri = null
                             }
                         )
+                    } else if (startTarget == "files") {
+                        //FilesTabContent()
                     } else {
                         LandingPageOrApp(sbclient.storage, startTarget)
                     }
