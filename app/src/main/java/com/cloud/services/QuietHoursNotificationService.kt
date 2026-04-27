@@ -71,17 +71,23 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
+import com.cloud.core.activities.MainActivity
 import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.core.functions.errorInsert
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.DEL_GAL_CONF
 import com.cloud.core.objects.Config.cms
 import com.cloud.quiethoursnotificationhelper.AiResponseEntry
+import com.cloud.quiethoursnotificationhelper.CleanupWorker
+import com.cloud.quiethoursnotificationhelper.DailySummaryWorker
 import com.cloud.quiethoursnotificationhelper.GalleryImage
 import com.cloud.quiethoursnotificationhelper.aiResponseFlow
 import com.cloud.quiethoursnotificationhelper.buildSessionStatsText
 import com.cloud.quiethoursnotificationhelper.checkQuietHours
-import com.cloud.quiethoursnotificationhelper.cleanupOldMessages
 import com.cloud.quiethoursnotificationhelper.commandReceiver
 import com.cloud.quiethoursnotificationhelper.createNotification
 import com.cloud.quiethoursnotificationhelper.createNotificationChannel
@@ -124,6 +130,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.time.Instant
 import java.util.Calendar
+import java.util.concurrent.TimeUnit
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -215,6 +222,9 @@ class QuietHoursNotificationService : Service() {
 
         const val SSN_CHANNEL_ID = "show_simple_not_channel"
 
+        const val SCHOOL_SUMMARY_CHANNEL_ID = "school_day_summary_channel"
+        const val SCHOOL_SUMMARY_NOTIF_ID = 9002
+
         const val ACTION_CONFIRM_DELETE_IMAGE =
             "com.cloud.ACTION_CONFIRM_DELETE_IMAGE"
         const val ACTION_DELETE_IMAGE = "com.cloud.ACTION_DELETE_IMAGE"
@@ -238,6 +248,7 @@ class QuietHoursNotificationService : Service() {
         const val ACTION_SYNC_LAPTOP = "com.cloud.ACTION_SYNC_LAPTOP"
         const val SHOW_OVERLAY = "com.cloud.SHOW_OVERLAY"
         const val ACTION_DAILY_MUSIC_SUMMARY = "com.cloud.ACTION_DAILY_MUSIC_SUMMARY"
+        const val ACTION_SCHOOL_DAY_SUMMARY = "com.cloud.ACTION_SCHOOL_DAY_SUMMARY"
 
         var currentSenderForVoiceNote: String? = null
         var voiceNoteFiles: List<File> = emptyList()
@@ -375,7 +386,8 @@ class QuietHoursNotificationService : Service() {
         }
 
         handler.post(checkRunnable)
-        schedulePeriodicCleanup()
+        schedulePeriodicCleanup(this)
+        scheduleSchoolDaySummary(this)
         restoreSyncIfNeeded(this)
         startTriggerListenerIfHomeWifi(this)
         startAiResponseListener(this)
@@ -428,9 +440,49 @@ class QuietHoursNotificationService : Service() {
     }
 
     private fun scheduleDailySummaryAlarm(context: Context) {
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 20)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            if (timeInMillis <= System.currentTimeMillis()) {
+                add(Calendar.DAY_OF_YEAR, 1)
+            }
+        }
+
+        val delay = cal.timeInMillis - System.currentTimeMillis()
+
+        val work = PeriodicWorkRequestBuilder<DailySummaryWorker>(
+            1, TimeUnit.DAYS
+        )
+            .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+            .setInputData(
+                workDataOf("action" to ACTION_DAILY_MUSIC_SUMMARY)
+            )
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            "daily_music_summary",
+            ExistingPeriodicWorkPolicy.KEEP,
+            work
+        )
+    }
+
+    private fun schedulePeriodicCleanup(context: Context) {
+        val work = PeriodicWorkRequestBuilder<CleanupWorker>(
+            6, TimeUnit.HOURS
+        ).build()
+
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            "periodic_cleanup",
+            ExistingPeriodicWorkPolicy.KEEP,
+            work
+        )
+    }
+
+    private fun scheduleSchoolDaySummary(context: Context) {
         val alarmManager = context.getSystemService(AlarmManager::class.java)
         val intent = Intent(context, QuietHoursNotificationService::class.java).apply {
-            action = ACTION_DAILY_MUSIC_SUMMARY
+            action = ACTION_SCHOOL_DAY_SUMMARY
         }
         val pending = PendingIntent.getService(
             context, 9001, intent,
@@ -451,21 +503,6 @@ class QuietHoursNotificationService : Service() {
             AlarmManager.INTERVAL_DAY,
             pending
         )
-    }
-
-    private fun schedulePeriodicCleanup() {
-        workerHandler.postDelayed(object : Runnable {
-            override fun run() {
-                try {
-                    cleanupReadMessages()
-                    cleanupOldMessages()
-                } catch (e: Exception) {
-                    reportServiceError("schedulePeriodicCleanup", e)
-                } finally {
-                    workerHandler.postDelayed(this, 6 * 60 * 60 * 1000)
-                }
-            }
-        }, 6 * 60 * 60 * 1000)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -608,19 +645,28 @@ class QuietHoursNotificationService : Service() {
                     CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
                         try {
                             MediaAnalyticsManager.init(this@QuietHoursNotificationService)
-                            val lastAiTimestamp = loadTodayOrYesterdayEntry(this@QuietHoursNotificationService)?.timestamp ?: 0L
+                            val lastAiTimestamp =
+                                loadTodayOrYesterdayEntry(this@QuietHoursNotificationService)?.timestamp
+                                    ?: 0L
 
                             val sessions = getSessions().filter { it.startedAt >= lastAiTimestamp }
                             if (sessions.isEmpty()) return@launch
 
                             val stats = buildSessionStatsText(sessions)
-                            val result = sendNvidiaChatMessageAITab(emptyList(), stats) ?: return@launch
-                            val musicMs = sessions.filter { it.type == "music" }.sumOf { it.listenedMs }
-                            val podcastMs = sessions.filter { it.type == "podcast" }.sumOf { it.listenedMs }
+                            val result =
+                                sendNvidiaChatMessageAITab(emptyList(), stats) ?: return@launch
+                            val musicMs =
+                                sessions.filter { it.type == "music" }.sumOf { it.listenedMs }
+                            val podcastMs =
+                                sessions.filter { it.type == "podcast" }.sumOf { it.listenedMs }
 
                             fun fmt(ms: Long): String {
                                 val mins = ms / 1000.0 / 60.0
-                                return if (mins < 1) "${(ms / 1000).toInt()}s" else "${"%.1f".format(mins)} min"
+                                return if (mins < 1) "${(ms / 1000).toInt()}s" else "${
+                                    "%.1f".format(
+                                        mins
+                                    )
+                                } min"
                             }
 
                             val parts = mutableListOf<String>()
@@ -628,11 +674,16 @@ class QuietHoursNotificationService : Service() {
                             if (podcastMs > 0) parts += "🎙️${fmt(podcastMs)}"
                             val suffix = parts.joinToString(" · ")
 
-                            val finalResult = if (suffix.isNotEmpty()) "$result\n\n$suffix" else result
+                            val finalResult =
+                                if (suffix.isNotEmpty()) "$result\n\n$suffix" else result
 
                             saveAiResponse(this@QuietHoursNotificationService, finalResult)
                             aiResponseFlow.emit(
-                                AiResponseEntry(finalResult, System.currentTimeMillis(), getTodayKey())
+                                AiResponseEntry(
+                                    finalResult,
+                                    System.currentTimeMillis(),
+                                    getTodayKey()
+                                )
                             )
                             showSimpleNotification(
                                 "🎵 Tages-Zusammenfassung",
@@ -642,6 +693,48 @@ class QuietHoursNotificationService : Service() {
                         } catch (e: Exception) {
                             reportServiceError("ACTION_DAILY_MUSIC_SUMMARY", e)
                         }
+                    }
+                    START_STICKY
+                }
+
+                ACTION_SCHOOL_DAY_SUMMARY -> {
+                    val nm = getSystemService(NotificationManager::class.java)
+                    if (nm.getNotificationChannel(SCHOOL_SUMMARY_CHANNEL_ID) == null) {
+                        android.app.NotificationChannel(
+                            SCHOOL_SUMMARY_CHANNEL_ID,
+                            "Schultag Zusammenfassung",
+                            NotificationManager.IMPORTANCE_HIGH
+                        ).apply {
+                            enableVibration(true)
+                            enableLights(true)
+                        }.also { nm.createNotificationChannel(it) }
+                    }
+
+                    val launchIntent = Intent(this, MainActivity::class.java).apply {
+                        putExtra("target", "files")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    }
+                    val pi = PendingIntent.getActivity(
+                        this, SCHOOL_SUMMARY_NOTIF_ID, launchIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+
+                    val notification = NotificationCompat.Builder(this, SCHOOL_SUMMARY_CHANNEL_ID)
+                        .setSmallIcon(android.R.drawable.ic_menu_upload)
+                        .setContentTitle("📚 Schultag beendet")
+                        .setContentText("Materialien von heute in die Cloud hochladen.")
+                        .setStyle(
+                            NotificationCompat.BigTextStyle()
+                                .bigText("Lade deine Unterlagen, Fotos und Notizen vom heutigen Schultag in die Cloud hoch.")
+                        )
+                        .setPriority(NotificationCompat.PRIORITY_HIGH)
+                        .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                        .setAutoCancel(true)
+                        .setContentIntent(pi)
+                        .build()
+
+                    if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                        nm.notify(SCHOOL_SUMMARY_NOTIF_ID, notification)
                     }
                     START_STICKY
                 }
@@ -1019,15 +1112,6 @@ class QuietHoursNotificationService : Service() {
                     duration.inWholeMilliseconds
                 )
             }
-        }
-    }
-
-    private fun cleanupReadMessages() {
-        val cutoffTime = System.currentTimeMillis() - (24 * 60 * 60 * 1000)
-
-        readMessageIds.removeAll { messageId ->
-            val timestamp = messageId.substringAfterLast("_").toLongOrNull() ?: 0
-            timestamp < cutoffTime
         }
     }
 
