@@ -84,6 +84,7 @@ fun scheduleNextCheck(context: Context) {
     val now = Calendar.getInstance()
     val quietStart = getQuietStartHour(context)
     val quietEnd = getQuietEndHour(context)
+
     val nextChange = calculateNextStatusChange(now, quietStart, quietEnd)
     val delayMillis = nextChange.timeInMillis - now.timeInMillis
     val delayMinutes = delayMillis / 1000 / 60
@@ -98,6 +99,8 @@ fun scheduleNextCheck(context: Context) {
         val alarmManager = context.getSystemService(ALARM_SERVICE) as AlarmManager
         if (alarmManager.canScheduleExactAlarms()) {
             scheduleWithAlarmManager(nextChange.timeInMillis, context, checkRunnable)
+        } else {
+            workerHandler.postDelayed(checkRunnable, maxOf(delayMillis, 30_000L))
         }
     }
 }
@@ -134,21 +137,9 @@ private fun scheduleWithAlarmManager(
                 SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(triggerAtMillis))
             }"
         )
-
     } catch (e: Exception) {
-        Log.e("QuietHoursService", "AlarmManager failed, falling back to Handler", e)
-        val delayMillis = triggerAtMillis - System.currentTimeMillis()
-        scheduleWithHandler(delayMillis, checkRunnable)
+        Log.e("QuietHoursService", "AlarmManager failed: ", e)
     }
-}
-
-private fun scheduleWithHandler(delayMillis: Long, checkRunnable: Runnable) {
-    val finalDelay = maxOf(delayMillis, 30_000L)
-
-    handler.removeCallbacks(checkRunnable)
-    handler.postDelayed(checkRunnable, finalDelay)
-
-    Log.d("QuietHoursService", "📱 Handler scheduled: ${finalDelay / 1000}s")
 }
 
 fun createNotificationChannel(context: Context) {
