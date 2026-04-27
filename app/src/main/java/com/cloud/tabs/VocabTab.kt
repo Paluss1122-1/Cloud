@@ -1,7 +1,4 @@
-@file:Suppress("AssignedValueIsNeverRead")
-
 package com.cloud.tabs
-
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -41,7 +38,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -157,7 +153,6 @@ fun VocabTab() {
 
     if (showMergeDialog) {
         MergeVocabSetsDialog(
-            context = context,
             prefs = prefs,
             allSets = savedSets,
             onDismiss = { showMergeDialog = false },
@@ -237,7 +232,8 @@ fun VocabTab() {
                                 val bytes = ByteArrayOutputStream().also {
                                     bmp.compress(Bitmap.CompressFormat.JPEG, 90, it)
                                 }.toByteArray()
-                                val sent = if (!Config.realDevice) false else trySendImageToLaptop(bytes)
+                                val sent =
+                                    if (!Config.realDevice) false else trySendImageToLaptop(bytes)
                                 if (sent) {
                                     val result = flashcardVokabelnFlow.first { it != null }
                                     vokabeln = result ?: emptyList()
@@ -429,7 +425,6 @@ fun HomeScreen(
     onMergeClick: () -> Unit = {}
 ) {
     var setToDelete by remember { mutableStateOf<VokabelSet?>(null) }
-    val listState = rememberLazyListState()
 
     if (setToDelete != null) {
         AlertDialog(
@@ -463,24 +458,48 @@ fun HomeScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.primary)
-                    .clickable { onNewSet() }
-                    .padding(vertical = 18.dp),
+                    .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("📷", fontSize = 22.sp)
-                    Text(
-                        "Neues Set scannen",
-                        color = TextPrimary,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .clickable { onNewSet() }
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.primary)
+                            .padding(horizontal = 20.dp, vertical = 18.dp)
+                    ) {
+                        Text("📷", fontSize = 22.sp)
+                        Text(
+                            "Neues Set scannen",
+                            color = TextPrimary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.primary)
+                            .padding(horizontal = 20.dp, vertical = 18.dp)
+                            .clickable {  }
+                    ) {
+                        Text("📚", fontSize = 22.sp)
+                        Text(
+                            "Materialien",
+                            color = TextPrimary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
 
@@ -1523,9 +1542,9 @@ fun SaveSetDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () ->
         }
     )
 }
+
 @Composable
 fun MergeVocabSetsDialog(
-    context: Context,
     prefs: SharedPreferences,
     allSets: List<VokabelSet>,
     onDismiss: () -> Unit,
@@ -1709,17 +1728,6 @@ fun createMergedVocabSet(
 
     return mergedSet
 }
-
-fun isMergedSet(prefs: SharedPreferences, setCreatedAt: Long): Boolean {
-    return prefs.contains("merged_sources_$setCreatedAt")
-}
-
-fun getMergedSetSources(prefs: SharedPreferences, setCreatedAt: Long): List<Long> {
-    val sourcesString = prefs.getString("merged_sources_$setCreatedAt", "") ?: ""
-    return if (sourcesString.isEmpty()) emptyList()
-    else sourcesString.split(",").mapNotNull { it.toLongOrNull() }
-}
-
 
 private const val SETS_KEY = "vocab_sets"
 
