@@ -144,7 +144,6 @@ import com.cloud.privatecloudapp.getMimeType
 import com.cloud.privatecloudapp.isImageFile
 import com.cloud.privatecloudapp.isOnline
 import com.cloud.tabs.AiResponseHistorySheet
-import com.cloud.tabs.AutoClickerTabContent
 import com.cloud.tabs.BrowserTabContent
 import com.cloud.tabs.CalendarTabContent
 import com.cloud.tabs.ContactsRepository
@@ -291,11 +290,6 @@ enum class MenuItem(
         "Spotify Downloader",
         "🎧",
         { SpotifyDownloaderTab() }
-    ),
-    AUTOKLICKER(
-        "Autoklicker",
-        "⌨️",
-        { AutoClickerTabContent() }
     ),
     MEDIAPLAYERTAB(
         "Media Player",
