@@ -721,9 +721,9 @@ fun OtherBucketViewer(
 
     showVideoPlayer?.let { _ ->
         val videoFiles = when (selectedFilter) {
-            "videos" -> fileList.filter { it.isVideo }
-            "images" -> emptyList()
-            "favorites" -> fileList.filter { it.isFavorite && it.isVideo }
+            "Videos" -> fileList.filter { it.isVideo }
+            "Bilder" -> emptyList()
+            "Favoriten" -> fileList.filter { it.isFavorite && it.isVideo }
             else -> fileList.filter { it.isVideo }
         }
 
