@@ -2194,7 +2194,7 @@ private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
                 "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}"
             )
             connection.setRequestProperty("Content-Type", "application/json")
-            connection.setRequestProperty("Prefer", "resolution=merge-duplicates")
+            connection.setRequestProperty("Prefer", "resolution=merge-duplicates,upsert=true")
 
             val jsonPayload = JSONObject().apply {
                 put("device_id", "handy")
