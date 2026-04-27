@@ -1332,6 +1332,7 @@ class MediaPlayerService : MediaSessionService() {
             savePlaylists()
             saveMusicState()
             favoritesMode = false
+            saveFavorites()
         }
         favoritesMode = !favoritesMode
         val active = getActivePlaylist()
@@ -2478,6 +2479,8 @@ class MediaPlayerService : MediaSessionService() {
         activeAlgorithmicPlaylistId = sourceId
         algorithmicPlaylistSongs = songs
         activePlaylistId = null
+        favoritesMode = false
+        saveFavorites()
         currentSongIndex = startIndex.coerceIn(0, songs.lastIndex)
         ensureMusicMode()
         musicPlayer?.release(); musicPlayer = null
