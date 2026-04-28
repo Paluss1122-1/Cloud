@@ -422,6 +422,29 @@ fun LandingPage(
     recentTabs = loadRecentTabs(context)
     val allTabsSorted = remember { MenuItem.entries.sortedBy { it.title } }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+    val neonOrange = Color(0xFF001FBB)
+    val neonGlow = Color(0xFF00177E)
+
+    val glowPaint = remember {
+        Paint().apply {
+            color = neonGlow.copy(alpha = 0.6f).toArgb()
+            isAntiAlias = true
+            maskFilter = android.graphics.BlurMaskFilter(
+                18f, android.graphics.BlurMaskFilter.Blur.OUTER
+            )
+        }
+    }
+
+    val orangePaint = remember {
+        Paint().apply {
+            color = neonOrange.copy(alpha = 0.75f).toArgb()
+            isAntiAlias = true
+            maskFilter = android.graphics.BlurMaskFilter(
+                10f, android.graphics.BlurMaskFilter.Blur.OUTER
+            )
+        }
+    }
+
     val gradient = remember {
         val colors = when (currentHour) {
             in 11..16 -> listOf(
@@ -511,7 +534,11 @@ fun LandingPage(
                         items(items = recentTabs, key = { "recent_${it.ordinal}" }) { menuItem ->
                             TabCard(
                                 menuItem = menuItem,
-                                onClick = { onTabSelected(menuItem) })
+                                onClick = { onTabSelected(menuItem) },
+                                glowPaint,
+                                orangePaint,
+                                neonOrange
+                            )
                         }
                         item(key = "divider") {
                             HorizontalDivider(
@@ -530,7 +557,11 @@ fun LandingPage(
                     items(items = allTabsSorted, key = { "all_${it.ordinal}" }) { menuItem ->
                         TabCard(
                             menuItem = menuItem,
-                            onClick = { onTabSelected(menuItem) })
+                            onClick = { onTabSelected(menuItem) },
+                            glowPaint,
+                            orangePaint,
+                            neonOrange
+                        )
                     }
                 }
             }
@@ -541,7 +572,10 @@ fun LandingPage(
 @Composable
 fun TabCard(
     menuItem: MenuItem,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    glowPaint: Paint,
+    orangePaint: Paint,
+    neonOrange: Color
 ) {
     val alpha = remember { Animatable(0f) }
 
@@ -549,40 +583,22 @@ fun TabCard(
         alpha.animateTo(1f, animationSpec = tween(300))
     }
 
-    val neonOrange = Color(0xFF001FBB)
-    val neonGlow = Color(0xFF00177E)
-
     Box(
         Modifier
-            .alpha(alpha.value)
             .drawBehind {
                 val canvasSize = size
+                val cornerRadius = 8.dp.toPx()
 
                 drawContext.canvas.nativeCanvas.apply {
                     drawRoundRect(
                         0f, 0f, canvasSize.width, canvasSize.height,
-                        8.dp.toPx(), 8.dp.toPx(),
-                        Paint().apply {
-                            color = neonGlow.copy(alpha = 0.6f).toArgb()
-                            isAntiAlias = true
-                            maskFilter = android.graphics.BlurMaskFilter(
-                                18f, android.graphics.BlurMaskFilter.Blur.OUTER
-                            )
-                        }
+                        cornerRadius, cornerRadius,
+                        glowPaint
                     )
-                }
-
-                drawContext.canvas.nativeCanvas.apply {
                     drawRoundRect(
                         0f, 0f, canvasSize.width, canvasSize.height,
-                        8.dp.toPx(), 8.dp.toPx(),
-                        Paint().apply {
-                            color = neonOrange.copy(alpha = 0.75f).toArgb()
-                            isAntiAlias = true
-                            maskFilter = android.graphics.BlurMaskFilter(
-                                10f, android.graphics.BlurMaskFilter.Blur.OUTER
-                            )
-                        }
+                        cornerRadius, cornerRadius,
+                        orangePaint
                     )
                 }
             }
