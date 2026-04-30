@@ -10,6 +10,7 @@ import android.content.Context.MODE_PRIVATE
 import android.content.Context.WINDOW_SERVICE
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.net.ConnectivityManager
 import android.net.LinkProperties
@@ -22,6 +23,7 @@ import android.provider.AlarmClock
 import android.provider.ContactsContract
 import android.provider.MediaStore
 import android.provider.Settings
+import android.util.Base64
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
@@ -54,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import androidx.core.graphics.scale
 import androidx.core.net.toUri
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
@@ -99,6 +102,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStreamReader
 import java.io.PrintWriter
@@ -304,6 +308,162 @@ private suspend fun callNvidiaApi(model: String, messagesJson: JSONArray): Strin
             null
         }
     }
+
+suspend fun callNvidiaVisionApi(
+    bmp: Bitmap,
+    onError: (String) -> Unit,
+    onProgress: (String) -> Unit,
+    onVocabChange: (List<Vokabel>) -> Unit
+) {
+    fun Bitmap.scaleForApi(maxPx: Int = 1280): Bitmap {
+        val scale = maxPx.toFloat() / maxOf(width, height)
+        if (scale >= 1f) return this
+        return this.scale(
+            (width * scale).toInt(),
+            (height * scale).toInt()
+        )
+    }
+
+    val scaledBmp = bmp.scaleForApi(1280)
+    val bytes2 = ByteArrayOutputStream().also {
+        scaledBmp.compress(Bitmap.CompressFormat.JPEG, 92, it)
+    }.toByteArray()
+    val base64 = Base64.encodeToString(
+        bytes2,
+        Base64.NO_WRAP
+    )
+
+    val nvidiaResult =
+        withContext(Dispatchers.IO) {
+            try {
+                val messagesJson = JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("role", "user")
+                        put("content", JSONArray().apply {
+                            put(JSONObject().apply {
+                                put("type", "image_url")
+                                put(
+                                    "image_url",
+                                    JSONObject().apply {
+                                        put(
+                                            "url",
+                                            "data:image/jpeg;base64,$base64"
+                                        )
+                                    })
+                            })
+                            put(JSONObject().apply {
+                                put("type", "text")
+                                put(
+                                    "text", """
+                                                                        Look at this vocabulary list image carefully.
+                                                                        There are TWO columns: Latin on the LEFT, German on the RIGHT.
+                                                                        Each row is one vocabulary entry.
+                                                                        
+                                                                        Rules:
+                                                                        - Match each Latin entry with the German entry on the SAME vertical position
+                                                                        - Latin entries are on the left half of the image
+                                                                        - German entries are on the right half
+                                                                        - Ignore page numbers (like "116")
+                                                                        - Ignore any repeated/duplicate blocks at bottom
+                                                                        
+                                                                        Return ONLY a JSON array like this (one object per row):
+                                                                        [{"latein":"salūtem dīcere (m. Dat.)","deutsch":"(jdn.) grüßen, begrüßen"},{"latein":"gaudium","deutsch":"die Freude"},...]
+                                                                        
+                                                                        No markdown, no explanation, ONLY the JSON array.
+                                                                        """.trimIndent()
+                                )
+                            })
+                        })
+                    })
+                }
+                val body = JSONObject().apply {
+                    put(
+                        "model",
+                        "meta/llama-3.2-90b-vision-instruct"
+                    )
+                    put("messages", messagesJson)
+                    put("stream", true)
+                }
+                val conn =
+                    URL("https://integrate.api.nvidia.com/v1/chat/completions")
+                        .openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty(
+                    "Authorization",
+                    "Bearer ${Config.NVIDIA}"
+                )
+                conn.setRequestProperty(
+                    "Content-Type",
+                    "application/json"
+                )
+                conn.doOutput = true
+                conn.outputStream.use {
+                    it.write(
+                        body.toString().toByteArray()
+                    )
+                }
+                val code = conn.responseCode
+                if (code != 200) {
+                    null
+                } else {
+                    val sb = StringBuilder()
+                    conn.inputStream.bufferedReader().useLines { lines ->
+                        for (line in lines) {
+                            if (!line.startsWith("data:")) continue
+                            val payload = line.removePrefix("data:").trim()
+                            if (payload == "[DONE]") break
+                            try {
+                                val delta = JSONObject(payload)
+                                    .getJSONArray("choices")
+                                    .getJSONObject(0)
+                                    .getJSONObject("delta")
+                                    .optString("content", "")
+                                if (delta.isNotEmpty()) {
+                                    sb.append(delta)
+                                    withContext(Dispatchers.Main) {
+                                        onProgress(sb.toString())  // live update
+                                    }
+                                }
+                            } catch (_: Exception) {}
+                        }
+                    }
+                    sb.toString().trim()
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
+    if (nvidiaResult != null) {
+        try {
+            val startIdx = nvidiaResult.indexOf('[')
+            val endIdx = nvidiaResult.lastIndexOf(']')
+            if (startIdx != -1 && endIdx > startIdx) {
+                val arr = JSONArray(
+                    nvidiaResult.substring(
+                        startIdx,
+                        endIdx + 1
+                    )
+                )
+                onVocabChange((0 until arr.length()).map {
+                    val o = arr.getJSONObject(it)
+                    Vokabel(
+                        o.getString("latein"),
+                        o.getString("deutsch"),
+                        it
+                    )
+                })
+            }
+        } catch (e: Exception) {
+            onError(
+                "Parse-Fehler: ${e.message}\nRaw: ${
+                    nvidiaResult.take(300)
+                }"
+            )
+        }
+    } else {
+        onError("API keine Antwort – prüfe Key & Netzwerk")
+    }
+}
 
 private object ConnectionGuard {
     private var lastFailedAttempt: Long = 0L
@@ -1284,7 +1444,6 @@ private fun startFlashcardResponseListener(boundSocket: ServerSocket) {
 
 private fun parseVokabelnFromJson(json: String): List<Vokabel> = try {
     val arr = JSONArray(json)
-    Log.d("TOTOTO", "$arr")
     (0 until arr.length()).map { i ->
         arr.getJSONObject(i).run { Vokabel(getString("latein"), getString("deutsch"), i) }
     }
@@ -1433,7 +1592,8 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
             if (level in 0..100) {
                 val audioManager =
                     context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
-                val maxVol = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                val maxVol =
+                    audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
                 val targetVol = (level / 100.0 * maxVol).toInt().coerceIn(0, maxVol)
                 audioManager.setStreamVolume(
                     android.media.AudioManager.STREAM_MUSIC,
