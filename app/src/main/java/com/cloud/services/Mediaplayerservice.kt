@@ -449,7 +449,23 @@ class MediaPlayerService : MediaSessionService() {
 
     private var podcastSessionStartedAt: Long = 0L
     private var podcastSessionStartPos: Long = 0L
-    private val showNameCache = mutableMapOf<String, String>() // showId -> displayName
+    private val showNameCache = mutableMapOf<String, String>()
+
+    private var autoPauseRunnable: Runnable? = null
+    private val autoPauseDelayMs = 20 * 60 * 1000L
+
+    private fun scheduleAutoPause() {
+        autoPauseRunnable?.let { handler.removeCallbacks(it) }
+        autoPauseRunnable = Runnable {
+            if (isPlayingPodcast) pausePodcast()
+        }
+        handler.postDelayed(autoPauseRunnable!!, autoPauseDelayMs)
+    }
+
+    private fun cancelAutoPause() {
+        autoPauseRunnable?.let { handler.removeCallbacks(it) }
+        autoPauseRunnable = null
+    }
 
     private fun loadShowNamesFromPrefs() {
         val prefs = getSharedPreferences("show_name_prefs", MODE_PRIVATE)
@@ -845,87 +861,48 @@ class MediaPlayerService : MediaSessionService() {
         isServiceDestroyed = true
         isRunning = false
 
-        try {
-            positionSaveRunnable?.let { handler.removeCallbacks(it) }
-            handler.removeCallbacksAndMessages(null)
-        } catch (_: Exception) {
-        }
+        positionSaveRunnable?.let { handler.removeCallbacks(it) }
+        handler.removeCallbacksAndMessages(null)
 
-        try {
-            bluetoothReceiver?.let { unregisterReceiver(it) }
-        } catch (_: Exception) {
-        } finally {
-            bluetoothReceiver = null
-        }
+        bluetoothReceiver?.let { unregisterReceiver(it) }
+        bluetoothReceiver = null
 
-        try {
-            screenReceiver?.let { unregisterReceiver(it) }
-        } catch (_: Exception) {
-        } finally {
-            screenReceiver = null
-        }
+        screenReceiver?.let { unregisterReceiver(it) }
+        screenReceiver = null
 
-        try {
-            savePodcastCurrentPosition()
-        } catch (_: Exception) {
-        }
+        cancelAutoPause()
 
-        try {
-            if (isPlayingMusic && songStartedAt > 0L && currentSongName.isNotEmpty()) {
-                val listenedMs = System.currentTimeMillis() - songStartedAt
-                if (listenedMs > 3000) {
-                    MediaAnalyticsManager.addSession(
-                        ListenSession(
-                            label = currentSongName,
-                            type = "music",
-                            listenedMs = listenedMs,
-                            startedAt = songStartedAt,
-                            repeatCount = consecutiveRepeatCount.coerceAtLeast(1)
-                        )
+        savePodcastCurrentPosition()
+        if (isPlayingMusic && songStartedAt > 0L && currentSongName.isNotEmpty()) {
+            val listenedMs = System.currentTimeMillis() - songStartedAt
+            if (listenedMs > 3000) {
+                MediaAnalyticsManager.addSession(
+                    ListenSession(
+                        label = currentSongName,
+                        type = "music",
+                        listenedMs = listenedMs,
+                        startedAt = songStartedAt,
+                        repeatCount = consecutiveRepeatCount.coerceAtLeast(1)
                     )
-                }
+                )
             }
-        } catch (_: Exception) {
         }
+        if (isPlayingPodcast) savePodcastSession()
 
-        try {
-            if (isPlayingPodcast) savePodcastSession()
-        } catch (_: Exception) {
-        }
+        musicPlayer?.stop()
+        musicPlayer?.release()
+        musicPlayer = null
 
-        try {
-            musicPlayer?.stop()
-            musicPlayer?.release()
-        } catch (_: Exception) {
-        } finally {
-            musicPlayer = null
-        }
+        podcastPlayer?.stop()
+        podcastPlayer?.release()
+        podcastPlayer = null
 
-        try {
-            podcastPlayer?.stop()
-            podcastPlayer?.release()
-        } catch (_: Exception) {
-        } finally {
-            podcastPlayer = null
-        }
+        mediaSession?.release()
 
-        try {
-            mediaSession?.release()
-        } catch (_: Exception) {
-        } finally {
-            mediaSession = null
-        }
+        stopForeground(STOP_FOREGROUND_REMOVE)
 
-        try {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } catch (_: Exception) {
-        }
-
-        try {
-            val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
-            nm?.cancel(MEDIA_PLAYER)
-        } catch (_: Exception) {
-        }
+        val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
+        nm?.cancel(MEDIA_PLAYER)
 
         super.onDestroy()
     }
@@ -1393,6 +1370,7 @@ class MediaPlayerService : MediaSessionService() {
             podcastSessionStartedAt = System.currentTimeMillis()
             isPlayingPodcast = true
             updateNotification()
+            scheduleAutoPause()
             return
         }
 
@@ -1439,6 +1417,7 @@ class MediaPlayerService : MediaSessionService() {
                 updateNotification()
                 start()
                 musicPrefs.editAsync { putBoolean("is_playing", true) }
+                scheduleAutoPause()
             }
             podcastSessionStartedAt = System.currentTimeMillis()
             podcastSessionStartPos = podcast.savedPosition
@@ -1448,6 +1427,7 @@ class MediaPlayerService : MediaSessionService() {
     }
 
     private fun pausePodcast() {
+        cancelAutoPause()
         if (!isPlayingPodcast || podcastPlayer?.isPlaying != true) return
         val pos = podcastPlayer?.currentPosition?.toLong() ?: 0
         podcastPlayer?.pause()
@@ -2256,7 +2236,8 @@ class MediaPlayerService : MediaSessionService() {
                     if (!result.isNullOrBlank()) {
                         saveShowNameToPrefs(show.id, result.trim())
                     }
-                } catch (_: Exception) {}
+                } catch (_: Exception) {
+                }
             }
         }
     }
