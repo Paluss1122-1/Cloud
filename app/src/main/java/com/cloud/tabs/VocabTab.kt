@@ -6,8 +6,6 @@ import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.net.Uri
-import android.util.Base64
-import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -77,20 +75,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
-import androidx.core.graphics.scale
 import com.cloud.core.objects.Config
+import com.cloud.quiethoursnotificationhelper.callNvidiaVisionApi
 import com.cloud.quiethoursnotificationhelper.flashcardVokabelnFlow
 import com.cloud.quiethoursnotificationhelper.trySendImageToLaptop
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 
 
 data class Vokabel(val latein: String, val deutsch: String, val id: Int)
@@ -122,6 +116,11 @@ data class SessionState(
     val showDeutsch: Boolean
 )
 
+data class WidthState(
+    val id: Int,
+    val value: Int
+)
+
 enum class VokabelTabScreen { HOME, UPLOAD, REVIEW, LEARN }
 
 private val BgSurface = Color(0xFF1E1E1E)
@@ -147,9 +146,10 @@ fun VocabTab() {
     var activeSet by remember { mutableStateOf<VokabelSet?>(null) }
     var showSaveDialog by remember { mutableStateOf(false) }
     var saveNameInput by remember { mutableStateOf("") }
-    var lastWidth by remember { mutableFloatStateOf(0f) }
-    var currentWidth by remember { mutableFloatStateOf(0f) }
+    var lastWidths by remember { mutableStateOf<List<WidthState>>(emptyList()) }
+    var currentWidths by remember { mutableStateOf<List<WidthState>>(emptyList()) }
     var showMergeDialog by remember { mutableStateOf(false) }
+    var extractionJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     if (showMergeDialog) {
         MergeVocabSetsDialog(
@@ -210,10 +210,10 @@ fun VocabTab() {
                     saveWeakVokabeln(prefs, set.createdAt, emptyList())
                     savedSets = deleteVokabelSet(prefs, set)
                 },
-                onUpdate = { int ->
-                    currentWidth = int
+                onUpdate = { id, value ->
+                    currentWidths = currentWidths.filter { it.id != id } + WidthState(id, value)
                 },
-                lastWidth = lastWidth,
+                lastWidths = lastWidths,
                 onMergeClick = { showMergeDialog = true }
             )
 
@@ -227,7 +227,7 @@ fun VocabTab() {
                     bitmap?.let { bmp ->
                         isExtracting = true
                         errorMessage = null
-                        scope.launch {
+                        extractionJob = scope.launch {
                             try {
                                 val bytes = ByteArrayOutputStream().also {
                                     bmp.compress(Bitmap.CompressFormat.JPEG, 90, it)
@@ -242,135 +242,35 @@ fun VocabTab() {
                                         errorMessage = "Lokale Extraktion leer..."
                                     }
                                 } else {
-                                    fun Bitmap.scaleForApi(maxPx: Int = 1280): Bitmap {
-                                        val scale = maxPx.toFloat() / maxOf(width, height)
-                                        if (scale >= 1f) return this
-                                        return this.scale(
-                                            (width * scale).toInt(),
-                                            (height * scale).toInt()
-                                        )
-                                    }
-
-                                    val scaledBmp = bmp.scaleForApi(1280)
-                                    val bytes2 = ByteArrayOutputStream().also {
-                                        scaledBmp.compress(Bitmap.CompressFormat.JPEG, 92, it)
-                                    }.toByteArray()
-                                    val base64 = Base64.encodeToString(
-                                        bytes2,
-                                        Base64.NO_WRAP
-                                    )
-                                    Log.d("TOTOTO", "$base64")
-                                    val nvidiaResult =
-                                        withContext(Dispatchers.IO) {
-                                            try {
-                                                val messagesJson = JSONArray().apply {
-                                                    put(JSONObject().apply {
-                                                        put("role", "user")
-                                                        put("content", JSONArray().apply {
-                                                            put(JSONObject().apply {
-                                                                put("type", "image_url")
-                                                                put(
-                                                                    "image_url",
-                                                                    JSONObject().apply {
-                                                                        put(
-                                                                            "url",
-                                                                            "data:image/jpeg;base64,$base64"
-                                                                        )
-                                                                    })
-                                                            })
-                                                            put(JSONObject().apply {
-                                                                put("type", "text")
-                                                                put(
-                                                                    "text", """
-                                                                        Look at this vocabulary list image carefully.
-                                                                        There are TWO columns: Latin on the LEFT, German on the RIGHT.
-                                                                        Each row is one vocabulary entry.
-                                                                        
-                                                                        Rules:
-                                                                        - Match each Latin entry with the German entry on the SAME vertical position
-                                                                        - Latin entries are on the left half of the image
-                                                                        - German entries are on the right half
-                                                                        - Ignore page numbers (like "116")
-                                                                        - Ignore any repeated/duplicate blocks at bottom
-                                                                        
-                                                                        Return ONLY a JSON array like this (one object per row):
-                                                                        [{"latein":"salūtem dīcere (m. Dat.)","deutsch":"(jdn.) grüßen, begrüßen"},{"latein":"gaudium","deutsch":"die Freude"},...]
-                                                                        
-                                                                        No markdown, no explanation, ONLY the JSON array.
-                                                                        """.trimIndent()
-                                                                )
-                                                            })
-                                                        })
-                                                    })
-                                                }
-                                                val body = JSONObject().apply {
-                                                    put(
-                                                        "model",
-                                                        "meta/llama-3.2-90b-vision-instruct"
-                                                    )
-                                                    put("messages", messagesJson)
-                                                    put("stream", false)
-                                                }
-                                                val conn =
-                                                    URL("https://integrate.api.nvidia.com/v1/chat/completions")
-                                                        .openConnection() as HttpURLConnection
-                                                conn.requestMethod = "POST"
-                                                conn.setRequestProperty(
-                                                    "Authorization",
-                                                    "Bearer ${Config.NVIDIA}"
-                                                )
-                                                conn.setRequestProperty(
-                                                    "Content-Type",
-                                                    "application/json"
-                                                )
-                                                conn.doOutput = true
-                                                conn.outputStream.use {
-                                                    it.write(
-                                                        body.toString().toByteArray()
-                                                    )
-                                                }
-                                                val code = conn.responseCode
-                                                if (code != 200) {
-                                                    null
-                                                } else {
-                                                    val raw =
-                                                        conn.inputStream.bufferedReader().readText()
-                                                    JSONObject(raw).getJSONArray("choices")
-                                                        .getJSONObject(0).getJSONObject("message")
-                                                        .getString("content").trim()
-                                                }
-                                            } catch (_: Exception) {
-                                                null
-                                            }
-                                        }
-                                    if (nvidiaResult != null) {
-                                        try {
-                                            val startIdx = nvidiaResult.indexOf('[')
-                                            val endIdx = nvidiaResult.lastIndexOf(']')
-                                            if (startIdx != -1 && endIdx > startIdx) {
-                                                val arr = JSONArray(
-                                                    nvidiaResult.substring(
-                                                        startIdx,
-                                                        endIdx + 1
-                                                    )
-                                                )
-                                                vokabeln = (0 until arr.length()).map {
-                                                    val o = arr.getJSONObject(it)
-                                                    Vokabel(
-                                                        o.getString("latein"),
-                                                        o.getString("deutsch"),
-                                                        it
-                                                    )
+                                    callNvidiaVisionApi(
+                                        bmp,
+                                        onError = { msg -> errorMessage = msg },
+                                        onVocabChange = { vocab -> vokabeln = vocab },
+                                        onProgress = { str ->
+                                            val lastBrace = str.lastIndexOf("},")
+                                            val jsonToParse = if (lastBrace >= 0) str.substring(
+                                                0,
+                                                lastBrace + 1
+                                            ) + "]" else null
+                                            if (jsonToParse != null) {
+                                                try {
+                                                    val arr = JSONArray(jsonToParse)
+                                                    val parsed = (0 until arr.length()).map {
+                                                        val o = arr.getJSONObject(it)
+                                                        Vokabel(
+                                                            o.getString("latein"),
+                                                            o.getString("deutsch"),
+                                                            it
+                                                        )
+                                                    }
+                                                    if (parsed.isNotEmpty()) {
+                                                        vokabeln = parsed
+                                                        screen = VokabelTabScreen.REVIEW
+                                                    }
+                                                } catch (_: Exception) {
                                                 }
                                             }
-                                        } catch (e: Exception) {
-                                            errorMessage = "Parse-Fehler: ${e.message}\nRaw: ${
-                                                nvidiaResult.take(300)
-                                            }"
-                                        }
-                                    } else {
-                                        errorMessage = "API keine Antwort – prüfe Key & Netzwerk"
-                                    }
+                                        })
                                     if (vokabeln.isNotEmpty()) screen = VokabelTabScreen.REVIEW
                                     else errorMessage = "Keine Vokabeln erkannt."
                                 }
@@ -387,6 +287,7 @@ fun VocabTab() {
             VokabelTabScreen.REVIEW -> ReviewScreen(
                 vokabeln = vokabeln,
                 setName = activeSet?.name,
+                isExtracting = isExtracting,
                 onVokabelnChanged = { vokabeln = it },
                 onStartLearning = { screen = VokabelTabScreen.LEARN },
                 onSave = { saveNameInput = activeSet?.name ?: ""; showSaveDialog = true },
@@ -394,7 +295,12 @@ fun VocabTab() {
                     screen =
                         if (activeSet != null) VokabelTabScreen.LEARN else VokabelTabScreen.UPLOAD
                 },
-                checkExist = activeSet != null
+                checkExist = activeSet != null,
+                onCancelExtraction = if (isExtracting) {{
+                    extractionJob?.cancel()
+                    isExtracting = false
+                    screen = VokabelTabScreen.UPLOAD
+                }} else null
             )
 
             VokabelTabScreen.LEARN -> LearnScreen(
@@ -402,9 +308,8 @@ fun VocabTab() {
                 prefs = prefs,
                 setCreatedAt = activeSet?.createdAt ?: 0L,
                 onBack = {
-                    lastWidth = currentWidth
-                    screen =
-                        if (activeSet != null) VokabelTabScreen.HOME else VokabelTabScreen.REVIEW
+                    lastWidths = currentWidths
+                    screen = if (activeSet != null) VokabelTabScreen.HOME else VokabelTabScreen.REVIEW
                 },
                 setName = activeSet?.name
             )
@@ -420,8 +325,8 @@ fun HomeScreen(
     onOpenSet: (VokabelSet) -> Unit,
     onLearnWeak: (VokabelSet) -> Unit,
     onDeleteSet: (VokabelSet) -> Unit,
-    onUpdate: (Float) -> Unit,
-    lastWidth: Float,
+    onUpdate: (Int, Int) -> Unit,
+    lastWidths: List<WidthState>,
     onMergeClick: () -> Unit = {}
 ) {
     var setToDelete by remember { mutableStateOf<VokabelSet?>(null) }
@@ -490,7 +395,7 @@ fun HomeScreen(
                             .clip(RoundedCornerShape(16.dp))
                             .background(MaterialTheme.colorScheme.primary)
                             .padding(horizontal = 20.dp, vertical = 18.dp)
-                            .clickable {  }
+                            .clickable { }
                     ) {
                         Text("📚", fontSize = 22.sp)
                         Text(
@@ -545,6 +450,9 @@ fun HomeScreen(
                             )
                         }
 
+                        val setId = set.createdAt.toInt()
+                        val lastWidth = remember { lastWidths.firstOrNull { it.id == setId }?.value?.toFloat() ?: 0f }
+
                         val progressPercentFloat = remember { Animatable(lastWidth) }
                         LaunchedEffect(progressFloat) {
                             delay(200)
@@ -552,7 +460,7 @@ fun HomeScreen(
                                 progressFloat,
                                 animationSpec = tween(400, easing = EaseInOutCubic)
                             )
-                            if (progressPercentFloat.value != 0f) onUpdate(progressPercentFloat.value)
+                            if (progressPercentFloat.value != 0f) onUpdate(setId, progressPercentFloat.value.toInt())
                         }
 
                         Row(
@@ -641,20 +549,17 @@ fun HomeScreen(
                                                 )
                                             )
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth(progressPercentFloat.value)
-                                                .fillMaxHeight()
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(
-                                                    Brush.linearGradient(
-                                                        listOf(
-                                                            AccentViolet,
-                                                            AccentVioletDim
-                                                        )
+                                        if (progressPercentFloat.value > 0f) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth(progressPercentFloat.value)
+                                                    .fillMaxHeight()
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(
+                                                        Brush.linearGradient(listOf(AccentViolet, AccentVioletDim))
                                                     )
-                                                )
-                                        )
+                                            )
+                                        }
                                     }
 
                                     Spacer(Modifier.width(10.dp))
@@ -850,14 +755,23 @@ fun UploadScreen(
 fun ReviewScreen(
     vokabeln: List<Vokabel>,
     setName: String?,
+    isExtracting: Boolean = false,
     onVokabelnChanged: (List<Vokabel>) -> Unit,
     onStartLearning: (() -> Unit)? = null,
     onSave: () -> Unit,
     onBack: () -> Unit,
-    checkExist: Boolean = true
+    checkExist: Boolean = true,
+    onCancelExtraction: (() -> Unit)? = null,
 ) {
     var currentVokabeln by remember { mutableStateOf(vokabeln) }
-    val initVocabs by remember { mutableStateOf(vokabeln) }  // Nutzt jetzt den Parameter direkt
+    val initVocabs by remember { mutableStateOf(vokabeln) }
+
+    LaunchedEffect(vokabeln) {
+        val newItems = vokabeln.filter { new -> currentVokabeln.none { it.id == new.id } }
+        if (newItems.isNotEmpty()) {
+            currentVokabeln = currentVokabeln + newItems
+        }
+    }
 
     fun calculateChanges(original: List<Vokabel>, current: List<Vokabel>): Int {
         var changeCount = 0
@@ -887,8 +801,37 @@ fun ReviewScreen(
         calculateChanges(initVocabs, currentVokabeln)
     }
 
+    var showCancelDialog by remember { mutableStateOf(false) }
+
+    if (showCancelDialog) {
+        AlertDialog(
+            onDismissRequest = { showCancelDialog = false },
+            containerColor = BgSurface,
+            title = { Text("Erkennung abbrechen?", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = { Text("Die KI erkennt noch Vokabeln. Wirklich abbrechen?", color = TextSecondary) },
+            confirmButton = {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFB71C1C))
+                        .clickable { showCancelDialog = false; onCancelExtraction?.invoke() }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) { Text("Abbrechen", color = TextPrimary, fontWeight = FontWeight.SemiBold) }
+            },
+            dismissButton = {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(BgCard)
+                        .clickable { showCancelDialog = false }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) { Text("Weiter", color = TextSecondary) }
+            }
+        )
+    }
+
     BackHandler {
-        onBack()
+        if (isExtracting) showCancelDialog = true else onBack()
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -938,10 +881,10 @@ fun ReviewScreen(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
                         .background(
-                            if (currentVokabeln.isNotEmpty()) SolidColor(MaterialTheme.colorScheme.primary)
+                            if (currentVokabeln.isNotEmpty() && isExtracting) SolidColor(MaterialTheme.colorScheme.primary)
                             else Brush.horizontalGradient(listOf(BgCard, BgCard))
                         )
-                        .clickable(enabled = currentVokabeln.isNotEmpty()) { onStartLearning() }
+                        .clickable(enabled = currentVokabeln.isNotEmpty() && isExtracting) { onStartLearning() }
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Text(
@@ -951,6 +894,28 @@ fun ReviewScreen(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
+            }
+        }
+
+        if (isExtracting) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(AccentViolet.copy(alpha = 0.15f))
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = AccentViolet
+                )
+                Text(
+                    "KI erkennt Vokabeln... (${vokabeln.size} bisher)",
+                    color = AccentViolet,
+                    fontSize = 13.sp
+                )
             }
         }
 
@@ -1191,13 +1156,15 @@ fun LearnScreen(
                     .height(3.dp)
                     .background(Transparent)
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(currentIndex.toFloat() / shuffled.size)
-                        .fillMaxHeight()
-                        .background(MaterialTheme.colorScheme.primary)
-                        .clip(RoundedCornerShape(2.dp))
-                )
+                if (currentIndex > 0) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(currentIndex.toFloat() / shuffled.size)
+                            .fillMaxHeight()
+                            .background(MaterialTheme.colorScheme.primary)
+                            .clip(RoundedCornerShape(2.dp))
+                    )
+                }
             }
             Text(
                 "${currentIndex + 1}/${shuffled.size}  ✓ $correct  ✗ $wrong",
