@@ -667,7 +667,7 @@ fun syncTodosWithLaptop(context: Context) {
                         10.seconds, context
                     )
                 }
-                return@launch  // NICHT nochmal fetchen
+                return@launch
             }
 
             val todos = getTodos(context)
