@@ -41,11 +41,8 @@ class QuietActionReceiver : BroadcastReceiver() {
 
 class QuietHoursAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val serviceIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-            action = ACTION_RESTORE_NOTIFICATION
-        }
-
-        context.startForegroundService(serviceIntent)
+        checkQuietHours(context)
+        scheduleNextCheck(context)
     }
 }
 
