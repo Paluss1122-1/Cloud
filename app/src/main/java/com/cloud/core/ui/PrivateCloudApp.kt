@@ -162,6 +162,7 @@ import com.cloud.tabs.MediaTab
 import com.cloud.tabs.MovieDiscoveryTabContent
 import com.cloud.tabs.NotizenApp
 import com.cloud.tabs.OtherBucketViewer
+import com.cloud.tabs.PodcastTab
 import com.cloud.tabs.QuickSettingsTabContent
 import com.cloud.tabs.RemoteDesktopTabContent
 import com.cloud.tabs.SpotifyDownloaderApp
@@ -331,6 +332,11 @@ enum class MenuItem(
         "Remote Desktop",
         "🖥️",
         { RemoteDesktopTabContent() }
+    ),
+    PODCAST(
+        "Podcasts",
+        "🎙️",
+        { PodcastTab() }
     ),
 }
 
