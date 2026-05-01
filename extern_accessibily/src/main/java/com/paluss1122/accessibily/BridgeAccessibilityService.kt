@@ -25,8 +25,6 @@ class BridgeAccessibilityService : AccessibilityService() {
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val json = intent.getStringExtra("cmd") ?: return
-            Toast.makeText(this@BridgeAccessibilityService, "Received", Toast.LENGTH_LONG).show()
-            Log.d("access_cloud", "Received")
             mainHandler.post { execute(json) }
         }
     }
