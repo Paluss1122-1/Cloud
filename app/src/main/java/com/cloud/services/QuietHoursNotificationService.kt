@@ -81,6 +81,8 @@ import com.cloud.core.functions.errorInsert
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.DEL_GAL_CONF
 import com.cloud.core.objects.Config.cms
+import com.cloud.core.objects.Config.realDevice
+import com.cloud.core.ui.getDeviceName
 import com.cloud.quiethoursnotificationhelper.AiResponseEntry
 import com.cloud.quiethoursnotificationhelper.CleanupWorker
 import com.cloud.quiethoursnotificationhelper.DailySummaryWorker
@@ -367,6 +369,7 @@ class QuietHoursNotificationService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        realDevice = getDeviceName().trim().equals("Samsung SM-S921U1", ignoreCase = true)
         requestIgnoreBatteryOptimizations(this)
         Config.init(this)
         sharedPreferences = getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
