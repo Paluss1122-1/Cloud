@@ -496,18 +496,6 @@ private object ConnectionGuard {
         consecutiveFailures = 0
         lastFailedAttempt = 0L
     }
-
-    fun quickPingTest(ip: String, port: Int): Boolean {
-        return try {
-            val addr = Inet4Address.getByName(ip)  // forces IPv4
-            Socket().use { socket ->
-                socket.connect(InetSocketAddress(addr, port), 1500)
-                true
-            }
-        } catch (_: Exception) {
-            false
-        }
-    }
 }
 
 private const val KEY_LAPTOP_IP = "laptop_ip"
@@ -815,19 +803,6 @@ fun syncTodosWithLaptop(context: Context) {
                 }
 
                 laptopIp = resolvedIp
-            }
-
-            val pingSuccess = ConnectionGuard.quickPingTest(resolvedIp, SYNC_PORT)
-
-            if (!pingSuccess) {
-                withContext(Dispatchers.Main) {
-                    showSimpleNotificationExtern(
-                        "❌ Ping fehlgeschlagen",
-                        "Laptop nicht erreichbar: $resolvedIp",
-                        10.seconds, context
-                    )
-                }
-                return@launch
             }
 
             val todos = getTodos(context)
