@@ -2382,7 +2382,7 @@ private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
                 writer.flush()
             }
 
-            return@withContext if (connection.responseCode == 201) {
+            return@withContext if (connection.responseCode in 200..201) {
                 Log.d("CLOUDSA", "Mobile IP successfully inserted: $ipAddress")
                 true
             } else {
