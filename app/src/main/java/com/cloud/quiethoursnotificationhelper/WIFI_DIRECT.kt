@@ -1,6 +1,7 @@
 package com.cloud.quiethoursnotificationhelper
 
 import android.Manifest
+import android.R
 import android.annotation.SuppressLint
 import android.app.NotificationManager
 import android.content.ClipData
@@ -12,6 +13,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
+import android.media.AudioManager
 import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
@@ -96,6 +98,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -123,6 +126,7 @@ import java.time.Instant
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.pow
@@ -134,10 +138,10 @@ val isLaptopConnectedFlow = MutableStateFlow(false)
 val aiResponseFlow = MutableStateFlow<AiResponseEntry?>(null)
 val flashcardVokabelnFlow = MutableStateFlow<List<Vokabel>?>(null)
 
-private val serverMutexes = mutableMapOf<Int, kotlinx.coroutines.sync.Mutex>()
+private val serverMutexes = mutableMapOf<Int, Mutex>()
 
 private fun getServerMutex(port: Int) = synchronized(serverMutexes) {
-    serverMutexes.getOrPut(port) { kotlinx.coroutines.sync.Mutex() }
+    serverMutexes.getOrPut(port) { Mutex() }
 }
 
 var isLaptopConnected: Boolean
@@ -783,13 +787,12 @@ fun syncTodosWithLaptop(context: Context) {
             if (localip != null) {
                 insertMobileIpToSupabase(localip)
             }
-            var resolvedIp = laptopIp
 
-            resolvedIp = withTimeoutOrNull(5000L) {
+            laptopIp = withTimeoutOrNull(5000L) {
                 fetchLaptopIpFromSupabase()
             } ?: ""
 
-            if (resolvedIp.isEmpty()) {
+            if (laptopIp.isEmpty()) {
                 withContext(Dispatchers.Main) {
                     showSimpleNotificationExtern(
                         "❌ Keine IP gefunden",
@@ -801,11 +804,9 @@ fun syncTodosWithLaptop(context: Context) {
                 return@launch
             }
 
-            laptopIp = resolvedIp
-
             val todos = getTodos(context)
             val socket = Socket()
-            socket.connect(InetSocketAddress(Inet4Address.getByName(resolvedIp), SYNC_PORT), 3000)
+            socket.connect(InetSocketAddress(Inet4Address.getByName(laptopIp), SYNC_PORT), 3000)
             socket.soTimeout = 8000
 
             val writer = PrintWriter(socket.getOutputStream(), true)
@@ -1023,7 +1024,7 @@ fun showOpenTodos(context: Context) {
     todos.forEachIndexed { index, todoItem ->
         notificationManager.notify(
             TODOS + index, NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_menu_agenda)
+                .setSmallIcon(R.drawable.ic_menu_agenda)
                 .setContentTitle(todoItem.text)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(todoItem.text))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -1035,7 +1036,7 @@ fun showOpenTodos(context: Context) {
 
     notificationManager.notify(
         TODOS + 150, NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .setSmallIcon(R.drawable.ic_menu_info_details)
             .setContentTitle("Erledigte Todos")
             .setContentText("${todos.size} Erledigte Todos")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -1141,7 +1142,7 @@ fun showAllTodos(context: Context) {
     chunks.forEachIndexed { index, chunk ->
         notificationManager.notify(
             TODOS + index, NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_menu_agenda)
+                .setSmallIcon(R.drawable.ic_menu_agenda)
                 .setContentTitle("📝 To-do Liste (${todos.size})")
                 .setStyle(NotificationCompat.BigTextStyle().bigText(chunk))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -1153,7 +1154,7 @@ fun showAllTodos(context: Context) {
 
     notificationManager.notify(
         TODOS + 50, NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .setSmallIcon(R.drawable.ic_menu_info_details)
             .setContentTitle("Alle Todos")
             .setContentText("${chunks.size} Todos")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -1337,7 +1338,7 @@ fun loadAllAiResponses(context: Context): List<AiResponseEntry> {
 }
 
 fun getTodayKey(): String {
-    val tz = java.util.TimeZone.getTimeZone("Europe/Berlin")
+    val tz = TimeZone.getTimeZone("Europe/Berlin")
     val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.GERMANY).apply {
         timeZone = tz
     }
@@ -1345,7 +1346,7 @@ fun getTodayKey(): String {
 }
 
 private fun getYesterdayKey(): String {
-    val tz = java.util.TimeZone.getTimeZone("Europe/Berlin")
+    val tz = TimeZone.getTimeZone("Europe/Berlin")
     val cal = Calendar.getInstance(tz)
     cal.add(Calendar.DAY_OF_YEAR, -1)
     val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.GERMANY).apply {
@@ -1564,12 +1565,12 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
             val level = json.optInt("level", -1)
             if (level in 0..100) {
                 val audioManager =
-                    context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+                    context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
                 val maxVol =
-                    audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                    audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
                 val targetVol = (level / 100.0 * maxVol).toInt().coerceIn(0, maxVol)
                 audioManager.setStreamVolume(
-                    android.media.AudioManager.STREAM_MUSIC,
+                    AudioManager.STREAM_MUSIC,
                     targetVol,
                     0
                 )
