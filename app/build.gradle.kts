@@ -31,6 +31,8 @@ android {
     buildTypes {
         debug {
         }
+        release {
+        }
         create("minifiedDebug") {
             initWith(buildTypes.getByName("debug"))
             isMinifyEnabled = true
