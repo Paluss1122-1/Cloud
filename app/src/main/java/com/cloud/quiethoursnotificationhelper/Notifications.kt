@@ -17,6 +17,7 @@ import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import com.cloud.core.functions.showSimpleNotificationExtern
+import com.cloud.core.objects.prvt
 import com.cloud.services.ChatService
 import com.cloud.services.ErrorNotificationManager
 import com.cloud.services.QuietHoursNotificationService
@@ -346,18 +347,7 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
         .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
         .addAction(commandAction)
         .setGroup("quiet_hours_main_group")
-
-    val now = Calendar.getInstance()
-    val nextChange = calculateNextStatusChange(
-        now,
-        getQuietStartHour(context),
-        getQuietEndHour(context)
-    )
-
-    builder
-        .setWhen(nextChange.timeInMillis)
-        .setUsesChronometer(true)
-        .setChronometerCountDown(true)
+        .setShowWhen(false)
 
     if (isQuietHours) {
         builder
@@ -412,18 +402,20 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
             .addAction(endAction)
     }
 
-    val syncIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-        action = ACTION_SYNC_LAPTOP
+    if (prvt()) {
+        val syncIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
+            action = ACTION_SYNC_LAPTOP
+        }
+        val syncPendingIntent = PendingIntent.getService(
+            context, 0, syncIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        builder.addAction(
+            android.R.drawable.ic_dialog_email,
+            "Connect",
+            syncPendingIntent
+        )
     }
-    val syncPendingIntent = PendingIntent.getService(
-        context, 0, syncIntent,
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    )
-    builder.addAction(
-        android.R.drawable.ic_dialog_email,
-        "Connect",
-        syncPendingIntent
-    )
 
     return builder.build()
 }
