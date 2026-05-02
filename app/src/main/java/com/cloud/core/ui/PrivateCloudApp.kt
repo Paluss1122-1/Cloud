@@ -317,7 +317,7 @@ enum class MenuItem(
         { SpotifyDownloaderApp() }
     ),
     EXPLORE(
-        "Erkunden",
+        "Explore",
         "🗺️",
         { setGesturesEnabled ->
             ExploreTabContent(setGesturesEnabled)
