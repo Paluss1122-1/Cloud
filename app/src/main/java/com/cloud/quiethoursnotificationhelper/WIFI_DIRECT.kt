@@ -785,25 +785,23 @@ fun syncTodosWithLaptop(context: Context) {
             }
             var resolvedIp = laptopIp
 
+            resolvedIp = withTimeoutOrNull(5000L) {
+                fetchLaptopIpFromSupabase()
+            } ?: ""
+
             if (resolvedIp.isEmpty()) {
-                resolvedIp = withTimeoutOrNull(5000L) {
-                    fetchLaptopIpFromSupabase()
-                } ?: ""
-
-                if (resolvedIp.isEmpty()) {
-                    withContext(Dispatchers.Main) {
-                        showSimpleNotificationExtern(
-                            "❌ Keine IP gefunden",
-                            "Supabase lieferte keine IP",
-                            10.seconds,
-                            context
-                        )
-                    }
-                    return@launch
+                withContext(Dispatchers.Main) {
+                    showSimpleNotificationExtern(
+                        "❌ Keine IP gefunden",
+                        "Supabase lieferte keine IP",
+                        10.seconds,
+                        context
+                    )
                 }
-
-                laptopIp = resolvedIp
+                return@launch
             }
+
+            laptopIp = resolvedIp
 
             val todos = getTodos(context)
             val socket = Socket()
@@ -2298,16 +2296,20 @@ fun sendAiExecuteCommand(context: Context, userInput: String) {
 private suspend fun fetchLaptopIpFromSupabase(): String? = withContext(Dispatchers.IO) {
     var connection: HttpURLConnection? = null
     try {
-        val url =
-            "${Config.SUPABASE_URL}/rest/v1/device_ips?device_id=eq.laptop&select=ip_address"
+        val url = "${Config.SUPABASE_URL}/rest/v1/device_ips" +
+                "?device_id=eq.laptop&select=ip_address"
 
         connection = URL(url).openConnection() as HttpURLConnection
         connection.requestMethod = "GET"
+        connection.useCaches = false  // ← wichtig
+        connection.setRequestProperty("Cache-Control", "no-cache, no-store")
+        connection.setRequestProperty("Pragma", "no-cache")
         connection.setRequestProperty("apikey", Config.SUPABASE_PUBLISHABLE_KEY)
         connection.setRequestProperty(
             "Authorization",
             "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}"
         )
+        Log.d("CLOUDSA", "NG: ${connection.responseCode}")
 
         if (connection.responseCode == 200) {
             val response = connection.inputStream.bufferedReader().readText()
@@ -2343,6 +2345,9 @@ private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
                 "Authorization",
                 "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}"
             )
+            connection.setRequestProperty("Cache-Control", "no-cache, no-store")
+            connection.setRequestProperty("Pragma", "no-cache")
+            connection.useCaches = false
             connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("Prefer", "resolution=merge-duplicates,upsert=true")
 
