@@ -14,9 +14,10 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Update
-import com.cloud.core.objects.Config
-import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
+import com.cloud.core.functions.errorInsert
+import com.cloud.core.objects.Config
+import com.cloud.core.objects.prvt
 import com.cloud.privatecloudapp.isOnline
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.CoroutineScope
@@ -27,7 +28,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
-import org.json.JSONObject
 import java.nio.ByteBuffer
 import java.security.SecureRandom
 import java.time.Instant
@@ -46,19 +46,6 @@ data class PasswordEntry(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
-
-fun PasswordEntry.toJsonObject(): JSONObject {
-    return JSONObject().apply {
-        put("id", id)
-        put("name", name)
-        put("url", url)
-        put("username", username)
-        put("password", password)
-        put("notes", notes)
-        put("createdAt", createdAt)
-        put("updatedAt", updatedAt)
-    }
-}
 
 
 @Dao
@@ -131,12 +118,12 @@ object CloudCrypto {
     }
 
     fun encryptForCloud(plaintext: String): String {
-        if (plaintext.isEmpty()) return ""
+        if (plaintext.isEmpty() || prvt()) return ""
         return encryptWithKey(plaintext, cachedKey)
     }
 
     fun decryptFromCloud(ciphertext: String): String? {
-        if (ciphertext.isEmpty()) return ""
+        if (ciphertext.isEmpty() || prvt()) return ""
         return try {
             decryptWithKey(ciphertext, cachedKey)
         } catch (e: Exception) {
@@ -265,6 +252,7 @@ data class PasswordEntrySupabase(
 )
 
 suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: TwoFADatabase, context: Context): SyncResult {
+    if (prvt()) return SyncResult(uploaded = 0, downloaded = 0, total = 0)
     if (!isOnline(context)) {
         return SyncResult(uploaded = 0, downloaded = 0, total = 0, error = "Kein Internet")
     }
