@@ -99,6 +99,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import com.cloud.core.objects.Config.realDevice
+import com.cloud.core.objects.prvt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -165,7 +166,7 @@ fun PasswordManagerScreen(db: PasswordDatabase, twoFaDb: TwoFADatabase) {
             Column(modifier = Modifier.weight(1f)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(
-                        "🔐 Passwörter",
+                        "🔒 Passwörter",
                         color = TextP,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold
@@ -183,53 +184,56 @@ fun PasswordManagerScreen(db: PasswordDatabase, twoFaDb: TwoFADatabase) {
                         ) {
                             Icon(Icons.Default.FileUpload, "Import", tint = AccentBlue)
                         }
-                        IconButton(
-                            onClick = { scope.launch { db.passwordDao().deleteAll(); reload() } },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(Icons.Default.Delete, "Import", tint = AccentBlue)
-                        }
-                        IconButton(
-                            onClick = {
-                                if (!isSyncing && realDevice) {
-                                    val prefs = context.getSharedPreferences(
-                                        "sync_prefs",
-                                        Context.MODE_PRIVATE
-                                    )
-                                    val lastSyncTime = prefs.getLong("last_sync_pw_timestamp", 0L)
-                                    val currentTime = System.currentTimeMillis()
+                        if (prvt()) {
+                            var clickcount by remember { mutableIntStateOf(0) }
+                            IconButton(
+                                onClick = { scope.launch { clickcount++; if (clickcount >= 5) { db.passwordDao().deleteAll(); reload(); clickcount = 0 }} },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(Icons.Default.Delete, "Import", tint = AccentBlue)
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (!isSyncing && realDevice) {
+                                        val prefs = context.getSharedPreferences(
+                                            "sync_prefs",
+                                            Context.MODE_PRIVATE
+                                        )
+                                        val lastSyncTime = prefs.getLong("last_sync_pw_timestamp", 0L)
+                                        val currentTime = System.currentTimeMillis()
 
-                                    if (currentTime - lastSyncTime > 20_000L) {
-                                        isSyncing = true
-                                        scope.launch {
-                                            try {
-                                                if (syncPasswordEntriesWithCloud(db, twoFaDb, context).error != null){
-                                                    Toast.makeText(context, "Kein Netzwerk verfügbar", Toast.LENGTH_LONG).show()
-                                                    return@launch
+                                        if (currentTime - lastSyncTime > 20_000L) {
+                                            isSyncing = true
+                                            scope.launch {
+                                                try {
+                                                    if (syncPasswordEntriesWithCloud(db, twoFaDb, context).error != null){
+                                                        Toast.makeText(context, "Kein Netzwerk verfügbar", Toast.LENGTH_LONG).show()
+                                                        return@launch
+                                                    }
+                                                    entries = db.passwordDao().getAll()
+                                                    prefs.edit(commit = true) {
+                                                        putLong(
+                                                            "last_sync_pw_timestamp",
+                                                            System.currentTimeMillis()
+                                                        )
+                                                    }
+                                                } catch (e: Exception) {
+                                                    Toast.makeText(
+                                                        context,
+                                                        "Sync fehlgeschlagen: ${e.message}",
+                                                        Toast.LENGTH_LONG
+                                                    ).show()
+                                                } finally {
+                                                    isSyncing = false
                                                 }
-                                                entries = db.passwordDao().getAll()
-                                                prefs.edit(commit = true) {
-                                                    putLong(
-                                                        "last_sync_pw_timestamp",
-                                                        System.currentTimeMillis()
-                                                    )
-                                                }
-                                            } catch (e: Exception) {
-                                                Toast.makeText(
-                                                    context,
-                                                    "Sync fehlgeschlagen: ${e.message}",
-                                                    Toast.LENGTH_LONG
-                                                ).show()
-                                            } finally {
-                                                isSyncing = false
                                             }
                                         }
                                     }
-                                }
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(Icons.Default.Refresh, "Import", tint = AccentBlue)
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(Icons.Default.Refresh, "Import", tint = AccentBlue)
+                            }
                         }
                     }
                 }
