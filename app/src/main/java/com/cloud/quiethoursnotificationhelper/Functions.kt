@@ -243,5 +243,5 @@ fun setSoundMode(mode: String, context: Context) {
 }
 
 private fun canWriteSettings(context: Context): Boolean {
-    return Settings.canDrawOverlays(context)
+    return Settings.System.canWrite(context)
 }
