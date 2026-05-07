@@ -341,6 +341,11 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
 fun markMessageAsRead(messageId: String, readMessageIds: MutableSet<String>, context: Context) {
     try {
         readMessageIds.add(messageId)
+        // Begrenze die Größe von readMessageIds, um Memory-Leaks zu vermeiden
+        if (readMessageIds.size > 200) {
+            val toRemove = readMessageIds.take(100)
+            readMessageIds.removeAll(toRemove.toSet())
+        }
         val key = messageId.substringBeforeLast("_")
         val notifId = key.hashCode() and 0x0FFFFFFF
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
