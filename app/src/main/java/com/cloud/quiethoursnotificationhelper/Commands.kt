@@ -12,6 +12,12 @@ import android.content.Context.WINDOW_SERVICE
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.hardware.camera2.CameraManager
+import android.location.LocationManager
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.net.wifi.WifiInfo
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -95,6 +101,54 @@ data class Command(
 private var testOverlayView: ComposeView? = null
 private var testOverlayLifecycle: OverlayLifecycleOwner? = null
 
+
+@SuppressLint("MissingPermission")
+fun getHomeWifiStatus(
+    context: Context,
+    homeSsid: String,
+    onResult: (isHome: Boolean) -> Unit
+) {
+    val cm = context.getSystemService(ConnectivityManager::class.java)
+
+    val request = NetworkRequest.Builder()
+        .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+        .build()
+
+    val callback = object : ConnectivityManager.NetworkCallback(
+        FLAG_INCLUDE_LOCATION_INFO
+    ) {
+        private var hasFired = false
+
+        override fun onCapabilitiesChanged(
+            network: Network,
+            caps: NetworkCapabilities
+        ) {
+            if (hasFired) return
+            
+            val wifiInfo = caps.transportInfo as? WifiInfo
+            val ssid = wifiInfo?.ssid
+                ?.removePrefix("\"")
+                ?.removeSuffix("\"")
+                ?.takeIf { it != "<unknown ssid>" }
+            
+            if (ssid != null) {
+                hasFired = true
+                Log.d("CLOUDSA", "SSID via callback: $ssid")
+                onResult(ssid.equals(homeSsid, ignoreCase = true))
+                cm.unregisterNetworkCallback(this)
+            }
+        }
+
+        override fun onUnavailable() {
+            if (hasFired) return
+            hasFired = true
+            onResult(false)
+        }
+    }
+
+    cm.registerNetworkCallback(request, callback)
+}
+
 private fun getAvailableCommands(context: Context): List<Command> {
     return listOf(
         Command(
@@ -109,15 +163,16 @@ private fun getAvailableCommands(context: Context): List<Command> {
             aliases = listOf(),
             description = "Zeigt ungelesene Nachrichten"
         ) {
-            val intent = Intent(context, QuietHoursNotificationService::class.java).apply {
-                action = ACTION_SCHOOL_DAY_SUMMARY
-            }
-            val pending = PendingIntent.getService(
-                context, 9001, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
-            pending.send()
+            //android.util.Log.d("CLOUDSA", "ishomewifi: ${isHomeWifi(context, "")}")
+//            val intent = Intent(context, QuietHoursNotificationService::class.java).apply {
+//                action = ACTION_SCHOOL_DAY_SUMMARY
+//            }
+//            val pending = PendingIntent.getService(
+//                context, 9001, intent,
+//                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+//            )
+//
+//            pending.send()
         },
         Command(
             name = "nvchat",
@@ -425,13 +480,6 @@ private fun getAvailableCommands(context: Context): List<Command> {
                 "Syntax: todorm [nummer]\nVerwende 'todos' um Nummern zu sehen",
                 context = context
             )
-        },
-        Command(
-            name = "todosync",
-            aliases = listOf("sync", "syncwifi", "synctodos"),
-            description = "Synchronisiert To-dos mit Laptop via WiFi Direct"
-        ) {
-            syncTodosWithLaptop(context)
         },
         Command(
             name = "bahn",
