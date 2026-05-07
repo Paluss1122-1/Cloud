@@ -304,9 +304,15 @@ fun showDeleteConfirmation(imageIndex: Int, context: Context) {
         val imageUri = galleryImages[imageIndex].uri
 
         val bitmap = try {
-            ImageDecoder.decodeBitmap(
-                ImageDecoder.createSource(context.contentResolver, imageUri)
-            )
+            val source = ImageDecoder.createSource(context.contentResolver, imageUri)
+            ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                val targetSize = 512 // Für Bestätigung reicht kleiner
+                if (info.size.width > targetSize || info.size.height > targetSize) {
+                    val scale = Math.max(info.size.width.toFloat() / targetSize, info.size.height.toFloat() / targetSize)
+                    decoder.setTargetSize((info.size.width / scale).toInt(), (info.size.height / scale).toInt())
+                }
+                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            }
         } catch (_: Exception) {
             null
         }
@@ -450,9 +456,16 @@ private fun showGalleryImage(index: Int, context: Context) {
             .format(Date(galleryImage.createdAt))
 
         val originalBitmap = try {
-            ImageDecoder.decodeBitmap(
-                ImageDecoder.createSource(context.contentResolver, imageUri)
-            )
+            val source = ImageDecoder.createSource(context.contentResolver, imageUri)
+            ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                // Skaliere das Bild auf eine vernünftige Größe für Benachrichtigungen (z.B. max 1024px)
+                val targetSize = 1024
+                if (info.size.width > targetSize || info.size.height > targetSize) {
+                    val scale = Math.max(info.size.width.toFloat() / targetSize, info.size.height.toFloat() / targetSize)
+                    decoder.setTargetSize((info.size.width / scale).toInt(), (info.size.height / scale).toInt())
+                }
+                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE // Wichtig für Notifications
+            }
         } catch (e: Exception) {
             Log.e("QuietHoursService", "Error decoding image at index $index", e)
             showSimpleNotificationExtern(
