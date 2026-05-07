@@ -35,6 +35,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -48,7 +49,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -145,9 +145,10 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
         Config.masterPassword = masterPw!!
     }
 
-    LaunchedEffect(Unit) {
+    DisposableEffect(Unit) {
         QuietHoursNotificationService.startService(context)
         ChatService.startService(context)
+        onDispose { }
     }
 
     LaunchedEffect(startTarget) {
@@ -162,13 +163,11 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
         }
     }
 
-    var isLandingVisible by rememberSaveable { mutableStateOf(!hasLoadedApp) }
     val landingOffsetX = remember { Animatable(if (!hasLoadedApp) 0f else -1f) }
     val scope = rememberCoroutineScope()
 
     fun openLanding() {
         scope.launch {
-            isLandingVisible = true
             landingOffsetX.snapTo(-1f)
             landingOffsetX.animateTo(0f, tween(360, easing = FastOutSlowInEasing))
         }
@@ -180,7 +179,6 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                 -1f,
                 tween(if (force) 1 else 300, easing = FastOutSlowInEasing)
             )
-            isLandingVisible = false
             then?.invoke()
         }
     }
@@ -231,23 +229,21 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
             }
         }
 
-        if (isLandingVisible) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        translationX = landingOffsetX.value * size.width
-                    }
-            ) {
-                LandingPage(
-                    showCloseButton = hasLoadedApp,
-                    onClose = { closeLanding() },
-                    onTabSelected = { menuItem ->
-                        pendingOverlayItem = menuItem
-                    },
-                    state = landingListState
-                )
-            }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    translationX = landingOffsetX.value * size.width
+                }
+        ) {
+            LandingPage(
+                showCloseButton = hasLoadedApp,
+                onClose = { closeLanding() },
+                onTabSelected = { menuItem ->
+                    pendingOverlayItem = menuItem
+                },
+                state = landingListState
+            )
         }
 
         if (pendingOverlayItem != null) {
@@ -300,6 +296,8 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
 
                 delay(80)
                 overlayAlpha.animateTo(0f, tween(durationMillis = 200))
+                previewBitmap = null
+                closingBitmap = null
                 overlayScale.snapTo(0f)
                 pendingOverlayItem = null
             }
@@ -418,8 +416,7 @@ fun LandingPage(
     state: LazyListState = rememberLazyListState()
 ) {
     val context = LocalContext.current
-    var recentTabs by remember { mutableStateOf<List<MenuItem>>(emptyList()) }
-    recentTabs = loadRecentTabs(context)
+    var recentTabs by remember { mutableStateOf(loadRecentTabs(context)) }
     val allTabsSorted = remember { MenuItem.entries.sortedBy { it.title } }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     val neonOrange = Color(0xFF001FBB)
