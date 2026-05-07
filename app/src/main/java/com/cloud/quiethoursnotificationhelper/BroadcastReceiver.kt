@@ -95,6 +95,9 @@ val notificationDismissReceiver = object : BroadcastReceiver() {
                         }
                     context.startForegroundService(serviceIntent)
                 }, 100)
+            } else if (notificationId == com.cloud.core.objects.Config.GAL) {
+                QuietHoursNotificationService.galleryImages = emptyList()
+                QuietHoursNotificationService.currentGalleryIndex = 0
             }
         }
     }
