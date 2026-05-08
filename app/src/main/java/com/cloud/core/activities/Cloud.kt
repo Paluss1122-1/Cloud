@@ -8,14 +8,18 @@ import com.cloud.quicksettingsfunctions.BatteryDataRepository
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.time.Instant
-import android.os.Process
 
 class Cloud : Application() {
 
     companion object {
         lateinit var coroutineExceptionHandler: CoroutineExceptionHandler
+        val appScope = CoroutineScope(
+            SupervisorJob() + Dispatchers.Main + coroutineExceptionHandler
+        )
     }
 
     override fun onCreate() {
@@ -23,19 +27,19 @@ class Cloud : Application() {
 
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            CoroutineScope(Dispatchers.IO).launch {
-                errorInsert(
-                    ERRORINSERTDATA(
-                        "UncaughtException: ${thread.name}",
-                        throwable.stackTraceToString().take(8000),
-                        Instant.now().toString(),
-                        "ERROR"
+            runBlocking {
+                try {
+                    errorInsert(
+                        ERRORINSERTDATA(
+                            "UncaughtException: ${thread.name}",
+                            throwable.stackTraceToString().take(8000),
+                            Instant.now().toString(),
+                            "ERROR"
+                        )
                     )
-                )
+                } catch (_: Exception) {}
             }
-            Thread.sleep(2000)
             defaultHandler?.uncaughtException(thread, throwable)
-            Process.killProcess(Process.myPid())
         }
 
         coroutineExceptionHandler = CoroutineExceptionHandler { context, throwable ->
