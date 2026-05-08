@@ -62,12 +62,9 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
-import com.cloud.core.functions.errorInsert
-import com.cloud.core.functions.ERRORINSERTDATA
-import kotlinx.coroutines.CoroutineScope
+import com.cloud.core.objects.reportError
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import kotlin.math.abs
@@ -124,7 +121,10 @@ fun GalleryTab() {
     val gridState = rememberLazyGridState()
 
     SharedTransitionLayout {
-        AnimatedContent(targetState = showFullscreenMedia, label = "gallery_transition") { isFullscreen ->
+        AnimatedContent(
+            targetState = showFullscreenMedia,
+            label = "gallery_transition"
+        ) { isFullscreen ->
             if (!isFullscreen) {
                 Box(
                     modifier = Modifier
@@ -132,7 +132,11 @@ fun GalleryTab() {
                         .background(Color.Transparent)
                 ) {
                     if (mediaItems.value.isEmpty()) {
-                        Text("Keine Medien gefunden", color = Color.White, modifier = Modifier.align(Alignment.Center))
+                        Text(
+                            "Keine Medien gefunden",
+                            color = Color.White,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
                     } else {
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(2),
@@ -163,12 +167,20 @@ fun GalleryTab() {
                                     )
 
                                     if (mediaItem.isVideo) {
-                                        val thumbnail by produceState(thumbnailCache[mediaItem.uri], mediaItem.uri) {
+                                        val thumbnail by produceState(
+                                            thumbnailCache[mediaItem.uri],
+                                            mediaItem.uri
+                                        ) {
                                             if (value == null) {
                                                 value = withContext(Dispatchers.IO) {
-                                                    val bmp = getVideoFirstFrame(mediaItem.uri, context)
+                                                    val bmp =
+                                                        getVideoFirstFrame(mediaItem.uri, context)
                                                     if (bmp != null) {
-                                                        saveThumbnailToCache(context, mediaItem.uri, bmp)
+                                                        saveThumbnailToCache(
+                                                            context,
+                                                            mediaItem.uri,
+                                                            bmp
+                                                        )
                                                         thumbnailCache[mediaItem.uri] = bmp
                                                     }
                                                     bmp
@@ -346,7 +358,9 @@ fun SharedTransitionScope.ImageFullscreen(
             visible = showButton,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp)
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(16.dp)
         ) {
             Button(
                 onClick = onDelete
@@ -424,14 +438,24 @@ fun loadImagesFromMediaStore(context: Context): List<GalleryMediaItem> {
             val dateColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
-                val uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
-                images.add(GalleryMediaItem(uri.toString(), isVideo = false, dateAdded = cursor.getLong(dateColumn)))
+                val uri =
+                    ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+                images.add(
+                    GalleryMediaItem(
+                        uri.toString(),
+                        isVideo = false,
+                        dateAdded = cursor.getLong(dateColumn)
+                    )
+                )
             }
         }
     } catch (e: Exception) {
-        CoroutineScope(Dispatchers.IO).launch {
-            errorInsert(ERRORINSERTDATA("GalleryTab", "Fehler bei Laden von Bildern: ${e.message}", Instant.now().toString(), "ERROR"))
-        }
+        reportError(
+            "GalleryTab",
+            "Fehler bei Laden von Bildern: ${e.message}",
+            Instant.now().toString(),
+            "ERROR"
+        )
     }
     return images
 }
@@ -452,14 +476,24 @@ fun loadVideosFromMediaStore(context: Context): List<GalleryMediaItem> {
             val dateColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
-                val uri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
-                videos.add(GalleryMediaItem(uri.toString(), isVideo = true, dateAdded = cursor.getLong(dateColumn)))
+                val uri =
+                    ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
+                videos.add(
+                    GalleryMediaItem(
+                        uri.toString(),
+                        isVideo = true,
+                        dateAdded = cursor.getLong(dateColumn)
+                    )
+                )
             }
         }
     } catch (e: Exception) {
-        CoroutineScope(Dispatchers.IO).launch {
-            errorInsert(ERRORINSERTDATA("GalleryTab", "Fehler bei Laden von Videos: ${e.message}", Instant.now().toString(), "ERROR"))
-        }
+        reportError(
+            "GalleryTab",
+            "Fehler bei Laden von Videos: ${e.message}",
+            Instant.now().toString(),
+            "ERROR"
+        )
     }
     return videos
 }
