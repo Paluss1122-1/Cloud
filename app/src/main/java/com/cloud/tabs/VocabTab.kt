@@ -39,6 +39,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.AlertDialog
@@ -1142,8 +1143,8 @@ fun LearnScreen(
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Icon(
-                    Icons.Default.MoreVert,
-                    "Back to Review Screen",
+                    Icons.Default.Edit,
+                    "Navigate to Review Screen",
                     tint = AccentViolet
                 )
             }
