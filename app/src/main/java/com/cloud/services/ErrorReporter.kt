@@ -14,10 +14,9 @@ import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
-import com.cloud.core.objects.Config.cms
-import com.cloud.core.functions.errorInsert
-import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.core.objects.Config
+import com.cloud.core.objects.Config.cms
+import com.cloud.core.objects.reportError
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
@@ -80,16 +79,12 @@ class ErrorNotificationManager(private val context: Context) {
             NotificationManagerCompat.from(context)
                 .notify(cms(), notification)
         } catch (e: Exception) {
-            CoroutineScope(Dispatchers.IO).launch {
-                errorInsert(
-                    ERRORINSERTDATA(
-                        "NotificationManager",
-                        "❌ Fehler bei Anzeigen von Error Notification: ${e.message}",
-                        Instant.now().toString(),
-                        "ERROR"
-                    )
-                )
-            }
+            reportError(
+                "NotificationManager",
+                "❌ Fehler bei Anzeigen von Error Notification: ${e.message}",
+                Instant.now().toString(),
+                "ERROR"
+            )
         }
     }
 }
@@ -110,16 +105,12 @@ class ErrorMonitorService : Service() {
             notificationManager = ErrorNotificationManager(this)
             createServiceNotificationChannel()
         } catch (e: Exception) {
-            CoroutineScope(Dispatchers.IO).launch {
-                errorInsert(
-                    ERRORINSERTDATA(
-                        "ErrorMonitorService",
-                        "Fehler in onCreate(): ${e.message}",
-                        Instant.now().toString(),
-                        "Error"
-                    )
-                )
-            }
+            reportError(
+                "ErrorMonitorService",
+                "Fehler in onCreate(): ${e.message}",
+                Instant.now().toString(),
+                "Error"
+            )
         }
     }
 
@@ -130,16 +121,12 @@ class ErrorMonitorService : Service() {
             startRealtimeListener()
             return START_STICKY
         } catch (e: Exception) {
-            CoroutineScope(Dispatchers.IO).launch {
-                errorInsert(
-                    ERRORINSERTDATA(
-                        "ErrorMonitorService",
-                        "Fehler in onStartCommand(): ${e.message}",
-                        Instant.now().toString(),
-                        "Error"
-                    )
-                )
-            }
+            reportError(
+                "ErrorMonitorService",
+                "Fehler in onStartCommand(): ${e.message}",
+                Instant.now().toString(),
+                "Error"
+            )
             return START_NOT_STICKY
         }
     }
@@ -188,16 +175,12 @@ class ErrorMonitorService : Service() {
 
                 channel.subscribe()
             } catch (e: Exception) {
-                CoroutineScope(Dispatchers.IO).launch {
-                    errorInsert(
-                        ERRORINSERTDATA(
-                            "ErrorMonitorService",
-                            "❌ Realtime Fehler: ${e.message}",
-                            Instant.now().toString(),
-                            "Error"
-                        )
-                    )
-                }
+                reportError(
+                    "ErrorMonitorService",
+                    "❌ Realtime Fehler: ${e.message}",
+                    Instant.now().toString(),
+                    "Error"
+                )
             }
         }
     }
@@ -219,16 +202,12 @@ class ErrorMonitorService : Service() {
                 notificationManager.showErrorNotification(errorReport)
             }
         } catch (e: Exception) {
-            CoroutineScope(Dispatchers.IO).launch {
-                errorInsert(
-                    ERRORINSERTDATA(
-                        "ErrorMonitorService",
-                        "Fehler beim Verarbeiten des Errors: ${e.message}",
-                        Instant.now().toString(),
-                        "Error"
-                    )
-                )
-            }
+            reportError(
+                "ErrorMonitorService",
+                "Fehler beim Verarbeiten des Errors: ${e.message}",
+                Instant.now().toString(),
+                "Error"
+            )
         }
     }
 
