@@ -63,6 +63,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.cloud.core.activities.Cloud.Companion.coroutineExceptionHandler
 import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.showSimpleNotificationExtern
@@ -73,6 +74,7 @@ import com.cloud.core.objects.Config.TODOS
 import com.cloud.core.objects.Config.UPDATE_PORT
 import com.cloud.core.ui.Cloud
 import com.cloud.services.MediaPlayerService
+import com.cloud.services.MediaPlayerService.Companion.ACTION_TOGGLE_REPEAT
 import com.cloud.services.OverlayLifecycleOwner
 import com.cloud.services.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.cloud.services.WhatsAppNotificationListener
@@ -127,6 +129,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.pow
@@ -150,8 +153,12 @@ var isLaptopConnected: Boolean
         isLaptopConnectedFlow.value = value
     }
 
-private val syncScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-private val mediaScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+private val syncScope = CoroutineScope(
+    Dispatchers.IO + SupervisorJob() + coroutineExceptionHandler
+)
+private val mediaScope = CoroutineScope(
+    Dispatchers.IO + SupervisorJob() + coroutineExceptionHandler
+)
 
 private var listenerJob: Job? = null
 private var updateServerSocket: ServerSocket? = null
@@ -186,8 +193,7 @@ private var pendingSyncJob: Job? = null
 private var lastTriggerTime = 0L
 private const val MIN_TRIGGER_INTERVAL = 15_000L
 
-@Volatile
-private var syncInProgress = false
+private val syncInProgress = AtomicBoolean(false)
 
 private fun PowerManager.WakeLock?.safeRelease() {
     if (this != null && isHeld) release()
@@ -502,16 +508,8 @@ private object ConnectionGuard {
     }
 }
 
-private const val KEY_LAPTOP_IP = "laptop_ip"
-
-var laptopIp: String
-    get() = appContext?.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)
-        ?.getString(KEY_LAPTOP_IP, "") ?: ""
-    set(value) {
-        appContext?.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)?.edit {
-            putString(KEY_LAPTOP_IP, value)
-        }
-    }
+@Volatile
+var laptopIp: String = ""
 
 data class TodoItem(
     val id: Long,
@@ -529,11 +527,12 @@ data class AiResponseEntry(
 fun startTriggerListenerIfHomeWifi(context: Context) {
     checkIfNearLocation(context) { atHome ->
         ConnectionGuard.updateLocationStatus(atHome)
-        syncScope.launch {
-            laptopIp = fetchLaptopIpFromSupabase() ?: ""
-        }
         startTriggerListener(context)
         registerWifiReconnectReceiver(context)
+        syncScope.launch {
+            val ip = fetchLaptopIpFromSupabase()
+            if (!ip.isNullOrEmpty()) laptopIp = ip
+        }
     }
 }
 
@@ -585,7 +584,7 @@ fun registerWifiReconnectReceiver(context: Context) {
 
         override fun onLost(network: Network) {
             ConnectionGuard.updateWifiStatus(false)
-            syncInProgress = false
+            syncInProgress.set(false)
             pendingSyncJob?.cancel()
             stopAllSyncServices(context)
         }
@@ -622,88 +621,35 @@ fun registerWifiReconnectReceiver(context: Context) {
 @SuppressLint("Wakelock", "WakelockTimeout")
 fun startTriggerListener(context: Context) {
     appContext = context.applicationContext
-
     triggerJob?.cancel()
-    triggerServerSocket?.close()
-    triggerServerSocket = null
 
-    triggerJob = syncScope.launch(Dispatchers.IO) {
-        while (isActive) {
-            try {
-                triggerServerSocket = ServerSocket().apply {
-                    reuseAddress = true
-                    bind(InetSocketAddress(Config.TRIGGER_PORT))
-                }
+    triggerJob = launchServer(syncScope, Config.TRIGGER_PORT, "startTriggerListener") { client ->
+        val pm = context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+        val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:AcceptWakeLock")
+        wl.acquire(30_000L)
 
-                while (isActive) {
-                    try {
-                        val client = triggerServerSocket?.accept() ?: break
-                        val pm =
-                            context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
-                        val wl = pm.newWakeLock(
-                            PowerManager.PARTIAL_WAKE_LOCK,
-                            "TodoSync:AcceptWakeLock"
-                        )
-                        wl.acquire(30_000L)
+        try {
+            val command = BufferedReader(InputStreamReader(client.getInputStream())).readLine()
+            client.close()
 
-                        try {
-                            val reader = BufferedReader(InputStreamReader(client.getInputStream()))
-                            val command = reader.readLine()
-                            client.close()
+            when {
+                command.startsWith("CONNECT") -> {
+                    laptopIp = command.substringAfter("CONNECT:", "")
+                    ConnectionGuard.recordSuccess()
+                    showSimpleNotificationExtern("📡 CONNECT", "Starte Sync...", 10.seconds, context)
 
-                            when {
-                                command.startsWith("CONNECT") -> {
-                                    laptopIp = command.substringAfter("CONNECT:", "")
-                                    ConnectionGuard.recordSuccess()
-
-                                    showSimpleNotificationExtern(
-                                        "📡 CONNECT empfangen",
-                                        "Starte Sync...",
-                                        10.seconds,
-                                        context
-                                    )
-
-                                    val syncWl = pm.newWakeLock(
-                                        PowerManager.PARTIAL_WAKE_LOCK,
-                                        "TodoSync:SyncWakeLock"
-                                    )
-                                    syncWl.acquire(60_000L)
-
-                                    syncScope.launch {
-                                        try {
-                                            syncTodosWithLaptop(context)
-                                        } finally {
-                                            syncWl.release()
-                                        }
-                                    }
-                                }
-
-                                command == "REQUEST_SESSIONS" -> {
-                                    syncScope.launch { sendSessionDataToLaptop(context) }
-                                }
-
-                                command == "DISCONNECT" -> {
-                                    stopAllSyncServices(context)
-                                }
-                            }
-                        } finally {
-                            wl.safeRelease()
-                        }
-                    } catch (_: SocketException) {
-                        break
-                    } catch (_: Exception) {
+                    val syncWl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:SyncWakeLock")
+                    syncWl.acquire(60_000L)
+                    syncScope.launch {
+                        try { syncTodosWithLaptop(context, true) }
+                        finally { syncWl.safeRelease() }
                     }
                 }
-            } catch (e: Exception) {
-                if (e !is SocketException) {
-                    logError("startTriggerListener", e)
-                }
-            } finally {
-                triggerServerSocket?.close()
-                triggerServerSocket = null
+                command == "REQUEST_SESSIONS" -> syncScope.launch { sendSessionDataToLaptop(context) }
+                command == "DISCONNECT" -> stopAllSyncServices(context)
             }
-
-            if (isActive) delay(1000)
+        } finally {
+            wl.safeRelease()
         }
     }
 }
@@ -768,45 +714,47 @@ fun stopAllSyncServices(context: Context) {
     )
 }
 
-fun syncTodosWithLaptop(context: Context) {
-    if (syncInProgress || !Config.realDevice) return
-    syncInProgress = true
+fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
+    if (syncInProgress.getAndSet(true) || !Config.realDevice) {
+        showSimpleNotificationExtern(
+            "syncTodosWithLaptop RETURN",
+            "syncInProgress: ${syncInProgress.get()}, realDevice: ${Config.realDevice}",
+            10.seconds, context
+        )
+        if (!Config.realDevice) syncInProgress.set(false)
+        return
+    }
 
     syncScope.launch {
         try {
-            val connectivityManager =
-                context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-            val network = connectivityManager.activeNetwork ?: return@launch
-            val linkProperties = connectivityManager.getLinkProperties(network) ?: return@launch
+            val localip = getHotspotIp()
+            if (localip != null) insertMobileIpToSupabase(localip)
 
-            val localip = linkProperties.linkAddresses
-                .map { it.address.hostAddress }
-                .firstOrNull { ip ->
-                    ip != null && (ip.startsWith("192.") || ip.startsWith("10."))
+            if (!connected) {
+                val fetched = withTimeoutOrNull(35_000L) {
+                    fetchLaptopIpFromSupabase()
                 }
-            if (localip != null) {
-                insertMobileIpToSupabase(localip)
+                if (fetched.isNullOrEmpty()) {
+                    showSimpleNotificationExtern(
+                        "❌ Keine IP gefunden", "Supabase lieferte keine IP", 10.seconds, context
+                    )
+                    return@launch
+                }
+                laptopIp = fetched
+                showSimpleNotificationExtern("Fetched laptopIp", fetched, 10.seconds, context)
             }
 
-            laptopIp = withTimeoutOrNull(5000L) {
-                fetchLaptopIpFromSupabase()
-            } ?: ""
-
-            if (laptopIp.isEmpty()) {
-                withContext(Dispatchers.Main) {
-                    showSimpleNotificationExtern(
-                        "❌ Keine IP gefunden",
-                        "Supabase lieferte keine IP",
-                        10.seconds,
-                        context
-                    )
-                }
+            val currentIp = laptopIp
+            if (currentIp.isEmpty()) {
+                showSimpleNotificationExtern(
+                    "❌ Keine IP gefunden", "Supabase lieferte keine IP", 10.seconds, context
+                )
                 return@launch
             }
 
             val todos = getTodos(context)
             val socket = Socket()
-            socket.connect(InetSocketAddress(Inet4Address.getByName(laptopIp), SYNC_PORT), 3000)
+            socket.connect(InetSocketAddress(Inet4Address.getByName(currentIp), SYNC_PORT), 3000)
             socket.soTimeout = 8000
 
             val writer = PrintWriter(socket.getOutputStream(), true)
@@ -822,52 +770,44 @@ fun syncTodosWithLaptop(context: Context) {
                 "OK" -> {
                     ConnectionGuard.recordSuccess()
                     isLaptopConnected = true
-
                     startMediaCommandListener(context)
                     startExecuteListener(context)
                     startMediaStateServer(context)
                     startClipboardListener(context)
-
                     if (listenerJob == null || listenerJob?.isActive == false) {
                         startUpdateListener(context, 60)
                     }
-
                     withContext(Dispatchers.Main) {
                         WhatsAppNotificationListener.forwardNotificationsToLaptop1()
                         showSimpleNotificationExtern(
-                            "✅ Sync erfolgreich",
-                            "${todos.size} To-dos übertragen",
+                            "✅ Sync erfolgreich", "${todos.size} To-dos übertragen",
                             10.seconds, context, silent = false
                         )
                     }
-
                     pushMediaStateToLaptop(context)
                 }
-
                 "EMPTY" -> throw IOException("Server erhielt leere Daten")
                 "TIMEOUT" -> throw IOException("Server-Timeout beim Lesen")
                 "ERROR" -> throw IOException("Server konnte Daten nicht verarbeiten")
                 else -> throw IOException("Unbekannte Antwort: $response")
             }
-        } catch (_: ConnectException) {
+        } catch (e: ConnectException) {
             ConnectionGuard.recordFailure()
-        } catch (_: SocketTimeoutException) {
+            showSimpleNotificationExtern("Error", "${e.message}", 10.seconds, context)
+        } catch (e: SocketTimeoutException) {
             ConnectionGuard.recordFailure()
+            showSimpleNotificationExtern("Error", "${e.message}", 10.seconds, context)
         } catch (e: Exception) {
             val msg = e.message
             if (msg == null || !msg.contains("Connection reset")) {
                 ConnectionGuard.recordFailure()
                 logError("syncTodosWithLaptop", e)
                 withContext(Dispatchers.Main) {
-                    showSimpleNotificationExtern(
-                        "❌ Sync Fehler",
-                        msg ?: "Unbekannter Fehler",
-                        10.seconds, context
-                    )
+                    showSimpleNotificationExtern("❌ Sync Fehler", msg ?: "Unbekannter Fehler", 10.seconds, context)
                 }
             }
         } finally {
-            syncInProgress = false
+            syncInProgress.set(false)
         }
     }
 }
@@ -1533,7 +1473,7 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
         "pause" -> sendIntent("com.cloud.ACTION_MUSIC_PAUSE")
         "next" -> sendIntent("com.cloud.ACTION_MUSIC_NEXT")
         "previous" -> sendIntent("com.cloud.ACTION_MUSIC_PREVIOUS")
-        "toggleRepeat" -> sendIntent("com.cloud.ACTION_TOGGLE_REPEAT")
+        "toggleRepeat" -> sendIntent(ACTION_TOGGLE_REPEAT)
         "toggleFavorite" -> sendIntent("com.cloud.ACTION_TOGGLE_FAVORITE")
 
         "activatePlaylist" -> {
@@ -2295,41 +2235,40 @@ fun sendAiExecuteCommand(context: Context, userInput: String) {
 }
 
 private suspend fun fetchLaptopIpFromSupabase(): String? = withContext(Dispatchers.IO) {
-    var connection: HttpURLConnection? = null
-    try {
-        val url = "${Config.SUPABASE_URL}/rest/v1/device_ips" +
-                "?device_id=eq.laptop&select=ip_address"
+    repeat(3) { attempt ->
+        var connection: HttpURLConnection? = null
+        try {
+            val url = "${Config.SUPABASE_URL}/rest/v1/device_ips" +
+                    "?device_id=eq.laptop&select=ip_address"
 
-        connection = URL(url).openConnection() as HttpURLConnection
-        connection.requestMethod = "GET"
-        connection.useCaches = false  // ← wichtig
-        connection.setRequestProperty("Cache-Control", "no-cache, no-store")
-        connection.setRequestProperty("Pragma", "no-cache")
-        connection.setRequestProperty("apikey", Config.SUPABASE_PUBLISHABLE_KEY)
-        connection.setRequestProperty(
-            "Authorization",
-            "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}"
-        )
-        Log.d("CLOUDSA", "NG: ${connection.responseCode}")
+            connection = URL(url).openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 5_000
+            connection.readTimeout = 5_000
+            connection.useCaches = false
+            connection.setRequestProperty("Cache-Control", "no-cache, no-store")
+            connection.setRequestProperty("Pragma", "no-cache")
+            connection.setRequestProperty("apikey", Config.SUPABASE_PUBLISHABLE_KEY)
+            connection.setRequestProperty("Authorization", "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}")
 
-        if (connection.responseCode == 200) {
-            val response = connection.inputStream.bufferedReader().readText()
-            val jsonArray = JSONArray(response)
+            val code = connection.responseCode
 
-            return@withContext if (jsonArray.length() > 0) {
-                jsonArray.getJSONObject(0).optString("ip_address", "")
-            } else {
-                null
+            if (code == 200) {
+                val jsonArray = JSONArray(connection.inputStream.bufferedReader().readText())
+                if (jsonArray.length() > 0) {
+                    val ip = jsonArray.getJSONObject(0).optString("ip_address", "")
+                    if (ip.isNotEmpty()) return@withContext ip
+                }
             }
+        } catch (e: Exception) {
+            if (attempt == 2) logError("SupabaseFetch", e)
+        } finally {
+            connection?.disconnect()
         }
-        null
-    } catch (e: Exception) {
-        Log.e("CLOUDSA", "Error fetching laptop IP: ${e.message}", e)
-        logError("SupabaseFetch", e)
-        null
-    } finally {
-        connection?.disconnect()
+
+        if (attempt < 2) delay(1000L * (attempt + 1))
     }
+    null
 }
 
 private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
@@ -2369,7 +2308,7 @@ private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
             } else {
                 val errorBody = if (connection.responseCode >= 400) {
                     connection.errorStream?.bufferedReader()?.use { it.readText() }
-                        ?: "No error body"
+                        ?: ""
                 } else ""
 
                 Log.e(
@@ -2386,3 +2325,23 @@ private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
             connection?.disconnect()
         }
     }
+
+fun getHotspotIp(): String? {
+    val interfaces = NetworkInterface.getNetworkInterfaces()
+
+    for (intf in interfaces) {
+        if (!intf.isUp || intf.isLoopback) continue
+
+        for (addr in intf.inetAddresses) {
+            if (!addr.isLoopbackAddress && addr is Inet4Address) {
+                val ip = addr.hostAddress
+                if (ip != null) {
+                    if (ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("172.16.")) {
+                        return ip
+                    }
+                }
+            }
+        }
+    }
+    return null
+}
