@@ -55,7 +55,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import kotlinx.coroutines.CoroutineScope
+import com.cloud.core.activities.Cloud.Companion.appScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -87,7 +87,7 @@ object BatteryDataRepository {
 
     fun init(ctx: Context) {
         context = ctx.applicationContext
-        CoroutineScope(Dispatchers.IO).launch { _samples.value = loadSamples() }
+        appScope.launch { _samples.value = loadSamples() }
     }
 
     fun addSample(sample: BatterySample) {
@@ -107,7 +107,7 @@ object BatteryDataRepository {
         }.getOrElse { emptyList() }
     }
 
-    private fun saveSamples(samples: List<BatterySample>) = CoroutineScope(Dispatchers.IO).launch {
+    private fun saveSamples(samples: List<BatterySample>) = appScope.launch {
         runCatching {
             context.getSharedPreferences("battery_data", Context.MODE_PRIVATE)
                 .edit { putString("samples", json.encodeToString(samples)) }
