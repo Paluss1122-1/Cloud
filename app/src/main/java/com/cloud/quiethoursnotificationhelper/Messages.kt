@@ -14,10 +14,10 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
-import com.cloud.core.objects.Config.cms
-import com.cloud.core.functions.errorInsert
-import com.cloud.core.functions.ERRORINSERTDATA
+import com.cloud.core.activities.Cloud.Companion.appScope
 import com.cloud.core.functions.showSimpleNotificationExtern
+import com.cloud.core.objects.Config.cms
+import com.cloud.core.objects.reportError
 import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_MARK_PARTS_READ
 import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_MESSAGE_SENT
 import com.cloud.services.QuietHoursNotificationService.Companion.EXTRA_MESSAGE_ID
@@ -25,9 +25,7 @@ import com.cloud.services.QuietHoursNotificationService.Companion.EXTRA_SENDER
 import com.cloud.services.QuietHoursNotificationService.Companion.MAX_MESSAGES_PER_CONTACT
 import com.cloud.services.QuietHoursNotificationService.Companion.isSupportedMessenger
 import com.cloud.services.QuietHoursNotificationService.Companion.readMessageIds
-import com.cloud.services.QuietHoursNotificationService.Companion.workerHandler
 import com.cloud.services.WhatsAppNotificationListener
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -239,7 +237,7 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
                 list.subList(0, list.size - MAX_MESSAGES_PER_CONTACT).clear()
             updateChatNotification(key, context)
 
-            CoroutineScope(Dispatchers.IO).launch {
+            appScope.launch {
                 val snapshot = list.toList()
                 val answer = sendNvidiaChatMessage(snapshot, trimmed)
                 if (!answer.isNullOrBlank()) {
@@ -269,15 +267,28 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
         val replyData = WhatsAppNotificationListener.replyActions[key]
 
         if (replyData == null) {
-            Log.e("Messages", "replyData ist null für key='$key'. replyActions-Keys: ${WhatsAppNotificationListener.replyActions.keys}")
-            showSimpleNotificationExtern("⚠️ Kein replyData", "Kein Eintrag in replyActions für: $key", context = context, silent = false)
+            Log.e(
+                "Messages",
+                "replyData ist null für key='$key'. replyActions-Keys: ${WhatsAppNotificationListener.replyActions.keys}"
+            )
+            showSimpleNotificationExtern(
+                "⚠️ Kein replyData",
+                "Kein Eintrag in replyActions für: $key",
+                context = context,
+                silent = false
+            )
             return
         }
 
         val creatorPackage = replyData.pendingIntent.creatorPackage
         if (creatorPackage == null) {
             Log.e("Messages", "creatorPackage ist null für key='$key'")
-            showSimpleNotificationExtern("⚠️ Kein Package", "PendingIntent hat kein creatorPackage", context = context, silent = false)
+            showSimpleNotificationExtern(
+                "⚠️ Kein Package",
+                "PendingIntent hat kein creatorPackage",
+                context = context,
+                silent = false
+            )
             return
         }
 
@@ -340,21 +351,18 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
 
 fun markMessageAsRead(messageId: String, readMessageIds: MutableSet<String>, context: Context) {
     try {
-        readMessageIds.add(messageId)
-        // Begrenze die Größe von readMessageIds, um Memory-Leaks zu vermeiden
         if (readMessageIds.size > 200) {
             val toRemove = readMessageIds.take(100)
             readMessageIds.removeAll(toRemove.toSet())
         }
+        readMessageIds.add(messageId)
         val key = messageId.substringBeforeLast("_")
         val notifId = key.hashCode() and 0x0FFFFFFF
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         for (i in 0 until 100) nm.cancel(notifId + i)
         nm.cancel(notifId + 1000000)
     } catch (e: Exception) {
-        CoroutineScope(Dispatchers.IO).launch {
-            errorInsert(ERRORINSERTDATA("markMessageAsRead", "ERROR: ${e.message}", Instant.now().toString(), "ERROR"))
-        }
+        reportError("markMessageAsRead", "ERROR: ${e.message}", Instant.now().toString(), "ERROR")
     }
 }
 
