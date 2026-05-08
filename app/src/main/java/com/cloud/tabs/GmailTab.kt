@@ -1,5 +1,6 @@
 package com.cloud.tabs
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -48,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.cloud.core.objects.Config.MAIL_NOTIFY_PORT
 import com.cloud.quiethoursnotificationhelper.laptopIp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -55,6 +57,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import androidx.core.content.edit
 
 // ─── Datenmodell ────────────────────────────────────────────────────────────
 
@@ -69,141 +72,121 @@ data class EmailItem(
     val hasSummary: Boolean,
 )
 
-data class EmailsResponse(
-    val emails: List<EmailItem>,
-    val cached: Boolean,
-    val cacheAgeSeconds: Int,
-    val nextRefreshIn: Int,
-    val count: Int,
-    val error: String?,
-)
-
-// ─── Server-Kommunikation ────────────────────────────────────────────────────
-
-private suspend fun fetchEmailsFromServer(
-    serverIp: String,
-    forceReload: Boolean = false
-): EmailsResponse = withContext(Dispatchers.IO) {
-    val port = 8886 // API_SERVER port
-    val urlStr = "http://$serverIp:$port/emails"
-
-    try {
-        val url = URL(urlStr)
-        val conn = if (forceReload) {
-            // POST für forced reload
-            val postUrl = URL("http://$serverIp:$port/emails/reload")
-            (postUrl.openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                connectTimeout = 8000
-                readTimeout = 120_000  // AI-Zusammenfassungen können dauern
-                setRequestProperty("Content-Type", "application/json")
-                doOutput = true
-            }
-        } else {
-            (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = 8000
-                readTimeout = 30_000
-            }
-        }
-
-        val responseCode = conn.responseCode
-        if (responseCode != 200) {
-            return@withContext EmailsResponse(emptyList(), false, 0, 0, 0, "HTTP $responseCode")
-        }
-
-        val raw = conn.inputStream.bufferedReader().readText()
-        conn.disconnect()
-
-        val json = JSONObject(raw)
-        val emailsArr = json.optJSONArray("emails") ?: run {
-            return@withContext EmailsResponse(
-                emptyList(),
-                false,
-                0,
-                0,
-                0,
-                "Keine Emails im Response"
-            )
-        }
-
-        val emails = (0 until emailsArr.length()).map { i ->
-            val obj = emailsArr.getJSONObject(i)
-            EmailItem(
-                id = obj.optString("id", i.toString()),
-                subject = obj.optString("subject", "(Kein Betreff)"),
-                from = obj.optString("from", "Unbekannt"),
-                date = obj.optString("date", ""),
-                timestamp = obj.optLong("timestamp", 0L),
-                body = obj.optString("body", ""),
-                summary = obj.optString("summary", "").takeIf { it.isNotBlank() },
-                hasSummary = obj.optBoolean("has_summary", false),
-            )
-        }
-
-        EmailsResponse(
-            emails = emails,
-            cached = json.optBoolean("cached", false),
-            cacheAgeSeconds = json.optInt("cache_age_seconds", 0),
-            nextRefreshIn = json.optInt("next_refresh_in", 0),
-            count = json.optInt("count", emails.size),
-            error = json.optString("error", "").takeIf { it.isNotBlank() }
-        )
-    } catch (e: Exception) {
-        EmailsResponse(emptyList(), false, 0, 0, 0, "Verbindungsfehler: ${e.message}")
-    }
-}
-
 private fun loadServerIp(): String = laptopIp
 
 private fun saveServerIp(ip: String) {
     laptopIp = ip
 }
 
-// ─── Haupt-Composable ────────────────────────────────────────────────────────
+private fun loadLocalSummaryCache(context: android.content.Context): MutableMap<String, String> {
+    val prefs = context.getSharedPreferences("email_summary_cache", android.content.Context.MODE_PRIVATE)
+    return prefs.all.mapNotNull { (k, v) -> (v as? String)?.let { k to it } }.toMap().toMutableMap()
+}
+
+private fun saveLocalSummary(context: android.content.Context, id: String, summary: String) {
+    context.getSharedPreferences("email_summary_cache", android.content.Context.MODE_PRIVATE)
+        .edit { putString(id, summary) }
+}
+
+private suspend fun fetchEmailsStreaming(
+    serverIp: String,
+    onEmailReceived: suspend (EmailItem) -> Unit,
+    onSummaryUpdate: suspend (id: String, summary: String) -> Unit = { _, _ -> }
+): String? = withContext(Dispatchers.IO) {
+    try {
+        val conn = (URL("http://$serverIp:$MAIL_NOTIFY_PORT/emails/stream")
+            .openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 8_000
+            readTimeout = 0
+        }
+        if (conn.responseCode != 200) return@withContext "HTTP ${conn.responseCode}"
+
+        conn.inputStream.bufferedReader().use { reader ->
+            var line: String?
+            while (reader.readLine().also { line = it } != null) {
+                val l = line?.takeIf { it.isNotBlank() } ?: continue
+                try {
+                    val obj = JSONObject(l)
+                    if (obj.optString("type") == "summary_update") {
+                        onSummaryUpdate(obj.getString("id"), obj.getString("summary"))
+                    } else {
+                        onEmailReceived(EmailItem(
+                            id = obj.optString("id"),
+                            subject = obj.optString("subject", "(Kein Betreff)"),
+                            from = obj.optString("from", "Unbekannt"),
+                            date = obj.optString("date", ""),
+                            timestamp = obj.optLong("timestamp", 0L),
+                            body = obj.optString("body", ""),
+                            summary = obj.optString("summary", "").takeIf { it.isNotBlank() },
+                            hasSummary = obj.optBoolean("has_summary", false),
+                        ))
+                    }
+                } catch (e: Exception) {
+                    Log.e("CLOUDSA", "Stream parse error: $e")
+                }
+            }
+        }
+        conn.disconnect()
+        null
+    } catch (e: Exception) {
+        "Verbindungsfehler: ${e.message}"
+    }
+}
 
 @Composable
 fun GmailTabContent() {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
 
+    val localSummaryCache = remember { loadLocalSummaryCache(context) }
     var serverIp by remember { mutableStateOf(loadServerIp()) }
     var emails by remember { mutableStateOf<List<EmailItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
-    var cacheInfo by remember { mutableStateOf<String?>(null) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var selectedEmail by remember { mutableStateOf<EmailItem?>(null) }
     var showIpDialog by remember { mutableStateOf(serverIp.isBlank()) }
 
-    fun loadEmails(force: Boolean = false) {
-        if (serverIp.isBlank()) {
-            showIpDialog = true; return
-        }
+    fun loadEmails() {
+        if (serverIp.isBlank()) { showIpDialog = true; return }
         scope.launch {
             isLoading = true
             errorMsg = null
-            val result = fetchEmailsFromServer(serverIp, force)
-            isLoading = false
-            if (result.error != null && result.emails.isEmpty()) {
-                errorMsg = result.error
-            } else {
-                emails = result.emails
-                cacheInfo = if (result.cached) {
-                    val mins = result.cacheAgeSeconds / 60
-                    "Gecacht (vor ${mins}min)"
-                } else {
-                    "Frisch geladen"
+            emails = emptyList()
+
+            val error = fetchEmailsStreaming(
+                serverIp,
+                onEmailReceived = { emailItem ->
+                    val enriched = when {
+                        emailItem.hasSummary && emailItem.summary != null -> {
+                            saveLocalSummary(context, emailItem.id, emailItem.summary)
+                            localSummaryCache[emailItem.id] = emailItem.summary
+                            emailItem
+                        }
+                        localSummaryCache.containsKey(emailItem.id) ->
+                            emailItem.copy(summary = localSummaryCache[emailItem.id], hasSummary = true)
+                        else -> emailItem
+                    }
+                    withContext(Dispatchers.Main) { emails = emails + enriched }
+                },
+                onSummaryUpdate = { id, summary ->
+                    saveLocalSummary(context, id, summary)
+                    localSummaryCache[id] = summary
+                    withContext(Dispatchers.Main) {
+                        emails = emails.map { if (it.id == id) it.copy(summary = summary, hasSummary = true) else it }
+                    }
                 }
-                if (result.error != null) errorMsg = result.error
-            }
+            )
+
+            isLoading = false
+            if (error != null && emails.isEmpty()) errorMsg = error
         }
     }
 
-    // Beim Start laden
     LaunchedEffect(serverIp) {
         if (serverIp.isNotBlank()) loadEmails()
     }
 
-    // IP-Dialog
     if (showIpDialog) {
         ServerIpDialog(
             current = serverIp,
@@ -217,58 +200,29 @@ fun GmailTabContent() {
         )
     }
 
-    Box(Modifier
-        .fillMaxSize()
-        .background(Color(0xFF111114))) {
-
+    Box(Modifier.fillMaxSize().background(Color(0xFF111114))) {
         when {
-            selectedEmail != null -> {
-                EmailDetailView(
-                    email = selectedEmail!!,
-                    onBack = { selectedEmail = null }
+            selectedEmail != null -> EmailDetailView(email = selectedEmail!!, onBack = { selectedEmail = null })
+            else -> Column(Modifier.fillMaxSize()) {
+                EmailTopBar(
+                    cacheInfo = if (isLoading) "Lädt... (${emails.size} bisher)" else "${emails.size} Emails",
+                    isLoading = isLoading,
+                    onReload = { loadEmails() },
+                    onSettings = { showIpDialog = true }
                 )
-            }
-
-            else -> {
-                Column(Modifier.fillMaxSize()) {
-
-                    // Top-Bar
-                    EmailTopBar(
-                        cacheInfo = cacheInfo,
-                        isLoading = isLoading,
-                        onReload = { loadEmails(force = true) },
-                        onSettings = { showIpDialog = true }
-                    )
-
-                    // Content
-                    when {
-                        isLoading && emails.isEmpty() -> {
-                            LoadingPlaceholder()
-                        }
-
-                        errorMsg != null && emails.isEmpty() -> {
-                            ErrorPlaceholder(errorMsg!!) { loadEmails() }
-                        }
-
-                        emails.isEmpty() -> {
-                            EmptyPlaceholder { loadEmails() }
-                        }
-
-                        else -> {
-                            if (isLoading) {
-                                LinearProgressIndicator(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(2.dp),
-                                    color = Color(0xFF4285F4),
-                                    trackColor = Color.Transparent
-                                )
-                            }
-                            EmailList(
-                                emails = emails,
-                                onClick = { selectedEmail = it }
+                when {
+                    isLoading && emails.isEmpty() -> LoadingPlaceholder()
+                    errorMsg != null && emails.isEmpty() -> ErrorPlaceholder(errorMsg!!) { loadEmails() }
+                    emails.isEmpty() -> EmptyPlaceholder { loadEmails() }
+                    else -> {
+                        if (isLoading) {
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth().height(2.dp),
+                                color = Color(0xFF4285F4),
+                                trackColor = Color.Transparent
                             )
                         }
+                        EmailList(emails = emails, onClick = { selectedEmail = it })
                     }
                 }
             }
