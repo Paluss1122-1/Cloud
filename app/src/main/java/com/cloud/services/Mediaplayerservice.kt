@@ -47,6 +47,7 @@ import androidx.media3.common.util.Size
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import com.cloud.core.activities.Cloud.Companion.appScope
 import com.cloud.core.activities.MainActivity
 import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.core.objects.Config.COMPLETED_PODCASTS
@@ -60,11 +61,10 @@ import com.cloud.tabs.FavoritesPlaylist
 import com.cloud.tabs.ListenSession
 import com.cloud.tabs.MediaAnalyticsManager
 import com.cloud.tabs.PodcastShowManager
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
 import java.net.URLDecoder
+import java.time.LocalTime.now
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
@@ -85,7 +85,7 @@ class MediaPlayerService : MediaSessionService() {
         private const val ACTION_MUSIC_PAUSE = "com.cloud.ACTION_MUSIC_PAUSE"
         private const val ACTION_MUSIC_NEXT = "com.cloud.ACTION_MUSIC_NEXT"
         private const val ACTION_MUSIC_PREVIOUS = "com.cloud.ACTION_MUSIC_PREVIOUS"
-        private const val ACTION_TOGGLE_REPEAT = "com.cloud.ACTION_TOGGLE_REPEAT"
+        const val ACTION_TOGGLE_REPEAT = "com.cloud.ACTION_TOGGLE_REPEAT"
         private const val ACTION_TOGGLE_FAVORITE = "com.cloud.ACTION_TOGGLE_FAVORITE"
         const val ACTION_TOGGLE_FAVORITES_MODE = "TOGGLE_FAVORITES_MODE"
 
@@ -455,6 +455,9 @@ class MediaPlayerService : MediaSessionService() {
     private val autoPauseDelayMs = 20 * 60 * 1000L
 
     private fun scheduleAutoPause() {
+        if (now().hour in 6..20) {
+            return
+        }
         autoPauseRunnable?.let { handler.removeCallbacks(it) }
         autoPauseRunnable = Runnable {
             if (isPlayingPodcast) pausePodcast()
@@ -777,7 +780,7 @@ class MediaPlayerService : MediaSessionService() {
 
             ACTION_PLAY_ALL_SONGS_AT_INDEX -> {
                 val path = intent.getStringExtra(EXTRA_SONG_PATH)
-                CoroutineScope(Dispatchers.IO).launch {
+                appScope.launch {
                     activeAlgorithmicPlaylistId = null
                     algorithmicPlaylistSongs = emptyList()
                     activePlaylistId = null
@@ -1287,8 +1290,10 @@ class MediaPlayerService : MediaSessionService() {
     private fun toggleFavorite(songPath: String? = null) {
         val active = getActivePlaylist()
         val path = songPath ?: active.getOrNull(currentSongIndex)?.path ?: return
-        val name = active.find { it.path == path }?.name ?: playlist.find { it.path == path }?.name
-        ?: "Unbekannt"
+        val name = active.find { it.path == path }?.name
+            ?: playlist.find { it.path == path }?.name ?: "Unbekannt"
+        val playingPath = active.getOrNull(currentSongIndex)?.path
+
         if (favoriteSongs.containsKey(path)) {
             favoriteSongs.remove(path)
             showSimpleNotificationExtern("💔 Favorit entfernt", name, 10.seconds, context = this)
@@ -1297,6 +1302,29 @@ class MediaPlayerService : MediaSessionService() {
             showSimpleNotificationExtern("⭐ Favorit hinzugefügt", name, 10.seconds, context = this)
         }
         saveFavorites()
+
+        if (favoritesMode && playingPath != null) {
+            val newActive = getActivePlaylist()
+            val newIdx = newActive.indexOfFirst { it.path == playingPath }
+
+            if (newIdx < 0) {
+                currentSongIndex = currentSongIndex.coerceIn(0, (newActive.size - 1).coerceAtLeast(0))
+                saveMusicState()
+                if (isPlayingMusic) {
+                    musicPlayer?.release()
+                    musicPlayer = null
+                    loadSong(currentSongIndex)
+                } else {
+                    updateNotification()
+                }
+            } else {
+                currentSongIndex = newIdx
+                saveMusicState()
+                updateNotification()
+            }
+            return
+        }
+
         updateNotification()
     }
 
@@ -1512,6 +1540,7 @@ class MediaPlayerService : MediaSessionService() {
 
     @SuppressLint("LaunchActivityFromNotification")
     private fun showPodcastSelection() {
+        loadPodcasts()
         if (podcasts.isEmpty()) return
         val nm = getSystemService(NotificationManager::class.java)
         val updated = podcasts.map {
@@ -2225,7 +2254,7 @@ class MediaPlayerService : MediaSessionService() {
         val shows = PodcastShowManager.getShows()
         if (shows.isEmpty()) return
 
-        CoroutineScope(Dispatchers.IO).launch {
+        appScope.launch {
             shows.forEach { show ->
                 if (showNameCache.containsKey(show.id)) return@forEach // schon gecacht
                 try {
