@@ -75,6 +75,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import com.cloud.core.activities.Cloud.Companion.appScope
 import com.cloud.core.activities.MainActivity
 import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.core.functions.errorInsert
@@ -82,7 +83,7 @@ import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.DEL_GAL_CONF
 import com.cloud.core.objects.Config.cms
 import com.cloud.core.objects.Config.realDevice
-import com.cloud.core.ui.getDeviceName
+import com.cloud.core.objects.reportError
 import com.cloud.quiethoursnotificationhelper.AiResponseEntry
 import com.cloud.quiethoursnotificationhelper.CleanupWorker
 import com.cloud.quiethoursnotificationhelper.DailySummaryWorker
@@ -145,19 +146,10 @@ class QuietHoursNotificationService : Service() {
         Log.e("QuietHoursService", "Unhandled error in $where", t)
         val stack = t.stackTraceToString()
         val trimmed = if (stack.length > 8000) stack.take(8000) + "\n...[truncated]" else stack
-        errorScope.launch {
-            try {
-                errorInsert(
-                    ERRORINSERTDATA(
-                        "QuietHoursNotificationService:$where",
-                        trimmed,
-                        Instant.now().toString(),
-                        "ERROR"
-                    )
-                )
-            } catch (_: Exception) {
-            }
-        }
+        reportError("QuietHoursNotificationService:$where",
+            trimmed,
+            Instant.now().toString(),
+            "ERROR")
     }
 
     @SuppressLint("BatteryLife")
@@ -242,6 +234,7 @@ class QuietHoursNotificationService : Service() {
         const val THRESHOLD_MINUTES = 30
         const val MAX_MESSAGES_PER_CONTACT = 15
         const val MAX_VOICE_NOTE_FILES = 20
+        const val MAX_HISTORY_SIZE = 50
 
         const val ACTION_RESTORE_NOTIFICATION = "com.cloud.ACTION_RESTORE_NOTIFICATION"
 
@@ -273,20 +266,12 @@ class QuietHoursNotificationService : Service() {
                 checkQuietHours(context)
                 scheduleNextCheck(context)
             } catch (e: Exception) {
-                Log.e("QuietHoursService", "checkRunnable failed", e)
-                CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
-                    try {
-                        errorInsert(
-                            ERRORINSERTDATA(
-                                "QuietHoursNotificationService:checkRunnable",
-                                e.stackTraceToString().take(8000),
-                                Instant.now().toString(),
-                                "ERROR"
-                            )
-                        )
-                    } catch (_: Exception) {
-                    }
-                }
+                reportError(
+                    "QuietHoursNotificationService:checkRunnable",
+                    e.stackTraceToString().take(8000),
+                    Instant.now().toString(),
+                    "ERROR"
+                )
             }
         }
 
@@ -645,7 +630,7 @@ class QuietHoursNotificationService : Service() {
                 }
 
                 ACTION_DAILY_MUSIC_SUMMARY -> {
-                    CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+                    appScope.launch {
                         try {
                             MediaAnalyticsManager.init(this@QuietHoursNotificationService)
                             val lastAiTimestamp =
