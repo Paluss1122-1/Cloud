@@ -35,11 +35,11 @@ import androidx.core.app.RemoteInput
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.cloud.core.ui.Cloud
+import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.core.objects.Config.BLOCKED_MESSAGES
 import com.cloud.core.objects.Config.NOTIFICATION_PORT
-import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.core.objects.NotificationRepository
+import com.cloud.core.ui.Cloud
 import com.cloud.quiethoursnotificationhelper.isLaptopConnected
 import com.cloud.quiethoursnotificationhelper.laptopIp
 import kotlinx.coroutines.CoroutineScope
@@ -138,7 +138,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         )
     }
 
-    // Instanz-Methode statt Companion-Methode — hat Zugriff auf forwardScope
     private fun forwardNotificationsToLaptop(
         notifications: Array<StatusBarNotification>,
         packageManager: PackageManager
