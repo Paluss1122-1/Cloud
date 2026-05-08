@@ -1,6 +1,5 @@
 package com.cloud.tabs
 
-import android.content.Context
 import android.os.Environment
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
@@ -170,53 +169,6 @@ private suspend fun fetchStreamUrl(track: Track): String? =
             .optString("url").takeIf { it.isNotEmpty() }
     }
 
-suspend fun testDownload(url: String, context: Context) = withContext(Dispatchers.IO) {
-    try {
-        // clen direkt aus URL parsen
-        val clen = Regex("clen=(\\d+)").find(url)?.groupValues?.get(1)?.toLongOrNull()
-        println("🎯 Erwartete Bytes laut clen: $clen")
-
-        val req = Request.Builder()
-            .url(url)
-            .build()
-
-        http.newCall(req).execute().use { response ->
-            println("📡 Status: ${response.code}")
-            println("📡 Content-Type: ${response.header("Content-Type")}")
-            println("📡 Content-Length Header: ${response.header("Content-Length")}")
-
-            val body = response.body ?: run { println("❌ Body null"); return@withContext }
-            val file = File(context.getExternalFilesDir(null), "test_download.webm")
-            if (file.exists()) file.delete()
-
-            var downloaded = 0L
-            val limit = clen ?: Long.MAX_VALUE
-
-            body.byteStream().use { input ->
-                FileOutputStream(file).use { out ->
-                    val buf = ByteArray(32768)
-                    var n: Int
-                    while (input.read(buf).also { n = it } != -1) {
-                        out.write(buf, 0, n)
-                        downloaded += n
-                        println("⬇️ $downloaded / $limit bytes")
-                        if (downloaded >= limit) {
-                            println("✅ clen erreicht, breche ab")
-                            break
-                        }
-                    }
-                    out.flush()
-                }
-            }
-
-            println("✅ Datei: ${file.absolutePath}")
-            println("✅ Größe: ${file.length()} bytes")
-        }
-    } catch (e: Exception) {
-        println("❌ ${e.javaClass.simpleName}: ${e.message}")
-    }
-}
-
 private fun downloadFromUrl(url: String, track: Track, outputDir: File): Boolean {
     return try {
         val clen = Regex("clen=(\\d+)").find(url)?.groupValues?.get(1)?.toLongOrNull()
@@ -243,7 +195,7 @@ private fun downloadFromUrl(url: String, track: Track, outputDir: File): Boolean
                 return false
             }
 
-            val body = response.body ?: return false
+            val body = response.body
             val limit = clen ?: Long.MAX_VALUE
 
             val buf = ByteArray(128 * 1024)
