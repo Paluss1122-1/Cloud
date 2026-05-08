@@ -290,6 +290,10 @@
                 android:name="android.autofill"
                 android:resource="@xml/autofill_service" />
         </service>
+
+        <receiver
+            android:name=".tabs.exploretab.ExploreGeofenceReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>
