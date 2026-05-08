@@ -48,12 +48,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
-import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
+import com.cloud.core.functions.errorInsert
+import com.cloud.core.objects.reportError
 import com.cloud.core.ui.c
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -313,16 +315,10 @@ fun MediaRecorderContent(
                                 isProcessing = false
                                 showTrimDialog = false
                             } catch (e: Exception) {
-                                CoroutineScope(Dispatchers.IO).launch {
-                                    errorInsert(
-                                        ERRORINSERTDATA(
-                                            "MediaRecorderContent",
-                                            "Fehler bei Konvertieren von m4a zu mp3: ${e.message}",
-                                            Instant.now().toString(),
-                                            "ERROR"
-                                        )
-                                    )
-                                }
+                                reportError("MediaRecorderContent",
+                                    "Fehler bei Konvertieren von m4a zu mp3: ${e.message}",
+                                    Instant.now().toString(),
+                                    "ERROR")
                                 isProcessing = false
                             }
                         }
@@ -613,7 +609,7 @@ fun MediaRecorderContent(
                             color = Color.White
                         )
                         Text(
-                            text = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+                            text = SimpleDateFormat("dd.MM.yyyy HH:mm", LocalLocale.current.platformLocale)
                                 .format(Date(file.lastModified())),
                             fontSize = 11.sp,
                             color = Color.Gray
@@ -973,15 +969,11 @@ class AudioRecorder {
     }
 
     private fun reportError(message: String, throwable: Throwable, servicename: String) {
-        CoroutineScope(Dispatchers.IO).launch {
-            errorInsert(
-                ERRORINSERTDATA(
-                    "AudioRecorder.$servicename",
-                    "$message: ${throwable::class.simpleName} - ${throwable.message ?: "ohne Nachricht"}",
-                    Instant.now().toString(),
-                    "Error"
-                )
-            )
-        }
+        com.cloud.core.objects.reportError(
+            "AudioRecorder.$servicename",
+            "$message: ${throwable::class.simpleName} - ${throwable.message ?: "ohne Nachricht"}",
+            Instant.now().toString(),
+            "Error"
+        )
     }
 }
