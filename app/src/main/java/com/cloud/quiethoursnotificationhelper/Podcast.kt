@@ -10,16 +10,12 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
+import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.core.objects.Config.COMPLETED_PODCASTS
 import com.cloud.core.objects.Config.PD_QUEUE
 import com.cloud.core.objects.Config.PODCASTS
-import com.cloud.core.functions.errorInsert
-import com.cloud.core.functions.ERRORINSERTDATA
-import com.cloud.core.functions.showSimpleNotificationExtern
+import com.cloud.core.objects.reportError
 import com.cloud.services.PodcastPlayerServiceCompat.startService
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import java.time.Instant
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -47,16 +43,12 @@ fun clearPodcastSelectionNotifications(context: Context) {
             context
         )
 
-        CoroutineScope(Dispatchers.IO).launch {
-            errorInsert(
-                ERRORINSERTDATA(
-                    "markMessageAsRead",
-                    "Konnte Notifications nicht löschen: ${e.message}",
-                    Instant.now().toString(),
-                    "ERROR"
-                )
-            )
-        }
+        reportError(
+            "clearPodcastSelectionNotification",
+            "Konnte Notifications nicht löschen: ${e.message}",
+            Instant.now().toString(),
+            "ERROR"
+        )
     }
 }
 
@@ -115,16 +107,12 @@ fun loadPodcastsFromMediaStore(context: Context): List<SimplePodcast> {
             }
         }
     } catch (e: Exception) {
-        CoroutineScope(Dispatchers.IO).launch {
-            errorInsert(
-                ERRORINSERTDATA(
-                    "loadPodcastsFromMediaStore",
-                    "Fehler bei Laden von Podcasts von MediaStore: ${e.message}",
-                    Instant.now().toString(),
-                    "ERROR"
-                )
-            )
-        }
+        reportError(
+            "loadPodcastsFromMediaStore",
+            "Fehler bei Laden von Podcasts von MediaStore: ${e.message}",
+            Instant.now().toString(),
+            "ERROR"
+        )
     }
 
     return podcasts.sortedBy { it.name }
