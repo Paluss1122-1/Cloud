@@ -50,39 +50,56 @@ jobs:
 
       - name: Create Config.kt
         run: |
-          cat > app/src/main/java/com/cloud/Config.kt << 'EOF'
-          package com.cloud
-          import android.annotation.SuppressLint
-          import android.util.Base64
-          import io.github.jan.supabase.annotations.SupabaseInternal
+          cat > app/src/main/java/com/cloud/core/objects/Config.kt << 'EOF'
+          package com.cloud.core.objects
+          import android.content.Context
+          import android.widget.Toast
+          import com.cloud.BuildConfig
+          import com.cloud.core.activities.Cloud.Companion.appScope
+          import com.cloud.core.functions.ERRORINSERTDATA
+          import com.cloud.core.functions.errorInsert
           import io.github.jan.supabase.createSupabaseClient
           import io.github.jan.supabase.postgrest.Postgrest
           import io.github.jan.supabase.realtime.Realtime
           import io.github.jan.supabase.storage.Storage
           import io.ktor.client.engine.okhttp.OkHttp
           import io.ktor.client.plugins.websocket.WebSockets
-          import javax.crypto.Cipher
+          import kotlinx.coroutines.launch
+          import javax.crypto.SecretKey
+          import javax.crypto.SecretKeyFactory
+          import javax.crypto.spec.PBEKeySpec
           import javax.crypto.spec.SecretKeySpec
           object Config {
               const val SUPABASE_URL = "${{ secrets.SUPABASE_URL }}"
               const val SUPABASE_PUBLISHABLE_KEY = "${{ secrets.SUPABASE_KEY }}"
-              const val SUPABASE_BUCKET = "Files"
+              const val PODCAST_DOWNLOAD_PROXY = """${{ secrets.PODCAST_DOWNLOAD_PROXY }}"""
+              val client = createSupabaseClient(
+                  supabaseUrl = SUPABASE_URL,
+                  supabaseKey = SUPABASE_PUBLISHABLE_KEY
+              ) {
+                  install(Storage)
+                  install(Postgrest)
+                  install(Realtime)
+          
+                  httpConfig {
+                      install(WebSockets)
+                  }
+                  httpEngine = OkHttp.create()
+              }
               const val BWMP = "${{ secrets.BWMP }}"
               const val DBKEY = "${{ secrets.DBKEY }}"
               const val DBKEY1 = "${{ secrets.DBKEY1 }}"
               const val NVIDIA = "${{ secrets.NVIDIA }}"
               const val WEATHERAPI_KEY = "${{ secrets.WEATHERAPI_KEY }}"
               const val RAPID_API_KEY = "${{ secrets.RAPID_API_KEY }}"
-              const val SPOTIFY_CLIENT_ID = "${{ secrets.SPOTIFY_CLIENT_ID }}"
-              const val SPOTIFY_CLIENT_SECRET = "${{ secrets.SPOTIFY_CLIENT_SECRET }}"
+              const val PODCASTINDEX_API_KEY = """${{ secrets.PODCASTINDEX_API_KEY }}"""
+              const val PODCASTINDEX_API_SECRET = """${{ secrets.PODCASTINDEX_API_SECRET }}"""
               const val LAT = ${{ secrets.LAT }}
               const val LON = ${{ secrets.LON }}
-              val LAPTOP_IPS = listOf("192.168.178.20", "192.168.178.72")
               const val SYNC_PORT = 8888
               const val NOTIFICATION_PORT = 8889
               const val UPDATE_PORT = 8890
               const val CLIPBOARD_PORT = 8891
-              const val DISCOVERY_PORT = 8892
               const val TRIGGER_PORT = 8893
               const val SESSION_PORT = 8894
               const val AI_RECEIVE_PORT = 8895
@@ -92,34 +109,29 @@ jobs:
               const val MEDIA_COMMAND_PORT = 8899
               const val MEDIA_STATE_PORT = 8900
               const val AI_PORT = 8902
-              const val BUILD_PORT = 8903
+              const val MAIL_NOTIFY_PORT = 8904
+              const val EXECUTE_PORT = 8905
+              const val EXECUTE_PORT_SEND_FROM_HANDY = 8906
+              const val EXECUTE_RESPONSE_PORT = 8907
+              const val SPOTIFY_PORT = 8908
 
-              const val GMAILPASSWORD = "${{ secrets.GMAILPASSWORD }}"
+              private const val ITERATIONS = ${{ secrets.ITERATIONS }}
+              private const val KEY_LENGTH = 256
 
-              @OptIn(SupabaseInternal::class)
-              val client = createSupabaseClient(supabaseUrl = SUPABASE_URL, supabaseKey = SUPABASE_PUBLISHABLE_KEY) {
-                  install(Storage); install(Postgrest); install(Realtime)
-                  httpConfig { install(WebSockets) }
-                  httpEngine = OkHttp.create()
+              fun deriveKey(password: String, salt: ByteArray): SecretKey {
+                  val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+                  val spec = PBEKeySpec(password.toCharArray(), salt, ITERATIONS, KEY_LENGTH)
+                  val tmp = factory.generateSecret(spec).encoded
+                  return SecretKeySpec(tmp, "AES")
               }
 
-              private const val FIXED_KEY = "${{ secrets.FIXED_KEY }}"
-
-              private val secretKey = SecretKeySpec(FIXED_KEY.toByteArray(), "AES")
-
-              @SuppressLint("GetInstance")
-              fun encrypt(plainText: String): String {
-                  val cipher = Cipher.getInstance("AES")
-                  cipher.init(Cipher.ENCRYPT_MODE, secretKey)
-                  return Base64.encodeToString(cipher.doFinal(plainText.toByteArray()), Base64.NO_WRAP)
+              var masterPassword: String = ""
+              fun init(context: Context) {
+                  masterPassword = PasswordStorage.loadPassword(context)
+                      ?: ""
               }
 
-              @SuppressLint("GetInstance")
-              fun decrypt(encryptedBase64: String): String {
-                  val cipher = Cipher.getInstance("AES")
-                  cipher.init(Cipher.DECRYPT_MODE, secretKey)
-                  return cipher.doFinal(Base64.decode(encryptedBase64, Base64.NO_WRAP)).toString(Charsets.UTF_8)
-              }
+              var realDevice = false
 
               fun cms(): Int = System.currentTimeMillis().toInt()
 
@@ -137,18 +149,29 @@ jobs:
               const val MEDIA_PLAYER = 50000
               const val BLOCKED_MESSAGES = 60000
           }
-          object SupabaseConfigALT {
-              const val SUPABASE_URL = "${{ secrets.SUPABASE_ALT_URL }}"
-              const val SUPABASE_PUBLISHABLE_KEY = "${{ secrets.SUPABASE_ALT_KEY }}"
-              @OptIn(SupabaseInternal::class)
-              val client = createSupabaseClient(supabaseUrl = SUPABASE_URL, supabaseKey = SUPABASE_PUBLISHABLE_KEY) {
-                  install(Storage); install(Postgrest); install(Realtime)
-                  httpConfig { install(WebSockets) }
-                  httpEngine = OkHttp.create()
-              }
-          }
           object TMDBConfig {
               const val APIKEY = "${{ secrets.TMDB_APIKEY }}"
+          }
+          
+          fun reportError(
+              serviceName: String,
+              errormessage: String,
+              createdat: String,
+              severity: String
+          ) {
+              appScope.launch {
+                  errorInsert(ERRORINSERTDATA(serviceName, errormessage, createdat, severity))
+              }
+          }
+
+          fun toast(context: Context, text: String) {
+              Toast.makeText(context, text, Toast.LENGTH_LONG).show()
+          }
+
+          @Suppress("KotlinConstantConditions")
+          fun prvt(): Boolean {
+              @Suppress("SimplifyBooleanWithConstants")
+              return BuildConfig.BUILD_TYPE == "debug"
           }
           EOF
 
