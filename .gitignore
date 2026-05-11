@@ -13,3 +13,4 @@ project_summary.md
 summarize.py
 app/src/main/java/com/cloud/core/objects/Config.kt
 app/src/main/java/com/cloud/python/get_fav_songs.py
+app/google-services.json
