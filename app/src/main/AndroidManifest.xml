@@ -246,12 +246,6 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
-        <service
-            android:name=".services.ErrorMonitorService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-
         <receiver
             android:name="androidx.media3.session.MediaButtonReceiver"
             android:exported="true">
@@ -294,6 +288,7 @@
         <receiver
             android:name=".tabs.exploretab.ExploreGeofenceReceiver"
             android:exported="false" />
+        <receiver android:name=".quiethoursnotificationhelper.DailySummaryReceiver" android:exported="false" />
     </application>
 
 </manifest>
