@@ -8,7 +8,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
-import android.os.Process
 import android.provider.OpenableColumns
 import android.view.View
 import android.view.animation.AnticipateInterpolator
@@ -30,22 +29,13 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
 import com.cloud.core.objects.Config
-import com.cloud.core.functions.errorInsert
-import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.core.ui.LandingPageOrApp
-import com.cloud.core.PolicyManager
 import com.cloud.core.ui.Typography
 import com.cloud.core.ui.c
-import com.cloud.quicksettingsfunctions.BatteryDataRepository
-import com.cloud.services.ErrorMonitorService
 import com.cloud.tabs.JsonEditorContent
 import io.github.jan.supabase.storage.storage
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
-import java.time.Instant
 import java.util.Calendar
 
 class MyDeviceAdminReceiver : DeviceAdminReceiver()
@@ -121,7 +111,6 @@ class MainActivity : FragmentActivity() {
 
         val startTarget = intent.getStringExtra("target")
         this.startTarget = startTarget
-
         setContent {
             MaterialTheme(
                 colorScheme = MaterialTheme.colorScheme.copy(
@@ -152,13 +141,6 @@ class MainActivity : FragmentActivity() {
                     }
                 }
             }
-        }
-
-        try {
-            val serviceIntent = Intent(this, ErrorMonitorService::class.java)
-            startForegroundService(serviceIntent)
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 
