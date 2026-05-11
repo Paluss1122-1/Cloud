@@ -8,6 +8,7 @@ plugins {
     id("kotlin-parcelize")
     alias(libs.plugins.hilt.android)
     id("com.autonomousapps.dependency-analysis") version "3.9.0"
+    id("com.google.gms.google-services")
 }
 
 val localProps = Properties().apply {
@@ -115,4 +116,6 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.android.mail)
     implementation(libs.androidx.autofill)
+    implementation(platform("com.google.firebase:firebase-bom:34.13.0"))
+    implementation("com.google.firebase:firebase-ai:17.12.0")
 }
