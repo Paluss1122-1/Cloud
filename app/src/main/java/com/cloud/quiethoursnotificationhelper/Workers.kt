@@ -1,5 +1,6 @@
 package com.cloud.quiethoursnotificationhelper
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.work.Worker
@@ -7,21 +8,18 @@ import androidx.work.WorkerParameters
 import com.cloud.services.QuietHoursNotificationService
 import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_DAILY_MUSIC_SUMMARY
 import com.cloud.services.QuietHoursNotificationService.Companion.MAX_MESSAGES_PER_CONTACT
+import com.cloud.services.QuietHoursNotificationService.Companion.scheduledailysummaryalarm
 import com.cloud.services.QuietHoursNotificationService.Companion.workerHandler
 import com.cloud.services.WhatsAppNotificationListener
 
-class DailySummaryWorker(
-    context: Context,
-    params: WorkerParameters
-) : Worker(context, params) {
-    override fun doWork(): Result {
-        val intent = Intent(applicationContext, QuietHoursNotificationService::class.java).apply {
-            action = ACTION_DAILY_MUSIC_SUMMARY
-        }
-
-        applicationContext.startService(intent)
-
-        return Result.success()
+class DailySummaryReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        context.startService(
+            Intent(context, QuietHoursNotificationService::class.java).apply {
+                action = ACTION_DAILY_MUSIC_SUMMARY
+            }
+        )
+        scheduledailysummaryalarm(context)
     }
 }
 
