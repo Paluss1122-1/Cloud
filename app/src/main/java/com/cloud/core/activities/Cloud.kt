@@ -5,6 +5,7 @@ import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.core.functions.errorInsert
 import com.cloud.core.objects.Config
 import com.cloud.quicksettingsfunctions.BatteryDataRepository
+import com.google.firebase.FirebaseApp
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,8 @@ class Cloud : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        FirebaseApp.initializeApp(this)
 
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
