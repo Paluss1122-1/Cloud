@@ -2,7 +2,6 @@ package com.cloud.quiethoursnotificationhelper
 
 import android.annotation.SuppressLint
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -12,7 +11,6 @@ import android.content.Context.WINDOW_SERVICE
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.hardware.camera2.CameraManager
-import android.location.LocationManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -60,8 +58,6 @@ import com.cloud.services.MediaPlayerService
 import com.cloud.services.MusicPlayerServiceCompat
 import com.cloud.services.OverlayLifecycleOwner
 import com.cloud.services.PodcastPlayerServiceCompat
-import com.cloud.services.QuietHoursNotificationService
-import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_SCHOOL_DAY_SUMMARY
 import com.cloud.services.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.cloud.services.QuietHoursNotificationService.Companion.commandHistory
 import com.cloud.services.QuietHoursNotificationService.Companion.showtestOverlay
@@ -71,6 +67,7 @@ import com.cloud.tabs.MediaAnalyticsManager.rebuildSessions
 import com.cloud.tabs.OtherBucketViewer
 import com.cloud.tabs.PodcastShowManager
 import com.cloud.tabs.audiorecordertab.AudioForegroundService
+import com.cloud.tabs.exploretab.ExploreLocationTracker.debugTriggerExitGeofence
 import com.cloud.tabs.fetchWeatherForecast
 import com.cloud.tabs.getLastKnownLocation
 import com.cloud.tabs.weathernot
@@ -444,6 +441,13 @@ private fun getAvailableCommands(context: Context): List<Command> {
                 "Syntax: . dein_command\nBeispiel: . show_notification",
                 context = context
             )
+        },
+        Command(
+            name = "errors",
+            aliases = listOf("err", "errs"),
+            description = "Fetcht neue Fehler von Supabase Table"
+        ) {
+            fetchNewErrors(context)
         },
         Command(
             name = "todos",
