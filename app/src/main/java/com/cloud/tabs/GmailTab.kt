@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.edit
 import com.cloud.core.objects.Config.MAIL_NOTIFY_PORT
 import com.cloud.quiethoursnotificationhelper.laptopIp
 import kotlinx.coroutines.Dispatchers
@@ -57,9 +58,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import androidx.core.content.edit
-
-// ─── Datenmodell ────────────────────────────────────────────────────────────
 
 data class EmailItem(
     val id: String,

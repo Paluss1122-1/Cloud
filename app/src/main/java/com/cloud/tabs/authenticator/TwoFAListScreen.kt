@@ -86,9 +86,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
-import com.cloud.core.objects.Config.realDevice
-import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.ERRORINSERTDATA
+import com.cloud.core.functions.errorInsert
+import com.cloud.core.objects.Config.realDevice
 import com.google.zxing.ResultPoint
 import com.journeyapps.barcodescanner.BarcodeCallback
 import com.journeyapps.barcodescanner.BarcodeResult

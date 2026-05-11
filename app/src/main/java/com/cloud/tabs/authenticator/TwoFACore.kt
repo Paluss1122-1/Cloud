@@ -18,7 +18,6 @@ import java.util.Locale
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.math.pow
-import kotlin.text.iterator
 
 @Entity(
     tableName = "twofa_entries",
