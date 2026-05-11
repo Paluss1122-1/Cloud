@@ -19,7 +19,6 @@ import androidx.core.app.RemoteInput
 import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.core.objects.prvt
 import com.cloud.services.ChatService
-import com.cloud.services.ErrorNotificationManager
 import com.cloud.services.QuietHoursNotificationService
 import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_CHANGE_END
 import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_CONTENT_INTENT
@@ -245,7 +244,7 @@ fun createNotificationChannel(context: Context) {
 
     notificationManager.createNotificationChannel(
         NotificationChannel(
-            ErrorNotificationManager.CHANNEL_ID,
+            QuietHoursNotificationService.Companion.ERROR_REPORTS_CHANNEL_ID,
             "Error Reports",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
