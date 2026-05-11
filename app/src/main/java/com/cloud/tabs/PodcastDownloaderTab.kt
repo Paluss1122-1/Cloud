@@ -8,37 +8,49 @@ import android.content.IntentFilter
 import android.os.Environment
 import android.webkit.CookieManager
 import android.widget.Toast
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.edit
 import androidx.core.net.toUri
-import coil.compose.AsyncImage
 import com.cloud.core.objects.Config.PODCASTINDEX_API_KEY
 import com.cloud.core.objects.Config.PODCASTINDEX_API_SECRET
 import com.cloud.core.objects.Config.PODCAST_DOWNLOAD_PROXY
+import com.cloud.core.ui.FeedCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -50,14 +62,14 @@ import java.net.URL
 import java.security.MessageDigest
 import javax.xml.parsers.DocumentBuilderFactory
 
-private data class PodcastFeed(
+data class PodcastFeed(
     val title: String,
     val author: String,
     val image: String,
     val feedUrl: String,
 )
 
-private data class Episode(
+data class Episode(
     val title: String,
     val audioUrl: String,
 )
@@ -194,6 +206,32 @@ fun PodcastTab() {
     }
 
     val scope = rememberCoroutineScope()
+    val prefs = context.getSharedPreferences("podcast_favs", Context.MODE_PRIVATE)
+
+    fun loadFavs(): Map<String, PodcastFeed> {
+        val raw = prefs.getString("favs", null) ?: return emptyMap()
+        return try {
+            val arr = org.json.JSONArray(raw)
+            (0 until arr.length()).associate { i ->
+                val o = arr.getJSONObject(i)
+                val f = PodcastFeed(o.getString("title"), o.getString("author"), o.getString("image"), o.getString("feedUrl"))
+                f.feedUrl to f
+            }
+        } catch (_: Exception) { emptyMap() }
+    }
+
+    fun saveFavs(favs: Map<String, PodcastFeed>) {
+        val arr = org.json.JSONArray()
+        favs.values.forEach { f ->
+            arr.put(JSONObject().apply {
+                put("title", f.title); put("author", f.author)
+                put("image", f.image); put("feedUrl", f.feedUrl)
+            })
+        }
+        prefs.edit { putString("favs", arr.toString()) }
+    }
+
+    var favorites by remember { mutableStateOf(loadFavs()) }
 
     Column(
         modifier = Modifier
@@ -233,102 +271,55 @@ fun PodcastTab() {
         }
 
         if (feeds.isEmpty() && !isSearching) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("🎙️ Gib einen Podcast-Namen ein", color = Color.White.copy(0.5f))
+            if (favorites.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("🎙️ Gib einen Podcast-Namen ein", color = Color.White.copy(0.5f))
+                }
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        Text("Favoriten", fontSize = 13.sp, color = Color(0xFF7A7880),
+                            modifier = Modifier.padding(vertical = 4.dp))
+                    }
+                    items(favorites.values.toList()) { feed ->
+                        val isExpanded = expandedFeedUrl == feed.feedUrl
+                        val feedEpisodes = episodes[feed.feedUrl]
+                        FeedCard(
+                            feed = feed, isExpanded = isExpanded, feedEpisodes = feedEpisodes,
+                            loadingEpisodes = loadingEpisodes, isFavorite = true,
+                            onToggleExpand = {
+                                if (isExpanded) expandedFeedUrl = null
+                                else { expandedFeedUrl = feed.feedUrl; scope.launch { loadEpisodes(feed.feedUrl) } }
+                            },
+                            onToggleFav = {
+                                favorites = favorites - feed.feedUrl
+                                saveFavs(favorites)
+                            },
+                            onDownload = { url, title -> downloadEpisode(url, title) }
+                        )
+                    }
+                    item { Spacer(Modifier.height(16.dp)) }
+                }
             }
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(feeds) { feed ->
                     val isExpanded = expandedFeedUrl == feed.feedUrl
                     val feedEpisodes = episodes[feed.feedUrl]
-
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E24)),
-                    ) {
-                        Column {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                AsyncImage(
-                                    model = feed.image.ifEmpty { null },
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .size(54.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFF2A2A32)),
-                                    contentScale = ContentScale.Crop,
-                                )
-                                Column(Modifier.weight(1f)) {
-                                    Text(feed.title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    if (feed.author.isNotEmpty()) {
-                                        Text(feed.author, fontSize = 12.sp, color = Color(0xFF7A7880), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                }
-                                IconButton(
-                                    onClick = {
-                                        if (isExpanded) {
-                                            expandedFeedUrl = null
-                                        } else {
-                                            expandedFeedUrl = feed.feedUrl
-                                            scope.launch { loadEpisodes(feed.feedUrl) }
-                                        }
-                                    }
-                                ) {
-                                    if (loadingEpisodes == feed.feedUrl) {
-                                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color(0xFFE8622A))
-                                    } else {
-                                        Icon(
-                                            if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                            contentDescription = null,
-                                            tint = Color(0xFFE8622A)
-                                        )
-                                    }
-                                }
-                            }
-
-                            if (isExpanded) {
-                                HorizontalDivider(color = Color.White.copy(0.07f))
-                                when {
-                                    feedEpisodes == null -> {
-                                        Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFFE8622A))
-                                        }
-                                    }
-                                    feedEpisodes.isEmpty() -> {
-                                        Text("Keine Episoden gefunden", modifier = Modifier.padding(16.dp), color = Color(0xFF7A7880), fontSize = 13.sp)
-                                    }
-                                    else -> {
-                                        feedEpisodes.forEachIndexed { idx, ep ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                            ) {
-                                                Text("${idx + 1}", fontSize = 11.sp, color = Color(0xFF4A4850), modifier = Modifier.width(24.dp))
-                                                Text(ep.title, modifier = Modifier.weight(1f), fontSize = 13.sp, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                                OutlinedIconButton(
-                                                    onClick = { downloadEpisode(ep.audioUrl, ep.title) },
-                                                    modifier = Modifier.size(36.dp),
-                                                    border = BorderStroke(1.dp, Color.White.copy(0.15f))
-                                                ) {
-                                                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Download", tint = Color(0xFFE8622A), modifier = Modifier.size(18.dp))
-                                                }
-                                            }
-                                            if (idx < feedEpisodes.lastIndex) {
-                                                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.White.copy(0.04f))
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    FeedCard(
+                        feed = feed, isExpanded = isExpanded, feedEpisodes = feedEpisodes,
+                        loadingEpisodes = loadingEpisodes, isFavorite = favorites.containsKey(feed.feedUrl),
+                        onToggleExpand = {
+                            if (isExpanded) expandedFeedUrl = null
+                            else { expandedFeedUrl = feed.feedUrl; scope.launch { loadEpisodes(feed.feedUrl) } }
+                        },
+                        onToggleFav = {
+                            favorites = if (favorites.containsKey(feed.feedUrl)) favorites - feed.feedUrl
+                            else favorites + (feed.feedUrl to feed)
+                            saveFavs(favorites)
+                        },
+                        onDownload = { url, title -> downloadEpisode(url, title) }
+                    )
                 }
                 item { Spacer(Modifier.height(16.dp)) }
             }
