@@ -4,16 +4,36 @@ import android.graphics.Paint
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedIconButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -28,8 +48,15 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.cloud.tabs.Episode
+import com.cloud.tabs.PodcastFeed
 import kotlinx.coroutines.launch
 
 
@@ -153,5 +180,91 @@ fun NeonBox(
         contentAlignment = Alignment.Center
     ) {
         content()
+    }
+}
+
+@Composable
+fun FeedCard(
+    feed: PodcastFeed,
+    isExpanded: Boolean,
+    feedEpisodes: List<Episode>?,
+    loadingEpisodes: String?,
+    isFavorite: Boolean,
+    onToggleExpand: () -> Unit,
+    onToggleFav: () -> Unit,
+    onDownload: (String, String) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E24)),
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                AsyncImage(
+                    model = feed.image.ifEmpty { null },
+                    contentDescription = null,
+                    modifier = Modifier.size(54.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF2A2A32)),
+                    contentScale = ContentScale.Crop,
+                )
+                Column(Modifier.weight(1f)) {
+                    Text(feed.title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (feed.author.isNotEmpty()) {
+                        Text(feed.author, fontSize = 12.sp, color = Color(0xFF7A7880), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                IconButton(onClick = onToggleFav) {
+                    Icon(
+                        if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
+                        contentDescription = null,
+                        tint = if (isFavorite) Color(0xFFE8622A) else Color(0xFF4A4850)
+                    )
+                }
+                IconButton(onClick = onToggleExpand) {
+                    if (loadingEpisodes == feed.feedUrl) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color(0xFFE8622A))
+                    } else {
+                        Icon(
+                            if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = null, tint = Color(0xFFE8622A)
+                        )
+                    }
+                }
+            }
+
+            if (isExpanded) {
+                HorizontalDivider(color = Color.White.copy(0.07f))
+                when {
+                    feedEpisodes == null -> Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFFE8622A))
+                    }
+                    feedEpisodes.isEmpty() -> Text("Keine Episoden gefunden", modifier = Modifier.padding(16.dp), color = Color(0xFF7A7880), fontSize = 13.sp)
+                    else -> feedEpisodes.forEachIndexed { idx, ep ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text("${idx + 1}", fontSize = 11.sp, color = Color(0xFF4A4850), modifier = Modifier.width(24.dp))
+                            Text(ep.title, modifier = Modifier.weight(1f), fontSize = 13.sp, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            OutlinedIconButton(
+                                onClick = { onDownload(ep.audioUrl, ep.title) },
+                                modifier = Modifier.size(36.dp),
+                                border = BorderStroke(1.dp, Color.White.copy(0.15f))
+                            ) {
+                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = Color(0xFFE8622A), modifier = Modifier.size(18.dp))
+                            }
+                        }
+                        if (idx < feedEpisodes.lastIndex) {
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.White.copy(0.04f))
+                        }
+                    }
+                }
+            }
+        }
     }
 }
