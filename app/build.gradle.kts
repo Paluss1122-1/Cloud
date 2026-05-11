@@ -7,7 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     id("kotlin-parcelize")
     alias(libs.plugins.hilt.android)
-    id("com.autonomousapps.dependency-analysis") version "3.9.0"
+    id("com.autonomousapps.dependency-analysis")
     id("com.google.gms.google-services")
 }
 
