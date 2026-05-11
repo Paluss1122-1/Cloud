@@ -58,6 +58,7 @@ jobs:
           import com.cloud.core.activities.Cloud.Companion.appScope
           import com.cloud.core.functions.ERRORINSERTDATA
           import com.cloud.core.functions.errorInsert
+          import io.github.jan.supabase.annotations.SupabaseInternal
           import io.github.jan.supabase.createSupabaseClient
           import io.github.jan.supabase.postgrest.Postgrest
           import io.github.jan.supabase.realtime.Realtime
@@ -74,6 +75,7 @@ jobs:
               const val SUPABASE_PUBLISHABLE_KEY = "${{ secrets.SUPABASE_KEY }}"
               const val SUPABASE_BUCKET = "Files"
               const val PODCAST_DOWNLOAD_PROXY = """${{ secrets.PODCAST_DOWNLOAD_PROXY }}"""
+              @OptIn(SupabaseInternal::class)
               val client = createSupabaseClient(
                   supabaseUrl = SUPABASE_URL,
                   supabaseKey = SUPABASE_PUBLISHABLE_KEY
@@ -85,6 +87,7 @@ jobs:
                   httpConfig {
                       install(WebSockets)
                   }
+                  httpEngine = OkHttp.create()
               }
               const val BWMP = "${{ secrets.BWMP }}"
               const val DBKEY = "${{ secrets.DBKEY }}"
