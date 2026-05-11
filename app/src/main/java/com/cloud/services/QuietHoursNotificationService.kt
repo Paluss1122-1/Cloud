@@ -74,19 +74,17 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import androidx.work.workDataOf
 import com.cloud.core.activities.Cloud.Companion.appScope
 import com.cloud.core.activities.MainActivity
-import com.cloud.core.functions.ERRORINSERTDATA
-import com.cloud.core.functions.errorInsert
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.DEL_GAL_CONF
 import com.cloud.core.objects.Config.cms
 import com.cloud.core.objects.Config.realDevice
 import com.cloud.core.objects.reportError
+import com.cloud.core.ui.getDeviceName
 import com.cloud.quiethoursnotificationhelper.AiResponseEntry
 import com.cloud.quiethoursnotificationhelper.CleanupWorker
-import com.cloud.quiethoursnotificationhelper.DailySummaryWorker
+import com.cloud.quiethoursnotificationhelper.DailySummaryReceiver
 import com.cloud.quiethoursnotificationhelper.GalleryImage
 import com.cloud.quiethoursnotificationhelper.aiResponseFlow
 import com.cloud.quiethoursnotificationhelper.buildSessionStatsText
@@ -95,6 +93,7 @@ import com.cloud.quiethoursnotificationhelper.commandReceiver
 import com.cloud.quiethoursnotificationhelper.createNotification
 import com.cloud.quiethoursnotificationhelper.createNotificationChannel
 import com.cloud.quiethoursnotificationhelper.deleteGalleryImage
+import com.cloud.quiethoursnotificationhelper.fetchNewErrors
 import com.cloud.quiethoursnotificationhelper.getTodayKey
 import com.cloud.quiethoursnotificationhelper.isQuietHoursNow
 import com.cloud.quiethoursnotificationhelper.loadGalleryImages
@@ -108,7 +107,7 @@ import com.cloud.quiethoursnotificationhelper.playPreviousVoiceNote
 import com.cloud.quiethoursnotificationhelper.restoreSyncIfNeeded
 import com.cloud.quiethoursnotificationhelper.saveAiResponse
 import com.cloud.quiethoursnotificationhelper.scheduleNextCheck
-import com.cloud.quiethoursnotificationhelper.sendNvidiaChatMessageAITab
+import com.cloud.quiethoursnotificationhelper.sendGeminiChatMessageAITab
 import com.cloud.quiethoursnotificationhelper.showDeleteConfirmation
 import com.cloud.quiethoursnotificationhelper.showNextGalleryImage
 import com.cloud.quiethoursnotificationhelper.showPreviousGalleryImage
@@ -226,6 +225,7 @@ class QuietHoursNotificationService : Service() {
         const val EXTRA_IMAGE_INDEX = "extra_image_index"
         const val DELETE_CONFIRMATION_CHANNEL_ID = "delete_confirmation_channel"
         const val MAIL_CHANNEL_ID = "mail_channel"
+        const val ERROR_REPORTS_CHANNEL_ID = "ERROR_REPORTS_CHANNEL_ID"
 
         const val ACTION_MARK_PARTS_READ = "com.cloud.ACTION_MARK_PARTS_READ"
         const val EXTRA_MESSAGE_ID = "extra_message_id"
@@ -234,7 +234,6 @@ class QuietHoursNotificationService : Service() {
         const val THRESHOLD_MINUTES = 30
         const val MAX_MESSAGES_PER_CONTACT = 15
         const val MAX_VOICE_NOTE_FILES = 20
-        const val MAX_HISTORY_SIZE = 50
 
         const val ACTION_RESTORE_NOTIFICATION = "com.cloud.ACTION_RESTORE_NOTIFICATION"
 
@@ -244,6 +243,7 @@ class QuietHoursNotificationService : Service() {
         const val SHOW_OVERLAY = "com.cloud.SHOW_OVERLAY"
         const val ACTION_DAILY_MUSIC_SUMMARY = "com.cloud.ACTION_DAILY_MUSIC_SUMMARY"
         const val ACTION_SCHOOL_DAY_SUMMARY = "com.cloud.ACTION_SCHOOL_DAY_SUMMARY"
+        const val SCHEDULE_DAILY_SUMMARY_ALARM = "com.cloud.SCHEDULE_DAILY_SUMMARY_ALARM"
 
         var currentSenderForVoiceNote: String? = null
         var voiceNoteFiles: List<File> = emptyList()
@@ -334,6 +334,13 @@ class QuietHoursNotificationService : Service() {
 
             return nextChange
         }
+
+        fun scheduledailysummaryalarm(context: Context) {
+            val intent = Intent(context, QuietHoursNotificationService::class.java).apply {
+                action = SCHEDULE_DAILY_SUMMARY_ALARM
+            }
+            context.startService(intent)
+        }
     }
 
     private val prefChangeListener =
@@ -379,7 +386,7 @@ class QuietHoursNotificationService : Service() {
         restoreSyncIfNeeded(this)
         startTriggerListenerIfHomeWifi(this)
         startAiResponseListener(this)
-        scheduleDailySummaryAlarm(this)
+        scheduleDailySummaryAlarm()
         startMailNotifyListener(this)
 
         val filter = IntentFilter(ACTION_MESSAGE_SENT)
@@ -427,32 +434,25 @@ class QuietHoursNotificationService : Service() {
         }
     }
 
-    private fun scheduleDailySummaryAlarm(context: Context) {
+    private fun scheduleDailySummaryAlarm() {
         val cal = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 20)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
             if (timeInMillis <= System.currentTimeMillis()) {
                 add(Calendar.DAY_OF_YEAR, 1)
             }
         }
 
-        val delay = cal.timeInMillis - System.currentTimeMillis()
-
-        val work = PeriodicWorkRequestBuilder<DailySummaryWorker>(
-            1, TimeUnit.DAYS
+        val pi = PendingIntent.getBroadcast(
+            this, 0,
+            Intent(this, DailySummaryReceiver::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-            .setInitialDelay(delay, TimeUnit.MILLISECONDS)
-            .setInputData(
-                workDataOf("action" to ACTION_DAILY_MUSIC_SUMMARY)
-            )
-            .build()
 
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            "daily_music_summary",
-            ExistingPeriodicWorkPolicy.KEEP,
-            work
-        )
+        val am = getSystemService(ALARM_SERVICE) as AlarmManager
+        am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pi)
     }
 
     private fun schedulePeriodicCleanup(context: Context) {
@@ -498,6 +498,11 @@ class QuietHoursNotificationService : Service() {
             when (intent?.action) {
                 ACTION_SCHEDULED_STOP -> {
                     stopSelf()
+                    START_NOT_STICKY
+                }
+
+                SCHEDULE_DAILY_SUMMARY_ALARM -> {
+                    scheduleDailySummaryAlarm()
                     START_NOT_STICKY
                 }
 
@@ -626,6 +631,7 @@ class QuietHoursNotificationService : Service() {
                         putExtra("cmd", """{"action":"close_nots"}""")
                     })
                     syncTodosWithLaptop(this@QuietHoursNotificationService)
+                    fetchNewErrors(this@QuietHoursNotificationService)
                     START_STICKY
                 }
 
@@ -641,8 +647,7 @@ class QuietHoursNotificationService : Service() {
                             if (sessions.isEmpty()) return@launch
 
                             val stats = buildSessionStatsText(sessions)
-                            val result =
-                                sendNvidiaChatMessageAITab(emptyList(), stats) ?: return@launch
+                            val result = sendGeminiChatMessageAITab(emptyList(), stats) ?: return@launch
                             val musicMs =
                                 sessions.filter { it.type == "music" }.sumOf { it.listenedMs }
                             val podcastMs =
