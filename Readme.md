@@ -1,149 +1,111 @@
 # Cloud (Android App)
 
-This project is a powerful multi-functional Android application that combines a number of utilities and services into one unified app. It includes features such as a private cloud storage manager, media recording & playback, authenticator, browser, notes, quick settings helpers, and more.
+This project is a powerful, multi-functional Android application with **ONE** goal: **Replacing** and **improving** third-party apps with a **single** app — **no tracking** (optional tracking for the Music Player for AI analysis, disabled by default), **optional server binding**, and **enhanced privacy**!
 
-## Key Features
+## Tabs 
 
-### Security & Authentication
-- **2FA authenticator** (TOTP generation, secure storage)
-- **Device admin and policy management** (for enhanced control)
-- **Encrypted storage functionality** (AesEncryption and secure file handling)
+### Ai Tab
+- **Text & Picture**: Chat with Nvidia AI models with chat context
 
-### Private Cloud & File Management
-- Private cloud file viewer and manager (via **Supabase**)
-- File import/export to/from local storage and DCIM
-- File icons and MIME type detection
+### Audio Recorder
+- **Voice:** Record your voice
+- **Media:** Record Sounds which played on your phone
 
-### Media & Recording
-- **Audio recorder** (with UI for recording and playback)
-- **Media player integration** (play local songs / podcasts)
+### Authenticator
+- **2FA authenticator:** Generate and save TOTP Codes
+- **Passwort Storage:** Save credentials with lots of parameters
+- **Autofill:** Simply fill your Credentials in
 
-### Productivity & Utility Tools
-- Notes tab for quick note-taking
-- JSON editor
-- Date calculator
-- Quick settings tile helpers (battery chart, network info, sensor info)
+### Browser
+- **Well configured webview:** Max optimized webview for best user experience
+- **Quick Link Buttons:** Set up Quick Link Buttons for maximal flow
 
-### Communication & Social
-- Browser tab for quick in-app browsing
-- Gmail tab integration
-- Contacts tab and management
+### Date Calculator
+- **Calculate Day Differences:** Select start & end date to view days between them
 
-### Background Services & Utilities
-- Auto-clicker service with accessibility support
-- WhatsApp notification listener
-- Quiethours notification manager
-- Shizuku manager support
+### Explore
+- **Optional Tracking Feature** View your procent of visited world
 
----
+### Movie Discover
+- Discover tousands of Movies in different Genres from TMDP (The Movie Data Base)
 
-## How to Build & Run
-1. Open the project in **Android Studio**.
-2. **Create file "Cloud\app\src\main\java\com\example\cloud\Config.kt":**
-```
-package com.cloud
+### Gallery
+- Watch & Delete Pictures and Videos from your local Storage
 
-import android.annotation.SuppressLint
-import android.util.Base64
-import io.github.jan.supabase.annotations.SupabaseInternal
-import io.github.jan.supabase.createSupabaseClient
-import io.github.jan.supabase.postgrest.Postgrest
-import io.github.jan.supabase.realtime.Realtime
-import io.github.jan.supabase.storage.Storage
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.plugins.websocket.WebSockets
-import javax.crypto.Cipher
-import javax.crypto.spec.SecretKeySpec
+### Calender
+- Plan tasks for an organized day
 
-object Config {
-    const val SUPABASE_URL = "" // Your supabase URL (https://xxxxxxx.supabase.co)
-    const val SUPABASE_PUBLISHABLE_KEY = "" // Your supabase anon / publisable key (ey... / sb)
-    const val SUPABASE_BUCKET = "Files" // create a bucket on supabase for Private Cloud
+### Contacts
+- Manage Contacts in one place
 
-    const val BWMP = "" // Bitwarden Master Password (for Command 'bitwarden')
+### Media Player
+- Play, sort and manage music & podcasts locally
+- Download podcasts by name and mark them as favourites
 
-    const val DBKEY = "" // deutsche bahn clientkey (create a application on https://developers.deutschebahn.com/db-api-marketplace/apis/frontpage)
+### Notes
+- Take notes and mark them with a color
 
-    const val DBKEY1 = "" // deutsche bahn apikey
+### Quick Access
+- Get informations about Network, Display, Battery and your device
+- Get an Diagram of your battery history
 
-    const val NVIDIA = "" // nvidia api key for ai models
+### Vocabs
+- **AI OCR:** Upload an Image and get strucutred Vocabs
+- **Learn:** Go trough your Vocabs, choose if you knew it and repeat mistakes
 
-    val LAPTOP_IPS = listOf(
-        "192.168.178.20",
-        "10.58.5.120",
-        "10.135.30.120",
-        "192.168.49.1",
-        "10.164.93.120"
-    ) // ips for laptops to ping
+### Weather
+- View Weather for your current location
+- **Clean GUI:** Swipe trough the Tab with many animations!
 
-    const val SYNC_PORT = 8888
-    const val UPDATE_PORT = 8890
-    const val CLIPBOARD_PORT = 8891
-    const val NOTIFICATION_PORT = 8892
-    const val FLASHCARD_SEND_PORT    = 8896
-    const val FLASHCARD_RECEIVE_PORT = 8897
+## Pictures
+<table>
+    <tr>
+        <td style="vertical-align: top; padding-right: 16px;">
+            <img src="Preview/AiTab.jpg"
+             style="width:auto; border-radius:12px; max-height: 600px" />
+        </td>
+        <td style="vertical-align: top; padding-right: 16px;">
+            <img src="Preview/Authenticator.jpg"
+             style="width:auto; border-radius:12px; max-height: 600px" />
+        </td>
+        <td style="vertical-align: top; padding-right: 16px;">
+            <img src="Preview/Browser.jpg"
+             style="width:auto; border-radius:12px; max-height: 600px" />
+        </td>
+    </tr>
+    <tr>
+        <td style="vertical-align: top; padding-right: 16px;">
+            <img src="Preview/DayCalculator.jpg"
+             style="width:auto; border-radius:12px; max-height: 600px" />
+        </td>
+        <td style="vertical-align: top; padding-right: 16px;">
+            <img src="Preview/Explore.jpg"
+             style="width:auto; border-radius:12px; max-height: 600px" />
+        </td>
+    </tr>
+</table>
 
-    const val IMAGE_SHARE_PORT = 8898
+## Services
+### Media Player
+- Play Songs or Podcasts, of course with position saving
+- Podcast AutoStop after 20min
+- Podcast Queue
+- **Optional Tracking for AI Analysis**
 
-    const val GMAILPASSWORD = "" // leave blank
-
-    @OptIn(SupabaseInternal::class)
-    val client = createSupabaseClient(
-        supabaseUrl = SUPABASE_URL,
-        supabaseKey = SUPABASE_PUBLISHABLE_KEY
-    ) {
-        install(Storage)
-        install(Postgrest)
-        install(Realtime)
-
-        httpConfig {
-            install(WebSockets)
-        }
-        httpEngine = OkHttp.create()
-    }
-
-    private const val FIXED_KEY = "" // enryption key
-
-    private val secretKey = SecretKeySpec(FIXED_KEY.toByteArray(), "AES")
-
-    @SuppressLint("GetInstance")
-    fun encrypt(plainText: String): String {
-        val cipher = Cipher.getInstance("AES")
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey)
-        val encryptedBytes = cipher.doFinal(plainText.toByteArray())
-        return Base64.encodeToString(encryptedBytes, Base64.NO_WRAP)
-    }
-
-    @SuppressLint("GetInstance")
-    fun decrypt(encryptedBase64: String): String {
-        val cipher = Cipher.getInstance("AES")
-        cipher.init(Cipher.DECRYPT_MODE, secretKey)
-        val encryptedBytes = Base64.decode(encryptedBase64, Base64.NO_WRAP)
-        val decryptedBytes = cipher.doFinal(encryptedBytes)
-        return decryptedBytes.toString(Charsets.UTF_8)
-    }
-}
-
-object TMDBConfig {
-    const val APIKEY = "" // for MovieDiscover Tab
-
-}
-```
-
-## Project Structure
-Some of the main modules include:
-- `authenticator/` – 2FA and authenticator UI
-- `privatecloudapp/` – file browsing and cloud helpers
-- `mediarecorder/` & `mediaplayer/` – media recording/playback
-- `quicksettingsfunctions/` – quick settings utilities
-- `service/` – background services like auto clicker and notification listeners
-
----
-
-## Notes for Contributors
-- This is an experimental multi-tool app with many features under active development.
-- Feel free to explore the existing packages and add new tabs or services.
-- Keep feature modules organized under their corresponding packages.
+### Quiet Hours (Biggest part of app)
+<table>
+  <tr>
+    <td style="vertical-align: top; padding-right: 16px;">
+      <ul>
+        <li><strong>MASSIVE Command System:</strong> Run commands via notification, like managing todos or replying to Messages from WhatsApp / Telegram, View your Gallery, and MUCH more</li>
+      </ul>
+    </td>
+    <td style="vertical-align: top;">
+      <img src="Preview/QuietHourNotification.jpg"
+     style="width:auto; border-radius:12px;" />
+    </td>
+  </tr>
+</table>
 
 ---
 
