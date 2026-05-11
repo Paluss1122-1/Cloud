@@ -1,4 +1,4 @@
-package com.cloud.tabs
+package com.cloud.tabs.school
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -40,7 +40,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -80,6 +79,7 @@ import com.cloud.core.objects.Config
 import com.cloud.quiethoursnotificationhelper.callNvidiaVisionApi
 import com.cloud.quiethoursnotificationhelper.flashcardVokabelnFlow
 import com.cloud.quiethoursnotificationhelper.trySendImageToLaptop
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -122,15 +122,15 @@ data class WidthState(
     val value: Int
 )
 
-enum class VokabelTabScreen { HOME, UPLOAD, REVIEW, LEARN }
+enum class VokabelTabScreen { HOME, UPLOAD, REVIEW, LEARN, MATERIALIEN }
 
-private val BgSurface = Color(0xFF1E1E1E)
+val BgSurface = Color(0xFF1E1E1E)
 private val BgCard = Color(0xFF2A2A2A)
-private val AccentViolet = Color(0xFF7C4DFF)
+val AccentViolet = Color(0xFF7C4DFF)
 private val AccentVioletDim = Color(0xFF4A148C)
-private val TextPrimary = Color(0xFFFFFFFF)
+val TextPrimary = Color(0xFFFFFFFF)
 private val TextSecondary = Color(0xFFB0B0B0)
-private val TextTertiary = Color(0xFF757575)
+val TextTertiary = Color(0xFF757575)
 
 @Composable
 fun VocabTab() {
@@ -150,7 +150,7 @@ fun VocabTab() {
     var lastWidths by remember { mutableStateOf<List<WidthState>>(emptyList()) }
     var currentWidths by remember { mutableStateOf<List<WidthState>>(emptyList()) }
     var showMergeDialog by remember { mutableStateOf(false) }
-    var extractionJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var extractionJob by remember { mutableStateOf<Job?>(null) }
 
     if (showMergeDialog) {
         MergeVocabSetsDialog(
@@ -215,7 +215,8 @@ fun VocabTab() {
                     currentWidths = currentWidths.filter { it.id != id } + WidthState(id, value)
                 },
                 lastWidths = lastWidths,
-                onMergeClick = { showMergeDialog = true }
+                onMergeClick = { showMergeDialog = true },
+                onMaterialienClick = { screen = VokabelTabScreen.MATERIALIEN }
             )
 
             VokabelTabScreen.UPLOAD -> UploadScreen(
@@ -314,6 +315,10 @@ fun VocabTab() {
                 },
                 setName = activeSet?.name
             )
+
+            VokabelTabScreen.MATERIALIEN -> MaterialienScreen(
+                onBack = { screen = VokabelTabScreen.HOME }
+            )
         }
     }
 }
@@ -328,7 +333,8 @@ fun HomeScreen(
     onDeleteSet: (VokabelSet) -> Unit,
     onUpdate: (Int, Int) -> Unit,
     lastWidths: List<WidthState>,
-    onMergeClick: () -> Unit = {}
+    onMergeClick: () -> Unit = {},
+    onMaterialienClick: () -> Unit = {}
 ) {
     var setToDelete by remember { mutableStateOf<VokabelSet?>(null) }
 
@@ -379,12 +385,13 @@ fun HomeScreen(
                             .clip(RoundedCornerShape(16.dp))
                             .background(MaterialTheme.colorScheme.primary)
                             .padding(horizontal = 20.dp, vertical = 18.dp)
+                            .weight(1f)
                     ) {
                         Text("📷", fontSize = 22.sp)
                         Text(
                             "Neues Set scannen",
                             color = TextPrimary,
-                            fontSize = 16.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -393,16 +400,17 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier
+                            .clickable { onMaterialienClick() }
                             .clip(RoundedCornerShape(16.dp))
                             .background(MaterialTheme.colorScheme.primary)
                             .padding(horizontal = 20.dp, vertical = 18.dp)
-                            .clickable { }
+                            .weight(1f)
                     ) {
                         Text("📚", fontSize = 22.sp)
                         Text(
                             "Materialien",
                             color = TextPrimary,
-                            fontSize = 16.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
