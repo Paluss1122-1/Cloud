@@ -14,10 +14,10 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.cloud.core.objects.Config.DEL_GAL_CONF
-import com.cloud.core.objects.Config.GAL
 import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.core.objects.Config
+import com.cloud.core.objects.Config.DEL_GAL_CONF
+import com.cloud.core.objects.Config.GAL
 import com.cloud.services.QuietHoursNotificationService
 import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_CANCEL_DELETE
 import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_CONFIRM_DELETE_IMAGE
