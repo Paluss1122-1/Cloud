@@ -82,16 +82,20 @@ import com.cloud.tabs.AlgorithmicPlaylistRegistry
 import com.cloud.tabs.ListenSession
 import com.cloud.tabs.MediaAnalyticsManager
 import com.cloud.tabs.MediaAnalyticsManager.getSessions
-import com.cloud.tabs.Vokabel
 import com.cloud.tabs.aitab.ChatMessage
 import com.cloud.tabs.authenticator.PasswordDatabase
 import com.cloud.tabs.authenticator.TotpGenerator.generateTOTP
 import com.cloud.tabs.authenticator.TwoFADatabase
+import com.cloud.tabs.school.Vokabel
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.google.firebase.Firebase
+import com.google.firebase.ai.ai
+import com.google.firebase.ai.type.GenerativeBackend
+import com.google.firebase.ai.type.content
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -164,7 +168,6 @@ private var listenerJob: Job? = null
 private var updateServerSocket: ServerSocket? = null
 
 private var triggerJob: Job? = null
-private var triggerServerSocket: ServerSocket? = null
 
 private var aiResponseJob: Job? = null
 private var aiResponseServerSocket: ServerSocket? = null
@@ -431,7 +434,7 @@ suspend fun callNvidiaVisionApi(
                                 if (delta.isNotEmpty()) {
                                     sb.append(delta)
                                     withContext(Dispatchers.Main) {
-                                        onProgress(sb.toString())  // live update
+                                        onProgress(sb.toString())
                                     }
                                 }
                             } catch (_: Exception) {}
@@ -586,7 +589,9 @@ fun registerWifiReconnectReceiver(context: Context) {
             ConnectionGuard.updateWifiStatus(false)
             syncInProgress.set(false)
             pendingSyncJob?.cancel()
-            stopAllSyncServices(context)
+            if (isLaptopConnected) {
+                stopAllSyncServices(context)
+            }
         }
 
         override fun onLinkPropertiesChanged(
@@ -620,8 +625,8 @@ fun registerWifiReconnectReceiver(context: Context) {
 
 @SuppressLint("Wakelock", "WakelockTimeout")
 fun startTriggerListener(context: Context) {
+    if (triggerJob?.isActive == true) return
     appContext = context.applicationContext
-    triggerJob?.cancel()
 
     triggerJob = launchServer(syncScope, Config.TRIGGER_PORT, "startTriggerListener") { client ->
         val pm = context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -679,7 +684,6 @@ fun restoreSyncIfNeeded(context: Context) {
 }
 
 fun stopAllSyncServices(context: Context) {
-    appContext = null
     stopUpdateListener(false)
 
     listOf(
@@ -694,12 +698,13 @@ fun stopAllSyncServices(context: Context) {
     flashcardResponseSocket?.close(); flashcardResponseSocket = null
 
     synchronized(activeServers) {
-        activeServers.forEach { runCatching { it.close() } }
-        activeServers.clear()
-    }
-
-    synchronized(serverMutexes) {
-        serverMutexes.clear()
+        activeServers.removeAll { server ->
+            val isTriggerServer = runCatching { server.localPort }.getOrNull() == Config.TRIGGER_PORT
+            if (!isTriggerServer) {
+                runCatching { server.close() }
+            }
+            !isTriggerServer
+        }
     }
 
     cpuWakeLock.safeRelease(); cpuWakeLock = null
@@ -712,9 +717,16 @@ fun stopAllSyncServices(context: Context) {
         10.seconds,
         context
     )
+
+    if (triggerJob?.isActive != true) {
+        startTriggerListener(context)
+    }
 }
 
 fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
+    if (triggerJob?.isActive != true) {
+        startTriggerListener(context)
+    }
     if (syncInProgress.getAndSet(true) || !Config.realDevice) {
         showSimpleNotificationExtern(
             "syncTodosWithLaptop RETURN",
@@ -1443,6 +1455,53 @@ suspend fun sendNvidiaChatMessageAITab(
         }
     }
     return callNvidiaApi(model, messages)
+}
+
+suspend fun sendGeminiChatMessageAITab(
+    history: List<ChatMessage>,
+    userMessage: String,
+): String? {
+    val model = Firebase.ai(backend = GenerativeBackend.googleAI())
+        .generativeModel("gemini-3-flash-preview")
+
+    val prompt = buildString {
+        append("Du bist ein hilfreicher Chat-Assistent. Antworte kurz, klar und auf Deutsch.\n\n")
+
+        history.forEach { msg ->
+            append(if (msg.own) "User: " else "Assistant: ")
+            append(msg.text)
+            append("\n")
+        }
+
+        append("\nUser: $userMessage")
+    }
+
+    return try {
+        val response = model.generateContent(prompt)
+        response.text
+    } catch (_: Exception) {
+        null
+    }
+}
+
+suspend fun extractTextFromImage(image: Bitmap): String? {
+
+    val model = Firebase.ai(backend = GenerativeBackend.googleAI())
+        .generativeModel("gemini-3-flash-preview")
+
+    val prompt = "Extrahiere exakt allen lesbaren Text aus dem Bild und antworte kurz auf Deutsch."
+
+    return try {
+        val response = model.generateContent(
+            content {
+                image(image)
+                text(prompt)
+            }
+        )
+        response.text
+    } catch (_: Exception) {
+        null
+    }
 }
 
 private fun handleMediaCommand(context: Context, json: JSONObject) {
