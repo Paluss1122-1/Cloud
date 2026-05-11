@@ -85,7 +85,6 @@ jobs:
                   httpConfig {
                       install(WebSockets)
                   }
-                  httpEngine = OkHttp.create()
               }
               const val BWMP = "${{ secrets.BWMP }}"
               const val DBKEY = "${{ secrets.DBKEY }}"
