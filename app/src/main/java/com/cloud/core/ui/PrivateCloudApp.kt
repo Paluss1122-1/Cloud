@@ -167,12 +167,12 @@ import com.cloud.tabs.QuickSettingsTabContent
 import com.cloud.tabs.RemoteDesktopTabContent
 import com.cloud.tabs.SpotifyDownloaderApp
 import com.cloud.tabs.SpotifyDownloaderTab
-import com.cloud.tabs.VocabTab
 import com.cloud.tabs.WeatherTabContent
 import com.cloud.tabs.aitab.AITabContent
 import com.cloud.tabs.audiorecordertab.AudioRecorderContent
 import com.cloud.tabs.authenticator.AuthenticatorTab
 import com.cloud.tabs.exploretab.ExploreTabContent
+import com.cloud.tabs.school.VocabTab
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
