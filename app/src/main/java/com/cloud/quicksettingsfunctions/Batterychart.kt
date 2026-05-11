@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -34,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +58,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.cloud.core.activities.Cloud.Companion.appScope
+import com.cloud.core.objects.Config.client
+import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,6 +67,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -82,12 +90,28 @@ data class BatterySample(
 object BatteryDataRepository {
     private lateinit var context: Context
     private val json = Json { ignoreUnknownKeys = true }
-    private val _samples = MutableStateFlow<List<BatterySample>>(emptyList())
+    internal val _samples = MutableStateFlow<List<BatterySample>>(emptyList())
     val samples = _samples.asStateFlow()
 
     fun init(ctx: Context) {
         context = ctx.applicationContext
-        appScope.launch { _samples.value = loadSamples() }
+        appScope.launch {
+            val local = loadSamples()
+            if (local.isEmpty()) {
+                val remote = fetchSamplesFromSupabase()
+                _samples.value = remote
+                if (remote.isNotEmpty()) saveSamplesLocal(remote)
+            } else {
+                _samples.value = local
+                appScope.launch(Dispatchers.IO) {
+                    val remote = fetchSamplesFromSupabase()
+                    if (remote.size > local.size) {
+                        _samples.value = remote
+                        saveSamplesLocal(remote)
+                    }
+                }
+            }
+        }
     }
 
     fun addSample(sample: BatterySample) {
@@ -99,19 +123,44 @@ object BatteryDataRepository {
         saveSamples(updated)
     }
 
+    private fun saveSamples(samples: List<BatterySample>) = appScope.launch {
+        saveSamplesLocal(samples)
+        syncToSupabase(samples)
+    }
+
+    private suspend fun saveSamplesLocal(samples: List<BatterySample>) =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                context.getSharedPreferences("battery_data", Context.MODE_PRIVATE)
+                    .edit { putString("samples", json.encodeToString(samples)) }
+            }
+        }
+
+    private fun syncToSupabase(samples: List<BatterySample>) = appScope.launch(Dispatchers.IO) {
+        runCatching {
+            client.from("Cloud").upsert(buildJsonObject {
+                put("id", 1)
+                put("battery_samples", json.encodeToString(samples))
+            })
+        }
+    }
+
+    private suspend fun fetchSamplesFromSupabase(): List<BatterySample> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val row = client.from("Cloud").select().decodeSingle<JsonObject>()
+                val str =
+                    row["battery_samples"]?.jsonPrimitive?.content ?: return@withContext emptyList()
+                json.decodeFromString<List<BatterySample>>(str)
+            }.getOrElse { emptyList() }
+        }
+
     private suspend fun loadSamples(): List<BatterySample> = withContext(Dispatchers.IO) {
         runCatching {
             val prefs = context.getSharedPreferences("battery_data", Context.MODE_PRIVATE)
             val jsonStr = prefs.getString("samples", null)
             if (jsonStr != null) json.decodeFromString<List<BatterySample>>(jsonStr) else emptyList()
         }.getOrElse { emptyList() }
-    }
-
-    private fun saveSamples(samples: List<BatterySample>) = appScope.launch {
-        runCatching {
-            context.getSharedPreferences("battery_data", Context.MODE_PRIVATE)
-                .edit { putString("samples", json.encodeToString(samples)) }
-        }
     }
 }
 
@@ -164,6 +213,27 @@ fun BatteryChartScreen(onDismiss: () -> Unit) {
                 .clickable { onDismiss() }
                 .padding(10.dp)
         ) {
+            val scope = rememberCoroutineScope()
+            var loading by remember { mutableStateOf(false) }
+            val context = LocalContext.current
+            var result by remember { mutableStateOf<String?>(null) }
+
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            loading = true
+                            val minutes = predictChargingTime(context)
+                            result = minutes?.let { "~$it min bis 85%" } ?: "Keine Schätzung möglich"
+                            loading = false
+                        }
+                    },
+                    enabled = !loading
+                ) {
+                    Text(if (loading) "Berechne..." else "Ladezeit berechnen")
+                }
+                result?.let { Text(it, color = Color.White) }
+            }
             Box(
                 Modifier
                     .align(Alignment.Center)
@@ -188,7 +258,6 @@ fun BatteryChartScreenContent(onClose: () -> Unit) {
         )
     }
     var selectedHour by remember { mutableStateOf<Int?>(null) }
-
     Box(Modifier.fillMaxSize()) {
         BatteryLineChart(Modifier.fillMaxSize(), selectedDay, selectedHour)
         BatteryChartFilters(
