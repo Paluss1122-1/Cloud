@@ -18,9 +18,9 @@ class Cloud : Application() {
 
     companion object {
         lateinit var coroutineExceptionHandler: CoroutineExceptionHandler
-        val appScope = CoroutineScope(
-            SupervisorJob() + Dispatchers.Main + coroutineExceptionHandler
-        )
+        val appScope by lazy {
+            CoroutineScope(SupervisorJob() + Dispatchers.Main + coroutineExceptionHandler)
+        }
     }
 
     override fun onCreate() {
