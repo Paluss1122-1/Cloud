@@ -6,6 +6,8 @@ biometric = "1.1.0"
 coilCompose = "2.7.0"
 core = "3.5.4"
 coreSplashscreen = "1.2.0"
+firebaseAi = "17.12.0"
+firebaseBom = "34.13.0"
 foundation = "1.11.1"
 gson = "2.14.0"
 kotlin = "2.3.21"
@@ -61,6 +63,8 @@ androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref =
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "roomRuntime" }
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coilCompose" }
 core = { module = "com.google.zxing:core", version.ref = "core" }
+firebase-ai = { module = "com.google.firebase:firebase-ai", version.ref = "firebaseAi" }
+firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
