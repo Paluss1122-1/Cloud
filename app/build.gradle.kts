@@ -15,6 +15,11 @@ val localProps = Properties().apply {
     load(rootProject.file("local.properties").inputStream())
 }
 
+val keystoreFile = findProperty("KEY_STORE_FILE")?.toString() ?: "debug.keystore"
+val keystorePassword = findProperty("KEY_STORE_PASSWORD")?.toString() ?: ""
+val keyAlias = findProperty("KEY_ALIAS")?.toString() ?: ""
+val keyPassword = findProperty("KEY_PASSWORD")?.toString() ?: ""
+
 android {
     namespace = "com.cloud"
     compileSdk = 36
@@ -29,10 +34,20 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file(keystoreFile)
+            storePassword = keystorePassword
+            keyAlias = keyAlias
+            keyPassword = keyPassword
+        }
+    }
+
     buildTypes {
         debug {
         }
         release {
+            signingConfig = signingConfigs.getByName("release")
         }
         create("minifiedDebug") {
             initWith(buildTypes.getByName("debug"))
@@ -116,6 +131,6 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.android.mail)
     implementation(libs.androidx.autofill)
-    implementation(platform("com.google.firebase:firebase-bom:34.13.0"))
-    implementation("com.google.firebase:firebase-ai:17.12.0")
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.ai)
 }
