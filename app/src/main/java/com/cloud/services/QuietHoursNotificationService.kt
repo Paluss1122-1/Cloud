@@ -38,7 +38,6 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
-import androidx.annotation.RequiresPermission
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -983,7 +982,6 @@ class QuietHoursNotificationService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    @RequiresPermission(Manifest.permission.SCHEDULE_EXACT_ALARM)
     override fun onDestroy() {
         super.onDestroy()
 
