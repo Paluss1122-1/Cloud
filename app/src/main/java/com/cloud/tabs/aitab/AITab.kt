@@ -53,6 +53,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cloud.core.objects.prvt
 import com.cloud.core.ui.NeonBox
 import com.cloud.core.ui.PloppingButton
 
@@ -87,7 +88,7 @@ fun AITabContent(vm: AITabViewModel = viewModel()) {
                     modifier = Modifier.padding(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf("Nvidia", "Server").forEachIndexed { index, mode ->
+                    listOfNotNull("Nvidia", if (prvt()) "Server" else null).forEachIndexed { index, mode ->
                         val containerColor by animateColorAsState(
                             targetValue = if (vm.currentMode == mode) Color(0xFF555555) else Color(
                                 0xFF333333
