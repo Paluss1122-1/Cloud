@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Environment
-import android.webkit.CookieManager
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,7 +48,6 @@ import androidx.core.content.edit
 import androidx.core.net.toUri
 import com.cloud.core.objects.Config.PODCASTINDEX_API_KEY
 import com.cloud.core.objects.Config.PODCASTINDEX_API_SECRET
-import com.cloud.core.objects.Config.PODCAST_DOWNLOAD_PROXY
 import com.cloud.core.ui.FeedCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -167,18 +165,16 @@ fun PodcastTab() {
     fun downloadEpisode(audioUrl: String, title: String) {
         val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_").take(100)
         val filename = "$safeTitle.mp3"
-        val proxyUrl = "$PODCAST_DOWNLOAD_PROXY?url=${java.net.URLEncoder.encode(audioUrl, "UTF-8")}&filename=${java.net.URLEncoder.encode(filename, "UTF-8")}"
-
         val destDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "cloud/podcasts")
         destDir.mkdirs()
-        val destFile = File(destDir, filename)
 
-        val request = DownloadManager.Request(proxyUrl.toUri()).apply {
+        val request = DownloadManager.Request(audioUrl.toUri()).apply {
             setTitle(filename)
             setDescription("Podcast wird heruntergeladen…")
             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            setDestinationUri(destFile.toUri())
-            addRequestHeader("Cookie", CookieManager.getInstance().getCookie(proxyUrl) ?: "")
+            setDestinationUri(File(destDir, filename).toUri())
+            setAllowedOverMetered(true)
+            addRequestHeader("User-Agent", "Mozilla/5.0")
         }
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val downloadId = dm.enqueue(request)
