@@ -191,7 +191,7 @@ jobs:
 
       - name: Restore debug keystore
         run: |
-          echo "${{ secrets.DEBUG_KEYSTORE_B64 }}" | base64 -d > debug.keystore
+          echo "${{ secrets.DEBUG_KEYSTORE_B64 }}" | base64 -d > app/debug.keystore
 
       - name: Set signing environment
         run: |
