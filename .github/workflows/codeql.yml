@@ -201,19 +201,14 @@ jobs:
 
       - name: Build project
         run: |
-          ./gradlew assembleRelease \
-            -PKEY_STORE_FILE=debug.keystore \
-            -PKEY_STORE_PASSWORD=$DEBUG_KEYSTORE_PASSWORD \
-            -PKEY_ALIAS=$DEBUG_KEY_ALIAS \
-            -PKEY_PASSWORD=$DEBUG_KEY_PASSWORD \
-            --build-cache --parallel --no-daemon
+          ./gradlew assembleDebug --build-cache --parallel --no-daemon
 
       - name: Save APK
         if: matrix.build-mode == 'manual'
         run: |
           BUILD_DIR="Builds/$(date +'%Y-%m-%d_%H-%M-%S')"
           mkdir -p "$BUILD_DIR"
-          cp app\build\outputs\apk\release\app-release.apk "$BUILD_DIR/"
+          cp app/build/outputs/apk/debug/app-debug.apk "$BUILD_DIR/"
 
       - name: Upload APK artifact
         if: matrix.build-mode == 'manual'
