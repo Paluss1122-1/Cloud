@@ -201,7 +201,7 @@ jobs:
 
       - name: Build project
         run: |
-          ./gradlew assembleDebug \
+          ./gradlew assembleRelease \
             -PdebugStoreFile=debug.keystore \
             -PdebugStorePassword=$DEBUG_KEYSTORE_PASSWORD \
             -PdebugKeyAlias=$DEBUG_KEY_ALIAS \
@@ -213,7 +213,7 @@ jobs:
         run: |
           BUILD_DIR="Builds/$(date +'%Y-%m-%d_%H-%M-%S')"
           mkdir -p "$BUILD_DIR"
-          cp app/build/outputs/apk/debug/app-debug.apk "$BUILD_DIR/"
+          cp app/build/outputs/apk/debug/app-release.apk "$BUILD_DIR/"
 
       - name: Upload APK artifact
         if: matrix.build-mode == 'manual'
