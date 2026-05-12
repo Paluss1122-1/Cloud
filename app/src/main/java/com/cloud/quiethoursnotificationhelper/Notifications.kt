@@ -1,6 +1,5 @@
 package com.cloud.quiethoursnotificationhelper
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.app.Notification
@@ -13,7 +12,6 @@ import android.content.Context.MODE_PRIVATE
 import android.content.Intent
 import android.provider.Settings
 import android.util.Log
-import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import com.cloud.core.functions.showSimpleNotificationExtern
@@ -105,7 +103,6 @@ fun scheduleNextCheck(context: Context) {
     }
 }
 
-@RequiresPermission(Manifest.permission.SCHEDULE_EXACT_ALARM)
 private fun scheduleWithAlarmManager(
     triggerAtMillis: Long,
     context: Context,
