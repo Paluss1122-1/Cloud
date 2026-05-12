@@ -213,7 +213,7 @@ jobs:
         run: |
           BUILD_DIR="Builds/$(date +'%Y-%m-%d_%H-%M-%S')"
           mkdir -p "$BUILD_DIR"
-          cp app/build/outputs/apk/debug/app-release.apk "$BUILD_DIR/"
+          cp app\build\outputs\apk\release\app-release.apk "$BUILD_DIR/"
 
       - name: Upload APK artifact
         if: matrix.build-mode == 'manual'
