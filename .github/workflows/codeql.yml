@@ -202,10 +202,10 @@ jobs:
       - name: Build project
         run: |
           ./gradlew assembleRelease \
-            -PdebugStoreFile=debug.keystore \
-            -PdebugStorePassword=$DEBUG_KEYSTORE_PASSWORD \
-            -PdebugKeyAlias=$DEBUG_KEY_ALIAS \
-            -PdebugKeyPassword=$DEBUG_KEY_PASSWORD \
+            -PKEY_STORE_FILE=debug.keystore \
+            -PKEY_STORE_PASSWORD=$DEBUG_KEYSTORE_PASSWORD \
+            -PKEY_ALIAS=$DEBUG_KEY_ALIAS \
+            -PKEY_PASSWORD=$DEBUG_KEY_PASSWORD \
             --build-cache --parallel --no-daemon
 
       - name: Save APK
