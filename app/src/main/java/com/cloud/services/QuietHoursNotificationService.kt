@@ -434,6 +434,12 @@ class QuietHoursNotificationService : Service() {
     }
 
     private fun scheduleDailySummaryAlarm() {
+        val am = getSystemService(ALARM_SERVICE) as AlarmManager
+
+        if (!am.canScheduleExactAlarms()) {
+            return
+        }
+
         val cal = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 20)
             set(Calendar.MINUTE, 0)
@@ -450,7 +456,6 @@ class QuietHoursNotificationService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val am = getSystemService(ALARM_SERVICE) as AlarmManager
         am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pi)
     }
 
