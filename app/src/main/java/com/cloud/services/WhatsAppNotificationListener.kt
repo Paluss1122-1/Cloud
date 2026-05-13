@@ -502,6 +502,9 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     }
 
     private fun scheduleBlockedNotificationsAlarm() {
+        val alarmManager = getSystemService(ALARM_SERVICE) as android.app.AlarmManager
+        if (!alarmManager.canScheduleExactAlarms()) return
+
         val cal = java.util.Calendar.getInstance().apply {
             set(java.util.Calendar.HOUR_OF_DAY, 14)
             set(java.util.Calendar.MINUTE, 0)
@@ -518,7 +521,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
         )
 
-        val alarmManager = getSystemService(ALARM_SERVICE) as android.app.AlarmManager
         if (alarmManager.canScheduleExactAlarms()) {
             alarmManager.setExactAndAllowWhileIdle(
                 android.app.AlarmManager.RTC_WAKEUP,
@@ -598,8 +600,7 @@ class BlockedNotificationReceiver : android.content.BroadcastReceiver() {
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
         )
 
-        val alarmManager =
-            context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+        val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
         if (!alarmManager.canScheduleExactAlarms()) return
         alarmManager.setExactAndAllowWhileIdle(
             android.app.AlarmManager.RTC_WAKEUP,
