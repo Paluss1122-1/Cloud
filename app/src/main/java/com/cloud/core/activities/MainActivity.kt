@@ -5,7 +5,6 @@ import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.app.admin.DeviceAdminReceiver
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -24,7 +23,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.core.animation.doOnEnd
-import androidx.core.app.ActivityCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
@@ -99,13 +97,7 @@ class MainActivity : FragmentActivity() {
             ActivityResultContracts.RequestMultiplePermissions()
         ) { _ -> }
 
-        permissions.forEach {
-            if (ActivityCompat.checkSelfPermission(this, it)
-                != PackageManager.PERMISSION_GRANTED
-            ) {
-                launcher.launch(arrayOf(it))
-            }
-        }
+        launcher.launch(permissions)
 
         checkPermissionsAndHandleIntent(intent)
 
