@@ -75,6 +75,7 @@ import com.cloud.R
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.realDevice
 import com.cloud.core.objects.PasswordStorage
+import com.cloud.core.objects.prvt
 import com.cloud.services.ChatService
 import com.cloud.services.QuietHoursNotificationService
 import io.github.jan.supabase.storage.Storage
@@ -134,7 +135,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     var reloadKey by remember { mutableIntStateOf(0) }
     realDevice = getDeviceName().trim().equals("Samsung SM-S921U1", ignoreCase = true)
 
-    if (realDevice) {
+    if (realDevice && prvt()) {
         if (masterPw == null || Config.masterPassword.isEmpty()) {
             MasterPasswordSetupScreen { pw ->
                 PasswordStorage.savePassword(context, pw)
