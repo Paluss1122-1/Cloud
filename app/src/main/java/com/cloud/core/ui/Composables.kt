@@ -25,6 +25,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -51,10 +53,12 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.cloud.tabs.Episode
 import com.cloud.tabs.PodcastFeed
@@ -149,7 +153,10 @@ fun NeonBox(
                             Paint().apply {
                                 color = neonColors.last().copy(alpha = 0.55f).toArgb()
                                 isAntiAlias = true
-                                maskFilter = android.graphics.BlurMaskFilter(glowBlur1, android.graphics.BlurMaskFilter.Blur.OUTER)
+                                maskFilter = android.graphics.BlurMaskFilter(
+                                    glowBlur1,
+                                    android.graphics.BlurMaskFilter.Blur.OUTER
+                                )
                             }
                         )
                     }
@@ -162,7 +169,10 @@ fun NeonBox(
                             Paint().apply {
                                 color = neonColors.first().copy(alpha = 0.65f).toArgb()
                                 isAntiAlias = true
-                                maskFilter = android.graphics.BlurMaskFilter(glowBlur2, android.graphics.BlurMaskFilter.Blur.OUTER)
+                                maskFilter = android.graphics.BlurMaskFilter(
+                                    glowBlur2,
+                                    android.graphics.BlurMaskFilter.Blur.OUTER
+                                )
                             }
                         )
                     }
@@ -210,13 +220,29 @@ fun FeedCard(
                 AsyncImage(
                     model = feed.image.ifEmpty { null },
                     contentDescription = null,
-                    modifier = Modifier.size(54.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF2A2A32)),
+                    modifier = Modifier
+                        .size(54.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF2A2A32)),
                     contentScale = ContentScale.Crop,
                 )
                 Column(Modifier.weight(1f)) {
-                    Text(feed.title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        feed.title,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                     if (feed.author.isNotEmpty()) {
-                        Text(feed.author, fontSize = 12.sp, color = Color(0xFF7A7880), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            feed.author,
+                            fontSize = 12.sp,
+                            color = Color(0xFF7A7880),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
                 IconButton(onClick = onToggleFav) {
@@ -228,7 +254,11 @@ fun FeedCard(
                 }
                 IconButton(onClick = onToggleExpand) {
                     if (loadingEpisodes == feed.feedUrl) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color(0xFFE8622A))
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = Color(0xFFE8622A)
+                        )
                     } else {
                         Icon(
                             if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
@@ -241,39 +271,130 @@ fun FeedCard(
             if (isExpanded) {
                 HorizontalDivider(color = Color.White.copy(0.07f))
                 when {
-                    feedEpisodes == null -> Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFFE8622A))
+                    feedEpisodes == null -> Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = Color(0xFFE8622A)
+                        )
                     }
-                    feedEpisodes.isEmpty() -> Text("Keine Episoden gefunden", modifier = Modifier.padding(16.dp), color = Color(0xFF7A7880), fontSize = 13.sp)
+
+                    feedEpisodes.isEmpty() -> Text(
+                        "Keine Episoden gefunden",
+                        modifier = Modifier.padding(16.dp),
+                        color = Color(0xFF7A7880),
+                        fontSize = 13.sp
+                    )
+
                     else -> feedEpisodes.forEachIndexed { idx, ep ->
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Text("${idx + 1}", fontSize = 11.sp, color = Color(0xFF4A4850), modifier = Modifier.width(24.dp))
-                            Text(ep.title, modifier = Modifier.weight(1f), fontSize = 13.sp, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                "${idx + 1}",
+                                fontSize = 11.sp,
+                                color = Color(0xFF4A4850),
+                                modifier = Modifier.width(24.dp)
+                            )
+                            Text(
+                                ep.title,
+                                modifier = Modifier.weight(1f),
+                                fontSize = 13.sp,
+                                color = Color.White,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
                             OutlinedIconButton(
                                 onClick = { onStream(ep.audioUrl) },
                                 modifier = Modifier.size(36.dp),
                                 border = BorderStroke(1.dp, Color.White.copy(0.15f))
                             ) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color(0xFFE8622A), modifier = Modifier.size(18.dp))
+                                Icon(
+                                    Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    tint = Color(0xFFE8622A),
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                             OutlinedIconButton(
                                 onClick = { onDownload(ep.audioUrl, ep.title) },
                                 modifier = Modifier.size(36.dp),
                                 border = BorderStroke(1.dp, Color.White.copy(0.15f))
                             ) {
-                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = Color(0xFFE8622A), modifier = Modifier.size(18.dp))
+                                Icon(
+                                    Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = Color(0xFFE8622A),
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
                         if (idx < feedEpisodes.lastIndex) {
-                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.White.copy(0.04f))
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = Color.White.copy(0.04f)
+                            )
                         }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+fun AlertDialogCloud(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: @Composable (() -> Unit)? = null,
+    title: String = "",
+    text: String = "",
+    shape: Shape = AlertDialogDefaults.shape,
+    iconContentColor: Color = AlertDialogDefaults.iconContentColor,
+    titleContentColor: Color = AlertDialogDefaults.titleContentColor,
+    textContentColor: Color = AlertDialogDefaults.textContentColor,
+    tonalElevation: Dp = AlertDialogDefaults.TonalElevation,
+    properties: DialogProperties = DialogProperties()
+) {
+    AlertDialog(
+        onDismissRequest = { onDismiss() },
+        confirmButton = {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFFB71C1C))
+                    .clickable { onConfirm() }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) { Text("Löschen", color = TextPrimary, fontWeight = FontWeight.SemiBold) }
+        },
+        modifier = modifier,
+        dismissButton = {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(BgCard)
+                    .clickable { onDismiss() }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) { Text("Abbrechen", color = TextSecondary) }
+        },
+        icon = icon,
+        title = { Text(title, color = TextSecondary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+        text = { Text(text, color = TextSecondary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+        shape = shape,
+        containerColor = BgSurface,
+        iconContentColor = iconContentColor,
+        titleContentColor = titleContentColor,
+        textContentColor = textContentColor,
+        tonalElevation = tonalElevation,
+        properties = properties
+    )
 }

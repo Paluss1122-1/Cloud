@@ -377,29 +377,11 @@ fun HomeScreen(
     var menuOpenFor by remember { mutableStateOf<Long?>(null) }
 
     if (setToDelete != null) {
-        AlertDialog(
-            onDismissRequest = { setToDelete = null },
-            containerColor = BgSurface,
-            title = { Text("Set löschen?", color = TextPrimary, fontWeight = FontWeight.Bold) },
-            text = { Text("\"${setToDelete!!.name}\" wird gelöscht.", color = TextSecondary) },
-            confirmButton = {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFFB71C1C))
-                        .clickable { onDeleteSet(setToDelete!!); setToDelete = null }
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) { Text("Löschen", color = TextPrimary, fontWeight = FontWeight.SemiBold) }
-            },
-            dismissButton = {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(BgCard)
-                        .clickable { setToDelete = null }
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) { Text("Abbrechen", color = TextSecondary) }
-            }
+        AlertDialogCloud(
+            title = "Set löschen?",
+            text = "\"${setToDelete!!.name}\" wird gelöscht.",
+            onConfirm = {onDeleteSet(setToDelete!!); setToDelete = null},
+            onDismiss = { setToDelete = null },
         )
     }
 
