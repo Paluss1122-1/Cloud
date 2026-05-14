@@ -29,11 +29,9 @@ android {
     }
 
     buildTypes {
-        debug {
-            applicationIdSuffix = ".debug"
-        }
         release {
             signingConfig = signingConfigs.getByName("debug")
+            applicationIdSuffix = ".release"
         }
         create("minifiedDebug") {
             initWith(buildTypes.getByName("debug"))
