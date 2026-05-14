@@ -54,6 +54,7 @@ import com.cloud.core.objects.Config.COMPLETED_PODCASTS
 import com.cloud.core.objects.Config.MEDIA_PLAYER
 import com.cloud.core.objects.Config.PLALISTS
 import com.cloud.core.objects.Config.PODCASTS
+import com.cloud.core.objects.reportError
 import com.cloud.quiethoursnotificationhelper.pushMediaStateToLaptop
 import com.cloud.quiethoursnotificationhelper.sendNvidiaChatMessageAITab
 import com.cloud.tabs.AlgorithmicPlaylistRegistry
@@ -61,9 +62,12 @@ import com.cloud.tabs.FavoritesPlaylist
 import com.cloud.tabs.ListenSession
 import com.cloud.tabs.MediaAnalyticsManager
 import com.cloud.tabs.PodcastShowManager
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import java.net.URLDecoder
+import java.time.Instant
 import java.time.LocalTime.now
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -96,6 +100,8 @@ class MediaPlayerService : MediaSessionService() {
         private const val ACTION_SELECT_PODCAST = "com.cloud.ACTION_SELECT_PODCAST"
         private const val ACTION_DELETE_SINGLE = "com.cloud.ACTION_DELETE_SINGLE_"
         const val ACTION_SHOW_DELETE_COMPLETED = "ACTION_SHOW_DELETE_COMPLETED"
+        const val ACTION_STREAM_REMOTE = "com.cloud.ACTION_STREAM_REMOTE"
+        const val EXTRA_STREAM_URL = "extra_stream_url"
         const val ACTION_SET_SPEED = "ACTION_SET_SPEED"
         const val EXTRA_SPEED = "SPEED"
 
@@ -378,6 +384,13 @@ class MediaPlayerService : MediaSessionService() {
             }
             context.startService(intent)
         }
+
+        fun streamRemote(context: Context, url: String) = context.startService(
+            Intent(context, MediaPlayerService::class.java).apply {
+                action = ACTION_STREAM_REMOTE
+                putExtra(EXTRA_STREAM_URL, url)
+            }
+        )
     }
 
     data class Song(val uri: Uri, val name: String, val path: String)
@@ -577,6 +590,12 @@ class MediaPlayerService : MediaSessionService() {
 
             ACTION_MUSIC_PLAY -> {
                 ensureMusicMode(); playMusic()
+            }
+
+            ACTION_STREAM_REMOTE -> {
+                val url = intent.getStringExtra(EXTRA_STREAM_URL) ?: return START_STICKY
+                ensureMusicMode()
+                streamFromUrl(url)
             }
 
             ACTION_MUSIC_PAUSE -> {
@@ -1170,7 +1189,7 @@ class MediaPlayerService : MediaSessionService() {
         musicPlayer?.pause()
         musicPrefs.editAsync { putBoolean("is_playing", false) }
         isPlayingMusic = false
-        updateNotification()
+        updateNotification(instantUpdate = false)
     }
 
     private fun nextSong() {
@@ -1308,7 +1327,8 @@ class MediaPlayerService : MediaSessionService() {
             val newIdx = newActive.indexOfFirst { it.path == playingPath }
 
             if (newIdx < 0) {
-                currentSongIndex = currentSongIndex.coerceIn(0, (newActive.size - 1).coerceAtLeast(0))
+                currentSongIndex =
+                    currentSongIndex.coerceIn(0, (newActive.size - 1).coerceAtLeast(0))
                 saveMusicState()
                 if (isPlayingMusic) {
                     musicPlayer?.release()
@@ -1465,7 +1485,7 @@ class MediaPlayerService : MediaSessionService() {
 
         savePodcastSession()
 
-        updateNotification()
+        updateNotification(instantUpdate = false)
     }
 
     private fun rewind() {
@@ -1660,13 +1680,31 @@ class MediaPlayerService : MediaSessionService() {
             context = this
         )
 
-    private fun updateNotification(important: Boolean = true) {
-        val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
-        nm?.notify(
-            MEDIA_PLAYER,
-            buildNotification()
-        )
-        if (important) pushMediaStateToLaptop(this)
+    var updateNotJob: Job? = null
+    var pendingUpdateTime = 0L
+    val cooldownMs = 400L
+
+    private fun updateNotification(important: Boolean = true, instantUpdate: Boolean = true) {
+        var cooldownMsIntern = cooldownMs
+        if (updateNotJob != null) {
+            cooldownMsIntern += 350L
+        }
+        cooldownMsIntern = if (instantUpdate) cooldownMsIntern else 0L
+        updateNotJob?.cancel()
+
+        val scheduledTime = System.currentTimeMillis() + cooldownMsIntern
+        pendingUpdateTime = scheduledTime
+
+        updateNotJob = appScope.launch {
+            delay(cooldownMsIntern)
+
+            if (pendingUpdateTime == scheduledTime) {
+                val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
+                nm?.notify(MEDIA_PLAYER, buildNotification())
+                if (important) pushMediaStateToLaptop(this@MediaPlayerService)
+                updateNotJob = null
+            }
+        }
     }
 
     private fun buildNotification(): Notification =
@@ -1739,7 +1777,7 @@ class MediaPlayerService : MediaSessionService() {
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("🎙️ $title $speedStr")
+            .setContentTitle("🎙️ $title ${speedStr}x (${podcastQueue.size})")
             .setContentText(progress)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
@@ -2501,6 +2539,36 @@ class MediaPlayerService : MediaSessionService() {
             "${songs.size} Songs · ab #${currentSongIndex + 1}",
             10.seconds, context = this
         )
+    }
+
+    private fun streamFromUrl(url: String) {
+        musicPlayer?.release()
+        musicPlayer = null
+        isPlayingMusic = false
+
+        try {
+            musicPlayer = MediaPlayer().apply {
+                setDataSource(url)
+                setOnPreparedListener {
+                    start()
+                    isPlayingMusic = true
+                    currentSongName = url.substringAfterLast("/").substringBeforeLast(".")
+                    songStartedAt = System.currentTimeMillis()
+                    consecutiveRepeatCount = 0
+                    musicPrefs.editAsync { putBoolean("is_playing", true) }
+                    updateNotification()
+                }
+                setOnCompletionListener { onSongComplete() }
+                setOnErrorListener { _, what, extra ->
+                    reportError("streamFromUrl", "MediaPlayer error $what/$extra", Instant.now().toString(), "ERROR")
+                    false
+                }
+                prepareAsync() // non-blocking, startet Pufferung
+            }
+            updateNotification()
+        } catch (e: Exception) {
+            reportError("streamFromUrl", "${e.message}", Instant.now().toString(), "ERROR")
+        }
     }
 }
 
