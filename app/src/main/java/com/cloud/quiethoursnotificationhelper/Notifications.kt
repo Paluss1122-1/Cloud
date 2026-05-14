@@ -110,6 +110,7 @@ private fun scheduleWithAlarmManager(
 ) {
     try {
         val alarmManager = context.getSystemService(ALARM_SERVICE) as AlarmManager
+        if (!alarmManager.canScheduleExactAlarms()) return
 
         handler.removeCallbacks(checkRunnable)
 
