@@ -418,6 +418,9 @@ fun LandingPage(
 ) {
     val context = LocalContext.current
     var recentTabs by remember { mutableStateOf(loadRecentTabs(context)) }
+    LaunchedEffect(Unit) {
+        recentTabs = loadRecentTabs(context)
+    }
     val allTabsSorted = remember { MenuItem.entries.sortedBy { it.title } }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     val neonOrange = Color(0xFF001FBB)
