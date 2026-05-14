@@ -8,12 +8,8 @@ data class Model(
 
 val nvidiaModels = listOf(
     Model("meta/llama-3.1-8b-instruct"),
-    Model("utter-project/eurollm-9b-instruct"),
-    Model("google/gemma-2-9b-it"),
     Model("openai/gpt-oss-120b"),
     Model("openai/gpt-oss-20b"),
-    Model("minimaxai/minimax-m2.5"),
-    Model("bigcode/starcoder2-7b"),
     Model("nvidia/nemotron-3-nano-30b-a3b"),
     Model("nvidia/nemoretriever-ocr-v1", true),
     Model("meta/llama-3.2-90b-vision-instruct", true),
