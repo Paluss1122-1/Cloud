@@ -284,6 +284,19 @@ fun createNotificationChannel(context: Context) {
             enableVibration(true)
             enableLights(true)
         })
+
+    notificationManager.createNotificationChannel(
+        NotificationChannel(
+            "ai_tab_notification_channel",
+            "AITab Answers",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Notification if AITab is not opened and receives AI answer"
+            setShowBadge(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            enableVibration(true)
+            enableLights(true)
+        })
 }
 
 @SuppressLint("LaunchActivityFromNotification")

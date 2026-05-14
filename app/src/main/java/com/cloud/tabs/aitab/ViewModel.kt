@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.cloud.core.functions.sendAITabBackgroundNotification
 import com.cloud.privatecloudapp.isOnline
 import com.cloud.quiethoursnotificationhelper.askServer
 import com.cloud.quiethoursnotificationhelper.sendNvidiaChatMessageAITab
@@ -115,6 +116,12 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 selectedImageUri = null
                 history.add(ChatMessage(response, System.currentTimeMillis(), false, modeAtSend))
+                
+                sendAITabBackgroundNotification(
+                    ctx,
+                    title = "AITab answer",
+                    message = response
+                )
             } catch (e: Exception) {
                 history.add(
                     ChatMessage(

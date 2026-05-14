@@ -156,6 +156,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
         if (startTarget != null && selectedMenuItem == null) {
             selectedMenuItem = when (startTarget) {
                 "weather" -> MenuItem.WEATHER
+                "aitab" -> MenuItem.AITAB
                 else -> null
             }
             if (selectedMenuItem != null) {
