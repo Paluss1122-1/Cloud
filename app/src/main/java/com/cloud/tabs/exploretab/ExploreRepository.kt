@@ -24,4 +24,9 @@ class ExploreRepository(context: Context) {
         val midnight = System.currentTimeMillis() / 86_400_000L * 86_400_000L
         return dao.countSince(midnight)
     }
+
+    suspend fun countTilesOutsideWorldBounds(): Long = dao.countOutOfWorldBounds(TILE_SIZE)
+
+    suspend fun sampleTilesOutsideWorldBounds(limit: Int = 6): List<ExploredTile> =
+        dao.sampleOutOfWorldBounds(TILE_SIZE, limit)
 }

@@ -3,7 +3,9 @@ package com.cloud.tabs.exploretab
 import android.annotation.SuppressLint
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,8 +23,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
@@ -56,6 +60,8 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
     val tileCount by vm.tileCount.collectAsState()
     val exploredPercent by vm.exploredPercent.collectAsState()
     val tiles by vm.allTiles.collectAsState()
+    val scope = rememberCoroutineScope()
+    var statsTapCount by remember { mutableStateOf(0) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
 
     LaunchedEffect(Unit) { setGesturesEnabled(false) }
@@ -106,7 +112,26 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                StatCard("🗺️ Tiles", tileCount.toString(), Modifier.weight(1f))
+                StatCard(
+                    label = "🗺️ Tiles",
+                    value = tileCount.toString(),
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        statsTapCount++
+                        if (statsTapCount >= 5) {
+                            statsTapCount = 0
+                            scope.launch {
+                                val suspectCount = vm.countTilesOutsideWorldBounds()
+                                val message = if (suspectCount > 0) {
+                                    "Alte Explore-Daten mit anderer TILE_SIZE gefunden: $suspectCount Zeilen. Sie werden vermutlich nicht korrekt angezeigt."
+                                } else {
+                                    "Keine alten Explore-Daten mit falscher TILE_SIZE gefunden."
+                                }
+                                Toast.makeText(ctx, message, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                )
                 StatCard("🌍 Erkundet", "%.8f%%".format(exploredPercent), Modifier.weight(1f))
                 StatCard("📅 Heute", vm.todayCount.toString(), Modifier.weight(1f))
             }
@@ -151,10 +176,12 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
 private fun StatCard(
     label: String,
     value: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
 ) {
+    val cardModifier = if (onClick != null) modifier.clickable(onClick = onClick) else modifier
     NeonBox(
-        modifier = modifier
+        modifier = cardModifier
             .fillMaxWidth()
             .padding(vertical = 4.dp, horizontal = 2.dp),
         cornerRadius = 20.dp,

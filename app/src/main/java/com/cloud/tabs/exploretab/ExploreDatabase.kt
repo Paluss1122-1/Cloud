@@ -40,6 +40,21 @@ interface ExploredTileDao {
 
     @Query("SELECT COUNT(*) FROM explored_tiles WHERE timestamp >= :since")
     suspend fun countSince(since: Long): Long
+
+    @Query(
+        "SELECT COUNT(*) FROM explored_tiles " +
+            "WHERE tileX * :currentSize < -90 OR tileX * :currentSize > 90 " +
+            "OR tileY * :currentSize < -180 OR tileY * :currentSize > 180"
+    )
+    suspend fun countOutOfWorldBounds(currentSize: Double): Long
+
+    @Query(
+        "SELECT * FROM explored_tiles " +
+            "WHERE tileX * :currentSize < -90 OR tileX * :currentSize > 90 " +
+            "OR tileY * :currentSize < -180 OR tileY * :currentSize > 180 " +
+            "LIMIT :limit"
+    )
+    suspend fun sampleOutOfWorldBounds(currentSize: Double, limit: Int): List<ExploredTile>
 }
 
 @Database(entities = [ExploredTile::class], version = 1, exportSchema = false)
