@@ -13,6 +13,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseInOutCubic
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -40,9 +41,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -184,6 +188,15 @@ fun VocabTab() {
                 savedSets = saveVokabelSet(prefs, set)
                 showSaveDialog = false
                 saveNameInput = ""
+                activeSet?.let { oldSet ->
+                    val oldId = oldSet.createdAt.toInt()
+                    val newId = set.createdAt.toInt()
+                    val weakVokabeln = loadWeakVokabeln(prefs, oldSet.createdAt)
+                    saveWeakVokabeln(prefs, set.createdAt, weakVokabeln)
+                    lastWidths = lastWidths.map { if (it.id == oldId) it.copy(id = newId) else it }
+                    currentWidths = currentWidths.map { if (it.id == oldId) it.copy(id = newId) else it }
+                    deleteVokabelSet(prefs, oldSet)
+                }
                 screen = VokabelTabScreen.HOME
             },
             onDismiss = { showSaveDialog = false }
@@ -205,6 +218,17 @@ fun VocabTab() {
                 onLearnWeak = { set ->
                     activeSet = set
                     vokabeln = loadWeakVokabeln(prefs, set.createdAt)
+                    screen = VokabelTabScreen.LEARN
+                },
+                onLearnWithMix = { set ->
+                    val otherVokabeln = savedSets
+                        .filter { it.createdAt != set.createdAt }
+                        .flatMap { it.vokabeln }
+                        .shuffled()
+                    val mixCount = (5..10).random().coerceAtMost(otherVokabeln.size)
+                    val mixed = (set.vokabeln + otherVokabeln.take(mixCount)).shuffled()
+                    activeSet = set
+                    vokabeln = mixed
                     screen = VokabelTabScreen.LEARN
                 },
                 onDeleteSet = { set ->
@@ -298,11 +322,13 @@ fun VocabTab() {
                         if (activeSet != null) VokabelTabScreen.LEARN else VokabelTabScreen.UPLOAD
                 },
                 checkExist = activeSet != null,
-                onCancelExtraction = if (isExtracting) {{
-                    extractionJob?.cancel()
-                    isExtracting = false
-                    screen = VokabelTabScreen.UPLOAD
-                }} else null
+                onCancelExtraction = if (isExtracting) {
+                    {
+                        extractionJob?.cancel()
+                        isExtracting = false
+                        screen = VokabelTabScreen.UPLOAD
+                    }
+                } else null
             )
 
             VokabelTabScreen.LEARN -> LearnScreen(
@@ -311,9 +337,19 @@ fun VocabTab() {
                 setCreatedAt = activeSet?.createdAt ?: 0L,
                 onBack = {
                     lastWidths = currentWidths
-                    screen = if (activeSet != null) VokabelTabScreen.HOME else VokabelTabScreen.REVIEW
+                    screen =
+                        if (activeSet != null) VokabelTabScreen.HOME else VokabelTabScreen.REVIEW
                 },
-                setName = activeSet?.name
+                setName = activeSet?.name,
+                onVokabelnUpdated = { updatedVokabeln ->
+                    vokabeln = updatedVokabeln
+                    activeSet = activeSet?.copy(vokabeln = updatedVokabeln)
+                    savedSets = saveVokabelSet(prefs, activeSet!!)
+                },
+                onRenameRequest = {
+                    saveNameInput = activeSet?.name ?: " "
+                    showSaveDialog = true
+                }
             )
 
             VokabelTabScreen.MATERIALIEN -> MaterialienScreen(
@@ -330,6 +366,7 @@ fun HomeScreen(
     onNewSet: () -> Unit,
     onOpenSet: (VokabelSet) -> Unit,
     onLearnWeak: (VokabelSet) -> Unit,
+    onLearnWithMix: (VokabelSet) -> Unit,
     onDeleteSet: (VokabelSet) -> Unit,
     onUpdate: (Int, Int) -> Unit,
     lastWidths: List<WidthState>,
@@ -337,6 +374,7 @@ fun HomeScreen(
     onMaterialienClick: () -> Unit = {}
 ) {
     var setToDelete by remember { mutableStateOf<VokabelSet?>(null) }
+    var menuOpenFor by remember { mutableStateOf<Long?>(null) }
 
     if (setToDelete != null) {
         AlertDialog(
@@ -460,7 +498,9 @@ fun HomeScreen(
                         }
 
                         val setId = set.createdAt.toInt()
-                        val lastWidth = remember { lastWidths.firstOrNull { it.id == setId }?.value?.toFloat() ?: 0f }
+                        val lastWidth = remember {
+                            lastWidths.firstOrNull { it.id == setId }?.value?.toFloat() ?: 0f
+                        }
 
                         val progressPercentFloat = remember { Animatable(lastWidth) }
                         LaunchedEffect(progressFloat) {
@@ -469,7 +509,10 @@ fun HomeScreen(
                                 progressFloat,
                                 animationSpec = tween(400, easing = EaseInOutCubic)
                             )
-                            if (progressPercentFloat.value != 0f) onUpdate(setId, progressPercentFloat.value.toInt())
+                            if (progressPercentFloat.value != 0f) onUpdate(
+                                setId,
+                                progressPercentFloat.value.toInt()
+                            )
                         }
 
                         Row(
@@ -529,14 +572,63 @@ fun HomeScreen(
                                         }
                                         Spacer(Modifier.width(6.dp))
                                     }
-                                    Box(
-                                        modifier = Modifier
-                                            .size(34.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFFB71C1C).copy(alpha = 0.15f))
-                                            .clickable { setToDelete = set },
-                                        contentAlignment = Alignment.Center
-                                    ) { Text("🗑", fontSize = 14.sp) }
+
+                                    Box {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(34.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(BgCard)
+                                                .clickable { menuOpenFor = set.createdAt },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                Icons.Default.MoreVert,
+                                                contentDescription = null,
+                                                tint = TextSecondary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+
+                                        val alpha by animateFloatAsState(
+                                            targetValue = if (menuOpenFor == set.createdAt) 1f else 0f,
+                                            animationSpec = if (menuOpenFor == set.createdAt)
+                                                tween(durationMillis = 80)
+                                            else
+                                                tween(durationMillis = 300),
+                                            label = "menuAlpha"
+                                        )
+
+                                        DropdownMenu(
+                                            expanded = menuOpenFor == set.createdAt,
+                                            onDismissRequest = { menuOpenFor = null },
+                                            containerColor = BgCard,
+                                            modifier = Modifier.alpha(alpha)
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        "🎲  Mix-Modus",
+                                                        color = TextPrimary,
+                                                        fontSize = 14.sp
+                                                    )
+                                                },
+                                                onClick = {
+                                                    menuOpenFor = null; onLearnWithMix(set)
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        "🗑  Löschen",
+                                                        color = Color(0xFFEF5350),
+                                                        fontSize = 14.sp
+                                                    )
+                                                },
+                                                onClick = { menuOpenFor = null; setToDelete = set }
+                                            )
+                                        }
+                                    }
                                 }
 
                                 Spacer(Modifier.height(12.dp))
@@ -565,7 +657,12 @@ fun HomeScreen(
                                                     .fillMaxHeight()
                                                     .clip(RoundedCornerShape(4.dp))
                                                     .background(
-                                                        Brush.linearGradient(listOf(AccentViolet, AccentVioletDim))
+                                                        Brush.linearGradient(
+                                                            listOf(
+                                                                AccentViolet,
+                                                                AccentVioletDim
+                                                            )
+                                                        )
                                                     )
                                             )
                                         }
@@ -773,7 +870,9 @@ fun ReviewScreen(
     onCancelExtraction: (() -> Unit)? = null,
 ) {
     var currentVokabeln by remember { mutableStateOf(vokabeln) }
-    val initVocabs by remember { mutableStateOf(vokabeln) }
+    var initVocabs by remember(vokabeln) {
+        mutableStateOf(vokabeln)
+    }
 
     LaunchedEffect(vokabeln) {
         val newItems = vokabeln.filter { new -> currentVokabeln.none { it.id == new.id } }
@@ -782,8 +881,16 @@ fun ReviewScreen(
         }
     }
 
+    LaunchedEffect(isExtracting) {
+        if (!isExtracting) {
+            onVokabelnChanged(currentVokabeln)
+            initVocabs = currentVokabeln.toList()
+        }
+    }
+
     fun calculateChanges(original: List<Vokabel>, current: List<Vokabel>): Int {
         var changeCount = 0
+        if (isExtracting) return 0
 
         // Zähle gelöschte Vokabeln
         original.forEach { origVokabel ->
@@ -806,9 +913,9 @@ fun ReviewScreen(
         return changeCount
     }
 
-    val changes = remember(currentVokabeln, initVocabs) {
-        calculateChanges(initVocabs, currentVokabeln)
-    }
+    val changes =
+        if (isExtracting) 0
+        else calculateChanges(initVocabs, currentVokabeln)
 
     var showCancelDialog by remember { mutableStateOf(false) }
 
@@ -816,8 +923,19 @@ fun ReviewScreen(
         AlertDialog(
             onDismissRequest = { showCancelDialog = false },
             containerColor = BgSurface,
-            title = { Text("Erkennung abbrechen?", color = TextPrimary, fontWeight = FontWeight.Bold) },
-            text = { Text("Die KI erkennt noch Vokabeln. Wirklich abbrechen?", color = TextSecondary) },
+            title = {
+                Text(
+                    "Erkennung abbrechen?",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    "Die KI erkennt noch Vokabeln. Wirklich abbrechen?",
+                    color = TextSecondary
+                )
+            },
             confirmButton = {
                 Box(
                     modifier = Modifier
@@ -867,19 +985,18 @@ fun ReviewScreen(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
-                    .background(BgSurface)
-                    .clickable {
-                        if (changes > 0) {
-                            onVokabelnChanged(currentVokabeln)
-                        } else {
-                            onSave()
-                        }
+                    .background(
+                        if (currentVokabeln.isNotEmpty() && !isExtracting) SolidColor(MaterialTheme.colorScheme.primary)
+                        else Brush.horizontalGradient(listOf(BgCard, BgCard))
+                    )
+                    .clickable(enabled = currentVokabeln.isNotEmpty() && !isExtracting) {
+                        if (changes > 0) onVokabelnChanged(currentVokabeln) else onSave()
                     }
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 Text(
                     if (changes > 0) "Bestätigen ($changes)" else if (checkExist) "Umbenennen" else "💾 Speichern",
-                    color = MaterialTheme.colorScheme.primary,
+                    color = if (currentVokabeln.isNotEmpty()) TextPrimary else TextTertiary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -890,10 +1007,12 @@ fun ReviewScreen(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
                         .background(
-                            if (currentVokabeln.isNotEmpty() && isExtracting) SolidColor(MaterialTheme.colorScheme.primary)
+                            if (currentVokabeln.isNotEmpty() && !isExtracting) SolidColor(
+                                MaterialTheme.colorScheme.primary
+                            )
                             else Brush.horizontalGradient(listOf(BgCard, BgCard))
                         )
-                        .clickable(enabled = currentVokabeln.isNotEmpty() && isExtracting) { onStartLearning() }
+                        .clickable(enabled = currentVokabeln.isNotEmpty() && !isExtracting) { onStartLearning() }
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Text(
@@ -1055,7 +1174,9 @@ fun LearnScreen(
     prefs: SharedPreferences,
     setCreatedAt: Long,
     onBack: () -> Unit,
-    setName: String?
+    setName: String?,
+    onVokabelnUpdated: ((List<Vokabel>) -> Unit)? = null,
+    onRenameRequest: () -> Unit = {},
 ) {
     var setToReview by remember { mutableStateOf(false) }
     var vokabeln by remember { mutableStateOf(vokabeln) }
@@ -1086,7 +1207,11 @@ fun LearnScreen(
     }
     var correct by remember { mutableIntStateOf(savedSession?.correctIds?.size ?: 0) }
     var wrong by remember { mutableIntStateOf(savedSession?.wrongIds?.size ?: 0) }
-    val flipped by animateFloatAsState(targetValue = if (showAnswer) 180f else 0f, label = "flip")
+    val flipped by animateFloatAsState(
+        targetValue = if (showAnswer) 180f else 0f,
+        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        label = "flip"
+    )
     val done = currentIndex >= shuffled.size
     LaunchedEffect(vokabeln) {
         shuffled = vokabeln.shuffled()
@@ -1123,7 +1248,7 @@ fun LearnScreen(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = TextPrimary)
             }
             Text(
-                "$setName",
+                "$setName ",
                 color = TextPrimary,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
@@ -1137,7 +1262,7 @@ fun LearnScreen(
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Text(
-                    if (showDeutsch) "DE → LA" else "LA → DE",
+                    if (showDeutsch) "DE → LA " else "LA → DE ",
                     color = AccentViolet,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
@@ -1152,7 +1277,7 @@ fun LearnScreen(
             ) {
                 Icon(
                     Icons.Default.Edit,
-                    "Navigate to Review Screen",
+                    "Navigate to Review Screen ",
                     tint = AccentViolet
                 )
             }
@@ -1188,81 +1313,64 @@ fun LearnScreen(
             val vokabel = shuffled[currentIndex]
             val frontText = if (showDeutsch) vokabel.deutsch else vokabel.latein
             val backText = if (showDeutsch) vokabel.latein else vokabel.deutsch
-            val frontLabel = if (showDeutsch) "DEUTSCH" else "LATEIN"
-            val backLabel = if (showDeutsch) "LATEIN" else "DEUTSCH"
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
                     .padding(horizontal = 20.dp, vertical = 80.dp)
-                    .graphicsLayer { rotationY = flipped; cameraDistance = 12f * density }
-                    .clickable { showAnswer = !showAnswer },
+                    .graphicsLayer { rotationY = flipped; cameraDistance = 12f * density },
                 contentAlignment = Alignment.Center
             ) {
                 if (flipped <= 90f) {
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .fillMaxWidth(0.9f)
+                            .fillMaxHeight(0.6f)
                             .clip(RoundedCornerShape(24.dp))
-                            .background(MaterialTheme.colorScheme.primary),
+                            .background(MaterialTheme.colorScheme.primary)
+                            .clickable { showAnswer = !showAnswer }
+                            .padding(vertical = 40.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                frontLabel,
-                                color = TextPrimary.copy(0.5f),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 2.sp
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            Text(
                                 frontText,
-                                fontSize = 26.sp,
+                                fontSize = 28.sp,
                                 fontWeight = FontWeight.Bold,
                                 textAlign = TextAlign.Center,
                                 color = TextPrimary,
                                 modifier = Modifier.padding(horizontal = 24.dp)
                             )
-                            Spacer(Modifier.height(20.dp))
-                            Text(
-                                if (currentIndex >= 1) "" else "Tippe zum Aufdecken",
-                                color = TextPrimary.copy(0.4f),
-                                fontSize = 12.sp
-                            )
+                            if (currentIndex == 0) {
+                                Spacer(Modifier.height(20.dp))
+                                Text(
+                                    "Tippe zum Aufdecken",
+                                    color = TextPrimary.copy(0.4f),
+                                    fontSize = 12.sp
+                                )
+                            }
                         }
                     }
                 } else {
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .fillMaxWidth(0.9f)
+                            .fillMaxHeight(0.6f)
                             .clip(RoundedCornerShape(24.dp))
                             .background(MaterialTheme.colorScheme.primary)
+                            .clickable { showAnswer = !showAnswer }
                             .graphicsLayer { rotationY = 180f },
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                backLabel,
-                                color = AccentViolet.copy(0.7f),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 2.sp
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            Text(
                                 backText,
-                                fontSize = 26.sp,
+                                fontSize = 28.sp,
                                 fontWeight = FontWeight.Bold,
                                 textAlign = TextAlign.Center,
                                 color = TextPrimary,
                                 modifier = Modifier.padding(horizontal = 24.dp)
-                            )
-                            Spacer(Modifier.height(20.dp))
-                            Text(
-                                " ",
-                                fontSize = 12.sp
                             )
                         }
                     }
@@ -1462,8 +1570,9 @@ fun LearnScreen(
                 onVokabelnChanged = { new ->
                     vokabeln = new
                     shuffled = new.shuffled()
+                    onVokabelnUpdated?.invoke(new)
                 },
-                onSave = {},
+                onSave = { onRenameRequest() },
                 setName = setName,
                 checkExist = true
             )
