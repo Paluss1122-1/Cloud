@@ -50,7 +50,10 @@ import androidx.compose.material.icons.filled.Laptop
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -760,8 +763,6 @@ class QuietHoursNotificationService : Service() {
 
         var currentUrl = "https://www.youtube.com"
 
-        var isDesktopMode = false
-
         testOverlayLifecycle = OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
 
         testOverlayView = ComposeView(this).apply {
@@ -769,6 +770,8 @@ class QuietHoursNotificationService : Service() {
             setViewTreeSavedStateRegistryOwner(testOverlayLifecycle)
             setViewTreeViewModelStoreOwner(testOverlayLifecycle)
             setContent {
+
+                var isDesktopMode by remember { mutableStateOf(false) }
                 val webView = remember {
                     WebView(context).apply {
                         webChromeClient = object : WebChromeClient() {
@@ -829,6 +832,10 @@ class QuietHoursNotificationService : Service() {
 
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 if (url != null) currentUrl = url
+                                view?.evaluateJavascript(
+                                    "var l=document.createElement('link');l.rel='dns-prefetch';l.href='//i.ytimg.com';document.head.appendChild(l);",
+                                    null
+                                )
                             }
                         }
 
@@ -859,6 +866,8 @@ class QuietHoursNotificationService : Service() {
 
                             userAgentString =
                                 "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+
+                            cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
                         }
 
                         val cookieManager = CookieManager.getInstance()
@@ -895,7 +904,7 @@ class QuietHoursNotificationService : Service() {
                                 }
                             }
 
-                            webView.loadUrl(currentUrl)
+                            webView.reload()
                         },
                         modifier = Modifier
                             .align(Alignment.CenterStart)
