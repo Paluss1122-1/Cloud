@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.ButtonColors
@@ -193,6 +194,7 @@ fun FeedCard(
     onToggleExpand: () -> Unit,
     onToggleFav: () -> Unit,
     onDownload: (String, String) -> Unit,
+    onStream: (String) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -251,6 +253,13 @@ fun FeedCard(
                         ) {
                             Text("${idx + 1}", fontSize = 11.sp, color = Color(0xFF4A4850), modifier = Modifier.width(24.dp))
                             Text(ep.title, modifier = Modifier.weight(1f), fontSize = 13.sp, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            OutlinedIconButton(
+                                onClick = { onStream(ep.audioUrl) },
+                                modifier = Modifier.size(36.dp),
+                                border = BorderStroke(1.dp, Color.White.copy(0.15f))
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color(0xFFE8622A), modifier = Modifier.size(18.dp))
+                            }
                             OutlinedIconButton(
                                 onClick = { onDownload(ep.audioUrl, ep.title) },
                                 modifier = Modifier.size(36.dp),
