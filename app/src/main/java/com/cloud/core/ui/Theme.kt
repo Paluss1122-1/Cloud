@@ -11,6 +11,14 @@ import java.util.Calendar
 val Cloud = Color(0xFF2A2A2A)
 val gruen = Color(0xFF228B22)
 
+val BgSurface = Color(0xFF1E1E1E)
+val BgCard = Color(0xFF2A2A2A)
+val AccentViolet = Color(0xFF7C4DFF)
+val AccentVioletDim = Color(0xFF4A148C)
+val TextPrimary = Color(0xFFFFFFFF)
+val TextSecondary = Color(0xFFB0B0B0)
+val TextTertiary = Color(0xFF757575)
+
 fun c(): Color {
     val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
 

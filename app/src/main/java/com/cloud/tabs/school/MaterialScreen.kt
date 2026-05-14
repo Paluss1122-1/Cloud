@@ -63,6 +63,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.scale
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.toast
+import com.cloud.core.ui.AccentViolet
+import com.cloud.core.ui.BgSurface
+import com.cloud.core.ui.TextPrimary
+import com.cloud.core.ui.TextTertiary
 import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream

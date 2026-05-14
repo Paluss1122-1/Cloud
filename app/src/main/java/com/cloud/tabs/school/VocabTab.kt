@@ -80,6 +80,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import com.cloud.core.objects.Config
+import com.cloud.core.ui.AccentViolet
+import com.cloud.core.ui.AccentVioletDim
+import com.cloud.core.ui.AlertDialogCloud
+import com.cloud.core.ui.BgCard
+import com.cloud.core.ui.BgSurface
+import com.cloud.core.ui.TextPrimary
+import com.cloud.core.ui.TextSecondary
+import com.cloud.core.ui.TextTertiary
 import com.cloud.quiethoursnotificationhelper.callNvidiaVisionApi
 import com.cloud.quiethoursnotificationhelper.flashcardVokabelnFlow
 import com.cloud.quiethoursnotificationhelper.trySendImageToLaptop
@@ -127,14 +135,6 @@ data class WidthState(
 )
 
 enum class VokabelTabScreen { HOME, UPLOAD, REVIEW, LEARN, MATERIALIEN }
-
-val BgSurface = Color(0xFF1E1E1E)
-private val BgCard = Color(0xFF2A2A2A)
-val AccentViolet = Color(0xFF7C4DFF)
-private val AccentVioletDim = Color(0xFF4A148C)
-val TextPrimary = Color(0xFFFFFFFF)
-private val TextSecondary = Color(0xFFB0B0B0)
-val TextTertiary = Color(0xFF757575)
 
 @Composable
 fun VocabTab() {
