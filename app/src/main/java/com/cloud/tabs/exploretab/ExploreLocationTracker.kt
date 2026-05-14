@@ -113,7 +113,6 @@ object ExploreLocationTracker {
             }
     }
 
-    @SuppressLint("MissingPermission")
     fun start(context: Context) {
         val appCtx = context.applicationContext
         if (isEnabled) {
