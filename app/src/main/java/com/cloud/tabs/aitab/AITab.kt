@@ -291,7 +291,7 @@ fun AITabContent(vm: AITabViewModel = viewModel()) {
                         )
                 ) {
                     Icon(
-                        if (vm.selectedImageUri != null) Icons.Default.CameraAlt else Icons.Default.Check,
+                        if (vm.selectedImageUri == null) Icons.Default.CameraAlt else Icons.Default.Check,
                         "Bild Anhängen",
                         tint = Black
                     )
