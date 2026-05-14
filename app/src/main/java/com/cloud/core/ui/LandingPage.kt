@@ -423,8 +423,11 @@ fun LandingPage(
     }
     val allTabsSorted = remember { MenuItem.entries.sortedBy { it.title } }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
-    val neonOrange = Color(0xFF001FBB)
-    val neonGlow = Color(0xFF00177E)
+    val neonOrange = c()
+    val neonGlow =  when (currentHour) {
+        in 11..16 -> Color(0xFF2C2C2C)
+        else -> Color(0xFF00177E)
+    }
 
     val glowPaint = remember {
         Paint().apply {
