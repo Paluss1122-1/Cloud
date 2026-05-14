@@ -49,6 +49,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.cloud.core.activities.Cloud.Companion.appScope
 import com.cloud.core.activities.MainActivity
+import com.cloud.core.functions.canNotify
 import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.core.objects.Config.COMPLETED_PODCASTS
 import com.cloud.core.objects.Config.MEDIA_PLAYER
@@ -298,7 +299,7 @@ class MediaPlayerService : MediaSessionService() {
                         .setContentIntent(deleteIntent)
                         .setGroup("podcast_delete")
                         .build()
-                if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
+                if (canNotify(context))
                     nm?.notify(COMPLETED_PODCASTS + i, n)
             }
 
@@ -312,7 +313,7 @@ class MediaPlayerService : MediaSessionService() {
                     .setGroupSummary(true)
                     .setAutoCancel(true)
                     .build()
-            if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
+            if (canNotify(context))
                 nm?.notify(COMPLETED_PODCASTS + 50, summary)
         }
 
@@ -555,8 +556,7 @@ class MediaPlayerService : MediaSessionService() {
         startPositionSaving()
         registerBluetoothReceiver()
 
-        canPostNotifications =
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        canPostNotifications = canNotify(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

@@ -1,6 +1,5 @@
 package com.cloud.services
 
-import android.Manifest
 import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -10,13 +9,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
-import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import androidx.core.content.edit
+import com.cloud.core.functions.canNotify
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.CHAT_SERVICE
 import com.cloud.core.objects.Config.CHAT_SERVICE_HISTORY
@@ -300,7 +299,7 @@ class ChatService : Service() {
 
             val notificationManager = getSystemService(NotificationManager::class.java)
 
-            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            if (canNotify(this)) {
                 notificationManager.notify(CHAT_SERVICE_HISTORY, notification)
             }
 
@@ -431,7 +430,7 @@ class ChatService : Service() {
 
             val notificationManager = getSystemService(NotificationManager::class.java)
 
-            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            if (canNotify(this)) {
                 notificationManager.notify(cms(), notification)
             }
 

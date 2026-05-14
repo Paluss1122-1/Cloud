@@ -5,13 +5,13 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.content.Intent
-import android.content.pm.PackageManager
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import com.cloud.core.activities.Cloud.Companion.appScope
+import com.cloud.core.functions.canNotify
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.cms
 import com.cloud.core.objects.reportError
@@ -92,7 +92,7 @@ fun fetchNewErrors(context: Context) {
 
             prefs.edit { putString("last_error_check", Instant.now().toString()) }
 
-            if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            if (canNotify(context)) {
                 results.forEach { showErrorNotification(it, context) }
             }
         } catch (e: Exception) {

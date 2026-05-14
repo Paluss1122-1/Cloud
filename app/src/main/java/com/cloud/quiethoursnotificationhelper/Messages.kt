@@ -15,6 +15,7 @@ import androidx.core.app.Person
 import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
 import com.cloud.core.activities.Cloud.Companion.appScope
+import com.cloud.core.functions.canNotify
 import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.core.objects.Config.cms
 import com.cloud.core.objects.reportError
@@ -428,7 +429,7 @@ fun extractLastMessage(context: Context) {
         }
     }
     val nm = context.getSystemService(NotificationManager::class.java)
-    if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+    if (canNotify(context)) {
         nm.notify(cms(), builder.build())
     }
 }
