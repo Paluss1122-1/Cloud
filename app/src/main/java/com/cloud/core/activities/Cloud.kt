@@ -21,6 +21,9 @@ class Cloud : Application() {
         val appScope by lazy {
             CoroutineScope(SupervisorJob() + Dispatchers.Main + coroutineExceptionHandler)
         }
+        val serviceScope by lazy {
+            CoroutineScope(SupervisorJob() + Dispatchers.IO + coroutineExceptionHandler)
+        }
     }
 
     override fun onCreate() {
