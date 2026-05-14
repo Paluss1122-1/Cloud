@@ -55,6 +55,9 @@ interface ExploredTileDao {
             "LIMIT :limit"
     )
     suspend fun sampleOutOfWorldBounds(currentSize: Double, limit: Int): List<ExploredTile>
+
+    @Query("DELETE FROM explored_tiles WHERE tileX = :x AND tileY = :y")
+    suspend fun deleteTile(x: Long, y: Long)
 }
 
 @Database(entities = [ExploredTile::class], version = 1, exportSchema = false)

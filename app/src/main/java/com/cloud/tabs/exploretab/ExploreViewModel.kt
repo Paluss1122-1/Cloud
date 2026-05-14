@@ -40,4 +40,5 @@ class ExploreViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     suspend fun countTilesOutsideWorldBounds(): Long = repo.countTilesOutsideWorldBounds()
+    suspend fun deleteTile(x: Long, y: Long) = repo.deleteTile(x, y)
 }

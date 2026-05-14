@@ -29,4 +29,6 @@ class ExploreRepository(context: Context) {
 
     suspend fun sampleTilesOutsideWorldBounds(limit: Int = 6): List<ExploredTile> =
         dao.sampleOutOfWorldBounds(TILE_SIZE, limit)
+
+    suspend fun deleteTile(x: Long, y: Long) = dao.deleteTile(x, y)
 }

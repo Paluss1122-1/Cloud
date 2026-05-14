@@ -3,6 +3,7 @@ package com.cloud.tabs.exploretab
 import android.annotation.SuppressLint
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.view.MotionEvent
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,12 +22,12 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
@@ -40,8 +41,10 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cloud.core.objects.Config
+import com.cloud.core.ui.AlertDialogCloud
 import com.cloud.core.ui.NeonBox
 import com.google.android.gms.location.LocationServices
+import kotlinx.coroutines.launch
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
@@ -61,8 +64,9 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
     val exploredPercent by vm.exploredPercent.collectAsState()
     val tiles by vm.allTiles.collectAsState()
     val scope = rememberCoroutineScope()
-    var statsTapCount by remember { mutableStateOf(0) }
+    var statsTapCount by remember { mutableIntStateOf(0) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
+    var tileToDelete by remember { mutableStateOf<ExploredTile?>(null) }
 
     LaunchedEffect(Unit) { setGesturesEnabled(false) }
 
@@ -160,7 +164,7 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                             mv.overlays.filterIsInstance<ExploreOverlay>().toSet()
                         )
                         if (tiles.isNotEmpty()) {
-                            mv.overlays.add(0, ExploreOverlay(tiles))
+                            mv.overlays.add(0, ExploreOverlay(tiles) { tile -> tileToDelete = tile })
                             mv.invalidate()
                         }
                     },
@@ -168,6 +172,18 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                         .fillMaxSize()
                 )
             }
+        }
+        tileToDelete?.let { tile ->
+            AlertDialogCloud(
+                onConfirm = {
+                    scope.launch { vm.deleteTile(tile.tileX, tile.tileY) }
+                    tileToDelete = null
+                },
+                onDismiss = { tileToDelete = null },
+                icon = { Text("🗺️", fontSize = 24.sp) },
+                title = "Tile löschen",
+                text = "Diesen Bereich als unbesucht markieren?"
+            )
         }
     }
 }
@@ -211,7 +227,10 @@ private fun StatCard(
     }
 }
 
-private class ExploreOverlay(private val tiles: List<ExploredTile>) : Overlay() {
+private class ExploreOverlay(
+    private val tiles: List<ExploredTile>,
+    private val onLongPress: (ExploredTile) -> Unit
+) : Overlay() {
     private val fillPaint = Paint().apply {
         color = android.graphics.Color.argb(100, 100, 149, 237)  // Etwas sichtbarer
         style = Paint.Style.FILL
@@ -249,5 +268,18 @@ private class ExploreOverlay(private val tiles: List<ExploredTile>) : Overlay() 
                 canvas.drawRect(left, top, right, bottom, fillPaint)
                 canvas.drawRect(left, top, right, bottom, strokePaint)
             }
+    }
+
+    override fun onLongPress(e: MotionEvent, mapView: MapView): Boolean {
+        val projection = mapView.projection
+        val geo = projection.fromPixels(e.x.toInt(), e.y.toInt()) as GeoPoint
+        val tx = floor(geo.latitude / TILE_SIZE).toLong()
+        val ty = floor(geo.longitude / TILE_SIZE).toLong()
+        val hit = tiles.find { it.tileX == tx && it.tileY == ty }
+        if (hit != null) {
+            onLongPress(hit)
+            return true
+        }
+        return false
     }
 }
