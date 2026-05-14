@@ -1,6 +1,7 @@
 package com.cloud.quiethoursnotificationhelper
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
@@ -74,6 +75,7 @@ private fun showErrorNotification(errorReport: ErrorReport, context: Context) {
     }
 }
 
+@SuppressLint("MissingPermission")
 fun fetchNewErrors(context: Context) {
     appScope.launch {
         try {
