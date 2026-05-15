@@ -78,6 +78,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.cloud.core.activities.Cloud.Companion.appScope
 import com.cloud.core.activities.MainActivity
+import com.cloud.core.functions.canNotify
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.DEL_GAL_CONF
 import com.cloud.core.objects.Config.cms
@@ -733,7 +734,7 @@ class QuietHoursNotificationService : Service() {
                         .setContentIntent(pi)
                         .build()
 
-                    if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                    if (canNotify(this)) {
                         nm.notify(SCHOOL_SUMMARY_NOTIF_ID, notification)
                     }
                     START_STICKY
