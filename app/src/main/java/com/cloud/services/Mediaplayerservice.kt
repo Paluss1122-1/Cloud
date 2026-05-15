@@ -2011,7 +2011,11 @@ class MediaPlayerService : MediaSessionService() {
                 if (!isServiceDestroyed) {
                     handler.postDelayed(
                         this,
-                        if (screenOn && (isPlayingPodcast || isPlayingMusic)) 1000L else 3000_000L
+                        when {
+                            isPlayingPodcast || isPlayingMusic -> 1000L
+                            screenOn -> 5000L
+                            else -> 3_000_000L
+                        }
                     )
                 }
             }
