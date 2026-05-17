@@ -8,6 +8,7 @@ import com.cloud.core.objects.Config.RAPID_API_KEY
 import com.cloud.spotifydownloader_own.domain.DownloadRepository
 import com.cloud.spotifydownloader_own.domain.DownloadState
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.get
 import io.ktor.client.request.headers
 import io.ktor.client.statement.HttpResponse
@@ -49,6 +50,12 @@ class DownloadRepositoryImpl @Inject constructor(
 
             send(DownloadState.Downloading(5))
             val response: HttpResponse = httpClient.get(apiUrl) {
+                timeout {
+                    requestTimeoutMillis = 120_000
+                    connectTimeoutMillis = 60_000
+                    socketTimeoutMillis = 120_000
+                }
+
                 headers {
                     append("x-rapidapi-key", RAPID_API_KEY)
                     append("x-rapidapi-host", "spotify-downloader9.p.rapidapi.com")
