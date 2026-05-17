@@ -1,5 +1,6 @@
-package com.cloud.core.functions
+package com.cloud.tabs.aitab
 
+import android.R
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
@@ -8,9 +9,9 @@ import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.cloud.core.activities.MainActivity
-import com.cloud.core.objects.toast
+import com.cloud.core.functions.canNotify
 
-fun isAppInForeground(context: Context): Boolean {
+fun isAppInForeground(): Boolean {
     return ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
 }
 
@@ -19,9 +20,7 @@ fun sendAITabBackgroundNotification(
     title: String = "AI Tab Antwort",
     message: String
 ) {
-    // Only send notification if app is in background
-    toast(context,"${isAppInForeground(context)}")
-    if (isAppInForeground(context)) return
+    if (isAppInForeground()) return
 
     if (!canNotify(context)) return
 
@@ -39,7 +38,7 @@ fun sendAITabBackgroundNotification(
     )
 
     val notification = NotificationCompat.Builder(context, "ai_tab_notification_channel")
-        .setSmallIcon(android.R.drawable.ic_dialog_info)
+        .setSmallIcon(R.drawable.ic_dialog_info)
         .setContentTitle(title)
         .setContentText(message)
         .setStyle(NotificationCompat.BigTextStyle().bigText(message))
