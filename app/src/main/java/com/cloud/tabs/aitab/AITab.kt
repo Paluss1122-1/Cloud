@@ -1,6 +1,12 @@
 package com.cloud.tabs.aitab
 
+import android.content.ClipData
+import android.content.ClipDescription
+import android.content.ClipboardManager
+import android.content.Context
 import android.net.Uri
+import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -9,19 +15,24 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -41,26 +52,67 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Color.Companion.Black
+import androidx.compose.ui.graphics.Color.Companion.Transparent
 import androidx.compose.ui.graphics.Color.Companion.White
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cloud.core.objects.prvt
+import com.cloud.core.ui.BgSurface
 import com.cloud.core.ui.NeonBox
 import com.cloud.core.ui.PloppingButton
+import com.cloud.core.ui.SharedViewModel
+import com.cloud.core.ui.TextPrimary
+import com.cloud.core.ui.c
 
 @Composable
-fun AITabContent(vm: AITabViewModel = viewModel()) {
+fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewModel()) {
     val listState = rememberLazyListState()
     val alpha = remember { Animatable(0f) }
+    var selectedMsg: Int? by remember { mutableStateOf(null) }
+    var lastSelectedMsg: Int? by remember { mutableStateOf(null) }
+    val context = LocalContext.current
+
+    val msgBounds = remember { mutableStateMapOf<Int, Float>() }
+    val view = LocalView.current
+    val contextMenuY1 = msgBounds[selectedMsg]?.toInt() ?: msgBounds[lastSelectedMsg]?.toInt() ?: 0
+    val overlayAlpha = animateFloatAsState(
+        targetValue = if (selectedMsg != null) 1f else 0f,
+        animationSpec = tween(400),
+        label = "overlay"
+    )
+
+    val density = LocalDensity.current
+    val screenHeightPx = LocalWindowInfo.current.containerSize.height
+
+    val menuGoesUp = contextMenuY1 > screenHeightPx * 0.6f
+
+    BackHandler(vm.isEditMode) {
+        vm.isEditMode = false
+    }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -74,21 +126,29 @@ fun AITabContent(vm: AITabViewModel = viewModel()) {
         vm.animateAlpha(alpha)
     }
 
+    LaunchedEffect(selectedMsg) {
+        Log.d("CLOUDSA", "${msgBounds[selectedMsg]}")
+    }
+
+    val cs = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Transparent)
+            .background(Transparent)
             .imePadding()
             .alpha(alpha.value)
-    )
-    {
+    ) {
         Column(verticalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(
                     modifier = Modifier.padding(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOfNotNull("Nvidia", if (prvt()) "Server" else null).forEachIndexed { index, mode ->
+                    listOfNotNull(
+                        "Nvidia",
+                        if (prvt()) "Server" else null
+                    ).forEachIndexed { index, mode ->
                         val containerColor by animateColorAsState(
                             targetValue = if (vm.currentMode == mode) Color(0xFF555555) else Color(
                                 0xFF333333
@@ -148,7 +208,9 @@ fun AITabContent(vm: AITabViewModel = viewModel()) {
                                                 .replace("-", " ")
                                                 .substringBeforeLast(":")
                                             val sizeString: String? =
-                                                if (vm.currentMode == "Nvidia") sizeRegex1.find(model.name)?.value
+                                                if (vm.currentMode == "Nvidia") sizeRegex1.find(
+                                                    model.name
+                                                )?.value
                                                 else model.name.substringAfter(":")
                                             val size =
                                                 if (sizeString != null && sizeString != "null") {
@@ -175,15 +237,25 @@ fun AITabContent(vm: AITabViewModel = viewModel()) {
                     .padding(horizontal = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                items(vm.history) { msg ->
+                items(vm.history.size) { index ->
+                    val msg = vm.history[index]
                     val isUser = msg.own
 
                     Box(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .zIndex(1f)
+                            .onGloballyPositioned { coords ->
+                                val rootBounds = coords.boundsInRoot()
+                                val windowInsets =
+                                    WindowInsetsCompat.toWindowInsetsCompat(view.rootWindowInsets)
+                                val statusBarHeight =
+                                    windowInsets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+                                msgBounds[index] = rootBounds.bottom - statusBarHeight
+                            },
                         contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
                     ) {
                         if (isUser) {
-                            // === Eigene Nachricht – klassisch & clean ===
                             Box(
                                 modifier = Modifier
                                     .widthIn(max = 280.dp)
@@ -192,22 +264,69 @@ fun AITabContent(vm: AITabViewModel = viewModel()) {
                                         end = 8.dp
                                     )
                             ) {
-                                Text(
-                                    text = msg.text,
-                                    color = White,
-                                    fontSize = 15.sp,
-                                    lineHeight = 21.sp,
-                                    modifier = Modifier
-                                        .background(
-                                            MaterialTheme.colorScheme.primary,   // oder Color(0xFF0066FF) etc.
-                                            RoundedCornerShape(14.dp)
-                                        )
-                                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                                )
+                                if (vm.isEditMode && index == vm.editIndex) {
+                                    TextField(
+                                        value = vm.currentEditMsg,
+                                        onValueChange = { vm.currentEditMsg = it },
+                                        textStyle = TextStyle(color = White, fontSize = 15.sp, lineHeight = 21.sp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        placeholder = { Text("Nachricht bearbeiten...", color = Color(0xFF888888)) },
+                                        colors = TextFieldDefaults.colors(
+                                            focusedTextColor = White,
+                                            unfocusedTextColor = White,
+                                            cursorColor = White,
+                                            focusedContainerColor = MaterialTheme.colorScheme.primary,
+                                            unfocusedContainerColor = MaterialTheme.colorScheme.primary,
+                                            focusedIndicatorColor = Transparent,
+                                            unfocusedIndicatorColor = Transparent
+                                        ),
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                                        keyboardActions = KeyboardActions(onGo = { vm.sendMessage() }),
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .zIndex(1000000f)
+                                            .combinedClickable(
+                                                onLongClick = {
+                                                    selectedMsg = vm.history.indexOf(msg)
+                                                    svm.fireEvent(true)
+                                                    lastSelectedMsg = selectedMsg
+                                                },
+                                                onClick = {}
+                                            )
+                                    )
+                                } else {
+                                    Text(
+                                        text = msg.text,
+                                        color = White,
+                                        fontSize = 15.sp,
+                                        lineHeight = 21.sp,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(MaterialTheme.colorScheme.primary)
+                                            .zIndex(1000000f)
+                                            .combinedClickable(
+                                                onLongClick = {
+                                                    selectedMsg = vm.history.indexOf(msg)
+                                                    svm.fireEvent(true)
+                                                    lastSelectedMsg = selectedMsg
+                                                },
+                                                onClick = {}
+                                            )
+                                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                                    )
+                                }
                             }
                         } else {
                             NeonBox(
                                 modifier = Modifier
+                                    .combinedClickable(
+                                        onLongClick = {
+                                            selectedMsg = vm.history.indexOf(msg)
+                                            svm.fireEvent(true)
+                                            lastSelectedMsg = selectedMsg
+                                        },
+                                        onClick = {}
+                                    )
                                     .widthIn(max = 280.dp)
                                     .padding(
                                         start = 8.dp,
@@ -216,10 +335,13 @@ fun AITabContent(vm: AITabViewModel = viewModel()) {
                                 cornerRadius = 14.dp,
                                 backgroundAlpha = 0.91f,
                                 borderWidth = 2.8.dp,
-                                neonColors = listOf(Color(0xFF00FFAA), Color(0xFF00CCFF)), // schönes Cyan → Blau
+                                neonColors = listOf(Color(0xFF00FFAA), Color(0xFF00CCFF)),
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                                    modifier = Modifier.padding(
+                                        horizontal = 14.dp,
+                                        vertical = 10.dp
+                                    )
                                 ) {
                                     Text(
                                         text = msg.text,
@@ -276,6 +398,7 @@ fun AITabContent(vm: AITabViewModel = viewModel()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .zIndex(1f)
                     .padding(8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -299,7 +422,7 @@ fun AITabContent(vm: AITabViewModel = viewModel()) {
 
                 TextField(
                     value = vm.currentMsg,
-                    onValueChange = { vm.currentMsg = it },
+                    onValueChange = { vm.currentMsg = it; vm.isEditMode = false },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                     shape = RoundedCornerShape(24.dp),
@@ -310,8 +433,8 @@ fun AITabContent(vm: AITabViewModel = viewModel()) {
                         cursorColor = White,
                         focusedContainerColor = Color(0xFF2A2A2A),
                         unfocusedContainerColor = Color(0xFF2A2A2A),
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent
+                        focusedIndicatorColor = Transparent,
+                        unfocusedIndicatorColor = Transparent
                     ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                     keyboardActions = KeyboardActions(onGo = { vm.sendMessage() })
@@ -330,6 +453,128 @@ fun AITabContent(vm: AITabViewModel = viewModel()) {
                     contentAlignment = Alignment.Center
                 ) {
                     Text("+", color = White, fontSize = 16.sp)
+                }
+            }
+        }
+
+        // Context Menu
+        if (overlayAlpha.value > 0) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .zIndex(2f)
+                    .alpha(overlayAlpha.value)
+                    .alpha(alpha.value)
+            ) {
+                var message: ChatMessage? by remember {mutableStateOf(null)}
+                message = selectedMsg?.let { vm.history[it] }
+
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Black.copy(0.6f))
+                        .imePadding()
+                        .then(
+                            if (selectedMsg != null && overlayAlpha.value > 0.5f) Modifier.clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) {
+                                selectedMsg = null
+                                svm.fireEvent(false)
+                            } else Modifier
+                        )
+                )
+
+                val menuHeightPx = with(density) { 260.dp.roundToPx() }
+
+                Row(
+                    Modifier
+                        .offset { IntOffset(0, if (menuGoesUp) contextMenuY1 - menuHeightPx else contextMenuY1 - 150) }
+                        .align(if (message?.own ?: false) Alignment.TopEnd else Alignment.TopStart)
+                        .padding(end = if (message?.own ?: false) 10.dp else 0.dp, start = if (message?.own ?: false) 0.dp else 10.dp)
+                        .width(200.dp)
+                        .clip(
+                            if (menuGoesUp) {
+                                RoundedCornerShape(
+                                    topEnd = 10.dp,
+                                    bottomEnd = 2.dp,
+                                    bottomStart = 10.dp,
+                                    topStart = 20.dp
+                                )
+                            } else if (message?.own == false) {
+                                RoundedCornerShape(
+                                    bottomStart = 10.dp,
+                                    topStart = 2.dp,
+                                    topEnd = 10.dp,
+                                    bottomEnd = 20.dp
+                                )
+                            } else {
+                                RoundedCornerShape(
+                                    topStart = 10.dp,
+                                    topEnd = 2.dp,
+                                    bottomEnd = 10.dp,
+                                    bottomStart = 20.dp
+                                )
+                            }
+                        )
+                        .background(BgSurface)
+                        .height(150.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.End) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(c())
+                                .clickable {
+                                    val clip = ClipData(
+                                        ClipDescription(
+                                            "AITab Message",
+                                            arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN)
+                                        ),
+                                        ClipData.Item(vm.history[selectedMsg!!].text)
+                                    )
+                                    cs.setPrimaryClip(clip)
+                                    selectedMsg = null
+                                    svm.fireEvent(false)
+                                }
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                "Kopieren",
+                                color = TextPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 22.sp
+                            )
+                        }
+
+                        if (message?.own ?: false) {
+                            Spacer(Modifier.height(12.dp))
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(c())
+                                    .clickable {
+                                        val msgIndex = selectedMsg ?: return@clickable
+                                        vm.currentEditMsg = vm.history[msgIndex].text
+                                        vm.editIndex = msgIndex
+                                        vm.isEditMode = true
+                                        selectedMsg = null
+                                        svm.fireEvent(false)
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    "Bearbeiten",
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 22.sp
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

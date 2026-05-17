@@ -18,7 +18,6 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.cloud.core.functions.sendAITabBackgroundNotification
 import com.cloud.privatecloudapp.isOnline
 import com.cloud.quiethoursnotificationhelper.askServer
 import com.cloud.quiethoursnotificationhelper.sendNvidiaChatMessageAITab
@@ -44,6 +43,9 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
     var isLoading by mutableStateOf(false)
     var selectedImageUri by mutableStateOf<Uri?>(null)
     var showAiModels by mutableStateOf(false)
+    var editIndex: Int? by mutableStateOf(null)
+    var isEditMode by mutableStateOf(false)
+    var currentEditMsg by mutableStateOf("")
 
     val history = mutableStateListOf<ChatMessage>()
 
@@ -89,7 +91,13 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
 
     fun sendMessage() {
         val ctx = getApplication<Application>()
-        val userText = currentMsg.trim()
+        val userText = if (isEditMode) currentEditMsg else currentMsg.trim()
+        val fetchedEditIndex = editIndex
+        if (isEditMode && fetchedEditIndex != null) {
+            val toRemove = history.drop(fetchedEditIndex)
+            history.removeAll(toRemove)
+        }
+        isEditMode = false
         if (userText.isEmpty() && selectedImageUri == null) return
 
         val modeAtSend = currentMode
