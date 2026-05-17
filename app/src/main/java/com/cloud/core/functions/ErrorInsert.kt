@@ -14,6 +14,7 @@ data class ERRORINSERTDATA(
 )
 
 suspend fun errorInsert(data: ERRORINSERTDATA): Int {
+    if (!Config.realDevice) return 0
     try {
         Config.client.from("error_reports").insert(data)
         return 1
