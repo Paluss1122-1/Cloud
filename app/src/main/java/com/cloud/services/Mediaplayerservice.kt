@@ -17,12 +17,14 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.media.AudioManager
+import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.MediaStore
+import android.util.Log
 import android.view.KeyEvent
 import android.view.Surface
 import android.view.SurfaceHolder
@@ -31,6 +33,7 @@ import android.view.TextureView
 import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
+import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.DeviceInfo
 import androidx.media3.common.MediaItem
@@ -63,9 +66,11 @@ import com.cloud.tabs.FavoritesPlaylist
 import com.cloud.tabs.ListenSession
 import com.cloud.tabs.MediaAnalyticsManager
 import com.cloud.tabs.PodcastShowManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URLDecoder
 import java.time.Instant
@@ -84,7 +89,7 @@ class MediaPlayerService : MediaSessionService() {
         const val EXTRA_FORWARD_MS = "extra_forward_ms"
         const val EXTRA_SONG_INDEX = "extra_song_index"
 
-        private const val CHANNEL_ID = "media_player_channel"
+        const val CHANNEL_ID = "media_player_channel"
 
         private const val ACTION_MUSIC_PLAY = "com.cloud.ACTION_MUSIC_PLAY"
         private const val ACTION_MUSIC_PAUSE = "com.cloud.ACTION_MUSIC_PAUSE"
@@ -95,6 +100,7 @@ class MediaPlayerService : MediaSessionService() {
         const val ACTION_TOGGLE_FAVORITES_MODE = "TOGGLE_FAVORITES_MODE"
 
         private const val ACTION_PODCAST_PLAY = "com.cloud.ACTION_PODCAST_PLAY"
+        const val ACTION_PODCAST_PLAY_SPECIFIED = "com.cloud.ACTION_PODCAST_PLAY_SPECIFIED"
         private const val ACTION_PODCAST_PAUSE = "com.cloud.ACTION_PODCAST_PAUSE"
         private const val ACTION_PODCAST_REWIND = "com.cloud.ACTION_PODCAST_REWIND"
         private const val ACTION_PODCAST_FORWARD = "com.cloud.ACTION_PODCAST_FORWARD"
@@ -458,7 +464,9 @@ class MediaPlayerService : MediaSessionService() {
     private var algorithmicPlaylistSongs: List<Song> = emptyList()
 
     private var songStartedAt: Long = 0L
-    private var currentSongName: String = ""
+    private var currentSongName = ""
+    private var currentStreamName = ""
+    private var currentStreamShowName = ""   // Show-Name für Stream-Analytics
     private var consecutiveRepeatCount: Int = 0
 
     private var podcastSessionStartedAt: Long = 0L
@@ -594,7 +602,6 @@ class MediaPlayerService : MediaSessionService() {
 
             ACTION_STREAM_REMOTE -> {
                 val url = intent.getStringExtra(EXTRA_STREAM_URL) ?: return START_STICKY
-                ensureMusicMode()
                 streamFromUrl(url)
             }
 
@@ -616,6 +623,54 @@ class MediaPlayerService : MediaSessionService() {
 
             ACTION_PODCAST_PLAY -> {
                 ensurePodcastMode(); playPodcast()
+            }
+
+            ACTION_PODCAST_PLAY_SPECIFIED -> {
+                val target = intent.getStringExtra("safeTitle") ?: return START_STICKY
+                ensurePodcastMode()
+                var result: Podcast? = null
+                val proj = arrayOf(
+                    MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DISPLAY_NAME,
+                    MediaStore.Audio.Media.DATA, MediaStore.Audio.Media.TITLE
+                )
+                contentResolver.query(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, proj, null, null,
+                    "${MediaStore.Audio.Media.DISPLAY_NAME} ASC"
+                )?.use { cursor ->
+                    val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                    val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+                    val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+                    val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                    while (cursor.moveToNext()) {
+                        val id = cursor.getLong(idCol)
+                        val name: String = cursor.getString(nameCol) ?: continue
+                        if (!name.contains(target)) continue
+                        val data: String = cursor.getString(dataCol) ?: continue
+                        val title: String? = cursor.getString(titleCol)
+                        val norm: String = try {
+                            URLDecoder.decode(data, "UTF-8").replace("\\", "/").lowercase()
+                        } catch (_: Exception) {
+                            data.replace("\\", "/").lowercase()
+                        }
+                        val inPodcasts = norm.contains("/download/cloud/podcasts/") ||
+                                norm.contains("/downloads/cloud/podcasts/") ||
+                                data.contains("/Cloud/Podcasts/", ignoreCase = true)
+                        if (inPodcasts && (name.endsWith(".mp3") || name.endsWith(".m4a"))) {
+                            val contentUri = Uri.withAppendedPath(
+                                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                id.toString()
+                            )
+                            val displayName =
+                                if (!title.isNullOrBlank() && title != "<unknown>") title else name.substringBeforeLast(
+                                    '.'
+                                )
+                            result = Podcast(contentUri, displayName, data)
+                        }
+                    }
+                }
+                playPodcast(
+                    result
+                )
             }
 
             ACTION_PODCAST_PAUSE -> {
@@ -1053,11 +1108,7 @@ class MediaPlayerService : MediaSessionService() {
                                 if (currentMode == MODE_MUSIC) {
                                     if (isPlayingMusic) pauseMusic() else playMusic()
                                 } else {
-                                    if (currentPodcast != null) {
-                                        if (isPlayingPodcast) pausePodcast() else playPodcast()
-                                    } else {
-                                        showPodcastSelection()
-                                    }
+                                    if (isPlayingPodcast) pausePodcast() else playPodcast()
                                 }
                                 return true
                             }
@@ -1389,21 +1440,20 @@ class MediaPlayerService : MediaSessionService() {
         } else updateNotification()
     }
 
-    private fun playPodcast() {
-        if (currentPodcast == null) {
-            podcastPrefs.getString(KEY_CURRENT_PODCAST, null)?.let { path ->
-                podcasts.find { it.path == path }?.let { p ->
-                    currentPodcast = p.copy(savedPosition = getPodcastSavedPosition(p.path))
-                    updateNotification()
-                }
+    private fun playPodcast(target: Podcast? = null) {
+        if (currentPodcast == null && podcastPlayer != null) {
+            if (!isPlayingPodcast) {
+                podcastPlayer?.start()
+                isPlayingPodcast = true
+                podcastSessionStartedAt = System.currentTimeMillis()
+                musicPrefs.editAsync { putBoolean("is_playing", true) }
+                scheduleAutoPause()
+                updateNotification()
             }
-            if (currentPodcast == null) {
-                showPodcastSelection()
-                return
-            }
+            return
         }
 
-        val podcast = currentPodcast ?: return
+        val podcast = target ?: currentPodcast ?: return
 
         if (getPodcastCompleted(podcast.path)) {
             showPodcastSelection()
@@ -1489,7 +1539,6 @@ class MediaPlayerService : MediaSessionService() {
     }
 
     private fun rewind() {
-        if (currentPodcast == null) return
         val player = podcastPlayer ?: return
         val newPos = maxOf(0, player.currentPosition - SKIP_TIME_MS)
         player.seekTo(newPos)
@@ -1498,7 +1547,6 @@ class MediaPlayerService : MediaSessionService() {
     }
 
     private fun forward(skipMs: Int = SKIP_TIME_MS) {
-        if (currentPodcast == null) return
         val player = podcastPlayer ?: return
         val newPos = minOf(player.duration, player.currentPosition + skipMs)
         player.seekTo(newPos)
@@ -1760,11 +1808,13 @@ class MediaPlayerService : MediaSessionService() {
     }
 
     private fun buildPodcastNotification(): Notification {
-        val title = currentPodcast?.name ?: "Kein Podcast ausgewählt"
+        val title = currentPodcast?.name ?: currentStreamName.ifEmpty { "Kein Podcast ausgewählt" }
         val pos = podcastPlayer?.currentPosition?.toLong() ?: 0
         val dur = podcastPlayer?.duration?.toLong() ?: 0
         val progress = if (dur > 0) "${formatTime(pos)} / ${formatTime(dur)}" else "Bereit"
-        val speedStr: String = podcastPlayer?.playbackParams?.speed?.toString() ?: ""
+        val speedStr: String = try {
+            podcastPlayer?.playbackParams?.speed?.toString() ?: ""
+        } catch (_: Exception) { "" }
 
         fun pi(reqCode: Int, action: String, extraMs: Int? = null) = PendingIntent.getService(
             this, reqCode,
@@ -2298,7 +2348,7 @@ class MediaPlayerService : MediaSessionService() {
 
         appScope.launch {
             shows.forEach { show ->
-                if (showNameCache.containsKey(show.id)) return@forEach // schon gecacht
+                if (showNameCache.containsKey(show.id)) return@forEach
                 try {
                     val result = sendNvidiaChatMessageAITab(
                         history = emptyList(),
@@ -2486,13 +2536,18 @@ class MediaPlayerService : MediaSessionService() {
     }
 
     private fun savePodcastSession() {
-        val podcast = currentPodcast ?: return
         if (podcastSessionStartedAt == 0L) return
         val listenedMs = System.currentTimeMillis() - podcastSessionStartedAt
         if (listenedMs < 3000) {
             podcastSessionStartedAt = 0L; return
         }
 
+        if (currentPodcast == null) {
+            saveStreamSession()
+            return
+        }
+
+        val podcast = currentPodcast!!
         val showName = resolveShowDisplayName(podcast)
 
         MediaAnalyticsManager.addSession(
@@ -2545,34 +2600,184 @@ class MediaPlayerService : MediaSessionService() {
         )
     }
 
+    private suspend fun resolveStreamMeta(url: String): Pair<String, String> =
+        withContext(Dispatchers.IO) {
+            var resolvedUrl = url
+            var episodeTitle = ""
+            var showName = ""
+
+            try {
+                val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                conn.instanceFollowRedirects = false
+                conn.requestMethod = "HEAD"
+                conn.connect()
+                val location = conn.getHeaderField("Location")
+                conn.disconnect()
+                Log.d("StreamDebug", "redirect resolved: $location")
+                if (!location.isNullOrBlank()) resolvedUrl = location
+            } catch (e: Exception) {
+                Log.e("StreamDebug", "redirect resolve failed: ${e.message}")
+            }
+
+            try {
+                val retriever = MediaMetadataRetriever()
+                retriever.setDataSource(resolvedUrl, hashMapOf())
+                episodeTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: ""
+                showName = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: ""
+                val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: ""
+                retriever.release()
+                Log.d("StreamDebug", "meta | title='$episodeTitle' | album='$showName' | artist='$artist'")
+            } catch (e: Exception) {
+                Log.e("StreamDebug", "metadata extract failed: ${e.message}")
+            }
+
+            Pair(episodeTitle, showName)
+        }
+
+    private suspend fun resolveRedirect(url: String): String = withContext(Dispatchers.IO) {
+        try {
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.instanceFollowRedirects = false
+            conn.requestMethod = "HEAD"
+            conn.connect()
+            val location = conn.getHeaderField("Location")
+            conn.disconnect()
+            Log.d("StreamDebug", "redirect resolved: $location")
+            location ?: url
+        } catch (e: Exception) {
+            Log.e("StreamDebug", "redirect resolve failed: ${e.message}")
+            url
+        }
+    }
+
+    @SuppressLint("UseKtx")
     private fun streamFromUrl(url: String) {
+        // Laufende Session sichern bevor wir wechseln
+        if (isPlayingPodcast) savePodcastSession()
+        if (isPlayingMusic) {
+            if (songStartedAt > 0L && currentSongName.isNotEmpty()) {
+                val listenedMs = System.currentTimeMillis() - songStartedAt
+                if (listenedMs > 3000) {
+                    MediaAnalyticsManager.addSession(
+                        ListenSession(
+                            label = currentSongName,
+                            type = "music",
+                            listenedMs = listenedMs,
+                            startedAt = songStartedAt,
+                            repeatCount = consecutiveRepeatCount.coerceAtLeast(1)
+                        )
+                    )
+                }
+                songStartedAt = 0L
+                consecutiveRepeatCount = 0
+            }
+            musicPlayer?.pause()
+            isPlayingMusic = false
+        }
         musicPlayer?.release()
         musicPlayer = null
-        isPlayingMusic = false
 
-        try {
-            musicPlayer = MediaPlayer().apply {
-                setDataSource(url)
-                setOnPreparedListener {
-                    start()
-                    isPlayingMusic = true
-                    currentSongName = url.substringAfterLast("/").substringBeforeLast(".")
-                    songStartedAt = System.currentTimeMillis()
-                    consecutiveRepeatCount = 0
-                    musicPrefs.editAsync { putBoolean("is_playing", true) }
+        podcastPlayer?.release()
+        podcastPlayer = null
+        isPlayingPodcast = false
+        currentPodcast = null
+
+        currentStreamName = url.substringAfterLast("/").substringBeforeLast(".")
+        currentStreamShowName = ""
+        currentMode = MODE_PODCAST
+
+        saveMusicState()
+        updateNotification()
+        appScope.launch {
+            val resolvedUrl = resolveRedirect(url)
+            val (episodeTitle, showName) = resolveStreamMeta(url)
+
+            // Stream-Titel für Anzeige und Analytics ermitteln
+            currentStreamName = when {
+                showName.isNotEmpty() && episodeTitle.isNotEmpty() -> episodeTitle
+                showName.isNotEmpty() -> showName
+                episodeTitle.isNotEmpty() -> episodeTitle
+                else -> url.substringAfterLast("/").substringBeforeLast(".")
+            }
+
+            // Show zuweisen oder erstellen
+            currentStreamShowName = if (showName.isNotEmpty()) {
+                val existingShow = PodcastShowManager.getShows()
+                    .find { it.name.equals(showName, ignoreCase = true) }
+                val show = existingShow ?: PodcastShowManager.createShow(showName)
+                // Pattern registrieren damit künftige Episoden auto-zugewiesen werden
+                if (episodeTitle.isNotEmpty()) {
+                    PodcastShowManager.assignPattern(episodeTitle.lowercase().take(30), show.name)
+                }
+                Log.d("StreamDebug", "show assigned: ${show.name} (${if (existingShow != null) "existing" else "created"})")
+                show.name
+            } else {
+                currentStreamName
+            }
+
+            withContext(Dispatchers.Main) {
+                try {
+                    podcastPlayer = MediaPlayer().apply {
+                        setDataSource(
+                            applicationContext,
+                            resolvedUrl.toUri(),
+                            mapOf("User-Agent" to "Mozilla/5.0 (Linux; Android)")
+                        )
+                        setOnPreparedListener {
+                            val speed = getSavedPlaybackSpeed()
+                            if (speed != 1.0f) {
+                                Log.d("StreamDebug", "applying speed=$speed")
+                                playbackParams = playbackParams.setSpeed(speed)
+                            }
+                            start()
+                            isPlayingPodcast = true
+                            podcastSessionStartedAt = System.currentTimeMillis()
+                            podcastSessionStartPos = 0L
+                            musicPrefs.editAsync { putBoolean("is_playing", true) }
+                            scheduleAutoPause()
+                            updateNotification()
+                        }
+                        setOnCompletionListener {
+                            // Analytics für Stream-Completion
+                            saveStreamSession()
+                            onPodcastComplete()
+                        }
+                        setOnErrorListener { _, what, extra ->
+                            reportError("streamFromUrl", "MediaPlayer error $what/$extra", Instant.now().toString(), "ERROR")
+                            saveStreamSession()
+                            isPlayingPodcast = false
+                            updateNotification()
+                            false
+                        }
+                        setOnInfoListener { _, _, _ ->
+                            false
+                        }
+                        prepareAsync()
+                    }
+                } catch (e: Exception) {
+                    reportError("streamFromUrl", "${e.message}", Instant.now().toString(), "ERROR")
+                    isPlayingPodcast = false
                     updateNotification()
                 }
-                setOnCompletionListener { onSongComplete() }
-                setOnErrorListener { _, what, extra ->
-                    reportError("streamFromUrl", "MediaPlayer error $what/$extra", Instant.now().toString(), "ERROR")
-                    false
-                }
-                prepareAsync() // non-blocking, startet Pufferung
             }
-            updateNotification()
-        } catch (e: Exception) {
-            reportError("streamFromUrl", "${e.message}", Instant.now().toString(), "ERROR")
         }
+    }
+
+    private fun saveStreamSession() {
+        if (podcastSessionStartedAt == 0L) return
+        val listenedMs = System.currentTimeMillis() - podcastSessionStartedAt
+        if (listenedMs < 3000) { podcastSessionStartedAt = 0L; return }
+        val label = currentStreamShowName.ifEmpty { currentStreamName }
+        MediaAnalyticsManager.addSession(
+            ListenSession(
+                label = label,
+                type = "podcast",
+                listenedMs = listenedMs,
+                startedAt = podcastSessionStartedAt
+            )
+        )
+        podcastSessionStartedAt = 0L
+        Log.d("StreamDebug", "stream session saved: label='$label' listenedMs=$listenedMs")
     }
 }
 
