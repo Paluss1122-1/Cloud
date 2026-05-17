@@ -25,7 +25,6 @@ import android.provider.AlarmClock
 import android.provider.ContactsContract
 import android.provider.MediaStore
 import android.provider.Settings
-import android.util.Base64
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
@@ -111,7 +110,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
-import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStreamReader
 import java.io.PrintWriter
@@ -331,147 +329,61 @@ suspend fun callNvidiaVisionApi(
     fun Bitmap.scaleForApi(maxPx: Int = 1280): Bitmap {
         val scale = maxPx.toFloat() / maxOf(width, height)
         if (scale >= 1f) return this
-        return this.scale(
-            (width * scale).toInt(),
-            (height * scale).toInt()
-        )
+        return this.scale((width * scale).toInt(), (height * scale).toInt())
     }
 
     val scaledBmp = bmp.scaleForApi(1280)
-    val bytes2 = ByteArrayOutputStream().also {
-        scaledBmp.compress(Bitmap.CompressFormat.JPEG, 92, it)
-    }.toByteArray()
-    val base64 = Base64.encodeToString(
-        bytes2,
-        Base64.NO_WRAP
-    )
 
-    val nvidiaResult =
-        withContext(Dispatchers.IO) {
-            try {
-                val messagesJson = JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("role", "user")
-                        put("content", JSONArray().apply {
-                            put(JSONObject().apply {
-                                put("type", "image_url")
-                                put(
-                                    "image_url",
-                                    JSONObject().apply {
-                                        put(
-                                            "url",
-                                            "data:image/jpeg;base64,$base64"
-                                        )
-                                    })
-                            })
-                            put(JSONObject().apply {
-                                put("type", "text")
-                                put(
-                                    "text", """
-                                                                        Look at this vocabulary list image carefully.
-                                                                        There are TWO columns: Latin on the LEFT, German on the RIGHT.
-                                                                        Each row is one vocabulary entry.
-                                                                        
-                                                                        Rules:
-                                                                        - Match each Latin entry with the German entry on the SAME vertical position
-                                                                        - Latin entries are on the left half of the image
-                                                                        - German entries are on the right half
-                                                                        - Ignore page numbers (like "116")
-                                                                        - Ignore any repeated/duplicate blocks at bottom
-                                                                        
-                                                                        Return ONLY a JSON array like this (one object per row):
-                                                                        [{"latein":"salūtem dīcere (m. Dat.)","deutsch":"(jdn.) grüßen, begrüßen"},{"latein":"gaudium","deutsch":"die Freude"},...]
-                                                                        
-                                                                        No markdown, no explanation, ONLY the JSON array.
-                                                                        """.trimIndent()
-                                )
-                            })
-                        })
-                    })
+    val prompt = """
+        Look at this vocabulary list image carefully.
+        There are TWO columns: Latin on the LEFT, German on the RIGHT.
+        Each row is one vocabulary entry.
+        
+        Rules:
+        - Match each Latin entry with the German entry on the SAME vertical position
+        - Latin entries are on the left half of the image
+        - German entries are on the right half
+        - Ignore page numbers (like "116")
+        - Ignore any repeated/duplicate blocks at bottom
+        
+        Return ONLY a JSON array like this (one object per row):
+        [{"latein":"salūtem dīcere (m. Dat.)","deutsch":"(jdn.) grüßen, begrüßen"},{"latein":"gaudium","deutsch":"die Freude"},...]
+        
+        No markdown, no explanation, ONLY the JSON array.
+    """.trimIndent()
+
+    val model = Firebase.ai(backend = GenerativeBackend.googleAI())
+        .generativeModel("gemini-3-flash-preview")
+
+    val result = try {
+        val sb = StringBuilder()
+        model.generateContentStream(content { image(scaledBmp); text(prompt) })
+            .collect { chunk ->
+                val delta = chunk.text ?: ""
+                if (delta.isNotEmpty()) {
+                    sb.append(delta)
+                    withContext(Dispatchers.Main) { onProgress(sb.toString()) }
                 }
-                val body = JSONObject().apply {
-                    put(
-                        "model",
-                        "meta/llama-3.2-90b-vision-instruct"
-                    )
-                    put("messages", messagesJson)
-                    put("stream", true)
-                }
-                val conn =
-                    URL("https://integrate.api.nvidia.com/v1/chat/completions")
-                        .openConnection() as HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.setRequestProperty(
-                    "Authorization",
-                    "Bearer ${Config.NVIDIA}"
-                )
-                conn.setRequestProperty(
-                    "Content-Type",
-                    "application/json"
-                )
-                conn.doOutput = true
-                conn.outputStream.use {
-                    it.write(
-                        body.toString().toByteArray()
-                    )
-                }
-                val code = conn.responseCode
-                if (code != 200) {
-                    null
-                } else {
-                    val sb = StringBuilder()
-                    conn.inputStream.bufferedReader().useLines { lines ->
-                        for (line in lines) {
-                            if (!line.startsWith("data:")) continue
-                            val payload = line.removePrefix("data:").trim()
-                            if (payload == "[DONE]") break
-                            try {
-                                val delta = JSONObject(payload)
-                                    .getJSONArray("choices")
-                                    .getJSONObject(0)
-                                    .getJSONObject("delta")
-                                    .optString("content", "")
-                                if (delta.isNotEmpty()) {
-                                    sb.append(delta)
-                                    withContext(Dispatchers.Main) {
-                                        onProgress(sb.toString())
-                                    }
-                                }
-                            } catch (_: Exception) {}
-                        }
-                    }
-                    sb.toString().trim()
-                }
-            } catch (_: Exception) {
-                null
             }
-        }
-    if (nvidiaResult != null) {
+        sb.toString().trim()
+    } catch (e: Exception) {
+        onError("API keine Antwort – prüfe Key & Netzwerk")
+        return
+    }
+
+    if (result.isNotEmpty()) {
         try {
-            val startIdx = nvidiaResult.indexOf('[')
-            val endIdx = nvidiaResult.lastIndexOf(']')
+            val startIdx = result.indexOf('[')
+            val endIdx = result.lastIndexOf(']')
             if (startIdx != -1 && endIdx > startIdx) {
-                val arr = JSONArray(
-                    nvidiaResult.substring(
-                        startIdx,
-                        endIdx + 1
-                    )
-                )
+                val arr = JSONArray(result.substring(startIdx, endIdx + 1))
                 onVocabChange((0 until arr.length()).map {
                     val o = arr.getJSONObject(it)
-                    Vokabel(
-                        o.getString("latein"),
-                        o.getString("deutsch"),
-                        it
-                    )
+                    Vokabel(o.getString("latein"), o.getString("deutsch"), it)
                 })
             }
         } catch (e: Exception) {
-            onError(
-                "Parse-Fehler: ${e.message}\nRaw: ${
-                    nvidiaResult.take(300)
-                }"
-            )
+            onError("Parse-Fehler: ${e.message}\nRaw: ${result.take(300)}")
         }
     } else {
         onError("API keine Antwort – prüfe Key & Netzwerk")
@@ -533,7 +445,7 @@ fun startTriggerListenerIfHomeWifi(context: Context) {
         startTriggerListener(context)
         registerWifiReconnectReceiver(context)
         syncScope.launch {
-            val ip = fetchLaptopIpFromSupabase()
+            val ip = fetchIpFromSupabase()
             if (!ip.isNullOrEmpty()) laptopIp = ip
         }
     }
@@ -669,7 +581,7 @@ fun restoreSyncIfNeeded(context: Context) {
     if (syncActive && remainingMs > 0) {
         val remainingMinutes = (remainingMs / 60_000L).toInt().coerceAtLeast(1)
         isLaptopConnected = true
-        startUpdateListener(context, remainingMinutes)
+        startUpdateListener(context)
         syncScope.launch {
             delay(5_000)
             syncTodosWithLaptop(context)
@@ -683,8 +595,22 @@ fun restoreSyncIfNeeded(context: Context) {
     }
 }
 
+fun stopUpdateListener(b: Boolean = true) {
+    try {
+        appContext?.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)?.edit {
+            putBoolean(KEY_SYNC_ACTIVE, false)
+        }
+        isLaptopConnected = b
+        cpuWakeLock.safeRelease(); cpuWakeLock = null
+        listenerJob?.cancel(); listenerJob = null
+        updateServerSocket?.close(); updateServerSocket = null
+    } catch (e: Exception) {
+        logError("stopUpdateListener", e)
+    }
+}
+
 fun stopAllSyncServices(context: Context) {
-    stopUpdateListener(false)
+    stopUpdateListener()
 
     listOf(
         mediaCommandJob, mediaStateJob, aiResponseJob, flashcardResponseJob,
@@ -744,7 +670,7 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
 
             if (!connected) {
                 val fetched = withTimeoutOrNull(35_000L) {
-                    fetchLaptopIpFromSupabase()
+                    fetchIpFromSupabase()
                 }
                 if (fetched.isNullOrEmpty()) {
                     showSimpleNotificationExtern(
@@ -753,7 +679,8 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                     return@launch
                 }
                 laptopIp = fetched
-                showSimpleNotificationExtern("Fetched laptopIp", fetched, 10.seconds, context)
+                val insertedIp = fetchIpFromSupabase(true)
+                showSimpleNotificationExtern("Fetched laptopIp, inserted ip", "$fetched, $insertedIp", 10.seconds, context)
             }
 
             val currentIp = laptopIp
@@ -787,7 +714,7 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                     startMediaStateServer(context)
                     startClipboardListener(context)
                     if (listenerJob == null || listenerJob?.isActive == false) {
-                        startUpdateListener(context, 60)
+                        startUpdateListener(context)
                     }
                     withContext(Dispatchers.Main) {
                         WhatsAppNotificationListener.forwardNotificationsToLaptop1()
@@ -824,35 +751,15 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
     }
 }
 
-fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
+fun startUpdateListener(context: Context) {
     stopUpdateListener(true)
     appContext = context.applicationContext
-    saveSyncState(context, durationMinutes)
-
-    val powerManager =
-        context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
-    cpuWakeLock =
-        powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:UpdateWakeLock")
-    cpuWakeLock?.acquire(durationMinutes * 60_000L)
 
     listenerJob = syncScope.launch(Dispatchers.IO) {
         try {
             updateServerSocket = ServerSocket().apply {
                 reuseAddress = true
                 bind(InetSocketAddress(UPDATE_PORT))
-            }
-
-            val timeoutJob = launch {
-                delay(durationMinutes * 60_000L)
-                stopUpdateListener(false)
-                withContext(Dispatchers.Main) {
-                    showSimpleNotificationExtern(
-                        "⏸️ Sync-Listener gestoppt",
-                        "Nach $durationMinutes min automatisch beendet.",
-                        15.seconds,
-                        context
-                    )
-                }
             }
 
             while (isActive) {
@@ -866,46 +773,15 @@ fun startUpdateListener(context: Context, durationMinutes: Int = 60) {
                         val updatedTodos = parseTodosFromJson(jsonData)
                         saveTodos(context, updatedTodos)
                         withContext(Dispatchers.Main) {
-                            showSimpleNotificationExtern(
-                                "🔄 To-dos aktualisiert",
-                                "Änderungen vom Laptop empfangen",
-                                10.seconds,
-                                context
-                            )
+                            showSimpleNotificationExtern("🔄 To-dos aktualisiert", "Änderungen vom Laptop empfangen", 10.seconds, context)
                         }
                     }
-                } catch (_: SocketException) {
-                    break
-                } catch (e: Exception) {
-                    logError("startUpdateListener", e)
-                }
+                } catch (_: SocketException) { break }
+                catch (e: Exception) { logError("startUpdateListener", e) }
             }
-
-            timeoutJob.cancel()
         } catch (e: Exception) {
             logError("startUpdateListener", e)
         }
-    }
-}
-
-fun stopUpdateListener(boolean: Boolean = false) {
-    try {
-        appContext?.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)?.edit {
-            putBoolean(KEY_SYNC_ACTIVE, false)
-        }
-        isLaptopConnected = boolean
-        cpuWakeLock.safeRelease(); cpuWakeLock = null
-        listenerJob?.cancel(); listenerJob = null
-        updateServerSocket?.close(); updateServerSocket = null
-    } catch (e: Exception) {
-        logError("stopUpdateListener", e)
-    }
-}
-
-private fun saveSyncState(context: Context, durationMinutes: Int = 0) {
-    context.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE).edit {
-        putBoolean(KEY_SYNC_ACTIVE, true)
-        putLong(KEY_SYNC_UNTIL, System.currentTimeMillis() + durationMinutes * 60_000L)
     }
 }
 
@@ -1313,7 +1189,7 @@ suspend fun trySendImageToLaptop(imageBytes: ByteArray): Boolean {
             var resolvedIp = laptopIp
 
             if (resolvedIp.isEmpty()) {
-                resolvedIp = fetchLaptopIpFromSupabase() ?: return@withContext false
+                resolvedIp = fetchIpFromSupabase() ?: return@withContext false
                 laptopIp = resolvedIp
             }
 
@@ -1790,7 +1666,7 @@ fun checkIfNearLocation(
     context: Context,
     targetLat: Double = Config.LAT,
     targetLon: Double = Config.LON,
-    radiusMeters: Float = 150f,
+    radiusMeters: Float = 550f,
     callback: (Boolean) -> Unit
 ) {
     if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
@@ -2293,12 +2169,13 @@ fun sendAiExecuteCommand(context: Context, userInput: String) {
     }
 }
 
-private suspend fun fetchLaptopIpFromSupabase(): String? = withContext(Dispatchers.IO) {
+private suspend fun fetchIpFromSupabase(mobile: Boolean = false): String? = withContext(Dispatchers.IO) {
     repeat(3) { attempt ->
         var connection: HttpURLConnection? = null
         try {
+            val column = if (!mobile) "laptop" else "handy"
             val url = "${Config.SUPABASE_URL}/rest/v1/device_ips" +
-                    "?device_id=eq.laptop&select=ip_address"
+                    "?device_id=eq.$column&select=ip_address"
 
             connection = URL(url).openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
