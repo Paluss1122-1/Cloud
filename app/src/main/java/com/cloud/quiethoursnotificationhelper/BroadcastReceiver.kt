@@ -1,15 +1,23 @@
 package com.cloud.quiethoursnotificationhelper
 
 import android.app.Activity
+import android.app.DownloadManager
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.widget.Toast
+import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import androidx.core.content.edit
 import com.cloud.core.functions.showSimpleNotificationExtern
+import com.cloud.services.MediaPlayerService
+import com.cloud.services.MediaPlayerService.Companion.ACTION_PODCAST_PLAY_SPECIFIED
+import com.cloud.services.MediaPlayerService.Companion.CHANNEL_ID
 import com.cloud.services.QuietHoursNotificationService
 import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_CHANGE_END
 import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_CHANGE_START
@@ -22,6 +30,8 @@ import com.cloud.services.QuietHoursNotificationService.Companion.EXTRA_MESSAGE_
 import com.cloud.services.QuietHoursNotificationService.Companion.EXTRA_SENDER
 import com.cloud.services.QuietHoursNotificationService.Companion.NOTIFICATION_ID
 import com.cloud.services.QuietHoursNotificationService.Companion.readMessageIds
+import com.cloud.tabs.PodcastShowManager
+import org.json.JSONObject
 
 class QuietActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -71,7 +81,7 @@ val messageSentReceiver = object : BroadcastReceiver() {
             val replyText = RemoteInput.getResultsFromIntent(intent)
                 ?.getCharSequence("key_text_reply")?.toString()
 
-            setResultCode(Activity.RESULT_OK)
+            resultCode = Activity.RESULT_OK
 
             if (replyText != null && context != null) {
                 Handler(Looper.getMainLooper()).post {
@@ -176,5 +186,53 @@ val commandReceiver = object : BroadcastReceiver() {
                 }
             }
         }
+    }
+}
+
+class FinishedPdDownload : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
+        if (downloadId == -1L) return
+
+        val prefs = context.getSharedPreferences("podcast_downloads", MODE_PRIVATE)
+        val pendingJson = prefs.getString("pending_$downloadId", null) ?: return
+        prefs.edit { remove("pending_$downloadId") }
+
+        val obj = JSONObject(pendingJson)
+        val safeTitle = obj.getString("safeTitle")
+        val showName = obj.getString("showName")
+
+        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val cursor = dm.query(DownloadManager.Query().setFilterById(downloadId))
+        if (cursor.moveToFirst()) {
+            val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+            if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                val show = PodcastShowManager.getShows()
+                    .find { it.name.equals(showName, ignoreCase = true) }
+                    ?: PodcastShowManager.createShow(showName)
+                PodcastShowManager.assignPattern(safeTitle.lowercase(), show.name)
+                Toast.makeText(context, "✓ Heruntergeladen", Toast.LENGTH_SHORT).show()
+                val openIntent = Intent(context, MediaPlayerService::class.java).apply {
+                    action = ACTION_PODCAST_PLAY_SPECIFIED
+                    putExtra("safeTitle", safeTitle)
+                }
+                val pendingIntent = PendingIntent.getForegroundService(
+                    context, downloadId.toInt(), openIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+
+                val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                    .setContentTitle("✓ Podcast heruntergeladen")
+                    .setContentText(safeTitle)
+                    .setContentIntent(pendingIntent)
+                    .setAutoCancel(true)
+                    .build()
+
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.notify(downloadId.toInt(), notification)
+            }
+        }
+        cursor.close()
     }
 }
