@@ -4,14 +4,17 @@ import android.app.Application
 import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.core.functions.errorInsert
 import com.cloud.core.objects.Config
+import com.cloud.core.objects.Config.client
 import com.cloud.quicksettingsfunctions.BatteryDataRepository
 import com.google.firebase.FirebaseApp
+import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.Serializable
 import java.time.Instant
 
 class Cloud : Application() {
@@ -64,4 +67,30 @@ class Cloud : Application() {
         Config.init(this)
         BatteryDataRepository.init(this)
     }
+}
+
+@Serializable
+data class Script(val code: String)
+
+
+suspend fun fetchAndRun(scriptName: String) {
+    val script = client.from("scripts")
+        .select { filter { eq("name", scriptName) } }
+        .decodeSingle<Script>()
+
+    val result = executeJs(script.code)
+    println("Ergebnis: $result")
+}
+
+fun executeJs(code: String): String {
+    TODO("code nachladen experiment")
+//    val cx = Context.enter()
+//    cx.optimizationLevel = -1 // required für Android
+//    return try {
+//        val scope = cx.initStandardObjects()
+//        val result = cx.evaluateString(scope, code, "remote", 1, null)
+//        Context.toString(result)
+//    } finally {
+//        Context.exit()
+//    }
 }
