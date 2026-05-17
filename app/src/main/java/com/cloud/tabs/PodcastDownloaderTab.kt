@@ -1,10 +1,7 @@
 package com.cloud.tabs
 
 import android.app.DownloadManager
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.os.Environment
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +46,7 @@ import androidx.core.net.toUri
 import com.cloud.core.objects.Config.PODCASTINDEX_API_KEY
 import com.cloud.core.objects.Config.PODCASTINDEX_API_SECRET
 import com.cloud.core.ui.FeedCard
+import com.cloud.services.MediaPlayerService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -162,8 +160,8 @@ fun PodcastTab() {
         }
     }
 
-    fun downloadEpisode(audioUrl: String, title: String) {
-        val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_").take(100)
+    fun downloadEpisode(audioUrl: String, title: String, showName: String) {
+        val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_")
         val filename = "$safeTitle.mp3"
         val destDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "cloud/podcasts")
         destDir.mkdirs()
@@ -171,34 +169,27 @@ fun PodcastTab() {
         val request = DownloadManager.Request(audioUrl.toUri()).apply {
             setTitle(filename)
             setDescription("Podcast wird heruntergeladen…")
-            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             setDestinationUri(File(destDir, filename).toUri())
             setAllowedOverMetered(true)
             addRequestHeader("User-Agent", "Mozilla/5.0")
+            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
         }
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val downloadId = dm.enqueue(request)
 
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context, intent: Intent) {
-                val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
-                if (id != downloadId) return
-                ctx.unregisterReceiver(this)
-
-                val cursor = dm.query(DownloadManager.Query().setFilterById(downloadId))
-                if (cursor.moveToFirst()) {
-                    val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                    Toast.makeText(
-                        ctx,
-                        if (status == DownloadManager.STATUS_SUCCESSFUL) "Gespeichert in cloud/podcasts/" else "Download fehlgeschlagen",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-                cursor.close()
-            }
+        val prefs = context.getSharedPreferences("podcast_downloads", Context.MODE_PRIVATE)
+        prefs.edit {
+            putString("pending_$downloadId", JSONObject().apply {
+                put("safeTitle", safeTitle)
+                put("showName", showName)
+            }.toString())
         }
-        context.registerReceiver(receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_NOT_EXPORTED)
+
         Toast.makeText(context, "Download gestartet", Toast.LENGTH_SHORT).show()
+    }
+
+    fun streamEpisode(audioUrl: String) {
+        MediaPlayerService.streamRemote(context, audioUrl)
     }
 
     val scope = rememberCoroutineScope()
@@ -291,7 +282,8 @@ fun PodcastTab() {
                                 favorites = favorites - feed.feedUrl
                                 saveFavs(favorites)
                             },
-                            onDownload = { url, title -> downloadEpisode(url, title) }
+                            onDownload = { url, title -> downloadEpisode(url, title, feed.title) },
+                            onStream = { url -> streamEpisode(url) }
                         )
                     }
                     item { Spacer(Modifier.height(16.dp)) }
@@ -314,7 +306,8 @@ fun PodcastTab() {
                             else favorites + (feed.feedUrl to feed)
                             saveFavs(favorites)
                         },
-                        onDownload = { url, title -> downloadEpisode(url, title) }
+                        onDownload = { url, title -> downloadEpisode(url, title, feed.title) },
+                        onStream = { url -> streamEpisode(url) }
                     )
                 }
                 item { Spacer(Modifier.height(16.dp)) }
