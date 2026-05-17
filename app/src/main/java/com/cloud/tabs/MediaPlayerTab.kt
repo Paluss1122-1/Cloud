@@ -14,10 +14,6 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -37,7 +33,6 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -71,12 +66,10 @@ import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -97,7 +90,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -106,12 +98,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.zIndex
 import androidx.core.content.edit
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -122,6 +110,7 @@ import com.cloud.quiethoursnotificationhelper.deleteAiResponse
 import com.cloud.quiethoursnotificationhelper.loadAllAiResponses
 import com.cloud.quiethoursnotificationhelper.loadTodayOrYesterdayEntry
 import com.cloud.services.MediaPlayerService
+import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
@@ -207,13 +196,14 @@ fun MediaTab(viewModel: MediaViewModel = viewModel()) {
                     )
                 }
             }
-        ) { _ ->
+        ) { innerPadding  ->
             Crossfade(
                 targetState = state.currentTab,
                 label = "tab_transition"
             ) { tab ->
                 when (tab) {
                     MediaTab.HOME -> HomeTab(
+                        modifier = Modifier.padding(bottom=innerPadding.calculateBottomPadding()),
                         state = state,
                         onSongClick = { song -> playSong(context, song, state.songs) },
                         onSongLongClick = { analyticsTarget = it },
@@ -222,6 +212,7 @@ fun MediaTab(viewModel: MediaViewModel = viewModel()) {
                     )
 
                     MediaTab.SEARCH -> SearchTab(
+                        modifier = Modifier.padding(bottom=innerPadding.calculateBottomPadding()),
                         query = state.searchQuery,
                         results = searchResults,
                         onQueryChange = { viewModel.setSearchQuery(it) },
@@ -232,19 +223,16 @@ fun MediaTab(viewModel: MediaViewModel = viewModel()) {
                     )
 
                     MediaTab.PODCASTS -> LibraryTab(
+                        modifier = Modifier.padding(bottom=innerPadding.calculateBottomPadding()),
                         state = state,
-                        onSongClick = { song -> playSong(context, song, state.songs) },
-                        onSongLongClick = { analyticsTarget = it },
                         onEpisodeClick = { ep -> playEpisode(context, ep) },
-                        onEpisodeLongClick = { analyticsTarget = it },
                         onRefresh = { viewModel.refresh() }
                     )
 
                     MediaTab.MUSIC -> MusicTab(
+                        modifier = Modifier.padding(bottom=innerPadding.calculateBottomPadding()),
                         state = state,
                         onSongClick = { song -> playSong(context, song, state.songs) },
-                        onSongLongClick = { analyticsTarget = it },
-                        onRefresh = { viewModel.refresh() },
                         onPlaylistCreated = {
                             viewModel.viewModelScope.launch {
                                 delay(600)
@@ -368,6 +356,7 @@ private fun MediaBottomBar(currentTab: MediaTab, onTabSelected: (MediaTab) -> Un
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeTab(
+    modifier: Modifier = Modifier,
     state: MediaUiState,
     onSongClick: (MediaPlayerService.Song) -> Unit,
     onSongLongClick: (MediaPlayerService.Song) -> Unit,
@@ -430,7 +419,7 @@ private fun HomeTab(
     PullToRefreshBox(
         isRefreshing = state.isLoading,
         onRefresh = onRefresh,
-        modifier = Modifier.fillMaxSize()
+        modifier = modifier.fillMaxSize()
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -869,6 +858,7 @@ private fun StatsRow(
 
 @Composable
 private fun SearchTab(
+    modifier: Modifier,
     query: String,
     results: SearchResults,
     onQueryChange: (String) -> Unit,
@@ -877,7 +867,7 @@ private fun SearchTab(
     onEpisodeClick: (PodcastEpisode) -> Unit,
     onShowClick: (PodcastShow) -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize()) {
         SearchBar(query = query, onQueryChange = onQueryChange)
 
         val hasResults =
@@ -926,7 +916,6 @@ private fun SearchTab(
                             completionFraction = 0f,
                             expanded = false,
                             episodes = emptyList(),
-                            podcastAnalytics = emptyMap(),
                             onToggle = { onShowClick(show) },
                             onEpisodeClick = {})
                     }
@@ -938,11 +927,9 @@ private fun SearchTab(
 
 @Composable
 private fun LibraryTab(
+    modifier: Modifier = Modifier,
     state: MediaUiState,
-    onSongClick: (MediaPlayerService.Song) -> Unit,
-    onSongLongClick: (MediaPlayerService.Song) -> Unit,
     onEpisodeClick: (PodcastEpisode) -> Unit,
-    onEpisodeLongClick: (PodcastEpisode) -> Unit,
     onRefresh: () -> Unit
 ) {
     var expandedShowId by remember { mutableStateOf<String?>(null) }
@@ -952,7 +939,7 @@ private fun LibraryTab(
     }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
         item { Row {
@@ -975,7 +962,6 @@ private fun LibraryTab(
                 totalListenedMs = totalListenedMs,
                 expanded = expandedShowId == show.id,
                 episodes = eps,
-                podcastAnalytics = state.podcastAnalytics,
                 onToggle = {
                     expandedShowId = if (expandedShowId == show.id) null else show.id
                 },
@@ -1009,10 +995,9 @@ private fun LibraryTab(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MusicTab(
+    modifier: Modifier,
     state: MediaUiState,
     onSongClick: (MediaPlayerService.Song) -> Unit,
-    onSongLongClick: (MediaPlayerService.Song) -> Unit,
-    onRefresh: () -> Unit,
     onPlaylistCreated: () -> Unit,
     viewModel: MediaViewModel
 ) {
@@ -1027,7 +1012,7 @@ private fun MusicTab(
     var detailUserPlaylist by remember { mutableStateOf<MediaPlayerService.Playlist?>(null) }
     var playlistToDelete by remember { mutableStateOf<MediaPlayerService.Playlist?>(null) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 100.dp)
@@ -1330,36 +1315,6 @@ private fun MusicTab(
             onDismiss = { showCreateSheet = false }
         )
     }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun FullscreenModalBottomSheet(
-    onDismissRequest: () -> Unit,
-    modifier: Modifier = Modifier,
-    sheetState: SheetState = rememberModalBottomSheetState(),
-    content: @Composable ColumnScope.() -> Unit
-) {
-    val view = LocalView.current
-
-    DisposableEffect(Unit) {
-        val window = (view.parent as? DialogWindowProvider)?.window
-        window?.let {
-            WindowCompat.setDecorFitsSystemWindows(it, false)
-            WindowCompat.getInsetsController(it, it.decorView).apply {
-                hide(WindowInsetsCompat.Type.systemBars())
-                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-        }
-        onDispose { }
-    }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismissRequest,
-        modifier = modifier,
-        sheetState = sheetState,
-        content = content
-    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -1921,7 +1876,6 @@ private fun ShowCard(
     totalListenedMs: Long = 0L,
     expanded: Boolean,
     episodes: List<PodcastEpisode>,
-    podcastAnalytics: Map<String, PodcastAnalytics>,
     onToggle: () -> Unit,
     onEpisodeClick: (PodcastEpisode) -> Unit,
     onEpisodeLongClick: ((PodcastEpisode) -> Unit)? = null
@@ -2221,50 +2175,6 @@ private fun PodcastAnalyticsContent(episode: PodcastEpisode) {
             Text("Noch nicht angehört", color = TextTertiary, fontSize = 14.sp)
         }
         Spacer(Modifier.height(32.dp))
-    }
-}
-
-@Composable
-private fun SkeletonItem() {
-    val infiniteTransition = rememberInfiniteTransition(label = "skeleton")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f, targetValue = 0.7f,
-        animationSpec = infiniteRepeatable(
-            tween(800, easing = LinearEasing),
-            RepeatMode.Reverse
-        ),
-        label = "alpha"
-    )
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(BgCard.copy(alpha = alpha))
-        )
-        Spacer(Modifier.width(12.dp))
-        Column {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.6f)
-                    .height(14.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(BgCard.copy(alpha = alpha))
-            )
-            Spacer(Modifier.height(6.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.4f)
-                    .height(10.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(BgCard.copy(alpha = alpha * 0.6f))
-            )
-        }
     }
 }
 
@@ -2853,7 +2763,7 @@ object MediaAnalyticsManager {
     private const val PREFS_NAME = "media_analytics_v2"
     const val KEY_SESSIONS = "sessions"
 
-    val gson = GsonBuilder().create()
+    val gson: Gson = GsonBuilder().create()
     var prefs: SharedPreferences? = null
 
     fun init(context: Context) {
@@ -3528,11 +3438,6 @@ object PodcastShowManager {
         return removed
     }
 
-
-    /**
-     * Assigns a pattern to a show by name. Creates the show if it doesn't exist.
-     * Example: assignPattern("heise", "Heise Show")
-     */
     fun assignPattern(pattern: String, showName: String): Boolean {
         val show = shows.find { it.name.equals(showName, ignoreCase = true) }
             ?: createShow(showName)
@@ -3558,7 +3463,6 @@ object PodcastShowManager {
         saveShows()
         savePatternMappings()
     }
-
 
     fun resolveShowForEpisode(path: String, title: String): String {
         val combined = ("$path $title").lowercase()
