@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.content.Context.WINDOW_SERVICE
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
@@ -20,6 +21,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.Uri
+import android.os.BatteryManager
 import android.os.PowerManager
 import android.provider.AlarmClock
 import android.provider.ContactsContract
@@ -68,6 +70,7 @@ import com.cloud.core.functions.errorInsert
 import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.FLASHCARD_RECEIVE_PORT
+import com.cloud.core.objects.Config.INFO_PORT
 import com.cloud.core.objects.Config.SYNC_PORT
 import com.cloud.core.objects.Config.TODOS
 import com.cloud.core.objects.Config.UPDATE_PORT
@@ -138,6 +141,16 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.seconds
+
+private data class Cache(
+    var batteryLevel: String = "0",
+    var temperature: String = "0",
+    var plugged: Boolean = false,
+    var lastSync: Long = 0
+)
+
+private var cache = Cache()
+private val akkuReceiver = AkkuReceiver()
 
 val isLaptopConnectedFlow = MutableStateFlow(false)
 val aiResponseFlow = MutableStateFlow<AiResponseEntry?>(null)
@@ -634,6 +647,8 @@ fun stopAllSyncServices(context: Context) {
     }
 
     cpuWakeLock.safeRelease(); cpuWakeLock = null
+    context.unregisterReceiver(akkuReceiver)
+    cache = Cache()
 
     isLaptopConnected = false
 
@@ -659,8 +674,8 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
             "syncInProgress: ${syncInProgress.get()}, realDevice: ${Config.realDevice}",
             10.seconds, context
         )
-        if (!Config.realDevice) syncInProgress.set(false)
-        return
+//        if (!Config.realDevice) syncInProgress.set(false)
+//        return
     }
 
     syncScope.launch {
@@ -724,6 +739,7 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                         )
                     }
                     pushMediaStateToLaptop(context)
+                    context.registerReceiver(akkuReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
                 }
                 "EMPTY" -> throw IOException("Server erhielt leere Daten")
                 "TIMEOUT" -> throw IOException("Server-Timeout beim Lesen")
@@ -1450,6 +1466,10 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
                     0
                 )
             }
+        }
+
+        "stopMediaPlayerService" -> {
+            MediaPlayerService.stopService(context)
         }
 
         else -> {}
@@ -2280,4 +2300,40 @@ fun getHotspotIp(): String? {
         }
     }
     return null
+}
+
+fun reportDeviceInformation(intent: Intent, ctx: Context) {
+    val now = System.currentTimeMillis()
+    if (now - cache.lastSync < 3000) return
+    cache.lastSync = now
+    val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1).takeIf { it >= 0 }.toString()
+        .ifEmpty { return  }
+    val temp =
+        intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1).takeIf { it != -1 }?.div(10f)
+            .toString().ifEmpty { return }
+    val plugged =
+        intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0).toString().ifEmpty { return }
+
+    val pluggedb = plugged != "0"
+    val bl = buildString {
+        if (cache.batteryLevel != level) append("battery_level=$level ")
+        if (cache.temperature != temp) append("temp=$temp ")
+        if (cache.plugged != pluggedb) append("charging=$pluggedb")
+    }.trim()
+    cache.batteryLevel = level
+    cache.plugged = pluggedb
+    cache.temperature = temp
+
+    if (bl.isEmpty()) return
+
+    CoroutineScope(Dispatchers.IO).launch {
+        try {
+            val socket = Socket(laptopIp.ifEmpty { return@launch }, INFO_PORT)
+            socket.getOutputStream().write(bl.toByteArray())
+            socket.shutdownOutput()
+            socket.close()
+        } catch (e: Exception) {
+            println("Socket error: ${e.message}")
+        }
+    }
 }
