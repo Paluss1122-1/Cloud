@@ -38,6 +38,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -107,6 +108,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Color.Companion.Black
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -126,6 +128,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
@@ -348,7 +351,8 @@ fun PrivateCloudApp(
     startTarget: String?,
     initialMenuItem: MenuItem,
     onMenuClick: (() -> Unit)? = null,
-    viewModel: TabNavigationViewModel = viewModel()
+    viewModel: TabNavigationViewModel = viewModel(),
+    svm: SharedViewModel = viewModel()
 ) {
     val context = LocalContext.current
     var selectedMenuItem by rememberSaveable {
@@ -361,6 +365,18 @@ fun PrivateCloudApp(
     var isDesktopMode by rememberSaveable { mutableStateOf(false) }
     val navigationState by viewModel.navigationState.collectAsState()
     var gesturesEnabled by rememberSaveable { mutableStateOf(true) }
+    var showBox by remember { mutableStateOf(false) }
+    val overlayAlpha = animateFloatAsState(
+        targetValue = if (showBox) 1f else 0f,
+        animationSpec = tween(400),
+        label = "overlay"
+    )
+
+    LaunchedEffect(Unit) {
+        svm.uiEvent.collect { value ->
+            showBox = value
+        }
+    }
 
     val setGesturesEnabled: (Boolean) -> Unit = { enabled ->
         gesturesEnabled = enabled
@@ -411,6 +427,10 @@ fun PrivateCloudApp(
 
                 MenuItem.PRIVATE_CLOUD -> {
                     MainCloudScreen(storage = storage)
+                }
+
+                MenuItem.AITAB -> {
+                    AITabContent(svm = svm)
                 }
 
                 else -> selectedMenuItem.content(setGesturesEnabled)
@@ -504,15 +524,20 @@ fun PrivateCloudApp(
                                 )
                             }
                         },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color.Transparent
-                        ),
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                         windowInsets = WindowInsets.statusBars
                     )
+                    Box(Modifier
+                        .alpha(overlayAlpha.value)
+                        .matchParentSize()
+                        .background(Black.copy(0.6f))
+                        .zIndex(10f))
                 },
                 containerColor = Color.Transparent
             ) { paddingValues ->
-                Box(modifier = Modifier.padding(paddingValues)) {
+                Box(modifier = Modifier
+                    .padding(paddingValues)
+                    .zIndex(1000000f)) {
                     when (selectedMenuItem) {
                         MenuItem.WEATHER -> WeatherTabContent(viewModel = viewModel)
                         MenuItem.BROWSER -> BrowserTabContent(
@@ -639,12 +664,19 @@ fun PrivateCloudApp(
                             setTitle(filename)
                             setDescription("Wird heruntergeladen…")
                             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                            setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+                            setDestinationInExternalPublicDir(
+                                Environment.DIRECTORY_DOWNLOADS,
+                                filename
+                            )
                             addRequestHeader("User-Agent", userAgent)
-                            addRequestHeader("Cookie", CookieManager.getInstance().getCookie(url) ?: "")
+                            addRequestHeader(
+                                "Cookie",
+                                CookieManager.getInstance().getCookie(url) ?: ""
+                            )
                         }
 
-                        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                        val dm =
+                            context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
                         val downloadId = dm.enqueue(request)
 
                         // BroadcastReceiver: wird gefeuert wenn Download fertig
@@ -660,16 +692,21 @@ fun PrivateCloudApp(
                                 val cursor = dm.query(query)
 
                                 if (cursor.moveToFirst()) {
-                                    val statusCol = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                                    val statusCol =
+                                        cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
                                     val status = cursor.getInt(statusCol)
 
                                     if (status == DownloadManager.STATUS_SUCCESSFUL) {
                                         val src = File(
-                                            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                                            Environment.getExternalStoragePublicDirectory(
+                                                Environment.DIRECTORY_DOWNLOADS
+                                            ),
                                             filename
                                         )
                                         val destDir = File(
-                                            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                                            Environment.getExternalStoragePublicDirectory(
+                                                Environment.DIRECTORY_DOWNLOADS
+                                            ),
                                             "cloud/podcasts"
                                         )
                                         destDir.mkdirs()
@@ -1392,7 +1429,7 @@ fun MainCloudScreen(storage: Storage) {
                                                                     Icon(
                                                                         imageVector = Icons.Filled.ArrowDropDown,
                                                                         contentDescription = "Download",
-                                                                        tint = Color.Black
+                                                                        tint = Black
                                                                     )
                                                                 }
                                                             }
