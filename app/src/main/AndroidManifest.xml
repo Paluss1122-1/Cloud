@@ -289,6 +289,13 @@
             android:name=".tabs.exploretab.ExploreGeofenceReceiver"
             android:exported="false" />
         <receiver android:name=".quiethoursnotificationhelper.DailySummaryReceiver" android:exported="false" />
+        <receiver
+            android:name=".quiethoursnotificationhelper.FinishedPdDownload"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
