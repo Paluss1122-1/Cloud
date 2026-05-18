@@ -79,6 +79,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
+import com.cloud.core.activities.Cloud.Companion.appScope
 import com.cloud.core.objects.Config
 import com.cloud.core.ui.AccentViolet
 import com.cloud.core.ui.AccentVioletDim
@@ -184,20 +185,24 @@ fun VocabTab() {
         SaveSetDialog(
             initial = saveNameInput,
             onConfirm = { name ->
-                val set = VokabelSet(name.trim(), vokabeln)
-                savedSets = saveVokabelSet(prefs, set)
-                showSaveDialog = false
-                saveNameInput = ""
-                activeSet?.let { oldSet ->
-                    val oldId = oldSet.createdAt.toInt()
-                    val newId = set.createdAt.toInt()
-                    val weakVokabeln = loadWeakVokabeln(prefs, oldSet.createdAt)
-                    saveWeakVokabeln(prefs, set.createdAt, weakVokabeln)
-                    lastWidths = lastWidths.map { if (it.id == oldId) it.copy(id = newId) else it }
-                    currentWidths = currentWidths.map { if (it.id == oldId) it.copy(id = newId) else it }
-                    deleteVokabelSet(prefs, oldSet)
+                appScope.launch {
+                    val set = VokabelSet(name.trim(), vokabeln)
+                    savedSets = saveVokabelSet(prefs, set)
+                    showSaveDialog = false
+                    saveNameInput = ""
+                    activeSet?.let { oldSet ->
+                        val oldId = oldSet.createdAt.toInt()
+                        val newId = set.createdAt.toInt()
+                        val weakVokabeln = loadWeakVokabeln(prefs, oldSet.createdAt)
+                        saveWeakVokabeln(prefs, set.createdAt, weakVokabeln)
+                        lastWidths =
+                            lastWidths.map { if (it.id == oldId) it.copy(id = newId) else it }
+                        currentWidths =
+                            currentWidths.map { if (it.id == oldId) it.copy(id = newId) else it }
+                        deleteVokabelSet(prefs, oldSet)
+                    }
+                    screen = VokabelTabScreen.HOME
                 }
-                screen = VokabelTabScreen.HOME
             },
             onDismiss = { showSaveDialog = false }
         )
@@ -380,7 +385,7 @@ fun HomeScreen(
         AlertDialogCloud(
             title = "Set löschen?",
             text = "\"${setToDelete!!.name}\" wird gelöscht.",
-            onConfirm = {onDeleteSet(setToDelete!!); setToDelete = null},
+            onConfirm = { onDeleteSet(setToDelete!!); setToDelete = null },
             onDismiss = { setToDelete = null },
         )
     }
@@ -1215,6 +1220,10 @@ fun LearnScreen(
             )
         }
         onBack()
+    }
+
+    BackHandler {
+        handleBack()
     }
 
     Column(
