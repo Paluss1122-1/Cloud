@@ -229,10 +229,17 @@ class FinishedPdDownload : BroadcastReceiver() {
                     .setAutoCancel(true)
                     .build()
 
-                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                val nm =
+                    context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 nm.notify(downloadId.toInt(), notification)
             }
         }
         cursor.close()
+    }
+}
+
+class AkkuReceiver : BroadcastReceiver() {
+    override fun onReceive(ctx: Context, intent: Intent) {
+        reportDeviceInformation(intent, ctx)
     }
 }
