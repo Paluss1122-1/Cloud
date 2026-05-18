@@ -1,9 +1,9 @@
 # Cloud (Android App)
 
-<div style="background: rgb(74, 0, 0); border: 4px solid rgb(164,0,0); border-radius: 20px; padding-left: 10px;">
-    <p><strong>NOTE:</strong> Due to new notification restrictions introduced in Samsung One UI 8.5, QuietHourNotificationService is currently not fully compatible.</p>
-    <p style="color: rgb(144, 144, 144)">11:24 PM CEST 05/18/2026</p>
-</div>
+> [!WARNING]
+> Due to new notification restrictions introduced in Samsung One UI 8.5, QuietHourNotificationService is currently not fully compatible.
+>
+> *11:24 PM CEST 05/18/2026*
 
 This project is a powerful, multi-functional Android application with **ONE** goal: **Replacing** and **improving** third-party apps with a **single** app — **no tracking** (optional tracking for the Music Player for AI analysis, disabled by default), **optional server binding**, and **enhanced privacy**!
 
