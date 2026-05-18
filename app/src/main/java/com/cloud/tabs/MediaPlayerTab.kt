@@ -321,7 +321,8 @@ private fun MediaBottomBar(currentTab: MediaTab, onTabSelected: (MediaTab) -> Un
     BottomAppBar(
         containerColor = BgSurface,
         contentColor = TextSecondary,
-        tonalElevation = 0.dp
+        tonalElevation = 0.dp,
+        windowInsets = WindowInsets(0,0,0,0)
     ) {
         val tabs = listOf(
             Triple(MediaTab.HOME, "Home", "🏠"),
