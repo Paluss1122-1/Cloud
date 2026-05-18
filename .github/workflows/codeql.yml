@@ -117,6 +117,7 @@ jobs:
               const val EXECUTE_PORT_SEND_FROM_HANDY = 8906
               const val EXECUTE_RESPONSE_PORT = 8907
               const val SPOTIFY_PORT = 8908
+              const val INFO_PORT = 8909
 
               private const val ITERATIONS = ${{ secrets.ITERATIONS }}
               private const val KEY_LENGTH = 256
