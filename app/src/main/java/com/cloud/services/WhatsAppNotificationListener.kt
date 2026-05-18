@@ -274,16 +274,22 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                                     .align(Alignment.TopEnd)
                                     .padding(8.dp)
                                     .size(40.dp)
-                                    .background(
-                                        Color.Black.copy(alpha = 0.6f),
-                                        shape = RoundedCornerShape(50)
-                                    )
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Schließen",
-                                    tint = Color.White
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Color.Black.copy(alpha = 0.6f),
+                                            shape = RoundedCornerShape(50)
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Schließen",
+                                        tint = Color.White
+                                    )
+                                }
                             }
                         }
                     }
