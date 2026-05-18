@@ -2091,12 +2091,24 @@ class MediaPlayerService : MediaSessionService() {
                     AudioManager.ACTION_AUDIO_BECOMING_NOISY -> {
                         if (currentMode == MODE_MUSIC) pauseMusic() else pausePodcast()
                     }
+                    BluetoothDevice.ACTION_ACL_CONNECTED -> seekBackOnOutputChange()
+                    Intent.ACTION_HEADSET_PLUG -> {
+                        if (intent.getIntExtra("state", 0) == 1) seekBackOnOutputChange()
+                    }
+                }
+            }
+            private fun seekBackOnOutputChange() {
+                if (currentMode == MODE_PODCAST && podcastPlayer != null) {
+                    val newPos = maxOf(0, (podcastPlayer?.currentPosition ?: 0) - 1000)
+                    podcastPlayer?.seekTo(newPos)
                 }
             }
         }
         registerReceiver(bluetoothReceiver, IntentFilter().apply {
             addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
             addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+            addAction(Intent.ACTION_HEADSET_PLUG)
         })
     }
 
