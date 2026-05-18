@@ -490,7 +490,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                 Row(
                     Modifier
                         .offset { IntOffset(0, if (menuGoesUp) contextMenuY1 - menuHeightPx else contextMenuY1 - 150) }
-                        .align(if (message?.own ?: false) Alignment.TopEnd else Alignment.TopStart)
+                        .align(if (message?.own ?: return) Alignment.TopEnd else Alignment.TopStart)
                         .padding(end = if (message?.own ?: false) 10.dp else 0.dp, start = if (message?.own ?: false) 0.dp else 10.dp)
                         .width(200.dp)
                         .clip(
