@@ -739,6 +739,7 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                         )
                     }
                     pushMediaStateToLaptop(context)
+                    cache = Cache()
                     context.registerReceiver(akkuReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
                 }
                 "EMPTY" -> throw IOException("Server erhielt leere Daten")
