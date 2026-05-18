@@ -147,7 +147,7 @@ fun createNotificationChannel(context: Context) {
         NotificationChannel(
             CHANNEL_ID,
             "Ruhezeiten Überwachung",
-            NotificationManager.IMPORTANCE_LOW
+            NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = "Überwacht Ruhezeiten "
             setShowBadge(false)
@@ -343,19 +343,21 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
         commandPendingIntent
     )
         .addRemoteInput(commandInput)
-        .setShowsUserInterface(false)
+        .setAllowGeneratedReplies(true)
+        .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY)
         .build()
 
     val builder = NotificationCompat.Builder(context, CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setOngoing(true)
         .setDeleteIntent(deletePendingIntent)
         .setContentIntent(contentPendingIntent)
-        .setRequestPromotedOngoing(true)
+        //.setRequestPromotedOngoing(true)
         .setOngoing(true)
         .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
         .addAction(commandAction)
+        .setAllowSystemGeneratedContextualActions(true)
         .setGroup("quiet_hours_main_group")
         .setShowWhen(false)
 
