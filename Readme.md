@@ -1,13 +1,7 @@
 # Cloud (Android App)
 
-> [!Warning]
-> Due to new notification restrictions introduced in Samsung One UI 8.5, QuietHourNotificationService is currently not fully compatible, but I'm working on it
->
-> *11:24 PM CEST 05/18/2026* - Planned fix around *5 PM CEST 05/19/2026*
->
-> **Update 4:25 PM:** Since this morning, more features than yesterday aren't working.
->
-> **9:08 PM: Compatible with Samsung OneUI8.5!**
+> [!NOTE]
+> Cloud is compatible with Samsung OneUI 8.5 - 9:11 PM 5/19/2026
 
 This project is a powerful, multi-functional Android application with **ONE** goal: **Replacing** and **improving** third-party apps with a **single** app — **no tracking** (optional tracking for the Music Player for AI analysis, disabled by default), **optional server binding**, and **enhanced privacy**!
 
