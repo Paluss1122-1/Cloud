@@ -353,7 +353,6 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
         .setOngoing(true)
         .setDeleteIntent(deletePendingIntent)
         .setContentIntent(contentPendingIntent)
-        //.setRequestPromotedOngoing(true)
         .setOngoing(true)
         .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
         .addAction(commandAction)
