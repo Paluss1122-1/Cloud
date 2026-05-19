@@ -1,6 +1,6 @@
 # Cloud (Android App)
 
-> [!INFO]
+> [!Warning]
 > Due to new notification restrictions introduced in Samsung One UI 8.5, QuietHourNotificationService is currently not fully compatible, but I'm working on it
 >
 > *11:24 PM CEST 05/18/2026* - Planned fix around *5 PM CEST 05/19/2026*
