@@ -300,7 +300,7 @@ private fun todosToJsonArray(todos: List<TodoItem>): JSONArray = JSONArray().app
     }
 }
 
-private suspend fun callNvidiaApi(model: String, messagesJson: JSONArray): String? =
+suspend fun callNvidiaApi(model: String, messagesJson: JSONArray): String? =
     withContext(Dispatchers.IO) {
         try {
             val requestBody = JSONObject().apply {
@@ -379,7 +379,7 @@ suspend fun callNvidiaVisionApi(
                 }
             }
         sb.toString().trim()
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         onError("API keine Antwort – prüfe Key & Netzwerk")
         return
     }
@@ -2303,7 +2303,7 @@ fun getHotspotIp(): String? {
     return null
 }
 
-fun reportDeviceInformation(intent: Intent, ctx: Context) {
+fun reportDeviceInformation(intent: Intent) {
     val now = System.currentTimeMillis()
     if (now - cache.lastSync < 3000) return
     cache.lastSync = now
