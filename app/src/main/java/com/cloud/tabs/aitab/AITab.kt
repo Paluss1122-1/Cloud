@@ -46,6 +46,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -246,14 +247,6 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                             }
                         }
                     }
-
-                    if (!isServer && !isPrivate) {
-                        Text(
-                            "${vm.todayUsage}/$DAILY_LIMIT",
-                            color = White,
-                            fontSize = 12.sp
-                        )
-                    }
                 }
 
                 if (vm.currentMode != "Server" && !prvt()) {
@@ -264,20 +257,29 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         LinearProgressIndicator(
-                            progress = vm.getUsageProgress(),
+                            progress = { vm.getUsageProgress() },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(6.dp)
                                 .clip(RoundedCornerShape(12.dp)),
                             color = Color(0xFF00FFAA),
-                            trackColor = Color(0xFF444444)
+                            trackColor = Color(0xFF444444),
+                            strokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
                         )
-                        Text(
-                            vm.getUsageResetText(),
-                            color = White.copy(alpha = 0.8f),
-                            fontSize = 11.sp,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(
+                                vm.getUsageResetText(),
+                                color = White.copy(alpha = 0.8f),
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(start = 10.dp)
+                            )
+                            Text(
+                                "${vm.todayUsage}/$DAILY_LIMIT",
+                                color = White,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(end = 10.dp)
+                            )
+                        }
                     }
                 }
 
