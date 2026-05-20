@@ -240,6 +240,6 @@ class FinishedPdDownload : BroadcastReceiver() {
 
 class AkkuReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        reportDeviceInformation(intent, ctx)
+        reportDeviceInformation(intent)
     }
 }
