@@ -17,6 +17,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import com.cloud.core.activities.Cloud.Companion.appScope
+import com.cloud.core.objects.Config.DEF_GEMINI
 import com.cloud.core.objects.Config.client
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
@@ -354,7 +355,7 @@ suspend fun predictChargingTime(context: Context): Int? {
 
     return try {
         val model = Firebase.ai(backend = GenerativeBackend.googleAI())
-            .generativeModel("gemini-3-flash-preview")
+            .generativeModel(DEF_GEMINI)
         val response = model.generateContent(prompt)
         response.text?.trim()?.toIntOrNull()
     } catch (e: Exception) {
