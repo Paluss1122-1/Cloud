@@ -12,14 +12,17 @@ import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.cloud.core.objects.prvt
 import com.cloud.privatecloudapp.isOnline
 import com.cloud.quiethoursnotificationhelper.askServer
+import com.cloud.quiethoursnotificationhelper.sendGeminiRequest
 import com.cloud.quiethoursnotificationhelper.sendNvidiaChatMessageAITab
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -28,6 +31,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.ByteArrayOutputStream
+import java.util.Calendar
+
+const val DAILY_LIMIT = 10
+private const val USAGE_RESET_MS = 6 * 60 * 60 * 1000L
 
 @Serializable
 data class ChatMessage(
@@ -53,17 +60,24 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
         get() = when (currentMode) {
             "Nvidia" -> nvidiaModels
             "Server" -> serverModels
+            "Gemini" -> geminiModels
             else -> emptyList()
         }
 
     var selectedModel by mutableStateOf(availableModels[0])
 
+    var todayUsage by mutableIntStateOf(0)
+    var usageResetAt by mutableStateOf(0L)
+
     var historyLoaded = false
+    
+    var showLimitReached by mutableStateOf(false)
 
     fun loadHistory() {
         if (historyLoaded) return
         historyLoaded = true
         val ctx = getApplication<Application>()
+        checkUsageResetIfNeeded(ctx)
         val json = ctx.getSharedPreferences("ai_prefs", MODE_PRIVATE)
             .getString("ai_history", null) ?: return
         try {
@@ -71,6 +85,51 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    private fun updateTodayUsage(count: Int) {
+        todayUsage = count
+        setStoredUsage(count, usageResetAt)
+    }
+
+    private fun setStoredUsage(count: Int, resetAt: Long) {
+        val ctx = getApplication<Application>()
+        val prefs = ctx.getSharedPreferences("ai_usage", MODE_PRIVATE)
+        prefs.edit {
+            putInt("usage_count", count)
+            putLong("usage_reset_at", resetAt)
+        }
+    }
+
+    fun checkUsageResetIfNeeded(ctx: Context) {
+        val prefs = ctx.getSharedPreferences("ai_usage", MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val savedResetAt = prefs.getLong("usage_reset_at", 0L)
+        val shouldReset = savedResetAt == 0L || now - savedResetAt >= USAGE_RESET_MS
+
+        if (shouldReset) {
+            usageResetAt = now
+            todayUsage = 0
+            setStoredUsage(0, now)
+        } else {
+            usageResetAt = savedResetAt
+            todayUsage = prefs.getInt("usage_count", 0)
+        }
+    }
+
+    fun getUsageProgress(): Float = (todayUsage.toFloat() / DAILY_LIMIT).coerceIn(0f, 1f)
+
+    fun getUsageResetText(): String {
+        val now = System.currentTimeMillis()
+        val target = usageResetAt + USAGE_RESET_MS
+        if (target <= now) return "Wird gleich zurückgesetzt"
+        val remaining = target - now
+        val hours = remaining / 3_600_000
+        val minutes = (remaining % 3_600_000) / 60_000
+        val resetTime = Calendar.getInstance().apply { timeInMillis = target }
+        val hh = resetTime.get(Calendar.HOUR_OF_DAY).toString().padStart(2, '0')
+        val mm = resetTime.get(Calendar.MINUTE).toString().padStart(2, '0')
+        return "Reset um $hh:$mm (${hours}h ${minutes}m)"
     }
 
     fun setMode(mode: String) {
@@ -100,6 +159,17 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
         isEditMode = false
         if (userText.isEmpty() && selectedImageUri == null) return
 
+        val isServer = currentMode == "Server"
+        val isPrivate = prvt()
+        
+        if (!isServer && !isPrivate) {
+            checkUsageResetIfNeeded(ctx)
+            if (todayUsage + selectedModel.weight > DAILY_LIMIT) {
+                showLimitReached = true
+                return
+            }
+        }
+
         val modeAtSend = currentMode
         val imageBase64 = selectedImageUri?.let { encodeImage(ctx, it) }
 
@@ -113,6 +183,10 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
         persistHistory()
         currentMsg = ""
         isLoading = true
+
+        if (!isServer && !isPrivate) {
+            updateTodayUsage(todayUsage + selectedModel.weight)
+        }
 
         viewModelScope.launch {
             try {
@@ -153,6 +227,8 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
                 ?: "Fehler"
 
             "Server" -> askServer(history, txt, selectedModel.realname, pic)
+
+            "Gemini" -> sendGeminiRequest(history, txt, pic) ?: "Fehler"
             else -> "Wähle einen Modus"
         }
     }
