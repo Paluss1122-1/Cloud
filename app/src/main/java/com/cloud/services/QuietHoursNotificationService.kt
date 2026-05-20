@@ -110,7 +110,7 @@ import com.cloud.quiethoursnotificationhelper.playPreviousVoiceNote
 import com.cloud.quiethoursnotificationhelper.restoreSyncIfNeeded
 import com.cloud.quiethoursnotificationhelper.saveAiResponse
 import com.cloud.quiethoursnotificationhelper.scheduleNextCheck
-import com.cloud.quiethoursnotificationhelper.sendGeminiChatMessageAITab
+import com.cloud.quiethoursnotificationhelper.sendGeminiRequest
 import com.cloud.quiethoursnotificationhelper.showDeleteConfirmation
 import com.cloud.quiethoursnotificationhelper.showNextGalleryImage
 import com.cloud.quiethoursnotificationhelper.showPreviousGalleryImage
@@ -646,6 +646,8 @@ class QuietHoursNotificationService : Service() {
                 ACTION_DAILY_MUSIC_SUMMARY -> {
                     appScope.launch {
                         try {
+                            MediaPlayerService.flushActiveSessions(this@QuietHoursNotificationService)
+                            kotlinx.coroutines.delay(500)
                             MediaAnalyticsManager.init(this@QuietHoursNotificationService)
                             val lastAiTimestamp =
                                 loadTodayOrYesterdayEntry(this@QuietHoursNotificationService)?.timestamp
@@ -655,7 +657,7 @@ class QuietHoursNotificationService : Service() {
                             if (sessions.isEmpty()) return@launch
 
                             val stats = buildSessionStatsText(sessions)
-                            val result = sendGeminiChatMessageAITab(emptyList(), stats) ?: return@launch
+                            val result = sendGeminiRequest(emptyList(), stats, anlytic = true) ?: return@launch
                             val musicMs =
                                 sessions.filter { it.type == "music" }.sumOf { it.listenedMs }
                             val podcastMs =
