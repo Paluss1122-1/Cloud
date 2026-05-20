@@ -35,6 +35,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -358,6 +359,8 @@ fun AlertDialogCloud(
     icon: @Composable (() -> Unit)? = null,
     title: String = "",
     text: String = "",
+    confirmText: String = "Löschen",
+    oneButton: Boolean = false,
     shape: Shape = AlertDialogDefaults.shape,
     iconContentColor: Color = AlertDialogDefaults.iconContentColor,
     titleContentColor: Color = AlertDialogDefaults.titleContentColor,
@@ -370,21 +373,24 @@ fun AlertDialogCloud(
         confirmButton = {
             Box(
                 modifier = Modifier
+                    .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFFB71C1C))
+                    .background(if (!oneButton) Color(0xFFB71C1C) else MaterialTheme.colorScheme.primary)
                     .clickable { onConfirm() }
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) { Text("Löschen", color = TextPrimary, fontWeight = FontWeight.SemiBold) }
+            ) { Text(confirmText, color = TextPrimary, fontWeight = FontWeight.SemiBold) }
         },
         modifier = modifier,
         dismissButton = {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(BgCard)
-                    .clickable { onDismiss() }
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) { Text("Abbrechen", color = TextSecondary) }
+            if(!oneButton) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(BgCard)
+                        .clickable { onDismiss() }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) { Text("Abbrechen", color = TextSecondary) }
+            }
         },
         icon = icon,
         title = { Text(title, color = TextSecondary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
