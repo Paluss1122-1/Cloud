@@ -89,6 +89,7 @@ jobs:
                   }
                   httpEngine = OkHttp.create()
               }
+              const val DEF_GEMINI = "gemini-2.5-flash-lite"
               const val BWMP = "${{ secrets.BWMP }}"
               const val DBKEY = "${{ secrets.DBKEY }}"
               const val DBKEY1 = "${{ secrets.DBKEY1 }}"
