@@ -33,7 +33,7 @@ import kotlinx.serialization.json.Json
 import java.io.ByteArrayOutputStream
 import java.util.Calendar
 
-const val DAILY_LIMIT = 10
+const val DAILY_LIMIT = 30
 private const val USAGE_RESET_MS = 6 * 60 * 60 * 1000L
 
 @Serializable
