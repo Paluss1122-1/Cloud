@@ -790,22 +790,25 @@ fun MaterialienScreen(
                                                     colors = markdownColor(text = TextPrimary),
                                                     typography = markdownTypography(
                                                         h1 = TextStyle(
-                                                            fontSize = 18.sp,
+                                                            fontSize = 20.sp,
                                                             lineHeight = 22.sp,
                                                             fontWeight = FontWeight.SemiBold,
-                                                            color = TextPrimary
+                                                            color = TextPrimary,
+                                                            textDecoration = TextDecoration.Underline
                                                         ),
                                                         h2 = TextStyle(
-                                                            fontSize = 16.sp,
+                                                            fontSize = 18.sp,
                                                             lineHeight = 20.sp,
                                                             fontWeight = FontWeight.SemiBold,
-                                                            color = TextPrimary
+                                                            color = TextPrimary,
+                                                            textDecoration = TextDecoration.Underline
                                                         ),
                                                         h3 = TextStyle(
-                                                            fontSize = 15.sp,
+                                                            fontSize = 17.sp,
                                                             lineHeight = 19.sp,
                                                             fontWeight = FontWeight.Medium,
-                                                            color = TextPrimary
+                                                            color = TextPrimary,
+                                                            textDecoration = TextDecoration.Underline
                                                         ),
 
                                                         text = TextStyle(
