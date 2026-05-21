@@ -168,7 +168,6 @@ import com.cloud.tabs.OtherBucketViewer
 import com.cloud.tabs.PodcastTab
 import com.cloud.tabs.QuickSettingsTabContent
 import com.cloud.tabs.RemoteDesktopTabContent
-import com.cloud.tabs.SpotifyDownloaderApp
 import com.cloud.tabs.SpotifyDownloaderTab
 import com.cloud.tabs.WeatherTabContent
 import com.cloud.tabs.aitab.AITabContent
@@ -313,11 +312,6 @@ enum class MenuItem(
         "Vokabeln",
         "️️🏫️",
         { VocabTab() }
-    ),
-    SPOTIY(
-        "Spotify 2.0",
-        "️️🏫️",
-        { SpotifyDownloaderApp() }
     ),
     EXPLORE(
         "Explore",
@@ -1283,7 +1277,7 @@ fun MainCloudScreen(storage: Storage) {
                                                     modifier = Modifier
                                                         .align(Alignment.BottomCenter)
                                                         .fillMaxWidth()
-                                                        .background(Color.Black.copy(alpha = 0.7f))
+                                                        .background(Black.copy(alpha = 0.7f))
                                                         .padding(4.dp)
                                                 ) {
                                                     Row(
@@ -1775,7 +1769,7 @@ fun MainCloudScreen(storage: Storage) {
                                                         Icon(
                                                             imageVector = Icons.Filled.ArrowDropDown,
                                                             contentDescription = "Download",
-                                                            tint = Color.Black
+                                                            tint = Black
                                                         )
                                                     }
                                                 }
