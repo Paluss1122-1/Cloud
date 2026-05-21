@@ -5,13 +5,21 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
-import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,8 +30,12 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -34,6 +46,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -57,20 +71,29 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.edit
 import androidx.core.graphics.scale
 import coil.compose.AsyncImage
 import com.cloud.core.objects.Config
-import com.cloud.core.objects.toast
+import com.cloud.core.objects.Config.MAX_GEMINI
 import com.cloud.core.ui.AccentViolet
 import com.cloud.core.ui.BgSurface
 import com.cloud.core.ui.TextPrimary
+import com.cloud.core.ui.TextSecondary
 import com.cloud.core.ui.TextTertiary
+import com.cloud.quiethoursnotificationhelper.sendGeminiRequest
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownColor
+import com.mikepenz.markdown.m3.markdownTypography
 import io.github.jan.supabase.storage.storage
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -86,9 +109,16 @@ enum class UploadStatus { PENDING, UPLOADING, DONE, ERROR }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MaterialienScreen(onBack: () -> Unit) {
+fun MaterialienScreen(
+    onBack: () -> Unit,
+    savedSets: List<VokabelSet> = emptyList(),
+    onOpenSet: (VokabelSet) -> Unit = {},
+    onLearnDirectly: () -> Unit = {},
+    paddingValues: PaddingValues
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val prefs = remember { context.getSharedPreferences("material_cache", Context.MODE_PRIVATE) }
 
     var showDatePicker by remember { mutableStateOf(false) }
     var uploads by remember { mutableStateOf<List<MaterialUploadState>>(emptyList()) }
@@ -99,12 +129,19 @@ fun MaterialienScreen(onBack: () -> Unit) {
     var foldersLoading by remember { mutableStateOf(true) }
     var folderFiles by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
     var folderFilesLoading by remember { mutableStateOf(false) }
+    var sheetExpanded by remember { mutableStateOf(false) }
+    var showFullscreenSummary by remember { mutableStateOf(false) }
+
+    LaunchedEffect(selectedFile) {
+        if (selectedFile == null) {
+            sheetExpanded = false
+            showFullscreenSummary = false
+        }
+    }
 
     LaunchedEffect(Unit) {
         try {
             val files = Config.client.storage.from("school").list()
-            toast(context, "$files")
-            Log.d("CLOUDSA", "$files")
             folders = files.map { it.name }.filter { it.isNotBlank() }.sortedDescending()
         } catch (e: Exception) {
             errorMsg = e.localizedMessage
@@ -128,6 +165,7 @@ fun MaterialienScreen(onBack: () -> Unit) {
 
     BackHandler {
         when {
+            showFullscreenSummary -> showFullscreenSummary = false
             selectedFile != null -> selectedFile = null
             selectedDate != null -> selectedDate = null
             else -> onBack()
@@ -164,7 +202,8 @@ fun MaterialienScreen(onBack: () -> Unit) {
                     uploads = uploads.map {
                         if (it.fileName == state.fileName) it.copy(status = UploadStatus.DONE) else it
                     }
-                    folderFiles = folderFiles + (selectedDate!! to (folderFiles[selectedDate] ?: emptyList()) + uploadName)
+                    folderFiles = folderFiles + (selectedDate!! to (folderFiles[selectedDate]
+                        ?: emptyList()) + uploadName)
                 } catch (e: Exception) {
                     errorMsg = e.localizedMessage
                     uploads = uploads.map {
@@ -184,7 +223,8 @@ fun MaterialienScreen(onBack: () -> Unit) {
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { millis ->
-                        val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(millis))
+                        val date =
+                            SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(millis))
                         selectedDate = date
                         uploads = emptyList()
                     }
@@ -200,38 +240,41 @@ fun MaterialienScreen(onBack: () -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 4.dp, top = 8.dp, end = 16.dp, bottom = 4.dp)
-        ) {
-            IconButton(onClick = {
+        SchoolHeader(
+            title = "Materialien",
+            subtitle = if (selectedDate != null) "School / $selectedDate" else "School",
+            onBack = {
                 when {
                     selectedFile != null -> selectedFile = null
                     selectedDate != null -> selectedDate = null
                     else -> onBack()
                 }
-            }) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = TextPrimary)
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Materialien", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    if (selectedDate != null) "School / $selectedDate" else "School",
-                    color = TextTertiary, fontSize = 12.sp
-                )
-            }
-            if (selectedDate != null) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(BgSurface)
-                        .clickable { showDatePicker = true }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Text(selectedDate!!, color = AccentViolet, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            },
+            savedSets = savedSets,
+            onOpenSet = onOpenSet,
+            onLearnDirectly = onLearnDirectly,
+            showDashboard = selectedDate == null,
+            paddingValues = paddingValues,
+            actions = {
+                if (selectedDate != null) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(BgSurface)
+                            .clickable { showDatePicker = true }
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            selectedDate!!,
+                            color = AccentViolet,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
-            }
-        }
+            },
+            drawGradient = false
+        )
 
         AnimatedVisibility(errorMsg != null) {
             Row(
@@ -245,13 +288,17 @@ fun MaterialienScreen(onBack: () -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("⚠️", fontSize = 14.sp)
-                Text(errorMsg ?: "", color = Color(0xFFEF9A9A), fontSize = 13.sp, modifier = Modifier.weight(1f))
+                Text(
+                    errorMsg ?: "",
+                    color = Color(0xFFEF9A9A),
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f)
+                )
                 Text("✕", color = TextTertiary, modifier = Modifier.clickable { errorMsg = null })
             }
         }
 
         if (selectedDate == null) {
-            // Ordner-Grid
             if (foldersLoading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = AccentViolet)
@@ -263,8 +310,17 @@ fun MaterialienScreen(onBack: () -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text("🗂️", fontSize = 48.sp)
-                        Text("Keine Ordner vorhanden", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text("Erstelle einen neuen Ordner via +", color = TextTertiary, fontSize = 13.sp)
+                        Text(
+                            "Keine Ordner vorhanden",
+                            color = TextPrimary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Erstelle einen neuen Ordner via +",
+                            color = TextTertiary,
+                            fontSize = 13.sp
+                        )
                     }
                 }
             } else {
@@ -305,7 +361,9 @@ fun MaterialienScreen(onBack: () -> Unit) {
             }
             FloatingActionButton(
                 onClick = { showDatePicker = true },
-                modifier = Modifier.align(Alignment.End).padding(20.dp),
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .padding(20.dp),
                 containerColor = AccentViolet,
                 contentColor = TextPrimary
             ) {
@@ -313,8 +371,17 @@ fun MaterialienScreen(onBack: () -> Unit) {
             }
         } else {
             if (folderFilesLoading) {
-                Box(Modifier.fillMaxWidth().padding(top = 20.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = AccentViolet)
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 20.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                        color = AccentViolet
+                    )
                 }
             }
             LazyColumn(
@@ -322,10 +389,14 @@ fun MaterialienScreen(onBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                if (uploads.isEmpty() && (folderFiles[selectedDate] ?: emptyList()).isEmpty() && !folderFilesLoading) {
+                if (uploads.isEmpty() && (folderFiles[selectedDate]
+                        ?: emptyList()).isEmpty() && !folderFilesLoading
+                ) {
                     item {
                         Box(
-                            modifier = Modifier.fillMaxWidth().padding(top = 60.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 60.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(
@@ -333,8 +404,17 @@ fun MaterialienScreen(onBack: () -> Unit) {
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text("📂", fontSize = 48.sp)
-                                Text("Noch keine Dateien", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                Text("Tippe + um Dateien hochzuladen", color = TextTertiary, fontSize = 13.sp)
+                                Text(
+                                    "Noch keine Dateien",
+                                    color = TextPrimary,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "Tippe + um Dateien hochzuladen",
+                                    color = TextTertiary,
+                                    fontSize = 13.sp
+                                )
                             }
                         }
                     }
@@ -394,8 +474,19 @@ fun MaterialienScreen(onBack: () -> Unit) {
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(fileEmoji(fileName), fontSize = 22.sp)
-                        Text(fileName, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        Text("✓", color = Color(0xFF66BB6A), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            fileName,
+                            color = TextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            "✓",
+                            color = Color(0xFF66BB6A),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
                 items(uploads) { item ->
@@ -410,7 +501,12 @@ fun MaterialienScreen(onBack: () -> Unit) {
                     ) {
                         Text(fileEmoji(item.fileName), fontSize = 22.sp)
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(item.fileName, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text(
+                                item.fileName,
+                                color = TextPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
                             Text(
                                 when (item.status) {
                                     UploadStatus.PENDING -> "Warte..."
@@ -428,12 +524,16 @@ fun MaterialienScreen(onBack: () -> Unit) {
                         }
                         when (item.status) {
                             UploadStatus.UPLOADING -> CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = AccentViolet
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = AccentViolet
                             )
+
                             UploadStatus.DONE -> Icon(
                                 Icons.Default.CheckCircle, null,
                                 tint = Color(0xFF66BB6A), modifier = Modifier.size(20.dp)
                             )
+
                             else -> {}
                         }
                     }
@@ -442,7 +542,9 @@ fun MaterialienScreen(onBack: () -> Unit) {
             }
             FloatingActionButton(
                 onClick = { filePicker.launch("*/*") },
-                modifier = Modifier.align(Alignment.End).padding(20.dp),
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .padding(20.dp),
                 containerColor = AccentViolet,
                 contentColor = TextPrimary
             ) {
@@ -451,15 +553,91 @@ fun MaterialienScreen(onBack: () -> Unit) {
         }
     }
 
-    // Fullscreen Detail Overlay
     if (selectedFile != null && selectedDate != null) {
         var fileUrl by remember(selectedFile, selectedDate) { mutableStateOf<String?>(null) }
+        var ocrText by remember(selectedFile, selectedDate) { mutableStateOf<String?>(null) }
+        var aiSummary by remember(selectedFile, selectedDate) { mutableStateOf<String?>(null) }
+        var summaryLoading by remember(selectedFile, selectedDate) { mutableStateOf(false) }
+
+        val cacheKeyBase = "cache_${selectedDate}_${selectedFile}"
+
+        suspend fun runOcrAndSummary(forceRefresh: Boolean = false) {
+            if (!forceRefresh) {
+                val cachedOcr = prefs.getString("${cacheKeyBase}_ocr", null)
+                val cachedSummary = prefs.getString("${cacheKeyBase}_summary", null)
+                if (cachedOcr != null && cachedSummary != null) {
+                    ocrText = cachedOcr
+                    aiSummary = cachedSummary
+                    return
+                }
+            }
+
+            summaryLoading = true
+            aiSummary = null
+            try {
+                val signedUrl = Config.client.storage.from("school")
+                    .createSignedUrl("$selectedDate/$selectedFile", 10.minutes)
+                val imgBytes = withContext(Dispatchers.IO) {
+                    java.net.URL(signedUrl).readBytes()
+                }
+                val base64 =
+                    android.util.Base64.encodeToString(imgBytes, android.util.Base64.NO_WRAP)
+
+                val rawText = sendGeminiRequest(
+                    history = emptyList(),
+                    userMessage = """
+                        Analysiere dieses Bild vollständig und strukturiert. Extrahiere:
+                        
+                        1. ALLEN sichtbaren Text – exakt wie er erscheint, mit Formatierung, Überschriften und Absätzen
+                        2. VISUELLE ELEMENTE – beschreibe Diagramme, Grafiken, Tabellen, Formeln oder Bilder kurz aber präzise (z.B. „[Diagramm: Kreislauf der Fotosynthese mit Pfeilen zwischen Sonne → Pflanze → O₂]")
+                        3. HERVORHEBUNGEN – notiere fett/unterstrichen/farbig markierte Wörter mit dem Tag [MARKIERT: ...]
+                        4. STRUKTUR – behalte die räumliche Anordnung bei (z.B. Spalten, Listen, Kästen)
+                        
+                        Ziel: Eine vollständige Rekonstruktion des Bildinhalts, die ohne das Original verständlich ist.
+                        """.trimIndent(),
+                    pic = base64,
+                    model = MAX_GEMINI
+                ) ?: throw Exception("OCR fehlgeschlagen")
+                ocrText = rawText
+
+                val summary = sendGeminiRequest(
+                    history = emptyList(),
+                    userMessage = """
+                        Du bekommst extrahierten Inhalt aus einem Lernmaterial. Deine Aufgabe: Erkläre das Thema so, dass jemand, der es noch nie gesehen hat, es danach wirklich versteht.
+                        
+                        INHALT:
+                        $rawText
+                        
+                        AUFGABE:
+                        - Beginne mit einem Satz, der das Kernthema nennt
+                        - Gliedere in 2–4 Abschnitte mit aussagekräftigen Überschriften
+                        - Erkläre Fachbegriffe direkt beim ersten Vorkommen
+                        - Hebe die 3–5 wichtigsten Punkte am Ende als „🔑 Merksätze" hervor
+                        - Wenn Diagramme/Grafiken beschrieben wurden: erkläre deren Aussage in eigenen Worten
+                        - Sprache: Deutsch, klar und präzise
+                        """.trimIndent()
+                ) ?: throw Exception("Summary fehlgeschlagen")
+                aiSummary = summary
+
+                // In SharedPreferences speichern
+                prefs.edit {
+                    putString("${cacheKeyBase}_ocr", rawText)
+                    putString("${cacheKeyBase}_summary", summary)
+                }
+            } catch (e: Exception) {
+                errorMsg = e.localizedMessage
+            } finally {
+                summaryLoading = false
+            }
+        }
 
         LaunchedEffect(selectedFile, selectedDate) {
-            fileUrl = Config.client.storage
-                .from("school")
+            fileUrl = Config.client.storage.from("school")
                 .createSignedUrl("$selectedDate/$selectedFile", 10.minutes)
+            if (isImageFile(selectedFile!!)) runOcrAndSummary(forceRefresh = false)
         }
+
+        // Doppelte LaunchedEffect entfernt
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -468,14 +646,28 @@ fun MaterialienScreen(onBack: () -> Unit) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(start = 4.dp, top = 8.dp, end = 16.dp, bottom = 4.dp)
+                    modifier = Modifier.padding(
+                        start = 4.dp,
+                        top = 8.dp,
+                        end = 16.dp,
+                        bottom = 4.dp
+                    )
                 ) {
                     IconButton(onClick = { selectedFile = null }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(selectedFile!!, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        Text(selectedDate!!, color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+                        Text(
+                            selectedFile!!,
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            selectedDate!!,
+                            color = Color.White.copy(alpha = 0.45f),
+                            fontSize = 12.sp
+                        )
                     }
                 }
 
@@ -493,47 +685,296 @@ fun MaterialienScreen(onBack: () -> Unit) {
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                         .background(BgSurface)
-                        .padding(20.dp),
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { sheetExpanded = !sheetExpanded }
+                        .animateContentSize()
+                        .padding(bottom = 20.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("📅", fontSize = 16.sp)
-                        Text("Hochgeladen am $selectedDate", color = TextPrimary, fontSize = 14.sp)
-                    }
+                    // Drag/Click Handle
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 10.dp, bottom = 4.dp)
+                            .width(36.dp)
+                            .height(4.dp)
+                            .clip(CircleShape)
+                            .background(TextTertiary.copy(alpha = 0.4f))
+                            .align(Alignment.CenterHorizontally)
+                    )
 
+                    if (sheetExpanded) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("📅", fontSize = 16.sp)
+                                Text(
+                                    "Hochgeladen am $selectedDate",
+                                    color = TextPrimary,
+                                    fontSize = 14.sp
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color.White.copy(alpha = 0.05f))
+                                    .padding(14.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Text("🤖", fontSize = 22.sp)
+                                 Column(
+                                     modifier = Modifier.weight(1f),
+                                     verticalArrangement = Arrangement.spacedBy(6.dp)
+                                 ) {
+                                     Row(
+                                         modifier = Modifier.fillMaxWidth(),
+                                         horizontalArrangement = Arrangement.SpaceBetween,
+                                         verticalAlignment = Alignment.CenterVertically
+                                     ) {
+                                         Text(
+                                             "AI Summary",
+                                             color = TextPrimary,
+                                             fontSize = 14.sp,
+                                             fontWeight = FontWeight.SemiBold
+                                         )
+                                         if (aiSummary != null) {
+                                             IconButton(
+                                                 onClick = { showFullscreenSummary = true },
+                                                 modifier = Modifier.size(24.dp)
+                                             ) {
+                                                 Icon(
+                                                     Icons.Default.OpenInFull,
+                                                     contentDescription = "Vollbild",
+                                                     tint = TextTertiary,
+                                                     modifier = Modifier.size(16.dp)
+                                                 )
+                                             }
+                                         }
+                                     }
+                                     when {
+                                        summaryLoading -> Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(14.dp),
+                                                strokeWidth = 2.dp,
+                                                color = AccentViolet
+                                            )
+                                            Text(
+                                                "Analysiere...",
+                                                color = TextTertiary,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+
+                                        aiSummary != null -> {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .heightIn(max = 240.dp)
+                                                    .verticalScroll(rememberScrollState())
+                                            ) {
+                                                Markdown(
+                                                    content = aiSummary!!,
+                                                    colors = markdownColor(text = TextPrimary),
+                                                    typography = markdownTypography(
+                                                        text = TextStyle(
+                                                            fontSize = 13.sp,
+                                                            color = TextPrimary
+                                                        )
+                                                    )
+                                                )
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(AccentViolet.copy(alpha = 0.15f))
+                                                    .clickable {
+                                                        scope.launch {
+                                                            runOcrAndSummary(
+                                                                forceRefresh = true
+                                                            )
+                                                        }
+                                                    }
+                                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                                            ) {
+                                                Text(
+                                                    "↺ Retry",
+                                                    color = AccentViolet,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
+                                        }
+
+                                        else -> Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text(
+                                                "Nicht verfügbar",
+                                                color = TextTertiary,
+                                                fontSize = 12.sp
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(AccentViolet.copy(alpha = 0.15f))
+                                                    .clickable {
+                                                        scope.launch {
+                                                            runOcrAndSummary(
+                                                                forceRefresh = true
+                                                            )
+                                                        }
+                                                    }
+                                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                                            ) {
+                                                Text(
+                                                    "↺ Retry",
+                                                    color = AccentViolet,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color.White.copy(alpha = 0.05f))
+                                    .padding(14.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("📝", fontSize = 22.sp)
+                                Column {
+                                    Text(
+                                        "Quiz",
+                                        color = TextPrimary,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text("Kommt bald...", color = TextTertiary, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    } else {
+                        // Collapsed Preview
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("🤖", fontSize = 18.sp)
+                                Text(
+                                    if (aiSummary != null) "Zusammenfassung bereit" else "KI Analyse...",
+                                    color = TextSecondary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Text(
+                                "Tippe zum Öffnen",
+                                color = TextTertiary,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fullscreen Summary Overlay
+        AnimatedVisibility(
+            visible = showFullscreenSummary,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(BgSurface)
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color.White.copy(alpha = 0.05f))
-                            .padding(14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("🤖", fontSize = 22.sp)
-                        Column {
-                            Text("AI Summary", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text("Kommt bald...", color = TextTertiary, fontSize = 12.sp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            IconButton(onClick = { showFullscreenSummary = false }) {
+                                Icon(Icons.Default.Close, null, tint = TextPrimary)
+                            }
+                            Text(
+                                "AI Zusammenfassung",
+                                color = TextPrimary,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(AccentViolet.copy(alpha = 0.15f))
+                                .clickable { scope.launch { runOcrAndSummary(forceRefresh = true) } }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                "Aktualisieren",
+                                color = AccentViolet,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
 
-                    Row(
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color.White.copy(alpha = 0.05f))
-                            .padding(14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(20.dp)
                     ) {
-                        Text("📝", fontSize = 22.sp)
-                        Column {
-                            Text("Quiz", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text("Kommt bald...", color = TextTertiary, fontSize = 12.sp)
+                        if (aiSummary != null) {
+                            Text(
+                                text = aiSummary!!,
+                                color = TextPrimary,
+                                fontSize = 15.sp,
+                                lineHeight = 22.sp
+                            )
+                        } else {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = AccentViolet)
+                            }
                         }
+                        Spacer(Modifier.height(40.dp))
                     }
                 }
             }
@@ -580,8 +1021,11 @@ private fun compressToJpgIfImage(
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
 
     var sampleSize = 1
-    var w = opts.outWidth; var h = opts.outHeight
-    while (w > maxSize * 2 || h > maxSize * 2) { sampleSize *= 2; w /= 2; h /= 2 }
+    var w = opts.outWidth
+    var h = opts.outHeight
+    while (w > maxSize * 2 || h > maxSize * 2) {
+        sampleSize *= 2; w /= 2; h /= 2
+    }
 
     val decoded = BitmapFactory.Options().apply {
         inSampleSize = sampleSize
