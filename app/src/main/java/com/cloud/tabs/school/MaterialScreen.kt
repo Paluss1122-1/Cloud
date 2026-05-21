@@ -55,12 +55,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.scale
+import coil.compose.AsyncImage
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.toast
 import com.cloud.core.ui.AccentViolet
@@ -73,6 +75,7 @@ import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.time.Duration.Companion.minutes
 
 data class MaterialUploadState(
     val fileName: String,
@@ -91,6 +94,7 @@ fun MaterialienScreen(onBack: () -> Unit) {
     var uploads by remember { mutableStateOf<List<MaterialUploadState>>(emptyList()) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var selectedDate by remember { mutableStateOf<String?>(null) }
+    var selectedFile by remember { mutableStateOf<String?>(null) }
     var folders by remember { mutableStateOf<List<String>>(emptyList()) }
     var foldersLoading by remember { mutableStateOf(true) }
     var folderFiles by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
@@ -123,7 +127,11 @@ fun MaterialienScreen(onBack: () -> Unit) {
     }
 
     BackHandler {
-        if (selectedDate != null) selectedDate = null else onBack()
+        when {
+            selectedFile != null -> selectedFile = null
+            selectedDate != null -> selectedDate = null
+            else -> onBack()
+        }
     }
 
     val filePicker = rememberLauncherForActivityResult(
@@ -196,7 +204,13 @@ fun MaterialienScreen(onBack: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = 4.dp, top = 8.dp, end = 16.dp, bottom = 4.dp)
         ) {
-            IconButton(onClick = { if (selectedDate != null) selectedDate = null else onBack() }) {
+            IconButton(onClick = {
+                when {
+                    selectedFile != null -> selectedFile = null
+                    selectedDate != null -> selectedDate = null
+                    else -> onBack()
+                }
+            }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = TextPrimary)
             }
             Column(modifier = Modifier.weight(1f)) {
@@ -325,10 +339,51 @@ fun MaterialienScreen(onBack: () -> Unit) {
                         }
                     }
                 }
-                val existingFiles = (folderFiles[selectedDate] ?: emptyList())
+                val allExisting = (folderFiles[selectedDate] ?: emptyList())
                     .filter { name -> uploads.none { it.fileName == name } }
+                val imageFiles = allExisting.filter { isImageFile(it) }
+                val otherFiles = allExisting.filter { !isImageFile(it) }
 
-                items(existingFiles) { fileName ->
+                if (imageFiles.isNotEmpty()) {
+                    item {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(((imageFiles.size + 1) / 2 * 164).dp),
+                            userScrollEnabled = false
+                        ) {
+                            items(imageFiles) { fileName ->
+                                var url by remember(fileName) { mutableStateOf<String?>(null) }
+
+                                LaunchedEffect(fileName) {
+                                    url = Config.client.storage
+                                        .from("school")
+                                        .createSignedUrl("$selectedDate/$fileName", 10.minutes)
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(156.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(BgSurface)
+                                        .clickable { selectedFile = fileName }
+                                ) {
+                                    AsyncImage(
+                                        model = url,
+                                        contentDescription = fileName,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                items(otherFiles) { fileName ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -395,6 +450,95 @@ fun MaterialienScreen(onBack: () -> Unit) {
             }
         }
     }
+
+    // Fullscreen Detail Overlay
+    if (selectedFile != null && selectedDate != null) {
+        var fileUrl by remember(selectedFile, selectedDate) { mutableStateOf<String?>(null) }
+
+        LaunchedEffect(selectedFile, selectedDate) {
+            fileUrl = Config.client.storage
+                .from("school")
+                .createSignedUrl("$selectedDate/$selectedFile", 10.minutes)
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.97f))
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = 4.dp, top = 8.dp, end = 16.dp, bottom = 4.dp)
+                ) {
+                    IconButton(onClick = { selectedFile = null }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(selectedFile!!, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(selectedDate!!, color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
+                    }
+                }
+
+                AsyncImage(
+                    model = fileUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                        .background(BgSurface)
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("📅", fontSize = 16.sp)
+                        Text("Hochgeladen am $selectedDate", color = TextPrimary, fontSize = 14.sp)
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color.White.copy(alpha = 0.05f))
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("🤖", fontSize = 22.sp)
+                        Column {
+                            Text("AI Summary", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Kommt bald...", color = TextTertiary, fontSize = 12.sp)
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color.White.copy(alpha = 0.05f))
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("📝", fontSize = 22.sp)
+                        Column {
+                            Text("Quiz", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Kommt bald...", color = TextTertiary, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 private fun getFileName(context: Context, uri: Uri): String {
@@ -405,6 +549,11 @@ private fun getFileName(context: Context, uri: Uri): String {
     }
     return name
 }
+
+private fun isImageFile(name: String) =
+    name.lowercase().let {
+        it.endsWith(".jpg") || it.endsWith(".jpeg") || it.endsWith(".png") || it.endsWith(".webp")
+    }
 
 private fun fileEmoji(name: String) = when {
     name.endsWith(".pdf") -> "📄"
@@ -419,7 +568,7 @@ private fun fileEmoji(name: String) = when {
 private fun compressToJpgIfImage(
     bytes: ByteArray,
     fileName: String,
-    quality: Int = 75,
+    quality: Int = 70,
     maxSize: Int = 2048
 ): Pair<ByteArray, String> {
     val lower = fileName.lowercase()
@@ -427,16 +576,28 @@ private fun compressToJpgIfImage(
             lower.endsWith(".jpeg") || lower.endsWith(".webp") || lower.endsWith(".bmp")
     if (!isImage) return bytes to fileName
 
-    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+
+    var sampleSize = 1
+    var w = opts.outWidth; var h = opts.outHeight
+    while (w > maxSize * 2 || h > maxSize * 2) { sampleSize *= 2; w /= 2; h /= 2 }
+
+    val decoded = BitmapFactory.Options().apply {
+        inSampleSize = sampleSize
+        inPreferredConfig = Bitmap.Config.RGB_565
+    }
+    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decoded)
         ?: return bytes to fileName
 
     val scaled = if (bitmap.width > maxSize || bitmap.height > maxSize) {
         val ratio = maxSize.toFloat() / maxOf(bitmap.width, bitmap.height)
-        bitmap.scale((bitmap.width * ratio).toInt(), (bitmap.height * ratio).toInt())
+        bitmap.scale((bitmap.width * ratio).toInt(), (bitmap.height * ratio).toInt(), true)
     } else bitmap
 
     val out = ByteArrayOutputStream()
     scaled.compress(Bitmap.CompressFormat.JPEG, quality, out)
+    if (scaled != bitmap) bitmap.recycle()
 
     val jpgName = fileName.substringBeforeLast(".") + ".jpg"
     return out.toByteArray() to jpgName
