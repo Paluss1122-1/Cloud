@@ -15,7 +15,8 @@ suspend fun sendGeminiRequest(
     history: List<ChatMessage>,
     userMessage: String,
     pic: String? = null,
-    anlytic: Boolean = false
+    anlytic: Boolean = false,
+    model: String = DEF_GEMINI
 ): String? {
     fun buildGeminiPrompt(history: List<ChatMessage>, userMessage: String) = buildString {
         if (anlytic) {
@@ -32,7 +33,7 @@ suspend fun sendGeminiRequest(
     }
 
     val model = Firebase.ai(backend = GenerativeBackend.googleAI())
-        .generativeModel(DEF_GEMINI)
+        .generativeModel(model)
 
     return try {
         if (pic != null) {
