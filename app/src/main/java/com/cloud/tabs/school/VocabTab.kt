@@ -135,15 +135,15 @@ data class WidthState(
     val value: Int
 )
 
-enum class VokabelTabScreen { HOME, UPLOAD, REVIEW, LEARN, MATERIALIEN }
+enum class VokabelTabScreen { DASHBOARD, HOME, UPLOAD, REVIEW, LEARN, MATERIALIEN }
 
 @Composable
-fun VocabTab() {
+fun VocabTab(paddingValues: PaddingValues) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("vocab_sets", Context.MODE_PRIVATE) }
 
-    var screen by remember { mutableStateOf(VokabelTabScreen.HOME) }
+    var screen by remember { mutableStateOf(VokabelTabScreen.DASHBOARD) }
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     var vokabeln by remember { mutableStateOf<List<Vokabel>>(emptyList()) }
     var isExtracting by remember { mutableStateOf(false) }
@@ -213,7 +213,23 @@ fun VocabTab() {
         label = "tab_transition"
     ) { current ->
         when (current) {
-            VokabelTabScreen.HOME -> HomeScreen(
+            VokabelTabScreen.DASHBOARD -> SchoolDashboard(
+                savedSets = savedSets,
+                onVocabClick = { screen = VokabelTabScreen.HOME },
+                onMaterialClick = { screen = VokabelTabScreen.MATERIALIEN },
+                onOpenSet = { set ->
+                    activeSet = set; vokabeln = set.vokabeln; screen = VokabelTabScreen.LEARN
+                },
+                onLearnDirectly = {
+                    if (savedSets.isNotEmpty()) {
+                        val latest = savedSets.maxBy { it.createdAt }
+                        activeSet = latest; vokabeln = latest.vokabeln; screen = VokabelTabScreen.LEARN
+                    }
+                },
+                paddingValues = paddingValues
+            )
+
+            VokabelTabScreen.HOME -> VocabTabContent(
                 savedSets = savedSets,
                 prefs = prefs,
                 onNewSet = { screen = VokabelTabScreen.UPLOAD },
@@ -245,7 +261,9 @@ fun VocabTab() {
                 },
                 lastWidths = lastWidths,
                 onMergeClick = { showMergeDialog = true },
-                onMaterialienClick = { screen = VokabelTabScreen.MATERIALIEN }
+                onMaterialienClick = { screen = VokabelTabScreen.MATERIALIEN },
+                onBack = { screen = VokabelTabScreen.DASHBOARD },
+                paddingValues = paddingValues
             )
 
             VokabelTabScreen.UPLOAD -> UploadScreen(
@@ -312,7 +330,8 @@ fun VocabTab() {
                             }
                         }
                     }
-                }
+                },
+                paddingValues = paddingValues
             )
 
             VokabelTabScreen.REVIEW -> ReviewScreen(
@@ -333,7 +352,8 @@ fun VocabTab() {
                         isExtracting = false
                         screen = VokabelTabScreen.UPLOAD
                     }
-                } else null
+                } else null,
+                paddingValues = paddingValues
             )
 
             VokabelTabScreen.LEARN -> LearnScreen(
@@ -354,18 +374,135 @@ fun VocabTab() {
                 onRenameRequest = {
                     saveNameInput = activeSet?.name ?: " "
                     showSaveDialog = true
-                }
+                },
+                paddingValues = paddingValues
             )
 
             VokabelTabScreen.MATERIALIEN -> MaterialienScreen(
-                onBack = { screen = VokabelTabScreen.HOME }
+                onBack = { screen = VokabelTabScreen.DASHBOARD },
+                savedSets = savedSets,
+                onOpenSet = { set ->
+                    activeSet = set; vokabeln = set.vokabeln; screen = VokabelTabScreen.LEARN
+                },
+                onLearnDirectly = {
+                    if (savedSets.isNotEmpty()) {
+                        val latest = savedSets.maxBy { it.createdAt }
+                        activeSet = latest; vokabeln = latest.vokabeln; screen = VokabelTabScreen.LEARN
+                    }
+                },
+                paddingValues = paddingValues
             )
         }
     }
 }
 
 @Composable
-fun HomeScreen(
+fun SchoolDashboard(
+    savedSets: List<VokabelSet>,
+    onVocabClick: () -> Unit,
+    onMaterialClick: () -> Unit,
+    onOpenSet: (VokabelSet) -> Unit,
+    onLearnDirectly: () -> Unit,
+    paddingValues: PaddingValues
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        SchoolHeader(
+            title = "Schule",
+            subtitle = "Dein Dashboard",
+            savedSets = savedSets,
+            onOpenSet = onOpenSet,
+            onLearnDirectly = onLearnDirectly,
+            showDashboard = true,
+            paddingValues = paddingValues
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Vokabeln Button (ersetzt Scannen)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .clickable { onVocabClick() }
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .padding(horizontal = 20.dp, vertical = 18.dp)
+                        .weight(1f)
+                ) {
+                    Text("🔤", fontSize = 22.sp)
+                    Text(
+                        "Vokabeln",
+                        color = TextPrimary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .clickable { onMaterialClick() }
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .padding(horizontal = 20.dp, vertical = 18.dp)
+                        .weight(1f)
+                ) {
+                    Text("📚", fontSize = 22.sp)
+                    Text(
+                        "Materialien",
+                        color = TextPrimary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+
+        // AI Chat Teaser
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(BgSurface)
+                .clickable { /* Future AI Chat */ }
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("🤖", fontSize = 22.sp)
+                Column {
+                    Text(
+                        "AI Chat",
+                        color = TextPrimary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "Unterstützung beim Lernen",
+                        color = TextTertiary,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun VocabTabContent(
     savedSets: List<VokabelSet>,
     prefs: SharedPreferences,
     onNewSet: () -> Unit,
@@ -376,7 +513,9 @@ fun HomeScreen(
     onUpdate: (Int, Int) -> Unit,
     lastWidths: List<WidthState>,
     onMergeClick: () -> Unit = {},
-    onMaterialienClick: () -> Unit = {}
+    onMaterialienClick: () -> Unit = {},
+    onBack: () -> Unit,
+    paddingValues: PaddingValues
 ) {
     var setToDelete by remember { mutableStateOf<VokabelSet?>(null) }
     var menuOpenFor by remember { mutableStateOf<Long?>(null) }
@@ -392,10 +531,19 @@ fun HomeScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
+            SchoolHeader(
+                title = "Vokabeln",
+                subtitle = "Übersicht & Scannen",
+                onBack = onBack,
+                showDashboard = false,
+                paddingValues = paddingValues,
+                drawGradient = false
+            )
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Row(
@@ -414,26 +562,7 @@ fun HomeScreen(
                     ) {
                         Text("📷", fontSize = 22.sp)
                         Text(
-                            "Neues Set scannen",
-                            color = TextPrimary,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier
-                            .clickable { onMaterialienClick() }
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.primary)
-                            .padding(horizontal = 20.dp, vertical = 18.dp)
-                            .weight(1f)
-                    ) {
-                        Text("📚", fontSize = 22.sp)
-                        Text(
-                            "Materialien",
+                            "Scannen",
                             color = TextPrimary,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
@@ -442,7 +571,7 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(16.dp))
 
             if (savedSets.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -715,13 +844,14 @@ fun UploadScreen(
     errorMessage: String?,
     onPickImage: () -> Unit,
     onBack: () -> Unit,
-    onExtract: () -> Unit
+    onExtract: () -> Unit,
+    paddingValues: PaddingValues
 ) {
     BackHandler {
         onBack()
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 4.dp)
@@ -855,6 +985,7 @@ fun ReviewScreen(
     onBack: () -> Unit,
     checkExist: Boolean = true,
     onCancelExtraction: (() -> Unit)? = null,
+    paddingValues: PaddingValues
 ) {
     var currentVokabeln by remember { mutableStateOf(vokabeln) }
     var initVocabs by remember(vokabeln) {
@@ -948,7 +1079,7 @@ fun ReviewScreen(
         if (isExtracting) showCancelDialog = true else onBack()
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = 4.dp, top = 8.dp, end = 16.dp)
@@ -1164,6 +1295,7 @@ fun LearnScreen(
     setName: String?,
     onVokabelnUpdated: ((List<Vokabel>) -> Unit)? = null,
     onRenameRequest: () -> Unit = {},
+    paddingValues: PaddingValues
 ) {
     var setToReview by remember { mutableStateOf(false) }
     var vokabeln by remember { mutableStateOf(vokabeln) }
@@ -1229,6 +1361,7 @@ fun LearnScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .padding(paddingValues)
             .alpha(if (setToReview) 0f else 1f)
     ) {
         Row(
@@ -1565,7 +1698,8 @@ fun LearnScreen(
                 },
                 onSave = { onRenameRequest() },
                 setName = setName,
-                checkExist = true
+                checkExist = true,
+                paddingValues = paddingValues
             )
         }
     }
