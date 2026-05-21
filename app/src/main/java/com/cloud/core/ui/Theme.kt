@@ -11,6 +11,7 @@ import java.util.Calendar
 val Cloud = Color(0xFF2A2A2A)
 val gruen = Color(0xFF228B22)
 
+val BgDeep = Color(0xFF121212)
 val BgSurface = Color(0xFF1E1E1E)
 val BgCard = Color(0xFF2A2A2A)
 val AccentViolet = Color(0xFF7C4DFF)
