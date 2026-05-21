@@ -27,9 +27,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.net.URLEncoder
-import javax.inject.Inject
 
-class DownloadRepositoryImpl @Inject constructor(
+class DownloadRepositoryImpl(
     private val httpClient: HttpClient,
     private val context: Context
 ) : DownloadRepository {

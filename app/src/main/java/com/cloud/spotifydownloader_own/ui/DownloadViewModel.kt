@@ -4,15 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cloud.spotifydownloader_own.domain.DownloadRepository
 import com.cloud.spotifydownloader_own.domain.DownloadState
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
-@HiltViewModel
-class DownloadViewModel @Inject constructor(
+class DownloadViewModel(
     private val repository: DownloadRepository
 ) : ViewModel() {
 
