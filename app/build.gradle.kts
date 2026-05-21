@@ -113,4 +113,6 @@ dependencies {
     implementation(libs.androidx.autofill)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.ai)
+    implementation(libs.multiplatform.markdown.renderer.android)
+    implementation(libs.multiplatform.markdown.renderer.m3)
 }
