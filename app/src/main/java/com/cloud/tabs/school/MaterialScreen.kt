@@ -74,6 +74,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
@@ -731,36 +732,36 @@ fun MaterialienScreen(
                                 verticalAlignment = Alignment.Top
                             ) {
                                 Text("🤖", fontSize = 22.sp)
-                                 Column(
-                                     modifier = Modifier.weight(1f),
-                                     verticalArrangement = Arrangement.spacedBy(6.dp)
-                                 ) {
-                                     Row(
-                                         modifier = Modifier.fillMaxWidth(),
-                                         horizontalArrangement = Arrangement.SpaceBetween,
-                                         verticalAlignment = Alignment.CenterVertically
-                                     ) {
-                                         Text(
-                                             "AI Summary",
-                                             color = TextPrimary,
-                                             fontSize = 14.sp,
-                                             fontWeight = FontWeight.SemiBold
-                                         )
-                                         if (aiSummary != null) {
-                                             IconButton(
-                                                 onClick = { showFullscreenSummary = true },
-                                                 modifier = Modifier.size(24.dp)
-                                             ) {
-                                                 Icon(
-                                                     Icons.Default.OpenInFull,
-                                                     contentDescription = "Vollbild",
-                                                     tint = TextTertiary,
-                                                     modifier = Modifier.size(16.dp)
-                                                 )
-                                             }
-                                         }
-                                     }
-                                     when {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            "AI Summary",
+                                            color = TextPrimary,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        if (aiSummary != null) {
+                                            IconButton(
+                                                onClick = { showFullscreenSummary = true },
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.OpenInFull,
+                                                    contentDescription = "Vollbild",
+                                                    tint = TextTertiary,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                    when {
                                         summaryLoading -> Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -788,8 +789,46 @@ fun MaterialienScreen(
                                                     content = aiSummary!!,
                                                     colors = markdownColor(text = TextPrimary),
                                                     typography = markdownTypography(
+                                                        h1 = TextStyle(
+                                                            fontSize = 18.sp,
+                                                            lineHeight = 22.sp,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = TextPrimary
+                                                        ),
+                                                        h2 = TextStyle(
+                                                            fontSize = 16.sp,
+                                                            lineHeight = 20.sp,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = TextPrimary
+                                                        ),
+                                                        h3 = TextStyle(
+                                                            fontSize = 15.sp,
+                                                            lineHeight = 19.sp,
+                                                            fontWeight = FontWeight.Medium,
+                                                            color = TextPrimary
+                                                        ),
+
                                                         text = TextStyle(
-                                                            fontSize = 13.sp,
+                                                            fontSize = 11.sp,
+                                                            lineHeight = 15.sp,
+                                                            color = TextPrimary
+                                                        ),
+
+                                                        paragraph = TextStyle(
+                                                            fontSize = 11.sp,
+                                                            lineHeight = 15.sp,
+                                                            color = TextPrimary
+                                                        ),
+
+                                                        list = TextStyle(
+                                                            fontSize = 11.sp,
+                                                            lineHeight = 15.sp,
+                                                            color = TextPrimary
+                                                        ),
+
+                                                        ordered = TextStyle(
+                                                            fontSize = 11.sp,
+                                                            lineHeight = 15.sp,
                                                             color = TextPrimary
                                                         )
                                                     )
@@ -939,7 +978,7 @@ fun MaterialienScreen(
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        
+
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
@@ -963,14 +1002,62 @@ fun MaterialienScreen(
                             .padding(20.dp)
                     ) {
                         if (aiSummary != null) {
-                            Text(
-                                text = aiSummary!!,
-                                color = TextPrimary,
-                                fontSize = 15.sp,
-                                lineHeight = 22.sp
+                            Markdown(
+                                content = aiSummary!!,
+                                colors = markdownColor(text = TextPrimary),
+                                typography = markdownTypography(
+                                    h1 = TextStyle(
+                                        fontSize = 24.sp,
+                                        lineHeight = 22.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = TextPrimary,
+                                        textDecoration = TextDecoration.Underline
+                                    ),
+                                    h2 = TextStyle(
+                                        fontSize = 22.sp,
+                                        lineHeight = 20.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = TextPrimary,
+                                        textDecoration = TextDecoration.Underline
+                                    ),
+                                    h3 = TextStyle(
+                                        fontSize = 21.sp,
+                                        lineHeight = 19.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = TextPrimary,
+                                        textDecoration = TextDecoration.Underline
+                                    ),
+
+                                    text = TextStyle(
+                                        fontSize = 13.sp,
+                                        lineHeight = 15.sp,
+                                        color = TextPrimary
+                                    ),
+
+                                    paragraph = TextStyle(
+                                        fontSize = 13.sp,
+                                        lineHeight = 15.sp,
+                                        color = TextPrimary
+                                    ),
+
+                                    list = TextStyle(
+                                        fontSize = 13.sp,
+                                        lineHeight = 15.sp,
+                                        color = TextPrimary
+                                    ),
+
+                                    ordered = TextStyle(
+                                        fontSize = 13.sp,
+                                        lineHeight = 15.sp,
+                                        color = TextPrimary
+                                    )
+                                )
                             )
                         } else {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 CircularProgressIndicator(color = AccentViolet)
                             }
                         }
