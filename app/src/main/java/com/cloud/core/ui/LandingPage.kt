@@ -453,8 +453,8 @@ fun LandingPage(
     val gradient = remember {
         val colors = when (currentHour) {
             in 11..16 -> listOf(
-                Color(0xFF00F2FE).copy(alpha = 0.5f),
-                Color(0xFFDEFE4F).copy(alpha = 0.5f)
+                Cloud.copy(alpha = 0.85f),
+                Color(0xFF001A93).copy(alpha = 0.35f)
             )
 
             else -> listOf(
@@ -464,14 +464,10 @@ fun LandingPage(
         }
         Brush.linearGradient(colors = colors, start = Offset.Zero, end = Offset.Infinite)
     }
-    val txtcolors = remember {
-        when (currentHour) {
-            in 11..16 -> Color.Black; else -> Color.White
-        }
-    }
+    val txtcolors = Color.White
     val bgpicture = remember {
         when (currentHour) {
-            in 11..16 -> R.drawable.mittag; else -> R.drawable.night
+            in 11..16 -> R.drawable.day; else -> R.drawable.night
         }
     }
 
@@ -617,7 +613,7 @@ fun TabCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(72.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
             shape = RoundedCornerShape(8.dp),
             onClick = onClick
         ) {
