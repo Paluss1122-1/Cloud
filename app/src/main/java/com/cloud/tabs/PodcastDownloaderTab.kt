@@ -68,6 +68,7 @@ data class PodcastFeed(
 data class Episode(
     val title: String,
     val audioUrl: String,
+    val publishDate: Long = 0L,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -143,15 +144,30 @@ fun PodcastTab() {
                 val children = item.childNodes
                 var title = ""
                 var audioUrl = ""
+                var pubDate = ""
                 for (j in 0 until children.length) {
                     val node = children.item(j)
                     when (node.nodeName) {
                         "title" -> title = node.textContent.trim()
                         "enclosure" -> audioUrl = node.attributes?.getNamedItem("url")?.nodeValue ?: ""
+                        "pubDate" -> pubDate = node.textContent.trim()
+                        "isoDate" -> if (pubDate.isEmpty()) pubDate = node.textContent.trim()
                     }
                 }
-                if (audioUrl.isEmpty()) null else Episode(title.ifEmpty { "Ohne Titel" }, audioUrl)
-            }
+                if (audioUrl.isEmpty()) null else {
+                    val timestamp = try {
+                        java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z", java.util.Locale.ENGLISH).parse(pubDate)?.time 
+                            ?: System.currentTimeMillis()
+                    } catch (e: Exception) {
+                        try {
+                            java.time.Instant.parse(pubDate).toEpochMilli()
+                        } catch (_: Exception) {
+                            System.currentTimeMillis()
+                        }
+                    }
+                    Episode(title.ifEmpty { "Ohne Titel" }, audioUrl, timestamp)
+                }
+            }.sortedByDescending { it.publishDate }
             episodes = episodes + (feedUrl to list)
         } catch (_: Exception) {
             episodes = episodes + (feedUrl to emptyList())
