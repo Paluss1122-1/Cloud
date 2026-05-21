@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlarmManager
+import android.app.DownloadManager
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
@@ -13,10 +14,13 @@ import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.hardware.camera2.CameraManager
 import android.media.MediaPlayer
+import android.os.Environment
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
@@ -62,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
+import androidx.core.content.edit
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -132,10 +137,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
+import org.xml.sax.InputSource
 import java.io.File
+import java.io.StringReader
+import java.net.URL
 import java.time.Instant
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
+import java.util.Locale
 import java.util.concurrent.TimeUnit
+import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -248,6 +263,12 @@ class QuietHoursNotificationService : Service() {
         const val ACTION_SCHOOL_DAY_SUMMARY = "com.cloud.ACTION_SCHOOL_DAY_SUMMARY"
         const val SCHEDULE_DAILY_SUMMARY_ALARM = "com.cloud.SCHEDULE_DAILY_SUMMARY_ALARM"
 
+        const val ACTION_PODCAST_CHECK = "com.cloud.ACTION_PODCAST_CHECK"
+        const val ACTION_PODCAST_DOWNLOAD = "com.cloud.ACTION_PODCAST_DOWNLOAD"
+        const val ACTION_PODCAST_RETRY = "com.cloud.ACTION_PODCAST_RETRY"
+        const val PODCAST_CHANNEL_ID = "podcast_check_channel"
+        const val PODCAST_NOTIFICATION_ID = 9100
+
         var currentSenderForVoiceNote: String? = null
         var voiceNoteFiles: List<File> = emptyList()
         var voiceNotePlayer: MediaPlayer? = null
@@ -344,6 +365,28 @@ class QuietHoursNotificationService : Service() {
             }
             context.startService(intent)
         }
+
+        fun schedulePodcastCheck(context: Context) {
+            val am = context.getSystemService(ALARM_SERVICE) as AlarmManager
+
+            if (!am.canScheduleExactAlarms()) return
+
+            val cal = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 15)
+                set(Calendar.MINUTE, 30)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+                if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
+            }
+
+            val pi = PendingIntent.getService(
+                context, 0,
+                Intent(context, QuietHoursNotificationService::class.java).apply { action = ACTION_PODCAST_CHECK },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pi)
+        }
     }
 
     private val prefChangeListener =
@@ -386,6 +429,7 @@ class QuietHoursNotificationService : Service() {
         handler.post(checkRunnable)
         schedulePeriodicCleanup(this)
         scheduleSchoolDaySummary(this)
+        schedulePodcastCheck(this)
         restoreSyncIfNeeded(this)
         startTriggerListenerIfHomeWifi(this)
         startAiResponseListener(this)
@@ -698,6 +742,51 @@ class QuietHoursNotificationService : Service() {
                         }
                     }
                     START_STICKY
+                }
+
+                ACTION_PODCAST_CHECK -> {
+                    try {
+                        if (isWifiConnected()) {
+                            checkPodcastsAndNotify(this)
+                        } else {
+                            showPodcastRetryNotification()
+                        }
+                    } catch (e: Exception) {
+                        reportServiceError("ACTION_PODCAST_CHECK", e)
+                    }
+                    START_NOT_STICKY
+                }
+
+                ACTION_PODCAST_RETRY -> {
+                    try {
+                        if (isWifiConnected()) {
+                            checkPodcastsAndNotify(this)
+                        } else {
+                            showPodcastRetryNotification()
+                        }
+                    } catch (e: Exception) {
+                        reportServiceError("ACTION_PODCAST_RETRY", e)
+                    }
+                    START_NOT_STICKY
+                }
+
+                ACTION_PODCAST_DOWNLOAD -> {
+                    try {
+                        val json = intent.getStringExtra("episodes_json")
+                        if (!json.isNullOrEmpty()) {
+                            val arr = JSONArray(json)
+                            for (i in 0 until arr.length()) {
+                                val o = arr.getJSONObject(i)
+                                val url = o.optString("audioUrl")
+                                val title = o.optString("title")
+                                val show = o.optString("showName")
+                                if (url.isNotEmpty()) startPodcastDownload(url, title, show, this)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        reportServiceError("ACTION_PODCAST_DOWNLOAD", e)
+                    }
+                    START_NOT_STICKY
                 }
 
                 ACTION_SCHOOL_DAY_SUMMARY -> {
@@ -1093,6 +1182,162 @@ class QuietHoursNotificationService : Service() {
         }
     }
 
+    @SuppressLint("LaunchActivityFromNotification")
+    private fun checkPodcastsAndNotify(context: Context) {
+        errorScope.launch {
+            try {
+                val prefs = context.getSharedPreferences("podcast_favs", MODE_PRIVATE)
+                val raw = prefs.getString("favs", null) ?: return@launch
+                val favsArr = JSONArray(raw)
+
+                val threshold = ZonedDateTime.now(ZoneId.systemDefault())
+                    .minusDays(1)
+                    .withHour(15)
+                    .withMinute(30)
+                    .withSecond(0)
+                    .withNano(0)
+                    .toInstant()
+
+                val destDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "cloud/podcasts")
+                destDir.mkdirs()
+
+                val found = mutableListOf<JSONObject>()
+
+                for (i in 0 until favsArr.length()) {
+                    try {
+                        val o = favsArr.getJSONObject(i)
+                        val feedTitle = o.optString("title")
+                        val feedUrl = o.optString("feedUrl")
+                        if (feedUrl.isEmpty()) continue
+
+                        val xml = URL(feedUrl).readText()
+                        val doc = DocumentBuilderFactory.newInstance()
+                            .newDocumentBuilder()
+                            .parse(InputSource(StringReader(xml)))
+
+                        val items = doc.getElementsByTagName("item")
+                        for (j in 0 until items.length) {
+                            try {
+                                val item = items.item(j)
+                                val children = item.childNodes
+                                var title = ""
+                                var audioUrl = ""
+                                var pubDateTxt = ""
+                                for (k in 0 until children.length) {
+                                    val node = children.item(k)
+                                    when (node.nodeName) {
+                                        "title" -> title = node.textContent.trim()
+                                        "enclosure" -> audioUrl = node.attributes?.getNamedItem("url")?.nodeValue ?: ""
+                                        "pubDate" -> pubDateTxt = node.textContent.trim()
+                                    }
+                                }
+
+                                if (audioUrl.isEmpty()) continue
+
+                                val pubInstant = try {
+                                    ZonedDateTime.parse(pubDateTxt, DateTimeFormatter.RFC_1123_DATE_TIME.withLocale(Locale.ENGLISH)).toInstant()
+                                } catch (_: Exception) {
+                                    try {
+                                        Instant.parse(pubDateTxt)
+                                    } catch (_: Exception) {
+                                        null
+                                    }
+                                }
+
+                                if (pubInstant == null) continue
+                                if (pubInstant <= threshold) continue
+
+                                val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_")
+                                val filename = "$safeTitle.mp3"
+                                if (File(destDir, filename).exists()) continue
+
+                                found.add(JSONObject().apply {
+                                    put("audioUrl", audioUrl)
+                                    put("title", title)
+                                    put("showName", feedTitle)
+                                })
+                            } catch (_: Exception) { }
+                        }
+                    } catch (_: Exception) { }
+                }
+
+                if (found.isNotEmpty()) {
+                    val arr = JSONArray()
+                    found.forEach { arr.put(it) }
+
+                    val nm = context.getSystemService(NotificationManager::class.java)
+                    if (nm.getNotificationChannel(PODCAST_CHANNEL_ID) == null) {
+                        android.app.NotificationChannel(
+                            PODCAST_CHANNEL_ID,
+                            "Podcast Check",
+                            NotificationManager.IMPORTANCE_DEFAULT
+                        ).also { nm.createNotificationChannel(it) }
+                    }
+
+                    val pi = PendingIntent.getService(
+                        context,
+                        PODCAST_NOTIFICATION_ID,
+                        Intent(context, QuietHoursNotificationService::class.java).apply {
+                            action = ACTION_PODCAST_DOWNLOAD
+                            putExtra("episodes_json", arr.toString())
+                        },
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+
+                    val contentText = if (found.size == 1) {
+                        "Neue Folge: ${found[0].optString("title")}" 
+                    } else {
+                        "${found.size} neue Folgen verfügbar"
+                    }
+
+                    val notification = NotificationCompat.Builder(context, PODCAST_CHANNEL_ID)
+                        .setSmallIcon(android.R.drawable.ic_menu_save)
+                        .setContentTitle("Neue Podcast-Folgen gefunden")
+                        .setContentText(contentText)
+                        .setAutoCancel(true)
+                        .setContentIntent(pi)
+                        .build()
+
+                    if (canNotify(context)) {
+                        nm.notify(PODCAST_NOTIFICATION_ID, notification)
+                    }
+                }
+            } catch (e: Exception) {
+                reportServiceError("checkPodcastsAndNotify", e)
+            }
+        }
+    }
+
+    private fun startPodcastDownload(audioUrl: String, title: String, showName: String, context: Context) {
+        try {
+            val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_")
+            val filename = "$safeTitle.mp3"
+            val destDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "cloud/podcasts")
+            destDir.mkdirs()
+
+            val request = DownloadManager.Request(audioUrl.toUri()).apply {
+                setTitle(filename)
+                setDescription("Podcast wird heruntergeladen…")
+                setDestinationUri(File(destDir, filename).toUri())
+                setAllowedOverMetered(true)
+                addRequestHeader("User-Agent", "Mozilla/5.0")
+                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+            }
+            val dm = context.getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+            val downloadId = dm.enqueue(request)
+
+            val prefs = context.getSharedPreferences("podcast_downloads", MODE_PRIVATE)
+            prefs.edit {
+                putString("pending_$downloadId", JSONObject().apply {
+                    put("safeTitle", safeTitle)
+                    put("showName", showName)
+                }.toString())
+            }
+        } catch (e: Exception) {
+            reportServiceError("startPodcastDownload", e)
+        }
+    }
+
     fun showSimpleNotification(
         title: String,
         text: String,
@@ -1129,6 +1374,56 @@ class QuietHoursNotificationService : Service() {
             MusicPlayerServiceCompat.startAndPlay(this)
         } catch (_: Exception) {
             showSimpleNotification("Fehler", "Musik Player konnte nicht geöffnet werden")
+        }
+    }
+
+    private fun isWifiConnected(): Boolean {
+        return try {
+            val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val network = connectivityManager.activeNetwork ?: return false
+            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+        } catch (e: Exception) {
+            Log.e("QuietHoursService", "Error checking WiFi connectivity", e)
+            false
+        }
+    }
+
+    private fun showPodcastRetryNotification() {
+        try {
+            val nm = getSystemService(NotificationManager::class.java)
+            if (nm.getNotificationChannel(PODCAST_CHANNEL_ID) == null) {
+                android.app.NotificationChannel(
+                    PODCAST_CHANNEL_ID,
+                    "Podcast Check",
+                    NotificationManager.IMPORTANCE_DEFAULT
+                ).also { nm.createNotificationChannel(it) }
+            }
+
+            val retryIntent = Intent(this, QuietHoursNotificationService::class.java).apply {
+                action = ACTION_PODCAST_RETRY
+            }
+            val retryPendingIntent = PendingIntent.getService(
+                this,
+                PODCAST_NOTIFICATION_ID,
+                retryIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val notification = NotificationCompat.Builder(this, PODCAST_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_menu_save)
+                .setContentTitle("Podcast Check fehlgeschlagen")
+                .setContentText("Keine WiFi-Verbindung. Tippen zum Wiederholen.")
+                .setAutoCancel(true)
+                .addAction(android.R.drawable.ic_menu_rotate, "Wiederholen", retryPendingIntent)
+                .setContentIntent(retryPendingIntent)
+                .build()
+
+            if (canNotify(this)) {
+                nm.notify(PODCAST_NOTIFICATION_ID, notification)
+            }
+        } catch (e: Exception) {
+            reportServiceError("showPodcastRetryNotification", e)
         }
     }
 }
