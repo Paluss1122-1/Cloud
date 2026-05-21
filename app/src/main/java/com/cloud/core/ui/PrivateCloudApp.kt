@@ -107,6 +107,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Color.Companion.Black
 import androidx.compose.ui.graphics.ImageBitmap
@@ -311,7 +312,7 @@ enum class MenuItem(
     Vocabs(
         "Vokabeln",
         "️️🏫️",
-        { VocabTab() }
+        {}
     ),
     EXPLORE(
         "Explore",
@@ -473,7 +474,7 @@ fun PrivateCloudApp(
             val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
             val bgpicture = remember {
                 when (currentHour) {
-                    in 11..16 -> R.drawable.mittag
+                    in 11..16 -> R.drawable.day
                     else -> R.drawable.night
                 }
             }
@@ -489,6 +490,20 @@ fun PrivateCloudApp(
                     .background(Cloud.copy(0.5f))
             )
             Scaffold(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (selectedMenuItem == MenuItem.Vocabs) {
+                            Modifier.background(
+                                Brush.verticalGradient(
+                                    listOf(BgDeep, Color.Transparent),
+                                    endY = 800f
+                                )
+                            )
+                        } else {
+                            Modifier
+                        }
+                    ),
                 topBar = {
                     TopAppBar(
                         title = {
@@ -518,7 +533,10 @@ fun PrivateCloudApp(
                                 )
                             }
                         },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color.Transparent,
+                            scrolledContainerColor = Color.Transparent
+                        ),
                         windowInsets = WindowInsets.statusBars
                     )
                     Box(Modifier
@@ -530,7 +548,7 @@ fun PrivateCloudApp(
                 containerColor = Color.Transparent
             ) { paddingValues ->
                 Box(modifier = Modifier
-                    .padding(paddingValues)
+                    .padding(if (selectedMenuItem != MenuItem.Vocabs) paddingValues else PaddingValues(0.dp))
                     .zIndex(1000000f)) {
                     when (selectedMenuItem) {
                         MenuItem.WEATHER -> WeatherTabContent(viewModel = viewModel)
@@ -541,6 +559,8 @@ fun PrivateCloudApp(
                         )
 
                         MenuItem.PRIVATE_CLOUD -> MainCloudScreen(storage = storage)
+
+                        MenuItem.Vocabs -> VocabTab(paddingValues)
                         else -> selectedMenuItem.content(setGesturesEnabled)
                     }
                 }
