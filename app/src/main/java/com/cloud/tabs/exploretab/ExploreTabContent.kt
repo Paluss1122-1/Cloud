@@ -200,7 +200,6 @@ private fun StatCard(
         modifier = cardModifier
             .fillMaxWidth()
             .padding(vertical = 4.dp, horizontal = 2.dp),
-        cornerRadius = 20.dp,
         borderWidth = 3.dp,
         neonColors = listOf(Color(0xFF00FFAA), Color(0xFF00CCFF)),
         backgroundAlpha = 0.25f,        // etwas transparenter, damit es edel aussieht
