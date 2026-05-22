@@ -574,6 +574,29 @@ class MediaPlayerService : MediaSessionService() {
         registerBluetoothReceiver()
 
         canPostNotifications = canNotify(this)
+
+        val wasPlayingMusic = musicPrefs.getBoolean("was_playing_music", false)
+        val wasPlayingPodcast = musicPrefs.getBoolean("was_playing_podcast", false)
+
+        Handler(Looper.getMainLooper()).post {
+            if (wasPlayingMusic) {
+                ensureMusicMode()
+                loadSong(currentSongIndex)
+                val savedPosition = musicPrefs.getLong("music_position_ms", 0L)
+                if (savedPosition > 0L) {
+                    musicPlayer?.seekTo(savedPosition.toInt())
+                }
+                playMusic()
+            } else if (wasPlayingPodcast && currentPodcast != null) {
+                ensurePodcastMode()
+                loadPodcast(currentPodcast!!)
+                val savedPosition = getPodcastSavedPosition(currentPodcast!!.path)
+                if (savedPosition > 0L) {
+                    podcastPlayer?.seekTo(savedPosition.toInt())
+                }
+                playPodcast()
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -964,6 +987,7 @@ class MediaPlayerService : MediaSessionService() {
         cancelAutoPause()
 
         savePodcastCurrentPosition()
+        saveMusicState()
         if (isPlayingMusic && songStartedAt > 0L && currentSongName.isNotEmpty()) {
             val listenedMs = System.currentTimeMillis() - songStartedAt
             if (listenedMs > 3000) {
@@ -1979,6 +2003,8 @@ class MediaPlayerService : MediaSessionService() {
             putString(KEY_ACTIVE_ALGORITHMIC_PLAYLIST, activeAlgorithmicPlaylistId)
             putLong("music_position_ms", musicPlayer?.currentPosition?.toLong() ?: 0L)
             putLong("music_duration_ms", musicPlayer?.duration?.toLong()?.takeIf { it > 0 } ?: 0L)
+            putBoolean("was_playing_music", isPlayingMusic)
+            putBoolean("was_playing_podcast", isPlayingPodcast)
         }
     }
 
