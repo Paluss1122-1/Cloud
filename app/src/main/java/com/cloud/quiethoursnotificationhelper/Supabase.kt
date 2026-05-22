@@ -85,8 +85,8 @@ fun fetchNewErrors(context: Context) {
             val results = Config.client
                 .from("error_reports")
                 .select {
-                    filter { gt("created_at", lastChecked) }
-                    order("created_at", Order.ASCENDING)
+                    filter { gt("createdAt", lastChecked) }
+                    order("createdAt", Order.ASCENDING)
                 }
                 .decodeList<ErrorReport>()
 
