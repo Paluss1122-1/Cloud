@@ -1,6 +1,10 @@
 package com.cloud.core.activities
 
 import android.app.Application
+import coil.Coil
+import coil.ImageLoader
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
 import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.core.functions.errorInsert
 import com.cloud.core.objects.Config
@@ -63,6 +67,22 @@ class Cloud : Application() {
                 )
             }
         }
+
+        val imageLoader = ImageLoader.Builder(this)
+            .memoryCache {
+                MemoryCache.Builder(this)
+                    .maxSizePercent(0.25)
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(cacheDir.resolve("image_cache"))
+                    .maxSizePercent(0.1)
+                    .build()
+            }
+            .respectCacheHeaders(false)
+            .build()
+        Coil.setImageLoader(imageLoader)
 
         Config.init(this)
         BatteryDataRepository.init(this)
