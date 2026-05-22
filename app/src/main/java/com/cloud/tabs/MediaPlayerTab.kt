@@ -3586,7 +3586,6 @@ fun AiResponseCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        cornerRadius = 20.dp,
         borderWidth = 3.dp,
         onClick = onShowHistory,
         neonColors = listOf(NeonGreen, NeonBlue)
