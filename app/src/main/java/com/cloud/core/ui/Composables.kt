@@ -45,9 +45,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
@@ -124,7 +129,7 @@ fun PloppingButton(
 @Composable
 fun NeonBox(
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = 20.dp,
+    cornerRadius: RoundedCornerShape = RoundedCornerShape(20.dp),
     backgroundAlpha: Float = 0.22f,
     borderWidth: Dp = 3.dp,
     glowBlur1: Float = 42f,
@@ -145,19 +150,31 @@ fun NeonBox(
             .drawBehind {
                 val w = size.width
                 val h = size.height
-                val r = cornerRadius.toPx()
+                val tl = cornerRadius.topStart.toPx(size, this)
+                val tr = cornerRadius.topEnd.toPx(size, this)
+                val br = cornerRadius.bottomEnd.toPx(size, this)
+                val bl = cornerRadius.bottomStart.toPx(size, this)
+
+                val path = Path().apply {
+                    addRoundRect(
+                        RoundRect(
+                            rect = Rect(0f, 0f, w, h),
+                            topLeft = CornerRadius(tl),
+                            topRight = CornerRadius(tr),
+                            bottomRight = CornerRadius(br),
+                            bottomLeft = CornerRadius(bl)
+                        )
+                    )
+                }
 
                 drawIntoCanvas {
                     it.nativeCanvas.apply {
-                        drawRoundRect(
-                            0f, 0f, w, h, r, r,
+                        drawPath(
+                            path.asAndroidPath(),
                             Paint().apply {
                                 color = neonColors.last().copy(alpha = 0.55f).toArgb()
                                 isAntiAlias = true
-                                maskFilter = android.graphics.BlurMaskFilter(
-                                    glowBlur1,
-                                    android.graphics.BlurMaskFilter.Blur.OUTER
-                                )
+                                maskFilter = android.graphics.BlurMaskFilter(glowBlur1, android.graphics.BlurMaskFilter.Blur.OUTER)
                             }
                         )
                     }
@@ -165,26 +182,23 @@ fun NeonBox(
 
                 drawIntoCanvas {
                     it.nativeCanvas.apply {
-                        drawRoundRect(
-                            0f, 0f, w, h, r, r,
+                        drawPath(
+                            path.asAndroidPath(),
                             Paint().apply {
                                 color = neonColors.first().copy(alpha = 0.65f).toArgb()
                                 isAntiAlias = true
-                                maskFilter = android.graphics.BlurMaskFilter(
-                                    glowBlur2,
-                                    android.graphics.BlurMaskFilter.Blur.OUTER
-                                )
+                                maskFilter = android.graphics.BlurMaskFilter(glowBlur2, android.graphics.BlurMaskFilter.Blur.OUTER)
                             }
                         )
                     }
                 }
             }
-            .clip(RoundedCornerShape(cornerRadius))
+            .clip(cornerRadius)
             .background(gradientBrush)
             .border(
                 width = borderWidth,
                 brush = Brush.linearGradient(neonColors),
-                shape = RoundedCornerShape(cornerRadius)
+                shape = cornerRadius
             )
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
 
