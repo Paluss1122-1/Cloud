@@ -34,7 +34,6 @@ import com.cloud.tabs.JsonEditorContent
 import io.github.jan.supabase.storage.storage
 import java.io.File
 import java.io.FileOutputStream
-import java.util.Calendar
 
 class MyDeviceAdminReceiver : DeviceAdminReceiver()
 
@@ -71,18 +70,10 @@ class MainActivity : FragmentActivity() {
             animator.start()
         }
 
-        val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        when (currentHour) {
-            in 11..16 -> WindowCompat.getInsetsController(
-                window,
-                window.decorView
-            ).isAppearanceLightStatusBars = true
-
-            else -> WindowCompat.getInsetsController(
-                window,
-                window.decorView
-            ).isAppearanceLightStatusBars = false
-        }
+        WindowCompat.getInsetsController(
+            window,
+            window.decorView
+        ).isAppearanceLightStatusBars = false
 
         val permissions = arrayOf(
             Manifest.permission.READ_MEDIA_AUDIO,
