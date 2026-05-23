@@ -66,9 +66,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
-import com.cloud.tabs.Episode
-import com.cloud.tabs.PodcastFeed
+import com.cloud.tabs.mediaplayer.Episode
+import com.cloud.tabs.mediaplayer.PodcastFeed
 import kotlinx.coroutines.launch
+import kotlin.collections.forEachIndexed
+import kotlin.collections.lastIndex
 
 
 @Composable
