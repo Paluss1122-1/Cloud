@@ -134,6 +134,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     }
     var reloadKey by remember { mutableIntStateOf(0) }
     realDevice = getDeviceName().trim().equals("Samsung SM-S921U1", ignoreCase = true)
+    var landingReloadTrigger by remember { mutableIntStateOf(0) }
 
     if (realDevice && prvt()) {
         if (masterPw == null || Config.masterPassword.isEmpty()) {
@@ -169,8 +170,8 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     val scope = rememberCoroutineScope()
 
     fun openLanding() {
+        landingReloadTrigger++
         scope.launch {
-            landingOffsetX.snapTo(-1f)
             landingOffsetX.animateTo(0f, tween(360, easing = FastOutSlowInEasing))
         }
     }
@@ -182,6 +183,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                 tween(if (force) 1 else 300, easing = FastOutSlowInEasing)
             )
             then?.invoke()
+            landingOffsetX.snapTo(-1f)
         }
     }
 
@@ -241,10 +243,9 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
             LandingPage(
                 showCloseButton = hasLoadedApp,
                 onClose = { closeLanding() },
-                onTabSelected = { menuItem ->
-                    pendingOverlayItem = menuItem
-                },
-                state = landingListState
+                onTabSelected = { menuItem -> pendingOverlayItem = menuItem },
+                state = landingListState,
+                reloadTrigger = landingReloadTrigger
             )
         }
 
@@ -415,11 +416,15 @@ fun LandingPage(
     onTabSelected: (MenuItem) -> Unit,
     showCloseButton: Boolean = false,
     onClose: () -> Unit = {},
-    state: LazyListState = rememberLazyListState()
+    state: LazyListState = rememberLazyListState(),
+    reloadTrigger: Int = 0
 ) {
     val context = LocalContext.current
     var recentTabs by remember { mutableStateOf(loadRecentTabs(context)) }
     LaunchedEffect(Unit) {
+        recentTabs = loadRecentTabs(context)
+    }
+    LaunchedEffect(reloadTrigger) {
         recentTabs = loadRecentTabs(context)
     }
     val allTabsSorted = remember { MenuItem.entries.sortedBy { it.title } }
