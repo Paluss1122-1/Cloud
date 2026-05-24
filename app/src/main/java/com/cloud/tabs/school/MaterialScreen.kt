@@ -1088,6 +1088,7 @@ fun MaterialienScreen(
                             .padding(20.dp)
                     ) {
                         if (aiSummary != null) {
+androidx.compose.foundation.text.selection.SelectionContainer {
                             Markdown(
                                 content = aiSummary!!,
                                 colors = markdownColor(text = TextPrimary),
@@ -1138,7 +1139,7 @@ fun MaterialienScreen(
                                         color = TextPrimary
                                     )
                                 )
-                            )
+                            )}
                         } else {
                             Box(
                                 modifier = Modifier.fillMaxSize(),
