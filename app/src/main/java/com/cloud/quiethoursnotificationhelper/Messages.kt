@@ -19,14 +19,13 @@ import com.cloud.core.functions.canNotify
 import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.core.objects.Config.cms
 import com.cloud.core.objects.reportError
-import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_MARK_PARTS_READ
 import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_MESSAGE_SENT
-import com.cloud.services.QuietHoursNotificationService.Companion.EXTRA_MESSAGE_ID
 import com.cloud.services.QuietHoursNotificationService.Companion.EXTRA_SENDER
 import com.cloud.services.QuietHoursNotificationService.Companion.MAX_MESSAGES_PER_CONTACT
 import com.cloud.services.QuietHoursNotificationService.Companion.isSupportedMessenger
 import com.cloud.services.QuietHoursNotificationService.Companion.readMessageIds
 import com.cloud.services.WhatsAppNotificationListener
+import com.cloud.tabs.aitab.ChatMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -36,11 +35,11 @@ import java.util.Date
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-private const val NVIDIA_CHAT_PREFIX = "NVIDIA Chat"
+private const val GEMINI_CHAT_PREFIX = "Gemini Chat"
 
 private fun resolveKey(sender: String): String? {
     if (sender.contains("|")) return sender
-    if (sender.startsWith(NVIDIA_CHAT_PREFIX)) return sender
+    if (sender.startsWith(GEMINI_CHAT_PREFIX)) return sender
     return WhatsAppNotificationListener.messagesByContact.keys
         .firstOrNull { it.endsWith("|$sender") }
         ?: WhatsAppNotificationListener.replyActions.keys
@@ -138,13 +137,13 @@ private fun postChatNotification(key: String, context: Context, sourceLabel: Str
                     }
                 }
             } else {
-                style.addMessage(
-                    NotificationCompat.MessagingStyle.Message(
-                        "$text • $timeText",
-                        msg.timestamp,
-                        if (msg.isOwnMessage) mePerson else senderPerson
-                    )
+            style.addMessage(
+                NotificationCompat.MessagingStyle.Message(
+                    "$text • $timeText",
+                    msg.timestamp,
+                    if (msg.isOwnMessage) mePerson else senderPerson
                 )
+            )
             }
         }
 
@@ -221,7 +220,7 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
     val displayName = if (key.contains("|")) key.substringAfter("|") else key
 
     try {
-        if (displayName == NVIDIA_CHAT_PREFIX || displayName.startsWith("$NVIDIA_CHAT_PREFIX:")) {
+        if (displayName == GEMINI_CHAT_PREFIX || displayName.startsWith("$GEMINI_CHAT_PREFIX:")) {
             val list =
                 WhatsAppNotificationListener.messagesByContact.getOrPut(key) { mutableListOf() }
             val trimmed = messageText.trim()
@@ -239,8 +238,18 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
             updateChatNotification(key, context)
 
             appScope.launch {
-                val snapshot = list.toList()
-                val answer = sendNvidiaChatMessage(snapshot, trimmed)
+                val snapshot = mutableListOf<ChatMessage>()
+                list.dropLast(1).forEach { obj ->
+                    snapshot.add(
+                        ChatMessage(
+                            text = obj.text,
+                            ts = obj.timestamp,
+                            own = obj.isOwnMessage,
+                            mode = "Gemini"
+                        )
+                    )
+                }
+                val answer = sendGeminiRequest(snapshot, trimmed, target = "notif")
                 if (!answer.isNullOrBlank()) {
                     list.add(
                         WhatsAppNotificationListener.Companion.ChatMessage(
@@ -367,13 +376,14 @@ fun markMessageAsRead(messageId: String, readMessageIds: MutableSet<String>, con
     }
 }
 
-fun createNvidiaChat(name: String?, context: Context) {
-    val title = if (name.isNullOrBlank()) NVIDIA_CHAT_PREFIX else "$NVIDIA_CHAT_PREFIX: $name"
+fun createGeminiChat(name: String?, context: Context, replace: Boolean) {
+    if (replace) WhatsAppNotificationListener.messagesByContact.remove(GEMINI_CHAT_PREFIX)
+    val title = if (name.isNullOrBlank()) GEMINI_CHAT_PREFIX else "$GEMINI_CHAT_PREFIX: $name"
     val list = WhatsAppNotificationListener.messagesByContact.getOrPut(title) { mutableListOf() }
     if (list.isEmpty()) {
         list.add(
             WhatsAppNotificationListener.Companion.ChatMessage(
-                "Neuer NVIDIA-Chat \"$title\" erstellt. Antworte auf diese Nachricht, um zu schreiben.",
+                "Neuer Gemini-Chat \"$title\" erstellt. Antworte auf diese Nachricht, um zu schreiben.",
                 System.currentTimeMillis(), false
             )
         )
