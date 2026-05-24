@@ -1,4 +1,4 @@
-package com.cloud.tabs
+package com.cloud.tabs.mediaplayer
 
 import android.content.Context
 import androidx.compose.runtime.Composable
