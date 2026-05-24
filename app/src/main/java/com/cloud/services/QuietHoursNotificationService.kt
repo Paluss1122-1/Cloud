@@ -129,8 +129,8 @@ import com.cloud.quiethoursnotificationhelper.timeChangeReceiver
 import com.cloud.quiethoursnotificationhelper.updateNotification
 import com.cloud.quiethoursnotificationhelper.updateSingleSenderNotification
 import com.cloud.tabs.AudioRecorder
-import com.cloud.tabs.MediaAnalyticsManager
-import com.cloud.tabs.MediaAnalyticsManager.getSessions
+import com.cloud.tabs.mediaplayer.MediaAnalyticsManager
+import com.cloud.tabs.mediaplayer.MediaAnalyticsManager.getSessions
 import com.cloud.tabs.exploretab.ExploreLocationTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
