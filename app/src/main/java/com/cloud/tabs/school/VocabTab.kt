@@ -40,9 +40,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.StickyNote2
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -50,6 +52,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -92,6 +95,7 @@ import com.cloud.core.ui.TextTertiary
 import com.cloud.quiethoursnotificationhelper.callNvidiaVisionApi
 import com.cloud.quiethoursnotificationhelper.flashcardVokabelnFlow
 import com.cloud.quiethoursnotificationhelper.trySendImageToLaptop
+import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -99,13 +103,15 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import kotlin.time.Duration.Companion.minutes
 
 
 data class Vokabel(val latein: String, val deutsch: String, val id: Int)
 data class VokabelSet(
     val name: String,
     val vokabeln: List<Vokabel>,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val lastUsed: Long = System.currentTimeMillis()
 )
 
 data class VokabelProgress(
@@ -137,11 +143,27 @@ data class WidthState(
 
 enum class VokabelTabScreen { DASHBOARD, HOME, UPLOAD, REVIEW, LEARN, MATERIALIEN }
 
+private fun parseRecentMaterial(serialized: String): RecentMaterial? {
+    val parts = serialized.split("\u001f")
+    if (parts.size != 3) return null
+    val subject = parts[0]
+    val fileName = parts[1].ifBlank { null }
+    val lastUsed = parts[2].toLongOrNull() ?: return null
+    return RecentMaterial(subject = subject, fileName = fileName, lastUsed = lastUsed)
+}
+
+private fun isImageFile(name: String) =
+    name.lowercase().let {
+        it.endsWith(".jpg") || it.endsWith(".jpeg") || it.endsWith(".png") || it.endsWith(".webp")
+    }
+
 @Composable
 fun VocabTab(paddingValues: PaddingValues) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("vocab_sets", Context.MODE_PRIVATE) }
+    val materialPrefs =
+        remember { context.getSharedPreferences("material_cache", Context.MODE_PRIVATE) }
 
     var screen by remember { mutableStateOf(VokabelTabScreen.DASHBOARD) }
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -156,6 +178,39 @@ fun VocabTab(paddingValues: PaddingValues) {
     var currentWidths by remember { mutableStateOf<List<WidthState>>(emptyList()) }
     var showMergeDialog by remember { mutableStateOf(false) }
     var extractionJob by remember { mutableStateOf<Job?>(null) }
+    var rawRecentMaterials by remember {
+        mutableStateOf(
+            materialPrefs.getString("recent_materials", null)
+                ?.split("\u001e")
+                ?.filter { it.isNotBlank() }
+                ?: emptyList()
+        )
+    }
+    var recentMaterialPreviews by remember { mutableStateOf<List<RecentMaterial>>(emptyList()) }
+
+    fun openSetAndUpdateLastUsed(set: VokabelSet) {
+        val updatedSet = set.copy(lastUsed = System.currentTimeMillis())
+        savedSets = saveVokabelSet(prefs, updatedSet)
+        activeSet = updatedSet
+        vokabeln = updatedSet.vokabeln
+        screen = VokabelTabScreen.LEARN
+    }
+
+    LaunchedEffect(rawRecentMaterials) {
+        val parsed = rawRecentMaterials.mapNotNull(::parseRecentMaterial)
+        recentMaterialPreviews = parsed.map { material ->
+            if (material.fileName != null && isImageFile(material.fileName)) {
+                val url = try {
+                    Config.client.storage.from("school").createSignedUrl(material.path, 10.minutes)
+                } catch (_: Exception) {
+                    null
+                }
+                material.copy(previewUrl = url)
+            } else material
+        }
+    }
+    var selectedMaterialSubject by remember { mutableStateOf<String?>(null) }
+    var selectedMaterialFile by remember { mutableStateOf<String?>(null) }
 
     if (showMergeDialog) {
         MergeVocabSetsDialog(
@@ -216,30 +271,35 @@ fun VocabTab(paddingValues: PaddingValues) {
             VokabelTabScreen.DASHBOARD -> SchoolDashboard(
                 savedSets = savedSets,
                 onVocabClick = { screen = VokabelTabScreen.HOME },
-                onMaterialClick = { screen = VokabelTabScreen.MATERIALIEN },
-                onOpenSet = { set ->
-                    activeSet = set; vokabeln = set.vokabeln; screen = VokabelTabScreen.LEARN
+                onMaterialClick = {
+                    selectedMaterialSubject = null
+                    selectedMaterialFile = null
+                    screen = VokabelTabScreen.MATERIALIEN
                 },
-                onLearnDirectly = {
-                    if (savedSets.isNotEmpty()) {
-                        val latest = savedSets.maxBy { it.createdAt }
-                        activeSet = latest; vokabeln = latest.vokabeln; screen = VokabelTabScreen.LEARN
-                    }
-                },
-                paddingValues = paddingValues
+                onOpenSet = { set -> openSetAndUpdateLastUsed(set) },
+                paddingValues = paddingValues,
+                recentMaterials = recentMaterialPreviews,
+                onOpenMaterial = {
+                    selectedMaterialSubject = it.subject
+                    selectedMaterialFile = it.fileName
+                    screen = VokabelTabScreen.MATERIALIEN
+                }
             )
 
             VokabelTabScreen.HOME -> VocabTabContent(
                 savedSets = savedSets,
                 prefs = prefs,
                 onNewSet = { screen = VokabelTabScreen.UPLOAD },
-                onOpenSet = { set ->
-                    activeSet = set; vokabeln = set.vokabeln; screen = VokabelTabScreen.LEARN
-                },
+                onOpenSet = { set -> openSetAndUpdateLastUsed(set) },
                 onLearnWeak = { set ->
-                    activeSet = set
-                    vokabeln = loadWeakVokabeln(prefs, set.createdAt)
-                    screen = VokabelTabScreen.LEARN
+                    openSetAndUpdateLastUsed(
+                        set.copy(
+                            vokabeln = loadWeakVokabeln(
+                                prefs,
+                                set.createdAt
+                            )
+                        )
+                    )
                 },
                 onLearnWithMix = { set ->
                     val otherVokabeln = savedSets
@@ -248,9 +308,7 @@ fun VocabTab(paddingValues: PaddingValues) {
                         .shuffled()
                     val mixCount = (5..10).random().coerceAtMost(otherVokabeln.size)
                     val mixed = (set.vokabeln + otherVokabeln.take(mixCount)).shuffled()
-                    activeSet = set
-                    vokabeln = mixed
-                    screen = VokabelTabScreen.LEARN
+                    openSetAndUpdateLastUsed(set.copy(vokabeln = mixed))
                 },
                 onDeleteSet = { set ->
                     saveWeakVokabeln(prefs, set.createdAt, emptyList())
@@ -261,9 +319,20 @@ fun VocabTab(paddingValues: PaddingValues) {
                 },
                 lastWidths = lastWidths,
                 onMergeClick = { showMergeDialog = true },
-                onMaterialienClick = { screen = VokabelTabScreen.MATERIALIEN },
                 onBack = { screen = VokabelTabScreen.DASHBOARD },
-                paddingValues = paddingValues
+                paddingValues = paddingValues,
+                recentMaterials = recentMaterialPreviews,
+                onOpenMaterial = {
+                    selectedMaterialSubject = it.subject
+                    selectedMaterialFile = it.fileName
+                    screen = VokabelTabScreen.MATERIALIEN
+                },
+                onLearnDirectly = {
+                    if (savedSets.isNotEmpty()) {
+                        val latest = savedSets.maxBy { it.lastUsed }
+                        openSetAndUpdateLastUsed(latest)
+                    }
+                }
             )
 
             VokabelTabScreen.UPLOAD -> UploadScreen(
@@ -379,18 +448,22 @@ fun VocabTab(paddingValues: PaddingValues) {
             )
 
             VokabelTabScreen.MATERIALIEN -> MaterialienScreen(
-                onBack = { screen = VokabelTabScreen.DASHBOARD },
-                savedSets = savedSets,
-                onOpenSet = { set ->
-                    activeSet = set; vokabeln = set.vokabeln; screen = VokabelTabScreen.LEARN
+                onBack = {
+                    selectedMaterialSubject = null
+                    selectedMaterialFile = null
+                    screen = VokabelTabScreen.DASHBOARD
                 },
+                savedSets = savedSets,
+                onOpenSet = { set -> openSetAndUpdateLastUsed(set) },
                 onLearnDirectly = {
                     if (savedSets.isNotEmpty()) {
-                        val latest = savedSets.maxBy { it.createdAt }
-                        activeSet = latest; vokabeln = latest.vokabeln; screen = VokabelTabScreen.LEARN
+                        val latest = savedSets.maxBy { it.lastUsed }
+                        openSetAndUpdateLastUsed(latest)
                     }
                 },
-                paddingValues = paddingValues
+                paddingValues = paddingValues,
+                initialSubject = selectedMaterialSubject,
+                initialFile = selectedMaterialFile
             )
         }
     }
@@ -402,8 +475,9 @@ fun SchoolDashboard(
     onVocabClick: () -> Unit,
     onMaterialClick: () -> Unit,
     onOpenSet: (VokabelSet) -> Unit,
-    onLearnDirectly: () -> Unit,
-    paddingValues: PaddingValues
+    paddingValues: PaddingValues,
+    recentMaterials: List<RecentMaterial> = emptyList(),
+    onOpenMaterial: (RecentMaterial) -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         SchoolHeader(
@@ -411,7 +485,8 @@ fun SchoolDashboard(
             subtitle = "Dein Dashboard",
             savedSets = savedSets,
             onOpenSet = onOpenSet,
-            onLearnDirectly = onLearnDirectly,
+            recentMaterials = recentMaterials,
+            onOpenMaterial = onOpenMaterial,
             showDashboard = true,
             paddingValues = paddingValues
         )
@@ -426,7 +501,6 @@ fun SchoolDashboard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Vokabeln Button (ersetzt Scannen)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -437,7 +511,7 @@ fun SchoolDashboard(
                         .padding(horizontal = 20.dp, vertical = 18.dp)
                         .weight(1f)
                 ) {
-                    Text("🔤", fontSize = 22.sp)
+                    Icon(Icons.Default.Style, contentDescription = "", tint = LocalContentColor.current.copy(0.4f))
                     Text(
                         "Vokabeln",
                         color = TextPrimary,
@@ -456,11 +530,11 @@ fun SchoolDashboard(
                         .padding(horizontal = 20.dp, vertical = 18.dp)
                         .weight(1f)
                 ) {
-                    Text("📚", fontSize = 22.sp)
+                    Icon(Icons.AutoMirrored.Filled.StickyNote2, contentDescription = "", tint = LocalContentColor.current.copy(0.4f))
                     Text(
                         "Materialien",
                         color = TextPrimary,
-                        fontSize = 15.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -513,12 +587,18 @@ fun VocabTabContent(
     onUpdate: (Int, Int) -> Unit,
     lastWidths: List<WidthState>,
     onMergeClick: () -> Unit = {},
-    onMaterialienClick: () -> Unit = {},
     onBack: () -> Unit,
-    paddingValues: PaddingValues
+    paddingValues: PaddingValues,
+    recentMaterials: List<RecentMaterial> = emptyList(),
+    onOpenMaterial: (RecentMaterial) -> Unit = {},
+    onLearnDirectly: () -> Unit = {}
 ) {
     var setToDelete by remember { mutableStateOf<VokabelSet?>(null) }
     var menuOpenFor by remember { mutableStateOf<Long?>(null) }
+
+    BackHandler {
+        onBack()
+    }
 
     if (setToDelete != null) {
         AlertDialogCloud(
@@ -535,9 +615,13 @@ fun VocabTabContent(
                 title = "Vokabeln",
                 subtitle = "Übersicht & Scannen",
                 onBack = onBack,
-                showDashboard = false,
+                savedSets = savedSets,
+                onOpenSet = onOpenSet,
+                recentMaterials = emptyList(),
+                onOpenMaterial = onOpenMaterial,
+                showDashboard = true,
                 paddingValues = paddingValues,
-                drawGradient = false
+                drawGradient = true
             )
 
             Box(
@@ -851,7 +935,9 @@ fun UploadScreen(
         onBack()
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .padding(paddingValues)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 4.dp)
@@ -1079,7 +1165,9 @@ fun ReviewScreen(
         if (isExtracting) showCancelDialog = true else onBack()
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .padding(paddingValues)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = 4.dp, top = 8.dp, end = 16.dp)
@@ -1950,6 +2038,7 @@ fun saveVokabelSet(prefs: SharedPreferences, set: VokabelSet): List<VokabelSet> 
             arr.put(JSONObject().apply {
                 put("name", s.name)
                 put("createdAt", s.createdAt)
+                put("lastUsed", s.lastUsed)
                 put("vokabeln", JSONArray().also { va ->
                     s.vokabeln.forEach { v ->
                         va.put(
@@ -1979,6 +2068,7 @@ fun loadVokabelSets(prefs: SharedPreferences): List<VokabelSet> {
             VokabelSet(
                 name = o.getString("name"),
                 createdAt = o.getLong("createdAt"),
+                lastUsed = if (o.has("lastUsed")) o.getLong("lastUsed") else o.getLong("createdAt"),
                 vokabeln = (0 until va.length()).map { i ->
                     val v = va.getJSONObject(i)
                     Vokabel(v.getString("latein"), v.getString("deutsch"), v.getInt("id"))
@@ -1997,6 +2087,7 @@ fun deleteVokabelSet(prefs: SharedPreferences, set: VokabelSet): List<VokabelSet
             arr.put(JSONObject().apply {
                 put("name", s.name)
                 put("createdAt", s.createdAt)
+                put("lastUsed", s.lastUsed)
                 put("vokabeln", JSONArray().also { va ->
                     s.vokabeln.forEach { v ->
                         va.put(
