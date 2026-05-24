@@ -151,7 +151,7 @@ import com.cloud.privatecloudapp.getLocalFileWithPath
 import com.cloud.privatecloudapp.getMimeType
 import com.cloud.privatecloudapp.isImageFile
 import com.cloud.privatecloudapp.isOnline
-import com.cloud.tabs.AiResponseHistorySheet
+import com.cloud.tabs.mediaplayer.AiResponseHistorySheet
 import com.cloud.tabs.BrowserTabContent
 import com.cloud.tabs.CalendarTabContent
 import com.cloud.tabs.ContactsRepository
@@ -160,21 +160,21 @@ import com.cloud.tabs.ContactsViewModel
 import com.cloud.tabs.DateCalculatorContent
 import com.cloud.tabs.GalleryTab
 import com.cloud.tabs.GmailTabContent
-import com.cloud.tabs.MediaAnalyticsManager
+import com.cloud.tabs.mediaplayer.MediaAnalyticsManager
 import com.cloud.tabs.MediaRecorderContent
-import com.cloud.tabs.MediaTab
+import com.cloud.tabs.mediaplayer.MediaTab
 import com.cloud.tabs.MovieDiscoveryTabContent
 import com.cloud.tabs.NotizenApp
 import com.cloud.tabs.OtherBucketViewer
-import com.cloud.tabs.PodcastTab
 import com.cloud.tabs.QuickSettingsTabContent
 import com.cloud.tabs.RemoteDesktopTabContent
-import com.cloud.tabs.SpotifyDownloaderTab
+import com.cloud.tabs.mediaplayer.SpotifyDownloaderTab
 import com.cloud.tabs.WeatherTabContent
 import com.cloud.tabs.aitab.AITabContent
 import com.cloud.tabs.audiorecordertab.AudioRecorderContent
 import com.cloud.tabs.authenticator.AuthenticatorTab
 import com.cloud.tabs.exploretab.ExploreTabContent
+import com.cloud.tabs.mediaplayer.PodcastTab
 import com.cloud.tabs.school.VocabTab
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
@@ -302,7 +302,7 @@ enum class MenuItem(
     MEDIAPLAYERTAB(
         "Media Player",
         "️️🎶",
-        { MediaTab() }
+        {}
     ),
     GMAIL(
         "Gmail",
@@ -505,51 +505,61 @@ fun PrivateCloudApp(
                         }
                     ),
                 topBar = {
-                    TopAppBar(
-                        title = {
-                            Text(
-                                text = "${selectedMenuItem.icon} ${selectedMenuItem.title}",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
-                        },
-                        navigationIcon = {
-                            if (onMenuClick != null) {
-                                IconButton(onClick = { onMenuClick() }) {
+                    if (selectedMenuItem != MenuItem.MEDIAPLAYERTAB) {
+                        TopAppBar(
+                            title = {
+                                Text(
+                                    text = "${selectedMenuItem.icon} ${selectedMenuItem.title}",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            navigationIcon = {
+                                if (onMenuClick != null) {
+                                    IconButton(onClick = { onMenuClick() }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Menu,
+                                            contentDescription = "Menü öffnen",
+                                            tint = Color.White
+                                        )
+                                    }
+                                } else {
                                     Icon(
                                         imageVector = Icons.Default.Menu,
                                         contentDescription = "Menü öffnen",
-                                        tint = Color.White
+                                        tint = Color.White,
+                                        modifier = Modifier
+                                            .alpha(0f)
+                                            .size(48.dp)
                                     )
                                 }
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Menu,
-                                    contentDescription = "Menü öffnen",
-                                    tint = Color.White,
-                                    modifier = Modifier
-                                        .alpha(0f)
-                                        .size(48.dp)
-                                )
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color.Transparent,
-                            scrolledContainerColor = Color.Transparent
-                        ),
-                        windowInsets = WindowInsets.statusBars
-                    )
-                    Box(Modifier
-                        .alpha(overlayAlpha.value)
-                        .matchParentSize()
-                        .background(Black.copy(0.6f))
-                        .zIndex(10f))
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = Color.Transparent,
+                                scrolledContainerColor = Color.Transparent
+                            ),
+                            windowInsets = WindowInsets.statusBars
+                        )
+                        Box(
+                            Modifier
+                                .alpha(overlayAlpha.value)
+                                .matchParentSize()
+                                .background(Black.copy(0.6f))
+                                .zIndex(10f)
+                        )
+                    }
                 },
                 containerColor = Color.Transparent
             ) { paddingValues ->
-                Box(modifier = Modifier
-                    .padding(if (selectedMenuItem != MenuItem.Vocabs) paddingValues else PaddingValues(0.dp))
-                    .zIndex(1000000f)) {
+                Box(
+                    modifier = Modifier
+                        .padding(
+                            if (selectedMenuItem != MenuItem.Vocabs && selectedMenuItem != MenuItem.MEDIAPLAYERTAB) paddingValues else PaddingValues(
+                                0.dp
+                            )
+                        )
+                        .zIndex(1000000f)
+                ) {
                     when (selectedMenuItem) {
                         MenuItem.WEATHER -> WeatherTabContent(viewModel = viewModel)
                         MenuItem.BROWSER -> BrowserTabContent(
@@ -561,6 +571,8 @@ fun PrivateCloudApp(
                         MenuItem.PRIVATE_CLOUD -> MainCloudScreen(storage = storage)
 
                         MenuItem.Vocabs -> VocabTab(paddingValues)
+
+                        MenuItem.MEDIAPLAYERTAB -> MediaTab(onBack = { onMenuClick?.invoke() })
                         else -> selectedMenuItem.content(setGesturesEnabled)
                     }
                 }
@@ -1866,7 +1878,7 @@ fun MainCloudScreen(storage: Storage) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.7f)),
+                        .background(Black.copy(alpha = 0.7f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Card(
@@ -1882,7 +1894,7 @@ fun MainCloudScreen(storage: Storage) {
                             verticalArrangement = Arrangement.Center
                         ) {
                             CircularProgressIndicator(
-                                color = Color.Black,
+                                color = Black,
                                 modifier = Modifier.size(40.dp)
                             )
                         }
@@ -1894,7 +1906,7 @@ fun MainCloudScreen(storage: Storage) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.7f)),
+                        .background(Black.copy(alpha = 0.7f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Card(
@@ -1910,7 +1922,7 @@ fun MainCloudScreen(storage: Storage) {
                             verticalArrangement = Arrangement.Center
                         ) {
                             CircularProgressIndicator(
-                                color = Color.Black,
+                                color = Black,
                                 modifier = Modifier.size(40.dp)
                             )
                         }
