@@ -13,6 +13,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -67,10 +68,10 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
     var selectedModel by mutableStateOf(availableModels[0])
 
     var todayUsage by mutableIntStateOf(0)
-    var usageResetAt by mutableStateOf(0L)
+    var usageResetAt by mutableLongStateOf(0L)
 
     var historyLoaded = false
-    
+
     var showLimitReached by mutableStateOf(false)
 
     fun loadHistory() {
@@ -161,7 +162,7 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
 
         val isServer = currentMode == "Server"
         val isPrivate = prvt()
-        
+
         if (!isServer && !isPrivate) {
             checkUsageResetIfNeeded(ctx)
             if (todayUsage + selectedModel.weight > DAILY_LIMIT) {
@@ -172,6 +173,7 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
 
         val modeAtSend = currentMode
         val imageBase64 = selectedImageUri?.let { encodeImage(ctx, it) }
+        val effectivePic = if (selectedModel.vision && selectedImageUri != null) imageBase64 else null
 
         history.add(
             ChatMessage(
@@ -188,31 +190,52 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
             updateTodayUsage(todayUsage + selectedModel.weight)
         }
 
+        val placeholderTs = System.currentTimeMillis()
+        history.add(ChatMessage("", placeholderTs, false, modeAtSend))
+        val placeholderIndex = history.lastIndex
+
+        val onToken: (String) -> Unit = { delta ->
+            val current = history.getOrNull(placeholderIndex)?.text ?: ""
+            history[placeholderIndex] = ChatMessage(
+                text = current + delta,
+                ts = placeholderTs,
+                own = false,
+                mode = modeAtSend
+            )
+        }
+
         viewModelScope.launch {
             try {
                 val response = withContext(Dispatchers.IO) {
                     send(
-                        ctx, userText.ifEmpty { "Beschreibe das Bild" },
-                        if (selectedModel.vision && selectedImageUri != null) imageBase64 else null
+                        ctx,
+                        userText.ifEmpty { "Beschreibe das Bild" },
+                        effectivePic,
+                        onToken
                     )
                 }
                 selectedImageUri = null
-                history.add(ChatMessage(response, System.currentTimeMillis(), false, modeAtSend))
-                
+
+                if (placeholderIndex < history.size) {
+                    history[placeholderIndex] = ChatMessage(
+                        response, placeholderTs, false, modeAtSend
+                    )
+                }
+
                 sendAITabBackgroundNotification(
                     ctx,
                     title = "AITab answer",
                     message = response
                 )
             } catch (e: Exception) {
-                history.add(
-                    ChatMessage(
+                if (placeholderIndex < history.size) {
+                    history[placeholderIndex] = ChatMessage(
                         "Fehler: ${e.message}",
-                        System.currentTimeMillis(),
+                        placeholderTs,
                         false,
                         modeAtSend
                     )
-                )
+                }
             } finally {
                 isLoading = false
                 persistHistory()
@@ -220,15 +243,27 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun send(ctx: Context, txt: String, pic: String?): String {
+    private suspend fun send(
+        ctx: Context,
+        txt: String,
+        pic: String?,
+        onToken: (String) -> Unit
+    ): String {
         if (!isOnline(ctx)) return "Kein Netzwerk"
         return when (currentMode) {
-            "Nvidia" -> sendNvidiaChatMessageAITab(history, txt, selectedModel.realname, pic)
-                ?: "Fehler"
+            "Nvidia" -> sendNvidiaChatMessageAITab(
+                history, txt, selectedModel.realname, pic,
+                onToken = onToken
+            ) ?: "Fehler"
 
             "Server" -> askServer(history, txt, selectedModel.realname, pic)
 
-            "Gemini" -> sendGeminiRequest(history, txt, pic) ?: "Fehler"
+            "Gemini" -> sendGeminiRequest(
+                history, txt, pic,
+                model = selectedModel.realname,
+                onToken = onToken
+            ) ?: "Fehler"
+
             else -> "Wähle einen Modus"
         }
     }
