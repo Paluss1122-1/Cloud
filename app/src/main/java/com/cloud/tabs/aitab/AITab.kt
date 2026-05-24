@@ -95,8 +95,6 @@ import com.cloud.core.ui.c
 fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewModel()) {
     val listState = rememberLazyListState()
     val alpha = remember { Animatable(0f) }
-    var selectedMsg: Int? by remember { mutableStateOf(null) }
-    var lastSelectedMsg: Int? by remember { mutableStateOf(null) }
     val context = LocalContext.current
 
     val msgBounds = remember { mutableStateMapOf<Int, Float>() }
