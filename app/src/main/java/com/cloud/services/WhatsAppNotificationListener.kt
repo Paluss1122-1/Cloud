@@ -79,10 +79,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             .take(100)
     }
 
-    val replyActions = java.util.concurrent.ConcurrentHashMap<String, ReplyData>()
-    val messagesByContact =
-        java.util.concurrent.ConcurrentHashMap<String, MutableList<ChatMessage>>()
-
     private val serviceJob = SupervisorJob()
     private val forwardScope = CoroutineScope(Dispatchers.IO + serviceJob)
 
@@ -100,10 +96,9 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
         private var instance: WeakReference<WhatsAppNotificationListener>? = null
 
-        val messagesByContact
-            get() = instance?.get()?.messagesByContact ?: java.util.concurrent.ConcurrentHashMap()
-        val replyActions
-            get() = instance?.get()?.replyActions ?: java.util.concurrent.ConcurrentHashMap()
+        val replyActions = java.util.concurrent.ConcurrentHashMap<String, ReplyData>()
+        val messagesByContact =
+            java.util.concurrent.ConcurrentHashMap<String, MutableList<ChatMessage>>()
 
         fun forwardNotificationsToLaptop1() {
             val svc = instance?.get() ?: return
@@ -298,15 +293,13 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or  // ✅ Statt FLAG_NOT_FOCUSABLE
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                     PixelFormat.TRANSLUCENT
                 ).apply {
                     gravity = Gravity.CENTER
                 }
-
-
                 try {
                     windowManager.addView(testOverlayView, params)
                 } catch (_: Exception) {
@@ -334,7 +327,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             ) return
 
             val key = keyFor(sbn.packageName, title)
-            val existingMessages = messagesByContact[key] ?: mutableListOf()
+            val existingMessages = WhatsAppNotificationListener.messagesByContact[key] ?: mutableListOf()
             val lastMessage = existingMessages.lastOrNull()
 
             if (lastMessage != null &&
@@ -350,7 +343,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
             // Alte replyActions bereinigen (älter als 24h)
             val cutoff = System.currentTimeMillis() - 24 * 60 * 60 * 1000
-            replyActions.entries.removeAll { it.value.timestamp < cutoff }
+            WhatsAppNotificationListener.replyActions.entries.removeAll { it.value.timestamp < cutoff }
 
             notification.actions?.forEach { action ->
                 action.remoteInputs?.firstOrNull()?.let { systemRemoteInput ->
@@ -360,7 +353,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                         .setAllowFreeFormInput(systemRemoteInput.allowFreeFormInput)
                         .build()
 
-                    replyActions[key] = ReplyData(
+                    WhatsAppNotificationListener.replyActions[key] = ReplyData(
                         pendingIntent = action.actionIntent,
                         remoteInput = remoteInput,
                         originalResultKey = systemRemoteInput.resultKey,
@@ -373,7 +366,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 }
             }
 
-            messagesByContact.getOrPut(key) { mutableListOf() }.add(
+            WhatsAppNotificationListener.messagesByContact.getOrPut(key) { mutableListOf() }.add(
                 ChatMessage(text, isOwnMessage = false)
             )
 
@@ -437,8 +430,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 val title = sbn.notification.extras.getString(android.app.Notification.EXTRA_TITLE)
                 title?.let {
                     val key = keyFor(sbn.packageName, it)
-                    replyActions.remove(key)
-                    messagesByContact.remove(key)
+                    WhatsAppNotificationListener.replyActions.remove(key)
+                    WhatsAppNotificationListener.messagesByContact.remove(key)
                     Log.d("MessageListener", "Removed reply action for $title")
                 }
             }
@@ -459,8 +452,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         super.onListenerDisconnected()
         listenerConnected = false
         instance = null
-        replyActions.clear()
-        messagesByContact.clear()
+        WhatsAppNotificationListener.replyActions.clear()
+        WhatsAppNotificationListener.messagesByContact.clear()
         NotificationRepository.clear()
     }
 
