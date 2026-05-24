@@ -17,9 +17,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,23 +38,25 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,6 +79,9 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import androidx.core.graphics.scale
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.size.Precision
+import coil.size.Scale
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.MAX_GEMINI
 import com.cloud.core.ui.AccentViolet
@@ -96,9 +98,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlin.time.Duration.Companion.minutes
 
 data class MaterialUploadState(
@@ -115,23 +114,60 @@ fun MaterialienScreen(
     savedSets: List<VokabelSet> = emptyList(),
     onOpenSet: (VokabelSet) -> Unit = {},
     onLearnDirectly: () -> Unit = {},
-    paddingValues: PaddingValues
+    paddingValues: PaddingValues,
+    initialSubject: String? = null,
+    initialFile: String? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("material_cache", Context.MODE_PRIVATE) }
 
-    var showDatePicker by remember { mutableStateOf(false) }
+    var showSubjectDialog by remember { mutableStateOf(false) }
+    var subjectNameInput by remember { mutableStateOf("") }
     var uploads by remember { mutableStateOf<List<MaterialUploadState>>(emptyList()) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
-    var selectedDate by remember { mutableStateOf<String?>(null) }
-    var selectedFile by remember { mutableStateOf<String?>(null) }
+    var selectedSubject by remember { mutableStateOf(initialSubject) }
+    var selectedFile by remember { mutableStateOf(initialFile) }
     var folders by remember { mutableStateOf<List<String>>(emptyList()) }
     var foldersLoading by remember { mutableStateOf(true) }
     var folderFiles by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
     var folderFilesLoading by remember { mutableStateOf(false) }
     var sheetExpanded by remember { mutableStateOf(false) }
     var showFullscreenSummary by remember { mutableStateOf(false) }
+    var rawRecentMaterials by remember {
+        mutableStateOf(
+            prefs.getString("recent_materials", null)
+                ?.split("\u001e")
+                ?.filter { it.isNotBlank() }
+                ?: emptyList()
+        )
+    }
+
+    var recentMaterialPreviews by remember { mutableStateOf<List<RecentMaterial>>(emptyList()) }
+
+    fun persistRecentMaterial(subject: String, fileName: String? = null) {
+        if (fileName == null) return
+        val newItem = RecentMaterial(subject = subject, fileName = fileName, lastUsed = System.currentTimeMillis())
+        val existing = rawRecentMaterials.mapNotNull(::parseRecentMaterial)
+            .filter { it.subject != subject || it.fileName != fileName }
+        val normalized = (listOf(newItem) + existing).take(3)
+        rawRecentMaterials = normalized.map(::serializeRecentMaterial)
+        prefs.edit { putString("recent_materials", rawRecentMaterials.joinToString("\u001e")) }
+    }
+
+    LaunchedEffect(rawRecentMaterials) {
+        val parsed = rawRecentMaterials.mapNotNull(::parseRecentMaterial)
+        recentMaterialPreviews = parsed.map { material ->
+            if (material.fileName != null && isImageFile(material.fileName)) {
+                val url = try {
+                    Config.client.storage.from("school").createSignedUrl(material.path, 10.minutes)
+                } catch (_: Exception) {
+                    null
+                }
+                material.copy(previewUrl = url)
+            } else material
+        }
+    }
 
     LaunchedEffect(selectedFile) {
         if (selectedFile == null) {
@@ -150,13 +186,13 @@ fun MaterialienScreen(
             foldersLoading = false
         }
     }
-    LaunchedEffect(selectedDate) {
-        val date = selectedDate ?: return@LaunchedEffect
-        if (folderFiles.containsKey(date)) return@LaunchedEffect
+    LaunchedEffect(selectedSubject) {
+        val subject = selectedSubject ?: return@LaunchedEffect
+        if (folderFiles.containsKey(subject)) return@LaunchedEffect
         folderFilesLoading = true
         try {
-            val files = Config.client.storage.from("school").list(date)
-            folderFiles = folderFiles + (date to files.map { it.name })
+            val files = Config.client.storage.from("school").list(subject)
+            folderFiles = folderFiles + (subject to files.map { it.name })
         } catch (e: Exception) {
             errorMsg = e.localizedMessage
         } finally {
@@ -168,7 +204,7 @@ fun MaterialienScreen(
         when {
             showFullscreenSummary -> showFullscreenSummary = false
             selectedFile != null -> selectedFile = null
-            selectedDate != null -> selectedDate = null
+            selectedSubject != null -> selectedSubject = null
             else -> onBack()
         }
     }
@@ -189,22 +225,26 @@ fun MaterialienScreen(
             val state = newUploads[i]
             scope.launch {
                 uploads = uploads.map {
-                    if (it.fileName == state.fileName) it.copy(status = UploadStatus.DONE) else it
+                    if (it.fileName == state.fileName) it.copy(status = UploadStatus.UPLOADING) else it
                 }
-                if (selectedDate != null && !folders.contains(selectedDate)) {
-                    folders = (listOf(selectedDate!!) + folders).sortedDescending()
+                if (selectedSubject != null && !folders.contains(selectedSubject)) {
+                    folders = (listOf(selectedSubject!!) + folders).sortedDescending()
                 }
                 try {
                     val rawBytes = context.contentResolver.openInputStream(uri)?.readBytes()
                         ?: throw Exception("Datei nicht lesbar")
                     val (uploadBytes, uploadName) = compressToJpgIfImage(rawBytes, state.fileName)
-                    val path = "$selectedDate/$uploadName"
+                    val path = "$selectedSubject/$uploadName"
                     Config.client.storage.from("school").upload(path, uploadBytes) { upsert = true }
-                    uploads = uploads.map {
-                        if (it.fileName == state.fileName) it.copy(status = UploadStatus.DONE) else it
+
+                    selectedSubject?.let { subject ->
+                        val currentFiles = folderFiles[subject] ?: emptyList()
+                        if (!currentFiles.contains(uploadName)) {
+                            folderFiles = folderFiles + (subject to (currentFiles + uploadName))
+                        }
                     }
-                    folderFiles = folderFiles + (selectedDate!! to (folderFiles[selectedDate]
-                        ?: emptyList()) + uploadName)
+                    uploads = uploads.filter { it.fileName != state.fileName }
+
                 } catch (e: Exception) {
                     errorMsg = e.localizedMessage
                     uploads = uploads.map {
@@ -215,58 +255,79 @@ fun MaterialienScreen(
         }
     }
 
-    if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = System.currentTimeMillis()
-        )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
+    if (showSubjectDialog) {
+        AlertDialog(
+            onDismissRequest = { showSubjectDialog = false },
+            title = { Text("Fach erstellen") },
+            text = {
+                OutlinedTextField(
+                    value = subjectNameInput,
+                    onValueChange = { subjectNameInput = it },
+                    label = { Text("Fachname") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        val date =
-                            SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(millis))
-                        selectedDate = date
-                        uploads = emptyList()
+                    val name = subjectNameInput.trim()
+                    if (name.isNotBlank()) {
+                        selectedSubject = name
+                        if (!folders.contains(name)) {
+                            folders = (listOf(name) + folders).sortedDescending()
+                        }
+                        folderFiles = folderFiles + (name to (folderFiles[name] ?: emptyList()))
+                        subjectNameInput = ""
                     }
-                    showDatePicker = false
-                }) { Text("OK") }
+                    showSubjectDialog = false
+                }) {
+                    Text("OK")
+                }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Abbrechen") }
+                TextButton(onClick = { showSubjectDialog = false }) { Text("Abbrechen") }
             }
-        ) {
-            DatePicker(state = datePickerState)
-        }
+        )
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
         SchoolHeader(
             title = "Materialien",
-            subtitle = if (selectedDate != null) "School / $selectedDate" else "School",
+            subtitle = if (selectedSubject != null) "School / $selectedSubject" else "School",
             onBack = {
                 when {
+                    showFullscreenSummary -> showFullscreenSummary = false
                     selectedFile != null -> selectedFile = null
-                    selectedDate != null -> selectedDate = null
+                    selectedSubject != null -> selectedSubject = null
                     else -> onBack()
                 }
             },
-            savedSets = savedSets,
+            savedSets = emptyList(),
             onOpenSet = onOpenSet,
-            onLearnDirectly = onLearnDirectly,
-            showDashboard = selectedDate == null,
+            recentMaterials = recentMaterialPreviews.ifEmpty {
+                folders.take(3).map { RecentMaterial(subject = it) }
+            },
+            onOpenMaterial = {
+                if (it.fileName != null) {
+                    selectedSubject = it.subject
+                    selectedFile = it.fileName
+                    persistRecentMaterial(it.subject, it.fileName)
+                } else {
+                    selectedSubject = it.subject
+                }
+            },
+            showDashboard = selectedSubject == null,
             paddingValues = paddingValues,
             actions = {
-                if (selectedDate != null) {
+                if (selectedSubject != null) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
                             .background(BgSurface)
-                            .clickable { showDatePicker = true }
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         Text(
-                            selectedDate!!,
+                            selectedSubject!!,
                             color = AccentViolet,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold
@@ -299,7 +360,7 @@ fun MaterialienScreen(
             }
         }
 
-        if (selectedDate == null) {
+        if (selectedSubject == null) {
             if (foldersLoading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = AccentViolet)
@@ -318,7 +379,7 @@ fun MaterialienScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            "Erstelle einen neuen Ordner via +",
+                            "Erstelle ein neues Fach via +",
                             color = TextTertiary,
                             fontSize = 13.sp
                         )
@@ -339,7 +400,10 @@ fun MaterialienScreen(
                                 .aspectRatio(1.1f)
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(BgSurface)
-                                .clickable { selectedDate = folder; uploads = emptyList() },
+                                .clickable {
+                                    selectedSubject = folder
+                                    uploads = emptyList()
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Column(
@@ -361,7 +425,7 @@ fun MaterialienScreen(
                 }
             }
             FloatingActionButton(
-                onClick = { showDatePicker = true },
+                onClick = { showSubjectDialog = true },
                 modifier = Modifier
                     .align(Alignment.End)
                     .padding(20.dp),
@@ -390,8 +454,8 @@ fun MaterialienScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                if (uploads.isEmpty() && (folderFiles[selectedDate]
-                        ?: emptyList()).isEmpty() && !folderFilesLoading
+                if (uploads.isEmpty() && (folderFiles[selectedSubject]
+                    ?: emptyList()).isEmpty() && !folderFilesLoading
                 ) {
                     item {
                         Box(
@@ -420,7 +484,7 @@ fun MaterialienScreen(
                         }
                     }
                 }
-                val allExisting = (folderFiles[selectedDate] ?: emptyList())
+                val allExisting = (folderFiles[selectedSubject] ?: emptyList())
                     .filter { name -> uploads.none { it.fileName == name } }
                 val imageFiles = allExisting.filter { isImageFile(it) }
                 val otherFiles = allExisting.filter { !isImageFile(it) }
@@ -440,9 +504,13 @@ fun MaterialienScreen(
                                 var url by remember(fileName) { mutableStateOf<String?>(null) }
 
                                 LaunchedEffect(fileName) {
-                                    url = Config.client.storage
-                                        .from("school")
-                                        .createSignedUrl("$selectedDate/$fileName", 10.minutes)
+                                    url = try {
+                                        Config.client.storage
+                                            .from("school")
+                                            .createSignedUrl("$selectedSubject/$fileName", 10.minutes)
+                                    } catch (_: Exception) {
+                                        null
+                                    }
                                 }
                                 Box(
                                     modifier = Modifier
@@ -450,10 +518,17 @@ fun MaterialienScreen(
                                         .height(156.dp)
                                         .clip(RoundedCornerShape(12.dp))
                                         .background(BgSurface)
-                                        .clickable { selectedFile = fileName }
+                                        .clickable {
+                                            selectedFile = fileName
+                                            selectedSubject?.let { persistRecentMaterial(it, fileName) }
+                                        }
                                 ) {
                                     AsyncImage(
-                                        model = url,
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(url)
+                                            .scale(Scale.FILL)
+                                            .precision(Precision.EXACT)
+                                            .build(),
                                         contentDescription = fileName,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier.fillMaxSize()
@@ -554,13 +629,13 @@ fun MaterialienScreen(
         }
     }
 
-    if (selectedFile != null && selectedDate != null) {
-        var fileUrl by remember(selectedFile, selectedDate) { mutableStateOf<String?>(null) }
-        var ocrText by remember(selectedFile, selectedDate) { mutableStateOf<String?>(null) }
-        var aiSummary by remember(selectedFile, selectedDate) { mutableStateOf<String?>(null) }
-        var summaryLoading by remember(selectedFile, selectedDate) { mutableStateOf(false) }
+    if (selectedFile != null && selectedSubject != null) {
+        var fileUrl by remember(selectedFile, selectedSubject) { mutableStateOf<String?>(null) }
+        var ocrText by remember(selectedFile, selectedSubject) { mutableStateOf<String?>(null) }
+        var aiSummary by remember(selectedFile, selectedSubject) { mutableStateOf<String?>(null) }
+        var summaryLoading by remember(selectedFile, selectedSubject) { mutableStateOf(false) }
 
-        val cacheKeyBase = "cache_${selectedDate}_${selectedFile}"
+        val cacheKeyBase = "cache_${selectedSubject}_${selectedFile}"
 
         suspend fun runOcrAndSummary(forceRefresh: Boolean = false) {
             if (!forceRefresh) {
@@ -577,7 +652,7 @@ fun MaterialienScreen(
             aiSummary = null
             try {
                 val signedUrl = Config.client.storage.from("school")
-                    .createSignedUrl("$selectedDate/$selectedFile", 10.minutes)
+                    .createSignedUrl("$selectedSubject/$selectedFile", 10.minutes)
                 val imgBytes = withContext(Dispatchers.IO) {
                     java.net.URL(signedUrl).readBytes()
                 }
@@ -632,9 +707,13 @@ fun MaterialienScreen(
             }
         }
 
-        LaunchedEffect(selectedFile, selectedDate) {
-            fileUrl = Config.client.storage.from("school")
-                .createSignedUrl("$selectedDate/$selectedFile", 10.minutes)
+        LaunchedEffect(selectedFile, selectedSubject) {
+            fileUrl = try {
+                Config.client.storage.from("school")
+                    .createSignedUrl("$selectedSubject/$selectedFile", 10.minutes)
+            } catch (_: Exception) {
+                null
+            }
             if (isImageFile(selectedFile!!)) runOcrAndSummary(forceRefresh = false)
         }
 
@@ -665,7 +744,7 @@ fun MaterialienScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            selectedDate!!,
+                            selectedSubject!!,
                             color = Color.White.copy(alpha = 0.45f),
                             fontSize = 12.sp
                         )
@@ -673,7 +752,11 @@ fun MaterialienScreen(
                 }
 
                 AsyncImage(
-                    model = fileUrl,
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(fileUrl)
+                        .scale(Scale.FIT)
+                        .precision(Precision.EXACT)
+                        .build(),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
@@ -716,7 +799,7 @@ fun MaterialienScreen(
                             ) {
                                 Text("📅", fontSize = 16.sp)
                                 Text(
-                                    "Hochgeladen am $selectedDate",
+                                    "Fach: $selectedSubject",
                                     color = TextPrimary,
                                     fontSize = 14.sp
                                 )
@@ -1135,4 +1218,18 @@ private fun compressToJpgIfImage(
 
     val jpgName = fileName.substringBeforeLast(".") + ".jpg"
     return out.toByteArray() to jpgName
+}
+
+private fun serializeRecentMaterial(material: RecentMaterial): String {
+    return listOf(material.subject, material.fileName.orEmpty(), material.lastUsed.toString())
+        .joinToString("\u001f")
+}
+
+private fun parseRecentMaterial(serialized: String): RecentMaterial? {
+    val parts = serialized.split("\u001f")
+    if (parts.size != 3) return null
+    val subject = parts[0]
+    val fileName = parts[1].ifBlank { null }
+    val lastUsed = parts[2].toLongOrNull() ?: return null
+    return RecentMaterial(subject = subject, fileName = fileName, lastUsed = lastUsed)
 }
