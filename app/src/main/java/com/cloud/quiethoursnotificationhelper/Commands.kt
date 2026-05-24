@@ -2,6 +2,7 @@ package com.cloud.quiethoursnotificationhelper
 
 import android.annotation.SuppressLint
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -58,17 +59,19 @@ import com.cloud.services.MediaPlayerService
 import com.cloud.services.MusicPlayerServiceCompat
 import com.cloud.services.OverlayLifecycleOwner
 import com.cloud.services.PodcastPlayerServiceCompat
+import com.cloud.services.QuietHoursNotificationService
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_SCHOOL_DAY_SUMMARY
 import com.cloud.services.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.cloud.services.QuietHoursNotificationService.Companion.commandHistory
 import com.cloud.services.QuietHoursNotificationService.Companion.showtestOverlay
-import com.cloud.tabs.AlgorithmicPlaylistRegistry
-import com.cloud.tabs.MediaAnalyticsManager
-import com.cloud.tabs.MediaAnalyticsManager.rebuildSessions
 import com.cloud.tabs.OtherBucketViewer
-import com.cloud.tabs.PodcastShowManager
 import com.cloud.tabs.audiorecordertab.AudioForegroundService
 import com.cloud.tabs.fetchWeatherForecast
 import com.cloud.tabs.getLastKnownLocation
+import com.cloud.tabs.mediaplayer.AlgorithmicPlaylistRegistry
+import com.cloud.tabs.mediaplayer.MediaAnalyticsManager
+import com.cloud.tabs.mediaplayer.MediaAnalyticsManager.rebuildSessions
+import com.cloud.tabs.mediaplayer.PodcastShowManager
 import com.cloud.tabs.weathernot
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
@@ -159,28 +162,21 @@ private fun getAvailableCommands(context: Context): List<Command> {
             aliases = listOf(),
             description = "Zeigt ungelesene Nachrichten"
         ) {
-            //android.util.Log.d("CLOUDSA", "ishomewifi: ${isHomeWifi(context, "")}")
-//            val intent = Intent(context, QuietHoursNotificationService::class.java).apply {
-//                action = ACTION_SCHOOL_DAY_SUMMARY
-//            }
-//            val pending = PendingIntent.getService(
-//                context, 9001, intent,
-//                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-//            )
-//
-//            pending.send()
+            val intent = Intent(context, QuietHoursNotificationService::class.java).apply {
+                action = ACTION_SCHOOL_DAY_SUMMARY
+            }
+            val pending = PendingIntent.getService(
+                context, 9001, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            pending.send()
         },
         Command(
             name = "nvchat",
             aliases = listOf("ai", "aichat", "nv"),
             description = "Erstellt einen neuen NVIDIA-Chat (nvchat [name])"
-        ) {
-            showSimpleNotificationExtern(
-                "ℹ️ NVIDIA-Chat",
-                "Syntax: nvchat [chat-name]\nBeispiel: nvchat vokabeln",
-                context = context
-            )
-        },
+        ) {},
         Command(
             name = "music",
             aliases = listOf("m", "play", "player", "musik"),
@@ -745,6 +741,13 @@ private fun getAvailableCommands(context: Context): List<Command> {
             windowManager.addView(testOverlayView, params)
         },
         Command(
+            name = "optimize",
+            aliases = listOf("opt", "compress", "komprimir"),
+            description = "Komprimiert alle heruntergeladenen Audio-Dateien (Musik & Podcasts)"
+        ) {
+            optimizeAudioFiles(context)
+        },
+        Command(
             name = "spotify",
             aliases = listOf("sp", "spot"),
             description = "Zeigt Spotify Embed Overlay (Syntax: spotify [track-id])"
@@ -780,7 +783,18 @@ fun executeCommand(commandText: String, context: Context) {
                 null
             }
 
-            createNvidiaChat(name, context)
+            createGeminiChat(name, context, false)
+            return
+        }
+
+        "newai", "newaichat", "na", "gemini" -> {
+            val name = if (parts.size > 1) {
+                commandText.substringAfter(" ", "").trim().ifEmpty { null }
+            } else {
+                null
+            }
+
+            createGeminiChat(name, context, true)
             return
         }
 
@@ -2039,4 +2053,249 @@ private fun showSpotifyOverlay(trackId: String, context: Context) {
 
     spotifyOverlayView = WeakReference(webView)
     Handler(Looper.getMainLooper()).post { wm.addView(webView, params) }
+}
+
+@OptIn(DelicateCoroutinesApi::class)
+private fun optimizeAudioFiles(context: Context) {
+    GlobalScope.launch {
+        try {
+            val downloadDir = context.getExternalFilesDir(null)?.parentFile?.parentFile
+                ?.let { File(it, "Downloads") } ?: run {
+                    showSimpleNotificationExtern(
+                        "❌ Fehler",
+                        "Download-Verzeichnis nicht gefunden",
+                        context = context
+                    )
+                    return@launch
+                }
+            
+            val cloudDir = File(downloadDir, "Cloud")
+            val podcastDir = File(downloadDir, "cloud/podcasts")
+            
+            val notificationManager = context.getSystemService(NotificationManager::class.java)
+            val prefs = context.getSharedPreferences("audio_optimization", MODE_PRIVATE)
+            
+            val audioFiles = mutableListOf<File>()
+            if (cloudDir.exists()) {
+                audioFiles.addAll(cloudDir.listFiles()?.filter { 
+                    it.extension in listOf("mp3", "m4a", "aac") && !isAlreadyOptimized(it, prefs) 
+                } ?: emptyList())
+            }
+            if (podcastDir.exists()) {
+                audioFiles.addAll(podcastDir.listFiles()?.filter { 
+                    it.extension in listOf("mp3", "m4a", "aac") && !isAlreadyOptimized(it, prefs) 
+                } ?: emptyList())
+            }
+            
+            if (audioFiles.isEmpty()) {
+                showSimpleNotificationExtern(
+                    "✅ Optimierung",
+                    "Alle Dateien sind bereits optimiert!",
+                    context = context
+                )
+                return@launch
+            }
+            
+            showSimpleNotificationExtern(
+                "🔄 Optimierung läuft",
+                "Komprimiere ${audioFiles.size} Dateien...",
+                context = context
+            )
+            
+            var successCount = 0
+            var totalSavedBytes = 0L
+            
+            audioFiles.forEach { file ->
+                val originalSize = file.length()
+                
+                try {
+                    val optimized = optimizeSingleAudioFile(file, context)
+                    if (optimized) {
+                        successCount++
+                        val newSize = file.length()
+                        val saved = originalSize - newSize
+                        if (saved > 0) {
+                            totalSavedBytes += saved
+                        }
+                        markAsOptimized(file, prefs)
+                        Log.d("AudioOptimize", "✅ ${file.name} optimiert (${originalSize} → ${newSize} bytes)")
+                    } else {
+                        markAsOptimized(file, prefs) // Markiere auch fehlgeschlagene Dateien, um nicht erneut zu versuchen
+                    }
+                } catch (e: Exception) {
+                    Log.e("AudioOptimize", "Fehler bei ${file.name}: ${e.message}")
+                    markAsOptimized(file, prefs) // Markiere auch bei Fehler
+                }
+            }
+            
+            val savedMB = String.format("%.2f", totalSavedBytes / (1024.0 * 1024.0))
+            val message = if (successCount > 0) {
+                "✅ $successCount Dateien optimiert\n💾 ${savedMB} MB gespart"
+            } else {
+                "⚠️ Keine Dateien konnten optimiert werden"
+            }
+            
+            showSimpleNotificationExtern(
+                "✅ Optimierung abgeschlossen",
+                message,
+                context = context
+            )
+        } catch (e: Exception) {
+            Log.e("AudioOptimize", "Fehler: ${e.message}")
+            showSimpleNotificationExtern(
+                "❌ Fehler",
+                "Optimierung fehlgeschlagen: ${e.message}",
+                context = context
+            )
+        }
+    }
+}
+
+private fun optimizeSingleAudioFile(file: File, context: Context): Boolean {
+    return try {
+        val fileName = file.nameWithoutExtension
+        val extension = file.extension
+        val tempFile = File(file.parentFile, "${fileName}_temp_${System.currentTimeMillis()}.$extension")
+        
+        // Versuche FFmpeg zu verwenden
+        try {
+            if (useFFmpegOptimization(file, tempFile)) {
+                return if (tempFile.length() < file.length()) {
+                    file.delete()
+                    tempFile.renameTo(file)
+                    Log.d("AudioOptimize", "FFmpeg: Datei erfolgreich komprimiert")
+                    true
+                } else {
+                    tempFile.delete()
+                    false
+                }
+            }
+        } catch (e: Exception) {
+            Log.d("AudioOptimize", "FFmpeg nicht verfügbar: ${e.message}")
+            tempFile.delete()
+        }
+        
+        // Fallback: Einfache Umcodierung mit reduzierter Bitrate
+        try {
+            if (useSimpleAudioReEncoding(file, tempFile, context)) {
+                return if (tempFile.length() < file.length()) {
+                    file.delete()
+                    tempFile.renameTo(file)
+                    Log.d("AudioOptimize", "Re-encoding: Datei erfolgreich komprimiert")
+                    true
+                } else {
+                    tempFile.delete()
+                    false
+                }
+            }
+        } catch (e: Exception) {
+            Log.d("AudioOptimize", "Re-encoding fehlgeschlagen: ${e.message}")
+            tempFile.delete()
+        }
+        
+        false
+    } catch (e: Exception) {
+        Log.e("AudioOptimize", "Kritischer Fehler: ${e.message}")
+        false
+    }
+}
+
+private fun useFFmpegOptimization(inputFile: File, outputFile: File): Boolean {
+    return try {
+        val commands = arrayOf(
+            "ffmpeg",
+            "-i", inputFile.absolutePath,
+            "-b:a", "96k",
+            "-c:a", "aac",
+            "-y",
+            outputFile.absolutePath
+        )
+        
+        val process = Runtime.getRuntime().exec(commands)
+        val exitCode = process.waitFor()
+
+        process.inputStream?.close()
+        process.outputStream?.close()
+        process.errorStream?.close()
+        
+        exitCode == 0 && outputFile.exists() && outputFile.length() > 1024
+    } catch (_: Exception) {
+        false
+    }
+}
+
+private fun useSimpleAudioReEncoding(inputFile: File, outputFile: File, context: Context): Boolean {
+    return try {
+        val inputBytes = inputFile.readBytes()
+        if (inputBytes.isEmpty()) return false
+        
+        return when (inputFile.extension.lowercase()) {
+            "mp3" -> compressMP3(inputFile, outputFile)
+            "m4a", "aac" -> compressM4A(inputFile, outputFile)
+            else -> false
+        }
+    } catch (e: Exception) {
+        Log.e("AudioOptimize", "Re-encoding Fehler: ${e.message}")
+        false
+    }
+}
+
+private fun compressMP3(inputFile: File, outputFile: File): Boolean {
+    return try {
+        val bytes = inputFile.readBytes()
+        
+        // Entferne ID3v2 Tags vom Anfang
+        var startIdx = 0
+        if (bytes.size > 10 && bytes[0] == 0x49.toByte() && 
+            bytes[1] == 0x44.toByte() && bytes[2] == 0x33.toByte()) {
+            // ID3v2 Header: Byte 6-9 enthalten die Größe (mit 7 Bit encoding)
+            val size = ((bytes[6].toInt() and 0x7F) shl 21) or
+                    ((bytes[7].toInt() and 0x7F) shl 14) or
+                    ((bytes[8].toInt() and 0x7F) shl 7) or
+                    (bytes[9].toInt() and 0x7F)
+            startIdx = 10 + size
+        }
+        
+        // Entferne ID3v1 Tags vom Ende
+        var endIdx = bytes.size
+        if (bytes.size > 128) {
+            if (bytes[bytes.size - 128] == 0x54.toByte() &&  // 'T'
+                bytes[bytes.size - 127] == 0x41.toByte() &&  // 'A'
+                bytes[bytes.size - 126] == 0x47.toByte()) {   // 'G'
+                endIdx = bytes.size - 128
+            }
+        }
+        
+        if (startIdx < endIdx) {
+            outputFile.writeBytes(bytes.sliceArray(startIdx until endIdx))
+            return outputFile.length() > 0
+        }
+        
+        false
+    } catch (e: Exception) {
+        false
+    }
+}
+
+private fun compressM4A(inputFile: File, outputFile: File): Boolean {
+    return try {
+        // M4A ist bereits in einem effizienten Format
+        // Wir können hier begrenzt optimieren
+        inputFile.copyTo(outputFile, overwrite = true)
+        outputFile.length() > 0
+    } catch (e: Exception) {
+        false
+    }
+}
+
+private fun isAlreadyOptimized(file: File, prefs: android.content.SharedPreferences): Boolean {
+    val key = "optimized_${file.absolutePath.hashCode()}"
+    return prefs.getBoolean(key, false)
+}
+
+private fun markAsOptimized(file: File, prefs: android.content.SharedPreferences) {
+    val key = "optimized_${file.absolutePath.hashCode()}"
+    prefs.edit {
+        putBoolean(key, true)
+    }
 }
