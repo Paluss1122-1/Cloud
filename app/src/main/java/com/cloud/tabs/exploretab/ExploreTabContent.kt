@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.view.MotionEvent
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +21,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -64,7 +62,6 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
     val exploredPercent by vm.exploredPercent.collectAsState()
     val tiles by vm.allTiles.collectAsState()
     val scope = rememberCoroutineScope()
-    var statsTapCount by remember { mutableIntStateOf(0) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var tileToDelete by remember { mutableStateOf<ExploredTile?>(null) }
 
@@ -119,22 +116,7 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                 StatCard(
                     label = "🗺️ Tiles",
                     value = tileCount.toString(),
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        statsTapCount++
-                        if (statsTapCount >= 5) {
-                            statsTapCount = 0
-                            scope.launch {
-                                val suspectCount = vm.countTilesOutsideWorldBounds()
-                                val message = if (suspectCount > 0) {
-                                    "Alte Explore-Daten mit anderer TILE_SIZE gefunden: $suspectCount Zeilen. Sie werden vermutlich nicht korrekt angezeigt."
-                                } else {
-                                    "Keine alten Explore-Daten mit falscher TILE_SIZE gefunden."
-                                }
-                                Toast.makeText(ctx, message, Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    }
+                    modifier = Modifier.weight(1f)
                 )
                 StatCard("🌍 Erkundet", "%.8f%%".format(exploredPercent), Modifier.weight(1f))
                 StatCard("📅 Heute", vm.todayCount.toString(), Modifier.weight(1f))

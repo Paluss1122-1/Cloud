@@ -13,8 +13,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 private const val EARTH_AREA_KM2 = 510_000_000.0
-// Aktuelle TILE_SIZE = 0.005 (~500m im Äquatorbereich)
-private val TILE_AREA_KM2 = (TILE_SIZE * 111.32) * (TILE_SIZE * 111.32)
+private const val TILE_AREA_KM2 = (TILE_SIZE * 111.32) * (TILE_SIZE * 111.32)
 
 class ExploreViewModel(app: Application) : AndroidViewModel(app) {
     val repo = ExploreRepository(app)
@@ -39,6 +38,5 @@ class ExploreViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    suspend fun countTilesOutsideWorldBounds(): Long = repo.countTilesOutsideWorldBounds()
     suspend fun deleteTile(x: Long, y: Long) = repo.deleteTile(x, y)
 }

@@ -32,29 +32,11 @@ interface ExploredTileDao {
     @Query("SELECT * FROM explored_tiles ORDER BY timestamp DESC")
     fun allFlow(): Flow<List<ExploredTile>>
 
-    @Query("SELECT * FROM explored_tiles WHERE tileX BETWEEN :minX AND :maxX AND tileY BETWEEN :minY AND :maxY")
-    suspend fun inViewport(minX: Long, maxX: Long, minY: Long, maxY: Long): List<ExploredTile>
-
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertTile(tile: ExploredTile): Long
 
     @Query("SELECT COUNT(*) FROM explored_tiles WHERE timestamp >= :since")
     suspend fun countSince(since: Long): Long
-
-    @Query(
-        "SELECT COUNT(*) FROM explored_tiles " +
-            "WHERE tileX * :currentSize < -90 OR tileX * :currentSize > 90 " +
-            "OR tileY * :currentSize < -180 OR tileY * :currentSize > 180"
-    )
-    suspend fun countOutOfWorldBounds(currentSize: Double): Long
-
-    @Query(
-        "SELECT * FROM explored_tiles " +
-            "WHERE tileX * :currentSize < -90 OR tileX * :currentSize > 90 " +
-            "OR tileY * :currentSize < -180 OR tileY * :currentSize > 180 " +
-            "LIMIT :limit"
-    )
-    suspend fun sampleOutOfWorldBounds(currentSize: Double, limit: Int): List<ExploredTile>
 
     @Query("DELETE FROM explored_tiles WHERE tileX = :x AND tileY = :y")
     suspend fun deleteTile(x: Long, y: Long)
