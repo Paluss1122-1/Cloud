@@ -30,7 +30,7 @@ import com.cloud.services.QuietHoursNotificationService.Companion.EXTRA_MESSAGE_
 import com.cloud.services.QuietHoursNotificationService.Companion.EXTRA_SENDER
 import com.cloud.services.QuietHoursNotificationService.Companion.NOTIFICATION_ID
 import com.cloud.services.QuietHoursNotificationService.Companion.readMessageIds
-import com.cloud.tabs.PodcastShowManager
+import com.cloud.tabs.mediaplayer.PodcastShowManager
 import org.json.JSONObject
 
 class QuietActionReceiver : BroadcastReceiver() {
