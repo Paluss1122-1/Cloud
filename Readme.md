@@ -1,7 +1,8 @@
 # Cloud (Android App)
 
 > [!TIP]
-> Cloud is compatible with Samsung OneUI 8.5 - 9:11 PM 5/19/2026
+> Cloud is compatible with Samsung OneUI 8.5  
+> <sub><sub>9:11 PM · 5/19/2026</sub></sub>
 
 This project is a powerful, multi-functional Android application with **ONE** goal: **Replacing** and **improving** third-party apps with a **single** app — **no tracking** (optional tracking for the Music Player for AI analysis, disabled by default), **optional server binding**, and **enhanced privacy**!
 
