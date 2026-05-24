@@ -80,10 +80,10 @@ import com.cloud.services.MediaPlayerService.Companion.ACTION_TOGGLE_REPEAT
 import com.cloud.services.OverlayLifecycleOwner
 import com.cloud.services.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.cloud.services.WhatsAppNotificationListener
-import com.cloud.tabs.AlgorithmicPlaylistRegistry
-import com.cloud.tabs.ListenSession
-import com.cloud.tabs.MediaAnalyticsManager
-import com.cloud.tabs.MediaAnalyticsManager.getSessions
+import com.cloud.tabs.mediaplayer.AlgorithmicPlaylistRegistry
+import com.cloud.tabs.mediaplayer.ListenSession
+import com.cloud.tabs.mediaplayer.MediaAnalyticsManager
+import com.cloud.tabs.mediaplayer.MediaAnalyticsManager.getSessions
 import com.cloud.tabs.aitab.ChatMessage
 import com.cloud.tabs.authenticator.PasswordDatabase
 import com.cloud.tabs.authenticator.TotpGenerator.generateTOTP
@@ -1282,31 +1282,6 @@ fun startMediaCommandListener(context: Context) {
             client.close()
             handleMediaCommand(context, JSONObject(sb.toString()))
         }
-}
-
-suspend fun sendNvidiaChatMessage(
-    history: List<WhatsAppNotificationListener.Companion.ChatMessage>,
-    userMessage: String
-): String? {
-    val messages = JSONArray().apply {
-        put(JSONObject().apply {
-            put("role", "system")
-            put(
-                "content",
-                "Du bist ein hilfreicher Chat-Assistent. Antworte kurz, klar und auf Deutsch und verwende keine Markdown Syntax."
-            )
-        })
-
-        history.forEach { msg ->
-            put(JSONObject().apply {
-                put("role", if (msg.isOwnMessage) "user" else "assistant")
-                put("content", msg.text)
-            })
-        }
-
-        put(JSONObject().apply { put("role", "user"); put("content", userMessage) })
-    }
-    return callNvidiaApi("meta/llama-3.1-8b-instruct", messages)
 }
 
 private fun handleMediaCommand(context: Context, json: JSONObject) {
