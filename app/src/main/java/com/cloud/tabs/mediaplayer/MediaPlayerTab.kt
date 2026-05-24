@@ -1,6 +1,6 @@
 @file:Suppress("AssignedValueIsNeverRead")
 
-package com.cloud.tabs
+package com.cloud.tabs.mediaplayer
 
 import android.app.Application
 import android.content.ContentResolver
@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.provider.MediaStore
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
@@ -56,10 +57,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
@@ -87,7 +93,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -161,7 +169,7 @@ fun formatMsMTB(ms: Long): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MediaTab(viewModel: MediaViewModel = viewModel()) {
+fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
     val state by viewModel.uiState.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
     val context = LocalContext.current
@@ -170,6 +178,14 @@ fun MediaTab(viewModel: MediaViewModel = viewModel()) {
 
     var showFullscreenPlayer by remember { mutableStateOf(false) }
     val nowPlaying by viewModel.nowPlaying.collectAsState()
+
+    BackHandler {
+        if (state.currentTab == MediaTab.DOWNLOADER) {
+            viewModel.setTab(MediaTab.HOME)
+            return@BackHandler
+        }
+        onBack()
+    }
 
     Box(
         modifier = Modifier
@@ -196,92 +212,162 @@ fun MediaTab(viewModel: MediaViewModel = viewModel()) {
                     )
                 }
             }
-        ) { innerPadding  ->
-            Crossfade(
-                targetState = state.currentTab,
-                label = "tab_transition"
-            ) { tab ->
-                when (tab) {
-                    MediaTab.HOME -> HomeTab(
-                        modifier = Modifier.padding(bottom=innerPadding.calculateBottomPadding()),
-                        state = state,
-                        onSongClick = { song -> playSong(context, song, state.songs) },
-                        onSongLongClick = { analyticsTarget = it },
-                        onEpisodeClick = { ep -> playEpisode(context, ep) },
-                        onRefresh = { viewModel.refresh() }
-                    )
-
-                    MediaTab.SEARCH -> SearchTab(
-                        modifier = Modifier.padding(bottom=innerPadding.calculateBottomPadding()),
-                        query = state.searchQuery,
-                        results = searchResults,
-                        onQueryChange = { viewModel.setSearchQuery(it) },
-                        onSongClick = { song -> playSong(context, song, state.songs) },
-                        onSongLongClick = { analyticsTarget = it },
-                        onEpisodeClick = { ep -> playEpisode(context, ep) },
-                        onShowClick = { viewModel.setTab(MediaTab.PODCASTS) }
-                    )
-
-                    MediaTab.PODCASTS -> LibraryTab(
-                        modifier = Modifier.padding(bottom=innerPadding.calculateBottomPadding()),
-                        state = state,
-                        onEpisodeClick = { ep -> playEpisode(context, ep) },
-                        onRefresh = { viewModel.refresh() }
-                    )
-
-                    MediaTab.MUSIC -> MusicTab(
-                        modifier = Modifier.padding(bottom=innerPadding.calculateBottomPadding()),
-                        state = state,
-                        onSongClick = { song -> playSong(context, song, state.songs) },
-                        onPlaylistCreated = {
-                            viewModel.viewModelScope.launch {
-                                delay(600)
-                                viewModel.refresh()
-                            }
-                        },
-                        viewModel = viewModel
-                    )
-                }
-            }
-        }
-
-        analyticsTarget?.let { target ->
-            AnalyticsBottomSheet(
-                target = target,
-                songAnalytics = state.songAnalytics,
-                podcastAnalytics = state.podcastAnalytics,
-                onDismiss = { analyticsTarget = null }
-            )
-        }
-
-        if (showFullscreenPlayer) {
-            var offsetY by remember { mutableFloatStateOf(0f) }
-            val dismissThreshold = 200f
-
-            Box(
+        ) { innerPadding ->
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .zIndex(10f)
-                    .offset { IntOffset(0, offsetY.toInt().coerceAtLeast(0)) }
-                    .draggable(
-                        orientation = Orientation.Vertical,
-                        state = rememberDraggableState { delta ->
-                            if (offsetY + delta >= 0f) offsetY += delta
-                        },
-                        onDragStopped = {
-                            if (offsetY > dismissThreshold) {
-                                showFullscreenPlayer = false
-                            }
-                            offsetY = 0f
-                        }
-                    )
+                    .statusBarsPadding()
             ) {
-                FullscreenPlayerContent(
-                    nowPlaying = nowPlaying,
-                    onDismiss = { showFullscreenPlayer = false },
-                    onAction = { action -> viewModel.playerAction(context, action) },
+                Box(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(Color.White.copy(alpha = 0.1f))
+                            .graphicsLayer {
+                                renderEffect = android.graphics.RenderEffect
+                                    .createBlurEffect(
+                                        20f,
+                                        20f,
+                                        android.graphics.Shader.TileMode.CLAMP
+                                    )
+                                    .asComposeRenderEffect()
+                            }
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 30.dp, vertical = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "🎶 Media Player",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 26.sp
+                        )
+
+                        Row {
+                            IconButton(onClick = {
+                                if (state.currentTab != MediaTab.DOWNLOADER) viewModel.setTab(MediaTab.DOWNLOADER)
+                                else viewModel.setTab(MediaTab.HOME)
+                            }) {
+                                Icon(
+                                    Icons.Default.Download,
+                                    contentDescription = "Open Downloader",
+                                    tint = Color.White
+                                )
+                            }
+
+                            IconButton(onClick = { }) {
+                                Icon(
+                                    Icons.Default.Mic,
+                                    contentDescription = "Open Recorder",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Crossfade(
+                    targetState = state.currentTab,
+                    label = "tab_transition",
                     modifier = Modifier.fillMaxSize()
+                ) { tab ->
+                    when (tab) {
+                        MediaTab.HOME -> HomeTab(
+                            modifier = Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding()),
+                            state = state,
+                            onSongClick = { song -> playSong(context, song, state.songs) },
+                            onSongLongClick = { analyticsTarget = it },
+                            onEpisodeClick = { ep -> playEpisode(context, ep) },
+                            onRefresh = { viewModel.refresh() }
+                        )
+
+                        MediaTab.SEARCH -> SearchTab(
+                            modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
+                            query = state.searchQuery,
+                            results = searchResults,
+                            onQueryChange = { viewModel.setSearchQuery(it) },
+                            onSongClick = { song -> playSong(context, song, state.songs) },
+                            onSongLongClick = { analyticsTarget = it },
+                            onEpisodeClick = { ep -> playEpisode(context, ep) },
+                            onShowClick = { viewModel.setTab(MediaTab.PODCASTS) }
+                        )
+
+                        MediaTab.PODCASTS -> LibraryTab(
+                            modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
+                            state = state,
+                            onEpisodeClick = { ep -> playEpisode(context, ep) },
+                            onRefresh = { viewModel.refresh() }
+                        )
+
+                        MediaTab.MUSIC -> MusicTab(
+                            modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
+                            state = state,
+                            onSongClick = { song -> playSong(context, song, state.songs) },
+                            onPlaylistCreated = {
+                                viewModel.viewModelScope.launch {
+                                    delay(600)
+                                    viewModel.refresh()
+                                }
+                            },
+                            viewModel = viewModel
+                        )
+
+                        MediaTab.DOWNLOADER -> {
+                            PodcastTab()
+                        }
+
+                        MediaTab.RECORDER -> {
+
+                        }
+                    }
+                }
+            }
+
+            analyticsTarget?.let { target ->
+                AnalyticsBottomSheet(
+                    target = target,
+                    songAnalytics = state.songAnalytics,
+                    podcastAnalytics = state.podcastAnalytics,
+                    onDismiss = { analyticsTarget = null }
                 )
+            }
+
+            if (showFullscreenPlayer) {
+                var offsetY by remember { mutableFloatStateOf(0f) }
+                val dismissThreshold = 200f
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(10f)
+                        .offset { IntOffset(0, offsetY.toInt().coerceAtLeast(0)) }
+                        .draggable(
+                            orientation = Orientation.Vertical,
+                            state = rememberDraggableState { delta ->
+                                if (offsetY + delta >= 0f) offsetY += delta
+                            },
+                            onDragStopped = {
+                                if (offsetY > dismissThreshold) {
+                                    showFullscreenPlayer = false
+                                }
+                                offsetY = 0f
+                            }
+                        )
+                ) {
+                    FullscreenPlayerContent(
+                        nowPlaying = nowPlaying,
+                        onDismiss = { showFullscreenPlayer = false },
+                        onAction = { action -> viewModel.playerAction(context, action) },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
         }
     }
@@ -322,7 +408,7 @@ private fun MediaBottomBar(currentTab: MediaTab, onTabSelected: (MediaTab) -> Un
         containerColor = BgSurface,
         contentColor = TextSecondary,
         tonalElevation = 0.dp,
-        windowInsets = WindowInsets(0,0,0,0)
+        windowInsets = WindowInsets(0, 10, 0, 20)
     ) {
         val tabs = listOf(
             Triple(MediaTab.HOME, "Home", "🏠"),
@@ -526,7 +612,12 @@ private fun HomeTab(
                                     .size(160.dp, 200.dp)
                                     .clip(RoundedCornerShape(20.dp))
                                     .background(
-                                        Brush.linearGradient(listOf(AccentViolet, AccentVioletDim))
+                                        Brush.linearGradient(
+                                            listOf(
+                                                AccentViolet,
+                                                AccentVioletDim
+                                            )
+                                        )
                                     )
                                     .clickable { detailUserPlaylist = playlist }
                                     .padding(16.dp)
@@ -943,12 +1034,14 @@ private fun LibraryTab(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        item { Row {
-            SectionHeader("Podcast-Shows")
-            Button(onClick = { PodcastShowManager.resetToDefault()}) {
-                Text("Reset")
+        item {
+            Row {
+                SectionHeader("Podcast-Shows")
+                Button(onClick = { PodcastShowManager.resetToDefault() }) {
+                    Text("Reset")
+                }
             }
-        } }
+        }
         items(state.shows) { show ->
             val eps = grouped[show] ?: emptyList()
             val stats = PodcastShowManager.getShowStats(show.id, eps)
@@ -2850,7 +2943,7 @@ data class MediaUiState(
     val currentTab: MediaTab = MediaTab.HOME
 )
 
-enum class MediaTab { HOME, SEARCH, PODCASTS, MUSIC }
+enum class MediaTab { HOME, SEARCH, PODCASTS, MUSIC, DOWNLOADER, RECORDER }
 
 data class SearchResults(
     val songs: List<MediaPlayerService.Song> = emptyList(),
@@ -3367,20 +3460,6 @@ object PodcastShowManager {
     private const val KEY_PATTERNS = "pattern_mappings"
 
     private val defaultShows = listOf(
-        PodcastShow(
-            id = "aeffchen",
-            name = "Äffchen mit Käffchen",
-            description = "Äffchen mit Käffchen Podcast",
-            matchPatterns = listOf("aeffchen", "äffchen", "kaeffchen", "käffchen"),
-            accentColorSeed = "aeffchen".hashCode()
-        ),
-        PodcastShow(
-            id = "heise",
-            name = "Heise Show",
-            description = "Heise Online Podcast",
-            matchPatterns = listOf("heise", "heiseshow"),
-            accentColorSeed = "heise".hashCode()
-        ),
         PodcastShow(
             id = "unassigned",
             name = "Sonstige",
