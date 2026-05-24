@@ -37,6 +37,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.ButtonDefaults.buttonColors
@@ -155,7 +156,6 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val isServer = vm.currentMode == "Server"
                     val isPrivate = prvt()
 
                     listOfNotNull(
@@ -193,11 +193,29 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                     var showedDiv = false
                                     vm.availableModels.forEach { model ->
                                         if (model.vision && !showedDiv && !vm.availableModels[0].vision) {
-                                            HorizontalDivider(
-                                                modifier = Modifier.padding(vertical = 16.dp),
-                                                thickness = 1.dp,
-                                                color = White.copy(alpha = 0.3f)
-                                            )
+                                            Row(
+                                                modifier = Modifier
+                                                    .padding(vertical = 16.dp)
+                                                    .fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                HorizontalDivider(
+                                                    modifier = Modifier.weight(1f),
+                                                    thickness = 1.dp,
+                                                    color = White.copy(alpha = 0.3f)
+                                                )
+
+                                                Text(
+                                                    text = "VISION MODELS:",
+                                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                                )
+
+                                                HorizontalDivider(
+                                                    modifier = Modifier.weight(1f),
+                                                    thickness = 1.dp,
+                                                    color = White.copy(alpha = 0.3f)
+                                                )
+                                            }
                                             showedDiv = true
                                         }
                                         val containerColorModel by animateColorAsState(
@@ -288,7 +306,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                     modifier = Modifier
                         .weight(1f)
                         .padding(horizontal = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(vm.history.size) { index ->
                         val msg = vm.history[index]
@@ -345,7 +363,14 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                                             keyboardActions = KeyboardActions(onGo = { vm.sendMessage() }),
                                             modifier = Modifier
-                                                .clip(RoundedCornerShape(14.dp))
+                                                .clip(
+                                                    RoundedCornerShape(
+                                                        topEnd = 10.dp,
+                                                        bottomEnd = 20.dp,
+                                                        bottomStart = 10.dp,
+                                                        topStart = 2.dp
+                                                    )
+                                                )
                                                 .zIndex(1000000f)
                                                 .combinedClickable(
                                                     onLongClick = {
@@ -363,7 +388,14 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                             fontSize = 15.sp,
                                             lineHeight = 21.sp,
                                             modifier = Modifier
-                                                .clip(RoundedCornerShape(14.dp))
+                                                .clip(
+                                                    RoundedCornerShape(
+                                                        topEnd = 2.dp,
+                                                        bottomEnd = 10.dp,
+                                                        bottomStart = 10.dp,
+                                                        topStart = 10.dp
+                                                    )
+                                                )
                                                 .background(MaterialTheme.colorScheme.primary)
                                                 .zIndex(1000000f)
                                                 .combinedClickable(
@@ -389,12 +421,12 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                             },
                                             onClick = {}
                                         )
-                                        .widthIn(max = 280.dp)
+                                        .widthIn(max = 380.dp)
                                         .padding(
                                             start = 8.dp,
                                             end = 40.dp
                                         ),
-                                    cornerRadius = 14.dp,
+                                    cornerRadius = RoundedCornerShape(2.dp, 10.dp, 10.dp, 10.dp),
                                     backgroundAlpha = 0.91f,
                                     borderWidth = 2.8.dp,
                                     neonColors = listOf(Color(0xFF00FFAA), Color(0xFF00CCFF)),
@@ -406,7 +438,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                         )
                                     ) {
                                         Text(
-                                            text = msg.text,
+                                            text = if (vm.isLoading && msg.text.isEmpty()) "..." else msg.text,
                                             color = Black,
                                             fontSize = 15.sp,
                                             lineHeight = 21.sp
@@ -422,24 +454,6 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                         }
                                     }
                                 }
-                            }
-                        }
-                    }
-
-                    if (vm.isLoading) {
-                        item {
-                            Box(
-                                modifier = Modifier.fillMaxWidth(),
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                Text(
-                                    text = "…",
-                                    color = White,
-                                    fontSize = 20.sp,
-                                    modifier = Modifier
-                                        .background(Color(0xFF444444), RoundedCornerShape(10.dp))
-                                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                                )
                             }
                         }
                     }
@@ -516,7 +530,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("+", color = White, fontSize = 16.sp)
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send message")
                     }
                 }
             }
