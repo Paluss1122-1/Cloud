@@ -60,12 +60,11 @@ import com.cloud.core.objects.Config.PLALISTS
 import com.cloud.core.objects.Config.PODCASTS
 import com.cloud.core.objects.reportError
 import com.cloud.quiethoursnotificationhelper.pushMediaStateToLaptop
-import com.cloud.quiethoursnotificationhelper.sendNvidiaChatMessageAITab
-import com.cloud.tabs.AlgorithmicPlaylistRegistry
-import com.cloud.tabs.FavoritesPlaylist
-import com.cloud.tabs.ListenSession
-import com.cloud.tabs.MediaAnalyticsManager
-import com.cloud.tabs.PodcastShowManager
+import com.cloud.tabs.mediaplayer.AlgorithmicPlaylistRegistry
+import com.cloud.tabs.mediaplayer.FavoritesPlaylist
+import com.cloud.tabs.mediaplayer.ListenSession
+import com.cloud.tabs.mediaplayer.MediaAnalyticsManager
+import com.cloud.tabs.mediaplayer.PodcastShowManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -509,13 +508,6 @@ class MediaPlayerService : MediaSessionService() {
         }
     }
 
-    private fun saveShowNameToPrefs(showId: String, name: String) {
-        showNameCache[showId] = name
-        getSharedPreferences("show_name_prefs", MODE_PRIVATE).edit {
-            putString(showId, name)
-        }
-    }
-
     private fun resolveShowDisplayName(podcast: Podcast): String {
         val showId = PodcastShowManager.resolveShowForEpisode(podcast.path, podcast.name)
         return showNameCache[showId]
@@ -567,9 +559,6 @@ class MediaPlayerService : MediaSessionService() {
 
         createMediaSession()
         startForeground(MEDIA_PLAYER, buildNotification(), getServiceForegroundType())
-        Handler(Looper.getMainLooper()).postDelayed({
-            refreshShowNamesViaNvidia()
-        }, 3000L)
         startPositionSaving()
         registerBluetoothReceiver()
 
@@ -2392,27 +2381,6 @@ class MediaPlayerService : MediaSessionService() {
 
         if (hasNotificationPermission())
             nm?.notify(PLALISTS + 50, summary)
-    }
-
-    private fun refreshShowNamesViaNvidia() {
-        val shows = PodcastShowManager.getShows()
-        if (shows.isEmpty()) return
-
-        appScope.launch {
-            shows.forEach { show ->
-                if (showNameCache.containsKey(show.id)) return@forEach
-                try {
-                    val result = sendNvidiaChatMessageAITab(
-                        history = emptyList(),
-                        userMessage = "Wie lautet der offizielle, vollständige deutsche Name des Podcasts \"${show.name}\"? Antworte NUR mit dem Namen, ohne Erklärung."
-                    )
-                    if (!result.isNullOrBlank()) {
-                        saveShowNameToPrefs(show.id, result.trim())
-                    }
-                } catch (_: Exception) {
-                }
-            }
-        }
     }
 
     @UnstableApi
