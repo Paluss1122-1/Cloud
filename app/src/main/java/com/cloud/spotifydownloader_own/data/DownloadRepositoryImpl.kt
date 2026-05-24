@@ -26,6 +26,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.io.ByteArrayOutputStream
+import java.net.URL
 import java.net.URLEncoder
 
 class DownloadRepositoryImpl(
@@ -77,10 +79,22 @@ class DownloadRepositoryImpl(
             val dataObject = jsonBody["data"]?.jsonObject
             val downloadUrl = dataObject?.get("downloadLink")?.jsonPrimitive?.content
             val trackTitle = dataObject?.get("title")?.jsonPrimitive?.content ?: "Track"
-            val artist = dataObject?.get("artists")?.jsonPrimitive?.content ?: "Unknown"
+            val artist = dataObject?.get("artist")?.jsonPrimitive?.content ?: "Unknown"
 
             if (downloadUrl == null) {
                 send(DownloadState.Error("Kein Download-Link erhalten"))
+                return@channelFlow
+            }
+
+            val album = dataObject?.get("album")?.jsonPrimitive?.content ?: ""
+            val coverUrl = dataObject?.get("cover")?.jsonPrimitive?.content
+
+            val safeArtist = artist.replace(" ", "_")
+            val safeTitle = trackTitle.replace(" ", "_")
+            val fileName = "${safeArtist}_${safeTitle}.mp3"
+
+            if (fileExistsInMediaStore(fileName)) {
+                send(DownloadState.Error("Datei existiert bereits lokal"))
                 return@channelFlow
             }
 
@@ -89,12 +103,11 @@ class DownloadRepositoryImpl(
             val channel: ByteReadChannel = audioResponse.bodyAsChannel()
             val contentLength = audioResponse.contentLength() ?: 0L
 
-            val ext = "m4a"
-            val mimeType = "audio/mp4"
+            val coverBytes: ByteArray? = coverUrl?.let {
+                try { URL(it).readBytes() } catch (e: Exception) { null }
+            }
 
-            val fileName = "${artist.replace(" ", "_")}_-_${trackTitle.replace(" ", "_")}.$ext"
-
-            saveFileFromChannel(fileName, channel, contentLength, mimeType) { progress ->
+            saveFileFromChannel(fileName, channel, contentLength, "audio/mpeg", trackId, trackTitle, artist, album, coverBytes) { progress ->
                 send(DownloadState.Downloading(20 + (progress * 0.7).toInt()))
             }
 
@@ -112,6 +125,11 @@ class DownloadRepositoryImpl(
         channel: ByteReadChannel,
         contentLength: Long,
         mimeType: String,
+        trackId: String,
+        title: String,
+        artist: String,
+        album: String,
+        coverBytes: ByteArray?,
         onProgress: suspend (Int) -> Unit
     ) {
         val resolver = context.contentResolver
@@ -119,14 +137,21 @@ class DownloadRepositoryImpl(
             put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
             put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Cloud")
+
+            // 1. NEU: Blockiert den Media-Scanner, solange wir schreiben!
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
 
-        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+        val uri = resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, contentValues)
             ?: throw Exception("Konnte MediaStore Eintrag nicht erstellen")
 
         try {
             withContext(Dispatchers.IO) {
                 resolver.openOutputStream(uri)?.use { outputStream ->
+                    // Unser eigenes Cover und Metadaten ganz an den Anfang schreiben
+                    val id3Tag = buildId3Tag(trackId, title, artist, album, coverBytes)
+                    outputStream.write(id3Tag)
+
                     val buffer = ByteArray(8192)
                     var totalBytesRead = 0L
                     var id3Skipped = false
@@ -139,6 +164,7 @@ class DownloadRepositoryImpl(
                         var writeOffset = 0
                         var writeLength = read
 
+                        // Überspringt den alten ID3 Tag des Streams
                         if (!id3Skipped) {
                             if (id3SkipBytes == 0 && read >= 10 &&
                                 buffer[0] == 0x49.toByte() &&
@@ -151,7 +177,6 @@ class DownloadRepositoryImpl(
                                         (buffer[9].toInt() and 0x7F)
                                 id3SkipBytes = 10 + tagSize
                             }
-
                             if (id3SkipBytes > 0) {
                                 val skip = minOf(id3SkipBytes, read)
                                 id3SkipBytes -= skip
@@ -173,11 +198,115 @@ class DownloadRepositoryImpl(
                     outputStream.flush()
                 }
             }
+
+            // 2. NEU: Datei ist fertig geschrieben und geschlossen.
+            // Jetzt heben wir die Sperre auf und geben dem System die harten Metadaten mit.
+            val updateValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.IS_PENDING, 0)
+                put(MediaStore.Audio.Media.TITLE, title)
+                put(MediaStore.Audio.Media.ARTIST, artist)
+                put(MediaStore.Audio.Media.ALBUM, album)
+            }
+            resolver.update(uri, updateValues, null, null)
+
         } catch (e: Exception) {
             resolver.delete(uri, null, null)
             throw e
         }
     }
 
+    private fun buildId3Tag(
+        trackId: String,
+        title: String,
+        artist: String,
+        album: String,
+        coverBytes: ByteArray?
+    ): ByteArray {
+        val frames = ByteArrayOutputStream()
+
+        // Hilfsfunktion für ID3v2.3 Frame-Größen (Normale 4-Byte Integer)
+        fun writeFrameHeader(id: String, size: Int) {
+            frames.write(id.toByteArray(Charsets.ISO_8859_1))
+            frames.write(byteArrayOf(
+                ((size shr 24) and 0xFF).toByte(),
+                ((size shr 16) and 0xFF).toByte(),
+                ((size shr 8) and 0xFF).toByte(),
+                (size and 0xFF).toByte(),
+                0x00, 0x00 // Flags
+            ))
+        }
+        fun encodeTextFrame(id: String, text: String) {
+            val textBytes = byteArrayOf(0x03) + text.toByteArray(Charsets.UTF_8) // 0x03 = UTF-8
+            writeFrameHeader(id, textBytes.size)
+            frames.write(textBytes)
+        }
+
+        // 1. Text-Frames schreiben
+        encodeTextFrame("TIT2", title)
+        encodeTextFrame("TPE1", artist)
+        encodeTextFrame("TALB", album)
+
+        // 2. UFID-Frame schreiben
+        val ufidOwner = "http://www.spotify.com".toByteArray(Charsets.ISO_8859_1)
+        val ufidId = "spotify:track:$trackId".toByteArray(Charsets.ISO_8859_1)
+        val ufidContent = ufidOwner + byteArrayOf(0x00) + ufidId
+        writeFrameHeader("UFID", ufidContent.size)
+        frames.write(ufidContent)
+
+        // 3. APIC-Frame (Cover) schreiben
+        // 3. APIC-Frame (Cover) schreiben
+        if (coverBytes != null) {
+            val mimeBytes = "image/jpeg".toByteArray(Charsets.ISO_8859_1)
+
+            val apicHeader = ByteArrayOutputStream().apply {
+                write(0x00) // 1. Text Encoding: ISO-8859-1
+                write(mimeBytes) // 2. MIME type (image/jpeg)
+                write(0x00) // 3. MIME type Terminator
+                write(0x03) // 4. Picture Type: Front Cover
+                write(0x00) // 5. Description (leerer String)
+                // Hinweis: Bei ISO-8859-1 reicht dieses eine 0x00-Byte gleichzeitig als leere Description + Terminator
+            }
+
+            val apicContent = apicHeader.toByteArray() + coverBytes
+            writeFrameHeader("APIC", apicContent.size)
+            frames.write(apicContent)
+        }
+
+        val framesBytes = frames.toByteArray()
+        val tagSize = framesBytes.size
+
+        // Der Haupt-Header (Ganz oben auf Dateiebene) benötigt bei ID3v2.3 IMMER Syncsafe!
+        fun toSyncsafe(n: Int) = byteArrayOf(
+            ((n shr 21) and 0x7F).toByte(),
+            ((n shr 14) and 0x7F).toByte(),
+            ((n shr 7) and 0x7F).toByte(),
+            (n and 0x7F).toByte()
+        )
+
+        // '0x03, 0x00' signalisiert dem Pixel: Das hier ist sauberes ID3v2.3
+        val header = byteArrayOf(0x49, 0x44, 0x33, 0x03, 0x00, 0x00) + toSyncsafe(tagSize)
+        return header + framesBytes
+    }
+
     private fun HttpResponse.contentLength(): Long? = headers["Content-Length"]?.toLongOrNull()
+
+    private suspend fun fileExistsInMediaStore(fileName: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val projection = arrayOf(MediaStore.MediaColumns._ID)
+            val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} = ?"
+            val selectionArgs = arrayOf(fileName)
+            val cursor = context.contentResolver.query(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                projection,
+                selection,
+                selectionArgs,
+                null
+            )
+            val exists = (cursor?.count ?: 0) > 0
+            cursor?.close()
+            exists
+        } catch (_: Exception) {
+            false
+        }
+    }
 }
