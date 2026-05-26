@@ -313,7 +313,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                         .padding(horizontal = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(vm.history.size) { index ->
+items(vm.history.size, key = { index -> "${vm.history[index].ts}_${vm.history[index].own}" }) { index ->
                         val msg = vm.history[index]
                         val isUser = msg.own
 
