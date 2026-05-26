@@ -302,14 +302,17 @@ fun VocabTab(paddingValues: PaddingValues) {
                     )
                 },
                 onLearnWithMix = { set ->
-                    val otherVokabeln = savedSets
-                        .filter { it.createdAt != set.createdAt }
-                        .flatMap { it.vokabeln }
-                        .shuffled()
-                    val mixCount = (5..10).random().coerceAtMost(otherVokabeln.size)
-                    val mixed = (set.vokabeln + otherVokabeln.take(mixCount)).shuffled()
-                    openSetAndUpdateLastUsed(set.copy(vokabeln = mixed))
-                },
+    val otherVokabeln = savedSets
+        .filter { it.createdAt != set.createdAt }
+        .flatMap { it.vokabeln }
+        .shuffled()
+    val mixCount = (5..10).random().coerceAtMost(otherVokabeln.size)
+    val mixed = (set.vokabeln + otherVokabeln.take(mixCount)).shuffled()
+    val reindexed = mixed.mapIndexed { i, v -> v.copy(id = i) }
+    activeSet = set
+    vokabeln = reindexed
+    screen = VokabelTabScreen.LEARN
+},
                 onDeleteSet = { set ->
                     saveWeakVokabeln(prefs, set.createdAt, emptyList())
                     savedSets = deleteVokabelSet(prefs, set)
