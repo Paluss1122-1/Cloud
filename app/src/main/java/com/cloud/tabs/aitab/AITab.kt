@@ -105,6 +105,13 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
         animationSpec = tween(400),
         label = "overlay"
     )
+    LaunchedEffect(vm.history.size) {
+    val sel = selectedMsg
+    if (sel != null && sel >= vm.history.size) {
+        selectedMsg = null
+        svm.fireEvent(false)
+    }
+    }
 
     val density = LocalDensity.current
     val screenHeightPx = LocalWindowInfo.current.containerSize.height
@@ -543,7 +550,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                         .alpha(alpha.value)
                 ) {
                     var message: ChatMessage? by remember { mutableStateOf(null) }
-                    message = selectedMsg?.let { vm.history[it] }
+                    message = selectedMsg?.let { vm.history.getOrNull(it) }
 
                     Box(
                         Modifier
@@ -617,16 +624,14 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(c())
                                     .clickable {
-                                        val clip = ClipData(
-                                            ClipDescription(
-                                                "AITab Message",
-                                                arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN)
-                                            ),
-                                            ClipData.Item(vm.history[selectedMsg!!].text)
-                                        )
-                                        cs.setPrimaryClip(clip)
-                                        selectedMsg = null
-                                        svm.fireEvent(false)
+    val text = message?.text ?: return@clickable
+    val clip = ClipData(
+        ClipDescription("AITab Message", arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN)),
+        ClipData.Item(text)
+    )
+    cs.setPrimaryClip(clip)
+    selectedMsg = null
+    svm.fireEvent(false)
                                     }
                                     .padding(horizontal = 16.dp, vertical = 8.dp)
                             ) {
