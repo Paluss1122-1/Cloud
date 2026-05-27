@@ -178,6 +178,7 @@ fun VocabTab(paddingValues: PaddingValues) {
     var currentWidths by remember { mutableStateOf<List<WidthState>>(emptyList()) }
     var showMergeDialog by remember { mutableStateOf(false) }
     var extractionJob by remember { mutableStateOf<Job?>(null) }
+    var comingFromScan by remember { mutableStateOf(false) }
     var rawRecentMaterials by remember {
         mutableStateOf(
             materialPrefs.getString("recent_materials", null)
@@ -245,6 +246,7 @@ fun VocabTab(paddingValues: PaddingValues) {
                     savedSets = saveVokabelSet(prefs, set)
                     showSaveDialog = false
                     saveNameInput = ""
+                    comingFromScan = false
                     activeSet?.let { oldSet ->
                         val oldId = oldSet.createdAt.toInt()
                         val newId = set.createdAt.toInt()
@@ -302,17 +304,17 @@ fun VocabTab(paddingValues: PaddingValues) {
                     )
                 },
                 onLearnWithMix = { set ->
-    val otherVokabeln = savedSets
-        .filter { it.createdAt != set.createdAt }
-        .flatMap { it.vokabeln }
-        .shuffled()
-    val mixCount = (5..10).random().coerceAtMost(otherVokabeln.size)
-    val mixed = (set.vokabeln + otherVokabeln.take(mixCount)).shuffled()
-    val reindexed = mixed.mapIndexed { i, v -> v.copy(id = i) }
-    activeSet = set
-    vokabeln = reindexed
-    screen = VokabelTabScreen.LEARN
-},
+                    val otherVokabeln = savedSets
+                        .filter { it.createdAt != set.createdAt }
+                        .flatMap { it.vokabeln }
+                        .shuffled()
+                    val mixCount = (5..10).random().coerceAtMost(otherVokabeln.size)
+                    val mixed = (set.vokabeln + otherVokabeln.take(mixCount)).shuffled()
+                    val reindexed = mixed.mapIndexed { i, v -> v.copy(id = i) }
+                    activeSet = set
+                    vokabeln = reindexed
+                    screen = VokabelTabScreen.LEARN
+                },
                 onDeleteSet = { set ->
                     saveWeakVokabeln(prefs, set.createdAt, emptyList())
                     savedSets = deleteVokabelSet(prefs, set)
@@ -347,6 +349,7 @@ fun VocabTab(paddingValues: PaddingValues) {
                 onExtract = {
                     bitmap?.let { bmp ->
                         isExtracting = true
+                        comingFromScan = true
                         errorMessage = null
                         extractionJob = scope.launch {
                             try {
@@ -410,6 +413,7 @@ fun VocabTab(paddingValues: PaddingValues) {
                 vokabeln = vokabeln,
                 setName = activeSet?.name,
                 isExtracting = isExtracting,
+                fromScan = comingFromScan,
                 onVokabelnChanged = { vokabeln = it },
                 onStartLearning = { screen = VokabelTabScreen.LEARN },
                 onSave = { saveNameInput = activeSet?.name ?: ""; showSaveDialog = true },
@@ -1068,6 +1072,7 @@ fun ReviewScreen(
     vokabeln: List<Vokabel>,
     setName: String?,
     isExtracting: Boolean = false,
+    fromScan: Boolean = false,
     onVokabelnChanged: (List<Vokabel>) -> Unit,
     onStartLearning: (() -> Unit)? = null,
     onSave: () -> Unit,
@@ -1097,7 +1102,7 @@ fun ReviewScreen(
 
     fun calculateChanges(original: List<Vokabel>, current: List<Vokabel>): Int {
         var changeCount = 0
-        if (isExtracting) return 0
+        if (isExtracting || fromScan) return 0
 
         // Zähle gelöschte Vokabeln
         original.forEach { origVokabel ->
@@ -1121,7 +1126,7 @@ fun ReviewScreen(
     }
 
     val changes =
-        if (isExtracting) 0
+        if (isExtracting || fromScan) 0
         else calculateChanges(initVocabs, currentVokabeln)
 
     var showCancelDialog by remember { mutableStateOf(false) }
@@ -1204,7 +1209,7 @@ fun ReviewScreen(
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 Text(
-                    if (changes > 0) "Bestätigen ($changes)" else if (checkExist) "Umbenennen" else "💾 Speichern",
+                    if (changes > 0) "Bestätigen ($changes)" else if (checkExist && !fromScan) "Umbenennen" else "💾 Speichern",
                     color = if (currentVokabeln.isNotEmpty()) TextPrimary else TextTertiary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
