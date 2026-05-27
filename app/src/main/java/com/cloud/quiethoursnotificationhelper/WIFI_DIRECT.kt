@@ -453,14 +453,19 @@ data class AiResponseEntry(
 )
 
 fun startTriggerListenerIfHomeWifi(context: Context) {
+    // Trigger Listener immer starten
+    startTriggerListener(context)
+    registerWifiReconnectReceiver(context)
+    
+    // Location Status prüfen (aber Listener wird nicht blockiert wenn es fehlschlägt)
     checkIfNearLocation(context) { atHome ->
         ConnectionGuard.updateLocationStatus(atHome)
-        startTriggerListener(context)
-        registerWifiReconnectReceiver(context)
-        syncScope.launch {
-            val ip = fetchIpFromSupabase()
-            if (!ip.isNullOrEmpty()) laptopIp = ip
-        }
+    }
+    
+    // IP vom Laptop holen
+    syncScope.launch {
+        val ip = fetchIpFromSupabase()
+        if (!ip.isNullOrEmpty()) laptopIp = ip
     }
 }
 
@@ -516,6 +521,13 @@ fun registerWifiReconnectReceiver(context: Context) {
             pendingSyncJob?.cancel()
             if (isLaptopConnected) {
                 stopAllSyncServices(context)
+            }
+            // Nach Connection Verlust: Trigger Listener wieder starten
+            syncScope.launch {
+                delay(2000)
+                if (triggerJob?.isActive != true) {
+                    startTriggerListener(context)
+                }
             }
         }
 
@@ -1580,7 +1592,8 @@ fun checkIfNearLocation(
     if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
         != PackageManager.PERMISSION_GRANTED
     ) {
-        callback(false)
+        // Wenn keine Permission: Default zu zuhause (true)
+        callback(true)
         return
     }
 
@@ -1591,8 +1604,13 @@ fun checkIfNearLocation(
         .setMaxUpdates(1)
         .build()
 
+    var callbackCalled = false
+    
     val locationCallback = object : LocationCallback() {
         override fun onLocationResult(locationResult: LocationResult) {
+            if (callbackCalled) return
+            callbackCalled = true
+            
             val location = locationResult.lastLocation
             if (location != null) {
                 callback(
@@ -1604,15 +1622,21 @@ fun checkIfNearLocation(
                     ) <= radiusMeters
                 )
             } else {
-                callback(false)
+                // Wenn Location null: Default zu zuhause (true)
+                callback(true)
             }
             fusedLocationClient.removeLocationUpdates(this)
         }
     }
 
     syncScope.launch(Dispatchers.Main) {
-        delay(10000)
-        runCatching { fusedLocationClient.removeLocationUpdates(locationCallback) }
+        delay(8000)
+        if (!callbackCalled) {
+            callbackCalled = true
+            // Timeout: Default zu zuhause (true)
+            callback(true)
+            runCatching { fusedLocationClient.removeLocationUpdates(locationCallback) }
+        }
     }
 
     @SuppressLint("MissingPermission")
