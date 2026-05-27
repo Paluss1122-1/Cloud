@@ -1614,8 +1614,8 @@ fun LearnScreen(
                             .clickable {
                                 wrong++
                                 wrongVokabeln = wrongVokabeln + shuffled[currentIndex]
-                                showAnswer = false
                                 currentIndex++
+                                showAnswer = false
                             }
                             .padding(vertical = 16.dp),
                         contentAlignment = Alignment.Center
@@ -1646,8 +1646,8 @@ fun LearnScreen(
                             .clickable {
                                 correct++
                                 correctVokabeln = correctVokabeln + shuffled[currentIndex]
-                                showAnswer = false
                                 currentIndex++
+                                showAnswer = false
                             }
                             .padding(vertical = 16.dp),
                         contentAlignment = Alignment.Center
