@@ -356,8 +356,7 @@ fun VocabTab(paddingValues: PaddingValues) {
                                 val bytes = ByteArrayOutputStream().also {
                                     bmp.compress(Bitmap.CompressFormat.JPEG, 90, it)
                                 }.toByteArray()
-                                val sent =
-                                    if (!Config.realDevice) false else trySendImageToLaptop(bytes)
+                                val sent = if (!Config.realDevice) false else trySendImageToLaptop(bytes)
                                 if (sent) {
                                     val result = flashcardVokabelnFlow.first { it != null }
                                     vokabeln = result ?: emptyList()
@@ -1204,7 +1203,8 @@ fun ReviewScreen(
                         else Brush.horizontalGradient(listOf(BgCard, BgCard))
                     )
                     .clickable(enabled = currentVokabeln.isNotEmpty() && !isExtracting) {
-                        if (changes > 0) onVokabelnChanged(currentVokabeln) else onSave()
+                        if (changes > 0) onVokabelnChanged(currentVokabeln)
+                        else { onVokabelnChanged(currentVokabeln); onSave() }
                     }
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
