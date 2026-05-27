@@ -2675,9 +2675,8 @@ class MediaPlayerService : MediaSessionService() {
                 retriever.setDataSource(resolvedUrl, hashMapOf())
                 episodeTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: ""
                 showName = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: ""
-                val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: ""
                 retriever.release()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
             }
 
             Pair(episodeTitle, showName)
@@ -2692,7 +2691,7 @@ class MediaPlayerService : MediaSessionService() {
             val location = conn.getHeaderField("Location")
             conn.disconnect()
             location ?: url
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             url
         }
     }
