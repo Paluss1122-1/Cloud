@@ -50,6 +50,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cloud.core.objects.Config.PODCASTINDEX_API_KEY
 import com.cloud.core.objects.Config.PODCASTINDEX_API_SECRET
+import com.cloud.core.ui.AlertDialogCloud
 import com.cloud.core.ui.FeedCard
 import com.cloud.services.MediaPlayerService
 import com.cloud.spotifydownloader_own.data.DownloadRepositoryImpl
@@ -91,7 +92,7 @@ sealed class SearchResult {
         val spotifyUrl: String,
         val coverUrl: String = "",
     ) : SearchResult()
-    
+
     data class PodcastResult(
         val feed: PodcastFeed
     ) : SearchResult()
@@ -134,6 +135,7 @@ fun PodcastTab() {
     var episodes by remember { mutableStateOf<Map<String, List<Episode>>>(emptyMap()) }
     var loadingEpisodes by remember { mutableStateOf<String?>(null) }
     var downloadingUrl by remember { mutableStateOf<String?>(null) }
+    var feedToUnfav by remember { mutableStateOf<PodcastFeed?>(null) }
 
     suspend fun search(q: String) {
         if (q.isBlank()) return
@@ -295,6 +297,20 @@ fun PodcastTab() {
     }
 
     var favorites by remember { mutableStateOf(loadFavs()) }
+
+    feedToUnfav?.let { feed ->
+        AlertDialogCloud(
+            onConfirm = {
+                favorites = favorites - feed.feedUrl
+                saveFavs(favorites)
+                feedToUnfav = null
+            },
+            onDismiss = { feedToUnfav = null },
+            title = "Aus Favoriten entfernen?",
+            text = "\"${feed.title}\" wird aus deinen Lieblings-Podcasts entfernt.",
+            confirmText = "Entfernen"
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -466,10 +482,7 @@ fun PodcastTab() {
                                 if (isExpanded) expandedFeedUrl = null
                                 else { expandedFeedUrl = feed.feedUrl; scope.launch { loadEpisodes(feed.feedUrl) } }
                             },
-                            onToggleFav = {
-                                favorites = favorites - feed.feedUrl
-                                saveFavs(favorites)
-                            },
+                            onToggleFav = { feedToUnfav = feed },
                             onDownload = { url, title -> downloadEpisode(url, title, feed.title) },
                             onStream = { url -> streamEpisode(url) }
                         )
@@ -493,9 +506,11 @@ fun PodcastTab() {
                                     else { expandedFeedUrl = feed.feedUrl; scope.launch { loadEpisodes(feed.feedUrl) } }
                                 },
                                 onToggleFav = {
-                                    favorites = if (favorites.containsKey(feed.feedUrl)) favorites - feed.feedUrl
-                                    else favorites + (feed.feedUrl to feed)
-                                    saveFavs(favorites)
+                                    if (favorites.containsKey(feed.feedUrl)) feedToUnfav = feed
+                                    else {
+                                        favorites = favorites + (feed.feedUrl to feed)
+                                        saveFavs(favorites)
+                                    }
                                 },
                                 onDownload = { url, title -> downloadEpisode(url, title, feed.title) },
                                 onStream = { url -> streamEpisode(url) }
