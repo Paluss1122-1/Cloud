@@ -2820,6 +2820,8 @@ class MediaPlayerService : MediaSessionService() {
         )
         podcastSessionStartedAt = 0L
     }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {}
 }
 
 object MusicPlayerServiceCompat {
