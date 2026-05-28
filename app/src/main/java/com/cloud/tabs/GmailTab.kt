@@ -1,6 +1,7 @@
 package com.cloud.tabs
 
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import com.cloud.core.objects.Config.MAIL_NOTIFY_PORT
+import com.cloud.core.objects.prvt
 import com.cloud.quiethoursnotificationhelper.laptopIp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -77,7 +79,8 @@ private fun saveServerIp(ip: String) {
 }
 
 private fun loadLocalSummaryCache(context: android.content.Context): MutableMap<String, String> {
-    val prefs = context.getSharedPreferences("email_summary_cache", android.content.Context.MODE_PRIVATE)
+    val prefs =
+        context.getSharedPreferences("email_summary_cache", android.content.Context.MODE_PRIVATE)
     return prefs.all.mapNotNull { (k, v) -> (v as? String)?.let { k to it } }.toMap().toMutableMap()
 }
 
@@ -109,16 +112,18 @@ private suspend fun fetchEmailsStreaming(
                     if (obj.optString("type") == "summary_update") {
                         onSummaryUpdate(obj.getString("id"), obj.getString("summary"))
                     } else {
-                        onEmailReceived(EmailItem(
-                            id = obj.optString("id"),
-                            subject = obj.optString("subject", "(Kein Betreff)"),
-                            from = obj.optString("from", "Unbekannt"),
-                            date = obj.optString("date", ""),
-                            timestamp = obj.optLong("timestamp", 0L),
-                            body = obj.optString("body", ""),
-                            summary = obj.optString("summary", "").takeIf { it.isNotBlank() },
-                            hasSummary = obj.optBoolean("has_summary", false),
-                        ))
+                        onEmailReceived(
+                            EmailItem(
+                                id = obj.optString("id"),
+                                subject = obj.optString("subject", "(Kein Betreff)"),
+                                from = obj.optString("from", "Unbekannt"),
+                                date = obj.optString("date", ""),
+                                timestamp = obj.optLong("timestamp", 0L),
+                                body = obj.optString("body", ""),
+                                summary = obj.optString("summary", "").takeIf { it.isNotBlank() },
+                                hasSummary = obj.optBoolean("has_summary", false),
+                            )
+                        )
                     }
                 } catch (e: Exception) {
                     Log.e("CLOUDSA", "Stream parse error: $e")
@@ -135,6 +140,10 @@ private suspend fun fetchEmailsStreaming(
 @Composable
 fun GmailTabContent() {
     val context = androidx.compose.ui.platform.LocalContext.current
+    if (!prvt()) {
+        Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+        return
+    }
     val scope = rememberCoroutineScope()
 
     val localSummaryCache = remember { loadLocalSummaryCache(context) }
@@ -146,7 +155,9 @@ fun GmailTabContent() {
     var showIpDialog by remember { mutableStateOf(serverIp.isBlank()) }
 
     fun loadEmails() {
-        if (serverIp.isBlank()) { showIpDialog = true; return }
+        if (serverIp.isBlank()) {
+            showIpDialog = true; return
+        }
         scope.launch {
             isLoading = true
             errorMsg = null
@@ -161,8 +172,13 @@ fun GmailTabContent() {
                             localSummaryCache[emailItem.id] = emailItem.summary
                             emailItem
                         }
+
                         localSummaryCache.containsKey(emailItem.id) ->
-                            emailItem.copy(summary = localSummaryCache[emailItem.id], hasSummary = true)
+                            emailItem.copy(
+                                summary = localSummaryCache[emailItem.id],
+                                hasSummary = true
+                            )
+
                         else -> emailItem
                     }
                     withContext(Dispatchers.Main) { emails = emails + enriched }
@@ -171,7 +187,12 @@ fun GmailTabContent() {
                     saveLocalSummary(context, id, summary)
                     localSummaryCache[id] = summary
                     withContext(Dispatchers.Main) {
-                        emails = emails.map { if (it.id == id) it.copy(summary = summary, hasSummary = true) else it }
+                        emails = emails.map {
+                            if (it.id == id) it.copy(
+                                summary = summary,
+                                hasSummary = true
+                            ) else it
+                        }
                     }
                 }
             )
@@ -198,9 +219,16 @@ fun GmailTabContent() {
         )
     }
 
-    Box(Modifier.fillMaxSize().background(Color(0xFF111114))) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xFF111114))
+    ) {
         when {
-            selectedEmail != null -> EmailDetailView(email = selectedEmail!!, onBack = { selectedEmail = null })
+            selectedEmail != null -> EmailDetailView(
+                email = selectedEmail!!,
+                onBack = { selectedEmail = null })
+
             else -> Column(Modifier.fillMaxSize()) {
                 EmailTopBar(
                     cacheInfo = if (isLoading) "Lädt... (${emails.size} bisher)" else "${emails.size} Emails",
@@ -215,7 +243,9 @@ fun GmailTabContent() {
                     else -> {
                         if (isLoading) {
                             LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth().height(2.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(2.dp),
                                 color = Color(0xFF4285F4),
                                 trackColor = Color.Transparent
                             )
