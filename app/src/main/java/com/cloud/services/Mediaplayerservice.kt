@@ -112,7 +112,6 @@ class MediaPlayerService : MediaSessionService() {
 
         const val ACTION_SWITCH_TO_MUSIC = "com.cloud.ACTION_SWITCH_TO_MUSIC"
         const val ACTION_SWITCH_TO_PODCAST = "com.cloud.ACTION_SWITCH_TO_PODCAST"
-        const val ACTION_FLUSH_ACTIVE_SESSIONS = "com.cloud.ACTION_FLUSH_ACTIVE_SESSIONS"
 
         private const val ACTION_NOTIFICATION_DELETED = "ACTION_NOTIFICATION_DELETED"
 
@@ -397,14 +396,6 @@ class MediaPlayerService : MediaSessionService() {
                 putExtra(EXTRA_STREAM_URL, url)
             }
         )
-
-        fun flushActiveSessions(context: Context) {
-            context.startService(
-                Intent(context, MediaPlayerService::class.java).apply {
-                    action = ACTION_FLUSH_ACTIVE_SESSIONS
-                }
-            )
-        }
     }
 
     data class Song(val uri: Uri, val name: String, val path: String)
@@ -596,11 +587,6 @@ class MediaPlayerService : MediaSessionService() {
         }
 
         when (val action = intent?.action) {
-
-            ACTION_FLUSH_ACTIVE_SESSIONS -> {
-                flushActiveSessionsInternal()
-                START_STICKY
-            }
 
             ACTION_SWITCH_TO_MUSIC -> switchToMusic()
             ACTION_SWITCH_TO_PODCAST -> switchToPodcast()
@@ -2556,36 +2542,6 @@ class MediaPlayerService : MediaSessionService() {
             handleAudioFocus: Boolean
         ) {
         }
-    }
-
-    private fun flushActiveMusicSession() {
-        if (isPlayingMusic && songStartedAt > 0L && currentSongName.isNotEmpty()) {
-            val listenedMs = System.currentTimeMillis() - songStartedAt
-            if (listenedMs > 3000) {
-                MediaAnalyticsManager.addSession(
-                    ListenSession(
-                        label = currentSongName,
-                        type = "music",
-                        listenedMs = listenedMs,
-                        startedAt = songStartedAt,
-                        repeatCount = consecutiveRepeatCount.coerceAtLeast(1)
-                    )
-                )
-            }
-            songStartedAt = 0L
-            consecutiveRepeatCount = 0
-        }
-    }
-
-    private fun flushActivePodcastSession() {
-        if (isPlayingPodcast) {
-            savePodcastSession()
-        }
-    }
-
-    private fun flushActiveSessionsInternal() {
-        flushActiveMusicSession()
-        flushActivePodcastSession()
     }
 
     private fun savePodcastSession() {
