@@ -427,7 +427,7 @@ fun LandingPage(
     LaunchedEffect(reloadTrigger) {
         recentTabs = loadRecentTabs(context)
     }
-    val allTabsSorted = remember { MenuItem.entries.sortedBy { it.title } }
+    val allTabsSorted = remember { MenuItem.entries.filter {if (!prvt()) {it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD} else true}.sortedBy { it.title } }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     val neonOrange = c()
     val neonGlow =  when (currentHour) {
