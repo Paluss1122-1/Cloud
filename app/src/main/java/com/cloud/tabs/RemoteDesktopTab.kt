@@ -15,6 +15,7 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.ImageView
+import android.widget.Toast
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -92,6 +93,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.cloud.core.objects.prvt
 import com.cloud.core.ui.Cloud
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -579,9 +581,13 @@ class RemoteDesktopViewModel : ViewModel() {
 
 @Composable
 fun RemoteDesktopTabContent() {
+    val context = LocalContext.current
+    if (!prvt()) {
+        Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+        return
+    }
     val viewModel: RemoteDesktopViewModel = viewModel()
     val state by viewModel.state.collectAsState()
-    val context = LocalContext.current
 
     val alpha = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
