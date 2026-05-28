@@ -86,8 +86,8 @@ class DownloadRepositoryImpl(
                 return@channelFlow
             }
 
-            val album = dataObject?.get("album")?.jsonPrimitive?.content ?: ""
-            val coverUrl = dataObject?.get("cover")?.jsonPrimitive?.content
+            val album = dataObject["album"]?.jsonPrimitive?.content ?: ""
+            val coverUrl = dataObject["cover"]?.jsonPrimitive?.content
 
             val safeArtist = artist.replace(" ", "_")
             val safeTitle = trackTitle.replace(" ", "_")
@@ -104,7 +104,7 @@ class DownloadRepositoryImpl(
             val contentLength = audioResponse.contentLength() ?: 0L
 
             val coverBytes: ByteArray? = coverUrl?.let {
-                try { URL(it).readBytes() } catch (e: Exception) { null }
+                try { URL(it).readBytes() } catch (_: Exception) { null }
             }
 
             saveFileFromChannel(fileName, channel, contentLength, "audio/mpeg", trackId, trackTitle, artist, album, coverBytes) { progress ->
