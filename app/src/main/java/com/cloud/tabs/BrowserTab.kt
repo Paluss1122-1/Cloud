@@ -123,9 +123,6 @@ fun BrowserTabContent(
             QuickLinkButton("Gmail", Color(0xFFFFA500)) {
                 loadAndOpenUrl("https://www.gmail.com")
             }
-            QuickLinkButton("Disney", Color(0xFF5900FF)) {
-                loadAndOpenUrl("https://www.disneyplus.com/de-de/home?")
-            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
