@@ -3,6 +3,7 @@ package com.cloud.quiethoursnotificationhelper
 import android.Manifest
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.PendingIntent.getBroadcast
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -19,7 +20,9 @@ import com.cloud.core.functions.canNotify
 import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.core.objects.Config.cms
 import com.cloud.core.objects.reportError
+import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_MARK_PARTS_READ
 import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_MESSAGE_SENT
+import com.cloud.services.QuietHoursNotificationService.Companion.EXTRA_MESSAGE_ID
 import com.cloud.services.QuietHoursNotificationService.Companion.EXTRA_SENDER
 import com.cloud.services.QuietHoursNotificationService.Companion.MAX_MESSAGES_PER_CONTACT
 import com.cloud.services.QuietHoursNotificationService.Companion.isSupportedMessenger
@@ -51,7 +54,7 @@ private fun buildReplyAction(
     notificationId: Int,
     context: Context
 ): NotificationCompat.Action {
-    val pi = PendingIntent.getBroadcast(
+    val pi = getBroadcast(
         context, notificationId,
         Intent(ACTION_MESSAGE_SENT).apply {
             putExtra(EXTRA_SENDER, key)
@@ -98,7 +101,7 @@ private fun postChatNotification(key: String, context: Context, sourceLabel: Str
                 parts.reversed().forEachIndexed { idx, part ->
                     val partId = notifId + partIndex
                     partIndex++
-                    val markPi = PendingIntent.getBroadcast(
+                    val markPi = getBroadcast(
                         context, partId + 500000,
                         Intent(ACTION_MARK_PARTS_READ).apply {
                             putExtra(EXTRA_MESSAGE_ID, msgId)

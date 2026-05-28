@@ -24,7 +24,6 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.MediaStore
-import android.util.Log
 import android.view.KeyEvent
 import android.view.Surface
 import android.view.SurfaceHolder
@@ -1553,16 +1552,20 @@ class MediaPlayerService : MediaSessionService() {
 
     private fun pausePodcast() {
         cancelAutoPause()
-        if (!isPlayingPodcast || podcastPlayer?.isPlaying != true) return
-        val pos = podcastPlayer?.currentPosition?.toLong() ?: 0
-        podcastPlayer?.pause()
-        isPlayingPodcast = false
-        musicPrefs.editAsync { putBoolean("is_playing", false) }
-        currentPodcast?.let { savePodcastPosition(it.path, pos) }
-
-        savePodcastSession()
-
-        updateNotification(instantUpdate = false)
+        if (!isPlayingPodcast) return
+        val player = podcastPlayer ?: run { isPlayingPodcast = false; return }
+        try {
+            if (!player.isPlaying) { isPlayingPodcast = false; return }
+            val pos = player.currentPosition.toLong()
+            player.pause()
+            isPlayingPodcast = false
+            musicPrefs.editAsync { putBoolean("is_playing", false) }
+            currentPodcast?.let { savePodcastPosition(it.path, pos) }
+            savePodcastSession()
+            updateNotification(instantUpdate = false)
+        } catch (_: IllegalStateException) {
+            isPlayingPodcast = false
+        }
     }
 
     private fun rewind() {
@@ -2663,10 +2666,8 @@ class MediaPlayerService : MediaSessionService() {
                 conn.connect()
                 val location = conn.getHeaderField("Location")
                 conn.disconnect()
-                Log.d("StreamDebug", "redirect resolved: $location")
                 if (!location.isNullOrBlank()) resolvedUrl = location
-            } catch (e: Exception) {
-                Log.e("StreamDebug", "redirect resolve failed: ${e.message}")
+            } catch (_: Exception) {
             }
 
             try {
@@ -2674,11 +2675,8 @@ class MediaPlayerService : MediaSessionService() {
                 retriever.setDataSource(resolvedUrl, hashMapOf())
                 episodeTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: ""
                 showName = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: ""
-                val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: ""
                 retriever.release()
-                Log.d("StreamDebug", "meta | title='$episodeTitle' | album='$showName' | artist='$artist'")
-            } catch (e: Exception) {
-                Log.e("StreamDebug", "metadata extract failed: ${e.message}")
+            } catch (_: Exception) {
             }
 
             Pair(episodeTitle, showName)
@@ -2692,17 +2690,14 @@ class MediaPlayerService : MediaSessionService() {
             conn.connect()
             val location = conn.getHeaderField("Location")
             conn.disconnect()
-            Log.d("StreamDebug", "redirect resolved: $location")
             location ?: url
-        } catch (e: Exception) {
-            Log.e("StreamDebug", "redirect resolve failed: ${e.message}")
+        } catch (_: Exception) {
             url
         }
     }
 
     @SuppressLint("UseKtx")
     private fun streamFromUrl(url: String) {
-        // Laufende Session sichern bevor wir wechseln
         if (isPlayingPodcast) savePodcastSession()
         if (isPlayingMusic) {
             if (songStartedAt > 0L && currentSongName.isNotEmpty()) {
@@ -2755,11 +2750,9 @@ class MediaPlayerService : MediaSessionService() {
                 val existingShow = PodcastShowManager.getShows()
                     .find { it.name.equals(showName, ignoreCase = true) }
                 val show = existingShow ?: PodcastShowManager.createShow(showName)
-                // Pattern registrieren damit künftige Episoden auto-zugewiesen werden
                 if (episodeTitle.isNotEmpty()) {
                     PodcastShowManager.assignPattern(episodeTitle.lowercase().take(30), show.name)
                 }
-                Log.d("StreamDebug", "show assigned: ${show.name} (${if (existingShow != null) "existing" else "created"})")
                 show.name
             } else {
                 currentStreamName
@@ -2774,11 +2767,10 @@ class MediaPlayerService : MediaSessionService() {
                             mapOf("User-Agent" to "Mozilla/5.0 (Linux; Android)")
                         )
                         setOnPreparedListener {
-                            val speed = getSavedPlaybackSpeed()
-                            if (speed != 1.0f) {
-                                Log.d("StreamDebug", "applying speed=$speed")
-                                playbackParams = playbackParams.setSpeed(speed)
-                            }
+                            try {
+                                val speed = getSavedPlaybackSpeed()
+                                if (speed != 1.0f) playbackParams = playbackParams.setSpeed(speed)
+                            } catch (_: Exception) {}
                             start()
                             isPlayingPodcast = true
                             podcastSessionStartedAt = System.currentTimeMillis()
@@ -2827,8 +2819,9 @@ class MediaPlayerService : MediaSessionService() {
             )
         )
         podcastSessionStartedAt = 0L
-        Log.d("StreamDebug", "stream session saved: label='$label' listenedMs=$listenedMs")
     }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {}
 }
 
 object MusicPlayerServiceCompat {

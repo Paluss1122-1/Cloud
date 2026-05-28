@@ -95,18 +95,24 @@ import com.cloud.core.ui.c
 fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewModel()) {
     val listState = rememberLazyListState()
     val alpha = remember { Animatable(0f) }
-    var selectedMsg: Int? by remember { mutableStateOf(null) }
-    var lastSelectedMsg: Int? by remember { mutableStateOf(null) }
     val context = LocalContext.current
 
     val msgBounds = remember { mutableStateMapOf<Int, Float>() }
     val view = LocalView.current
-    val contextMenuY1 = msgBounds[selectedMsg]?.toInt() ?: msgBounds[lastSelectedMsg]?.toInt() ?: 0
+    val contextMenuY1 =
+        msgBounds[vm.selectedMsg]?.toInt() ?: msgBounds[vm.lastSelectedMsg]?.toInt() ?: 0
     val overlayAlpha = animateFloatAsState(
-        targetValue = if (selectedMsg != null) 1f else 0f,
+        targetValue = if (vm.selectedMsg != null) 1f else 0f,
         animationSpec = tween(400),
         label = "overlay"
     )
+    LaunchedEffect(vm.history.size) {
+        val sel = vm.selectedMsg
+        if (sel != null && sel >= vm.history.size) {
+            vm.selectedMsg = null
+            svm.fireEvent(false)
+        }
+    }
 
     val density = LocalDensity.current
     val screenHeightPx = LocalWindowInfo.current.containerSize.height
@@ -284,7 +290,10 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                             trackColor = Color(0xFF444444),
                             strokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
                         )
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
                             Text(
                                 vm.getUsageResetText(),
                                 color = White.copy(alpha = 0.8f),
@@ -308,7 +317,9 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                         .padding(horizontal = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(vm.history.size) { index ->
+                    items(
+                        vm.history.size,
+                        key = { index -> "${vm.history[index].ts}_${vm.history[index].own}" }) { index ->
                         val msg = vm.history[index]
                         val isUser = msg.own
 
@@ -374,9 +385,9 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                                 .zIndex(1000000f)
                                                 .combinedClickable(
                                                     onLongClick = {
-                                                        selectedMsg = vm.history.indexOf(msg)
+                                                        vm.selectedMsg = vm.history.indexOf(msg)
                                                         svm.fireEvent(true)
-                                                        lastSelectedMsg = selectedMsg
+                                                        vm.lastSelectedMsg = vm.selectedMsg
                                                     },
                                                     onClick = {}
                                                 )
@@ -400,9 +411,9 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                                 .zIndex(1000000f)
                                                 .combinedClickable(
                                                     onLongClick = {
-                                                        selectedMsg = vm.history.indexOf(msg)
+                                                        vm.selectedMsg = vm.history.indexOf(msg)
                                                         svm.fireEvent(true)
-                                                        lastSelectedMsg = selectedMsg
+                                                        vm.lastSelectedMsg = vm.selectedMsg
                                                     },
                                                     onClick = {}
                                                 )
@@ -415,9 +426,9 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                     modifier = Modifier
                                         .combinedClickable(
                                             onLongClick = {
-                                                selectedMsg = vm.history.indexOf(msg)
+                                                vm.selectedMsg = vm.history.indexOf(msg)
                                                 svm.fireEvent(true)
-                                                lastSelectedMsg = selectedMsg
+                                                vm.lastSelectedMsg = vm.selectedMsg
                                             },
                                             onClick = {}
                                         )
@@ -545,7 +556,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                         .alpha(alpha.value)
                 ) {
                     var message: ChatMessage? by remember { mutableStateOf(null) }
-                    message = selectedMsg?.let { vm.history[it] }
+                    message = vm.selectedMsg?.let { vm.history.getOrNull(it) }
 
                     Box(
                         Modifier
@@ -553,11 +564,11 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                             .background(Black.copy(0.6f))
                             .imePadding()
                             .then(
-                                if (selectedMsg != null && overlayAlpha.value > 0.5f) Modifier.clickable(
+                                if (vm.selectedMsg != null && overlayAlpha.value > 0.5f) Modifier.clickable(
                                     indication = null,
                                     interactionSource = remember { MutableInteractionSource() }
                                 ) {
-                                    selectedMsg = null
+                                    vm.selectedMsg = null
                                     svm.fireEvent(false)
                                 } else Modifier
                             )
@@ -619,15 +630,16 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(c())
                                     .clickable {
+                                        val text = message?.text ?: return@clickable
                                         val clip = ClipData(
                                             ClipDescription(
                                                 "AITab Message",
                                                 arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN)
                                             ),
-                                            ClipData.Item(vm.history[selectedMsg!!].text)
+                                            ClipData.Item(text)
                                         )
                                         cs.setPrimaryClip(clip)
-                                        selectedMsg = null
+                                        vm.selectedMsg = null
                                         svm.fireEvent(false)
                                     }
                                     .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -648,11 +660,11 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(c())
                                         .clickable {
-                                            val msgIndex = selectedMsg ?: return@clickable
+                                            val msgIndex = vm.selectedMsg ?: return@clickable
                                             vm.currentEditMsg = vm.history[msgIndex].text
                                             vm.editIndex = msgIndex
                                             vm.isEditMode = true
-                                            selectedMsg = null
+                                            vm.selectedMsg = null
                                             svm.fireEvent(false)
                                         }
                                         .padding(horizontal = 16.dp, vertical = 8.dp)

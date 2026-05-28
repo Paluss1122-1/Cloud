@@ -389,7 +389,6 @@ fun AlertDialogCloud(
         confirmButton = {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
                     .background(if (!oneButton) Color(0xFFB71C1C) else MaterialTheme.colorScheme.primary)
                     .clickable { onConfirm() }

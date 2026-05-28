@@ -54,7 +54,8 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
     var editIndex: Int? by mutableStateOf(null)
     var isEditMode by mutableStateOf(false)
     var currentEditMsg by mutableStateOf("")
-
+    var selectedMsg: Int? by mutableStateOf(null)
+    var lastSelectedMsg: Int? by mutableStateOf(null)
     val history = mutableStateListOf<ChatMessage>()
 
     val availableModels
