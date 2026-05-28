@@ -92,6 +92,7 @@ import coil.compose.rememberAsyncImagePainter
 import coil.disk.DiskCache
 import coil.memory.MemoryCache.Builder
 import com.cloud.core.TabNavigationViewModel
+import com.cloud.core.objects.prvt
 import com.cloud.core.ui.PloppingButton
 import com.cloud.core.ui.gruen
 import com.cloud.privatecloudapp.getVideoFirstFrame
@@ -122,13 +123,17 @@ fun OtherBucketViewer(
     onBackPressed: () -> Unit,
     viewModel: TabNavigationViewModel = viewModel()
 ) {
+    val context = LocalContext.current
+    if (!prvt()) {
+        Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+        return
+    }
     var fileList by remember { mutableStateOf<List<LocalFileInfo>>(emptyList()) }
     var isUploading by remember { mutableStateOf(false) }
     var uploadProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var showFullscreenImage by remember { mutableStateOf<LocalFileInfo?>(null) }
     var showVideoPlayer by remember { mutableStateOf<LocalFileInfo?>(null) }
     var selectedFilter by remember { mutableStateOf("Alle") }
-    val context = LocalContext.current
     var currentVideoIndex by rememberSaveable { mutableIntStateOf(0) }
     var currentImageIndex by rememberSaveable { mutableIntStateOf(0) }
     var favorites by remember { mutableStateOf<Set<String>>(emptySet()) }
