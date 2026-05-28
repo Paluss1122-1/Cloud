@@ -14,12 +14,12 @@ import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.hardware.camera2.CameraManager
 import android.media.MediaPlayer
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Environment
 import android.os.Handler
 import android.os.HandlerThread
@@ -101,6 +101,7 @@ import com.cloud.quiethoursnotificationhelper.commandReceiver
 import com.cloud.quiethoursnotificationhelper.createNotification
 import com.cloud.quiethoursnotificationhelper.createNotificationChannel
 import com.cloud.quiethoursnotificationhelper.deleteGalleryImage
+import com.cloud.quiethoursnotificationhelper.ensureReadyForConnect
 import com.cloud.quiethoursnotificationhelper.fetchNewErrors
 import com.cloud.quiethoursnotificationhelper.getTodayKey
 import com.cloud.quiethoursnotificationhelper.isQuietHoursNow
@@ -129,9 +130,9 @@ import com.cloud.quiethoursnotificationhelper.timeChangeReceiver
 import com.cloud.quiethoursnotificationhelper.updateNotification
 import com.cloud.quiethoursnotificationhelper.updateSingleSenderNotification
 import com.cloud.tabs.AudioRecorder
+import com.cloud.tabs.exploretab.ExploreLocationTracker
 import com.cloud.tabs.mediaplayer.MediaAnalyticsManager
 import com.cloud.tabs.mediaplayer.MediaAnalyticsManager.getSessions
-import com.cloud.tabs.exploretab.ExploreLocationTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -682,6 +683,7 @@ class QuietHoursNotificationService : Service() {
                         setPackage("com.paluss1122.accessibily")
                         putExtra("cmd", """{"action":"close_nots"}""")
                     })
+                    ensureReadyForConnect(this@QuietHoursNotificationService)
                     syncTodosWithLaptop(this@QuietHoursNotificationService)
                     fetchNewErrors(this@QuietHoursNotificationService)
                     START_STICKY
@@ -690,7 +692,6 @@ class QuietHoursNotificationService : Service() {
                 ACTION_DAILY_MUSIC_SUMMARY -> {
                     appScope.launch {
                         try {
-                            MediaPlayerService.flushActiveSessions(this@QuietHoursNotificationService)
                             kotlinx.coroutines.delay(500)
                             MediaAnalyticsManager.init(this@QuietHoursNotificationService)
                             val lastAiTimestamp =
@@ -1379,7 +1380,7 @@ class QuietHoursNotificationService : Service() {
 
     private fun isWifiConnected(): Boolean {
         return try {
-            val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
             val network = connectivityManager.activeNetwork ?: return false
             val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
             capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
