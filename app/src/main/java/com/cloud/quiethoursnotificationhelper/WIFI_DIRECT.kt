@@ -80,14 +80,14 @@ import com.cloud.services.MediaPlayerService.Companion.ACTION_TOGGLE_REPEAT
 import com.cloud.services.OverlayLifecycleOwner
 import com.cloud.services.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.cloud.services.WhatsAppNotificationListener
-import com.cloud.tabs.mediaplayer.AlgorithmicPlaylistRegistry
-import com.cloud.tabs.mediaplayer.ListenSession
-import com.cloud.tabs.mediaplayer.MediaAnalyticsManager
-import com.cloud.tabs.mediaplayer.MediaAnalyticsManager.getSessions
 import com.cloud.tabs.aitab.ChatMessage
 import com.cloud.tabs.authenticator.PasswordDatabase
 import com.cloud.tabs.authenticator.TotpGenerator.generateTOTP
 import com.cloud.tabs.authenticator.TwoFADatabase
+import com.cloud.tabs.mediaplayer.AlgorithmicPlaylistRegistry
+import com.cloud.tabs.mediaplayer.ListenSession
+import com.cloud.tabs.mediaplayer.MediaAnalyticsManager
+import com.cloud.tabs.mediaplayer.MediaAnalyticsManager.getSessions
 import com.cloud.tabs.school.Vokabel
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -226,6 +226,42 @@ private fun logError(service: String, e: Exception) {
     }
 }
 
+fun ensureReadyForConnect(context: Context) {
+    // 1. syncInProgress zurücksetzen (könnte von abgebrochenem Versuch stuck sein)
+    syncInProgress.set(false)
+    pendingSyncJob?.cancel()
+    pendingSyncJob = null
+
+    // 2. triggerJob force-restart — egal ob isActive oder nicht
+    triggerJob?.cancel()
+    triggerJob = null
+    startTriggerListener(context)
+
+    // 3. networkCallback neu registrieren (bei WiFi-Toggle kann er verloren gehen)
+    registerWifiReconnectReceiver(context)
+
+    // 4. frische laptopIp holen
+    syncScope.launch {
+        val ip = fetchIpFromSupabase()
+        if (!ip.isNullOrEmpty()) {
+            laptopIp = ip
+            showSimpleNotificationExtern(
+                "✅ Bereit",
+                "TriggerListener aktiv: ${triggerJob?.isActive} | IP: $ip",
+                10.seconds,
+                context
+            )
+        } else {
+            showSimpleNotificationExtern(
+                "⚠️ Kein Laptop-IP",
+                "Supabase hat keine IP geliefert",
+                10.seconds,
+                context
+            )
+        }
+    }
+}
+
 private fun launchServer(
     scope: CoroutineScope,
     port: Int,
@@ -345,7 +381,7 @@ suspend fun callNvidiaVisionApi(
         return this.scale((width * scale).toInt(), (height * scale).toInt())
     }
 
-    val scaledBmp = bmp.scaleForApi(1280)
+    val scaledBmp = withContext(Dispatchers.IO) { bmp.scaleForApi(1280) }
 
     val prompt = """
         Look at this vocabulary list image carefully.
@@ -686,8 +722,8 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
             "syncInProgress: ${syncInProgress.get()}, realDevice: ${Config.realDevice}",
             10.seconds, context
         )
-//        if (!Config.realDevice) syncInProgress.set(false)
-//        return
+        if (!Config.realDevice) syncInProgress.set(false)
+        return
     }
 
     syncScope.launch {
