@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -28,10 +29,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -111,9 +110,7 @@ enum class UploadStatus { PENDING, UPLOADING, DONE, ERROR }
 @Composable
 fun MaterialienScreen(
     onBack: () -> Unit,
-    savedSets: List<VokabelSet> = emptyList(),
     onOpenSet: (VokabelSet) -> Unit = {},
-    onLearnDirectly: () -> Unit = {},
     paddingValues: PaddingValues,
     initialSubject: String? = null,
     initialFile: String? = null
@@ -159,11 +156,7 @@ fun MaterialienScreen(
         val parsed = rawRecentMaterials.mapNotNull(::parseRecentMaterial)
         recentMaterialPreviews = parsed.map { material ->
             if (material.fileName != null && isImageFile(material.fileName)) {
-                val url = try {
-                    Config.client.storage.from("school").createSignedUrl(material.path, 10.minutes)
-                } catch (_: Exception) {
-                    null
-                }
+                val url = resolveFileUrl(context, material.subject, material.fileName)
                 material.copy(previewUrl = url)
             } else material
         }
@@ -181,7 +174,20 @@ fun MaterialienScreen(
             val files = Config.client.storage.from("school").list()
             folders = files.map { it.name }.filter { it.isNotBlank() }.sortedDescending()
         } catch (e: Exception) {
-            errorMsg = e.localizedMessage
+            val cachedFolders = prefs.all.keys
+                .filter { it.startsWith("files_") }
+                .map { it.removePrefix("files_") }
+                .sortedDescending()
+            if (cachedFolders.isNotEmpty()) {
+                folders = cachedFolders
+                cachedFolders.forEach { subj ->
+                    val cached = prefs.getString("files_$subj", null)
+                        ?.split("\u001e")?.filter { it.isNotBlank() } ?: emptyList()
+                    folderFiles = folderFiles + (subj to cached)
+                }
+            } else {
+                errorMsg = e.localizedMessage
+            }
         } finally {
             foldersLoading = false
         }
@@ -193,8 +199,19 @@ fun MaterialienScreen(
         try {
             val files = Config.client.storage.from("school").list(subject)
             folderFiles = folderFiles + (subject to files.map { it.name })
+            val fileNames = files.map { it.name }
+            folderFiles = folderFiles + (subject to fileNames)
+            prefs.edit {
+                putString("files_$subject", fileNames.joinToString("\u001e"))
+            }
         } catch (e: Exception) {
-            errorMsg = e.localizedMessage
+            val cached = prefs.getString("files_$subject", null)
+                ?.split("\u001e")?.filter { it.isNotBlank() }
+            if (cached != null) {
+                folderFiles = folderFiles + (subject to cached)
+            } else {
+                errorMsg = e.localizedMessage
+            }
         } finally {
             folderFilesLoading = false
         }
@@ -455,7 +472,7 @@ fun MaterialienScreen(
                 modifier = Modifier.weight(1f)
             ) {
                 if (uploads.isEmpty() && (folderFiles[selectedSubject]
-                    ?: emptyList()).isEmpty() && !folderFilesLoading
+                        ?: emptyList()).isEmpty() && !folderFilesLoading
                 ) {
                     item {
                         Box(
@@ -504,13 +521,7 @@ fun MaterialienScreen(
                                 var url by remember(fileName) { mutableStateOf<String?>(null) }
 
                                 LaunchedEffect(fileName) {
-                                    url = try {
-                                        Config.client.storage
-                                            .from("school")
-                                            .createSignedUrl("$selectedSubject/$fileName", 10.minutes)
-                                    } catch (_: Exception) {
-                                        null
-                                    }
+                                    url = resolveFileUrl(context, selectedSubject!!, fileName)
                                 }
                                 Box(
                                     modifier = Modifier
@@ -630,10 +641,14 @@ fun MaterialienScreen(
     }
 
     if (selectedFile != null && selectedSubject != null) {
-        var fileUrl by remember(selectedFile, selectedSubject) { mutableStateOf<String?>(null) }
-        var ocrText by remember(selectedFile, selectedSubject) { mutableStateOf<String?>(null) }
-        var aiSummary by remember(selectedFile, selectedSubject) { mutableStateOf<String?>(null) }
-        var summaryLoading by remember(selectedFile, selectedSubject) { mutableStateOf(false) }
+        val fileKey = remember(selectedFile, selectedSubject) {
+            "${selectedSubject}_${selectedFile}"
+        }
+
+        var fileUrl by remember(fileKey) { mutableStateOf<String?>(null) }
+        var aiSummary by remember(fileKey) { mutableStateOf<String?>(null) }
+        var summaryLoading by remember(fileKey) { mutableStateOf(false) }
+        var analysisStarted by remember(fileKey) { mutableStateOf(false) }
 
         val cacheKeyBase = "cache_${selectedSubject}_${selectedFile}"
 
@@ -641,61 +656,70 @@ fun MaterialienScreen(
             if (!forceRefresh) {
                 val cachedOcr = prefs.getString("${cacheKeyBase}_ocr", null)
                 val cachedSummary = prefs.getString("${cacheKeyBase}_summary", null)
+
                 if (cachedOcr != null && cachedSummary != null) {
-                    ocrText = cachedOcr
                     aiSummary = cachedSummary
+                    summaryLoading = false
                     return
                 }
             }
 
             summaryLoading = true
             aiSummary = null
+
             try {
-                val signedUrl = Config.client.storage.from("school")
-                    .createSignedUrl("$selectedSubject/$selectedFile", 10.minutes)
+                val localUri = resolveFileUrl(context, selectedSubject!!, selectedFile!!)
+                    ?: throw Exception("Datei nicht erreichbar")
+
                 val imgBytes = withContext(Dispatchers.IO) {
-                    java.net.URL(signedUrl).readBytes()
+                    if (localUri.startsWith("file:")) {
+                        java.io.File(java.net.URI(localUri)).readBytes()
+                    } else {
+                        java.net.URL(localUri).readBytes()
+                    }
                 }
-                val base64 =
-                    android.util.Base64.encodeToString(imgBytes, android.util.Base64.NO_WRAP)
+
+                val base64 = android.util.Base64.encodeToString(
+                    imgBytes,
+                    android.util.Base64.NO_WRAP
+                )
 
                 val rawText = sendGeminiRequest(
                     history = emptyList(),
                     userMessage = """
-                        Analysiere dieses Bild vollständig und strukturiert. Extrahiere:
-                        
-                        1. ALLEN sichtbaren Text – exakt wie er erscheint, mit Formatierung, Überschriften und Absätzen
-                        2. VISUELLE ELEMENTE – beschreibe Diagramme, Grafiken, Tabellen, Formeln oder Bilder kurz aber präzise (z.B. „[Diagramm: Kreislauf der Fotosynthese mit Pfeilen zwischen Sonne → Pflanze → O₂]")
-                        3. HERVORHEBUNGEN – notiere fett/unterstrichen/farbig markierte Wörter mit dem Tag [MARKIERT: ...]
-                        4. STRUKTUR – behalte die räumliche Anordnung bei (z.B. Spalten, Listen, Kästen)
-                        
-                        Ziel: Eine vollständige Rekonstruktion des Bildinhalts, die ohne das Original verständlich ist.
-                        """.trimIndent(),
+                    Analysiere dieses Bild vollständig und strukturiert. Extrahiere:
+
+                    1. ALLEN sichtbaren Text – exakt wie er erscheint, mit Formatierung, Überschriften und Absätzen
+                    2. VISUELLE ELEMENTE – beschreibe Diagramme, Grafiken, Tabellen, Formeln oder Bilder kurz aber präzise
+                    3. HERVORHEBUNGEN – notiere fett/unterstrichen/farbig markierte Wörter mit dem Tag [MARKIERT: ...]
+                    4. STRUKTUR – behalte die räumliche Anordnung bei
+
+                    Ziel: Eine vollständige Rekonstruktion des Bildinhalts, die ohne das Original verständlich ist.
+                """.trimIndent(),
                     pic = base64,
                     model = MAX_GEMINI
                 ) ?: throw Exception("OCR fehlgeschlagen")
-                ocrText = rawText
 
                 val summary = sendGeminiRequest(
                     history = emptyList(),
                     userMessage = """
-                        Du bekommst extrahierten Inhalt aus einem Lernmaterial. Deine Aufgabe: Erkläre das Thema so, dass jemand, der es noch nie gesehen hat, es danach wirklich versteht.
-                        
-                        INHALT:
-                        $rawText
-                        
-                        AUFGABE:
-                        - Beginne mit einem Satz, der das Kernthema nennt
-                        - Gliedere in 2–4 Abschnitte mit aussagekräftigen Überschriften
-                        - Erkläre Fachbegriffe direkt beim ersten Vorkommen
-                        - Hebe die 3–5 wichtigsten Punkte am Ende als „🔑 Merksätze" hervor
-                        - Wenn Diagramme/Grafiken beschrieben wurden: erkläre deren Aussage in eigenen Worten
-                        - Sprache: Deutsch, klar und präzise
-                        """.trimIndent()
+                    Du bekommst extrahierten Inhalt aus einem Lernmaterial. Deine Aufgabe: Erkläre das Thema so, dass jemand, der es noch nie gesehen hat, es danach wirklich versteht.
+
+                    INHALT:
+                    $rawText
+
+                    AUFGABE:
+                    - Beginne mit einem Satz, der das Kernthema nennt
+                    - Gliedere in 2–4 Abschnitte mit aussagekräftigen Überschriften
+                    - Erkläre Fachbegriffe direkt beim ersten Vorkommen
+                    - Hebe die 3–5 wichtigsten Punkte am Ende als Merksätze hervor
+                    - Wenn Diagramme/Grafiken beschrieben wurden: erkläre deren Aussage in eigenen Worten
+                    - Sprache: Deutsch, klar und präzise
+                """.trimIndent()
                 ) ?: throw Exception("Summary fehlgeschlagen")
+
                 aiSummary = summary
 
-                // In SharedPreferences speichern
                 prefs.edit {
                     putString("${cacheKeyBase}_ocr", rawText)
                     putString("${cacheKeyBase}_summary", summary)
@@ -707,23 +731,21 @@ fun MaterialienScreen(
             }
         }
 
-        LaunchedEffect(selectedFile, selectedSubject) {
-            fileUrl = try {
-                Config.client.storage.from("school")
-                    .createSignedUrl("$selectedSubject/$selectedFile", 10.minutes)
-            } catch (_: Exception) {
-                null
+        LaunchedEffect(fileKey) {
+            fileUrl = resolveFileUrl(context, selectedSubject!!, selectedFile!!)
+
+            if (!analysisStarted && isImageFile(selectedFile!!)) {
+                analysisStarted = true
+                runOcrAndSummary(forceRefresh = false)
             }
-            if (isImageFile(selectedFile!!)) runOcrAndSummary(forceRefresh = false)
         }
 
-        // Doppelte LaunchedEffect entfernt
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.97f))
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(
@@ -736,6 +758,7 @@ fun MaterialienScreen(
                     IconButton(onClick = { selectedFile = null }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
                     }
+
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             selectedFile!!,
@@ -773,11 +796,10 @@ fun MaterialienScreen(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
                         ) { sheetExpanded = !sheetExpanded }
-                        .animateContentSize()
+                        .animateContentSize(animationSpec = tween(400))
                         .padding(bottom = 20.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Drag/Click Handle
                     Box(
                         modifier = Modifier
                             .padding(top = 10.dp, bottom = 4.dp)
@@ -788,9 +810,49 @@ fun MaterialienScreen(
                             .align(Alignment.CenterHorizontally)
                     )
 
-                    if (sheetExpanded) {
+                    // Synchronized Header Fade out / Shrink when expanded
+                    AnimatedVisibility(
+                        visible = !sheetExpanded,
+                        enter = fadeIn(animationSpec = tween(400)) + expandVertically(animationSpec = tween(400)),
+                        exit = fadeOut(animationSpec = tween(400)) + shrinkVertically(animationSpec = tween(400))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("🤖", fontSize = 18.sp)
+                                Text(
+                                    if (aiSummary != null) "Zusammenfassung bereit" else "KI Analyse...",
+                                    color = TextSecondary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Text(
+                                "Tippe zum Öffnen",
+                                color = TextTertiary,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    // Synchronized Content Fade in / Expand when expanded
+                    AnimatedVisibility(
+                        visible = sheetExpanded,
+                        enter = fadeIn(animationSpec = tween(400)) + expandVertically(animationSpec = tween(400)),
+                        exit = fadeOut(animationSpec = tween(400)) + shrinkVertically(animationSpec = tween(400))
+                    ) {
                         Column(
-                            modifier = Modifier.padding(horizontal = 20.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Row(
@@ -815,6 +877,7 @@ fun MaterialienScreen(
                                 verticalAlignment = Alignment.Top
                             ) {
                                 Text("🤖", fontSize = 22.sp)
+
                                 Column(
                                     modifier = Modifier.weight(1f),
                                     verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -830,6 +893,7 @@ fun MaterialienScreen(
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.SemiBold
                                         )
+
                                         if (aiSummary != null) {
                                             IconButton(
                                                 onClick = { showFullscreenSummary = true },
@@ -844,6 +908,7 @@ fun MaterialienScreen(
                                             }
                                         }
                                     }
+
                                     when {
                                         summaryLoading -> Row(
                                             verticalAlignment = Alignment.CenterVertically,
@@ -893,51 +958,27 @@ fun MaterialienScreen(
                                                             color = TextPrimary,
                                                             textDecoration = TextDecoration.Underline
                                                         ),
-
                                                         text = TextStyle(
                                                             fontSize = 11.sp,
                                                             lineHeight = 15.sp,
                                                             color = TextPrimary
                                                         ),
-
                                                         paragraph = TextStyle(
                                                             fontSize = 11.sp,
                                                             lineHeight = 15.sp,
                                                             color = TextPrimary
                                                         ),
-
                                                         list = TextStyle(
                                                             fontSize = 11.sp,
                                                             lineHeight = 15.sp,
                                                             color = TextPrimary
                                                         ),
-
                                                         ordered = TextStyle(
                                                             fontSize = 11.sp,
                                                             lineHeight = 15.sp,
                                                             color = TextPrimary
                                                         )
                                                     )
-                                                )
-                                            }
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(AccentViolet.copy(alpha = 0.15f))
-                                                    .clickable {
-                                                        scope.launch {
-                                                            runOcrAndSummary(
-                                                                forceRefresh = true
-                                                            )
-                                                        }
-                                                    }
-                                                    .padding(horizontal = 10.dp, vertical = 5.dp)
-                                            ) {
-                                                Text(
-                                                    "↺ Retry",
-                                                    color = AccentViolet,
-                                                    fontSize = 12.sp,
-                                                    fontWeight = FontWeight.SemiBold
                                                 )
                                             }
                                         }
@@ -951,85 +992,16 @@ fun MaterialienScreen(
                                                 color = TextTertiary,
                                                 fontSize = 12.sp
                                             )
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(AccentViolet.copy(alpha = 0.15f))
-                                                    .clickable {
-                                                        scope.launch {
-                                                            runOcrAndSummary(
-                                                                forceRefresh = true
-                                                            )
-                                                        }
-                                                    }
-                                                    .padding(horizontal = 10.dp, vertical = 5.dp)
-                                            ) {
-                                                Text(
-                                                    "↺ Retry",
-                                                    color = AccentViolet,
-                                                    fontSize = 12.sp,
-                                                    fontWeight = FontWeight.SemiBold
-                                                )
-                                            }
                                         }
                                     }
                                 }
                             }
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(Color.White.copy(alpha = 0.05f))
-                                    .padding(14.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("📝", fontSize = 22.sp)
-                                Column {
-                                    Text(
-                                        "Quiz",
-                                        color = TextPrimary,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Text("Kommt bald...", color = TextTertiary, fontSize = 12.sp)
-                                }
-                            }
-                        }
-                    } else {
-                        // Collapsed Preview
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text("🤖", fontSize = 18.sp)
-                                Text(
-                                    if (aiSummary != null) "Zusammenfassung bereit" else "KI Analyse...",
-                                    color = TextSecondary,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                            Text(
-                                "Tippe zum Öffnen",
-                                color = TextTertiary,
-                                fontSize = 11.sp
-                            )
                         }
                     }
                 }
             }
         }
 
-        // Fullscreen Summary Overlay
         AnimatedVisibility(
             visible = showFullscreenSummary,
             enter = fadeIn() + expandVertically(),
@@ -1039,8 +1011,7 @@ fun MaterialienScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(BgSurface)
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
+                //.padding(paddingValues)
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Row(
@@ -1069,7 +1040,9 @@ fun MaterialienScreen(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(AccentViolet.copy(alpha = 0.15f))
-                                .clickable { scope.launch { runOcrAndSummary(forceRefresh = true) } }
+                                .clickable {
+                                    scope.launch { runOcrAndSummary(forceRefresh = true) }
+                                }
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Text(
@@ -1088,58 +1061,55 @@ fun MaterialienScreen(
                             .padding(20.dp)
                     ) {
                         if (aiSummary != null) {
-androidx.compose.foundation.text.selection.SelectionContainer {
-                            Markdown(
-                                content = aiSummary!!,
-                                colors = markdownColor(text = TextPrimary),
-                                typography = markdownTypography(
-                                    h1 = TextStyle(
-                                        fontSize = 24.sp,
-                                        lineHeight = 22.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = TextPrimary,
-                                        textDecoration = TextDecoration.Underline
-                                    ),
-                                    h2 = TextStyle(
-                                        fontSize = 22.sp,
-                                        lineHeight = 20.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = TextPrimary,
-                                        textDecoration = TextDecoration.Underline
-                                    ),
-                                    h3 = TextStyle(
-                                        fontSize = 21.sp,
-                                        lineHeight = 19.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = TextPrimary,
-                                        textDecoration = TextDecoration.Underline
-                                    ),
-
-                                    text = TextStyle(
-                                        fontSize = 13.sp,
-                                        lineHeight = 15.sp,
-                                        color = TextPrimary
-                                    ),
-
-                                    paragraph = TextStyle(
-                                        fontSize = 13.sp,
-                                        lineHeight = 15.sp,
-                                        color = TextPrimary
-                                    ),
-
-                                    list = TextStyle(
-                                        fontSize = 13.sp,
-                                        lineHeight = 15.sp,
-                                        color = TextPrimary
-                                    ),
-
-                                    ordered = TextStyle(
-                                        fontSize = 13.sp,
-                                        lineHeight = 15.sp,
-                                        color = TextPrimary
+                            androidx.compose.foundation.text.selection.SelectionContainer {
+                                Markdown(
+                                    content = aiSummary!!,
+                                    colors = markdownColor(text = TextPrimary),
+                                    typography = markdownTypography(
+                                        h1 = TextStyle(
+                                            fontSize = 24.sp,
+                                            lineHeight = 22.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = TextPrimary,
+                                            textDecoration = TextDecoration.Underline
+                                        ),
+                                        h2 = TextStyle(
+                                            fontSize = 22.sp,
+                                            lineHeight = 20.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = TextPrimary,
+                                            textDecoration = TextDecoration.Underline
+                                        ),
+                                        h3 = TextStyle(
+                                            fontSize = 21.sp,
+                                            lineHeight = 19.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = TextPrimary,
+                                            textDecoration = TextDecoration.Underline
+                                        ),
+                                        text = TextStyle(
+                                            fontSize = 13.sp,
+                                            lineHeight = 15.sp,
+                                            color = TextPrimary
+                                        ),
+                                        paragraph = TextStyle(
+                                            fontSize = 13.sp,
+                                            lineHeight = 15.sp,
+                                            color = TextPrimary
+                                        ),
+                                        list = TextStyle(
+                                            fontSize = 13.sp,
+                                            lineHeight = 15.sp,
+                                            color = TextPrimary
+                                        ),
+                                        ordered = TextStyle(
+                                            fontSize = 13.sp,
+                                            lineHeight = 15.sp,
+                                            color = TextPrimary
+                                        )
                                     )
                                 )
-                            )}
+                            }
                         } else {
                             Box(
                                 modifier = Modifier.fillMaxSize(),
@@ -1148,6 +1118,7 @@ androidx.compose.foundation.text.selection.SelectionContainer {
                                 CircularProgressIndicator(color = AccentViolet)
                             }
                         }
+
                         Spacer(Modifier.height(40.dp))
                     }
                 }
@@ -1221,7 +1192,34 @@ private fun compressToJpgIfImage(
     return out.toByteArray() to jpgName
 }
 
-private fun serializeRecentMaterial(material: RecentMaterial): String {
+fun localCacheFile(context: Context, subject: String, fileName: String): java.io.File {
+    val dir = java.io.File(context.cacheDir, "material_cache/$subject").also { it.mkdirs() }
+    return java.io.File(dir, fileName)
+}
+
+suspend fun resolveFileUrl(
+    context: Context,
+    subject: String,
+    fileName: String
+): String? {
+    val local = localCacheFile(context, subject, fileName)
+    if (local.exists()) return local.toURI().toString()
+
+    return try {
+        val signed = Config.client.storage.from("school")
+            .createSignedUrl("$subject/$fileName", 10.minutes)
+
+        withContext(Dispatchers.IO) {
+            val bytes = java.net.URL(signed).readBytes()
+            local.writeBytes(bytes)
+        }
+        local.toURI().toString()
+    } catch (_: Exception) {
+        null
+    }
+}
+
+fun serializeRecentMaterial(material: RecentMaterial): String {
     return listOf(material.subject, material.fileName.orEmpty(), material.lastUsed.toString())
         .joinToString("\u001f")
 }
