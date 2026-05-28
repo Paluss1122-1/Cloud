@@ -65,9 +65,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.json.JSONObject
-import org.xml.sax.InputSource
 import java.io.File
-import java.io.StringReader
 import java.net.URL
 import java.security.MessageDigest
 import javax.xml.parsers.DocumentBuilderFactory
@@ -185,13 +183,12 @@ fun PodcastTab() {
         if (episodes.containsKey(feedUrl)) return
         loadingEpisodes = feedUrl
         try {
-            val xml = withContext(Dispatchers.IO) {
-                URL(feedUrl).readText()
-            }
             val doc = withContext(Dispatchers.IO) {
+                val conn = URL(feedUrl).openConnection() as java.net.HttpURLConnection
+                conn.setRequestProperty("Accept-Charset", "UTF-8")
                 DocumentBuilderFactory.newInstance()
                     .newDocumentBuilder()
-                    .parse(InputSource(StringReader(xml)))
+                    .parse(conn.inputStream)
             }
             val items = doc.getElementsByTagName("item")
             val list = (0 until minOf(items.length, 50)).mapNotNull { i ->
