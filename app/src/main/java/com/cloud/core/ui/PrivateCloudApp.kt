@@ -142,6 +142,7 @@ import com.cloud.core.TabNavigationViewModel
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.cms
 import com.cloud.core.objects.FavoriteManager
+import com.cloud.core.objects.prvt
 import com.cloud.privatecloudapp.FileIcon
 import com.cloud.privatecloudapp.FullscreenImageDialog
 import com.cloud.privatecloudapp.fileExistsInDCIM
@@ -151,7 +152,6 @@ import com.cloud.privatecloudapp.getLocalFileWithPath
 import com.cloud.privatecloudapp.getMimeType
 import com.cloud.privatecloudapp.isImageFile
 import com.cloud.privatecloudapp.isOnline
-import com.cloud.tabs.mediaplayer.AiResponseHistorySheet
 import com.cloud.tabs.BrowserTabContent
 import com.cloud.tabs.CalendarTabContent
 import com.cloud.tabs.ContactsRepository
@@ -160,21 +160,22 @@ import com.cloud.tabs.ContactsViewModel
 import com.cloud.tabs.DateCalculatorContent
 import com.cloud.tabs.GalleryTab
 import com.cloud.tabs.GmailTabContent
-import com.cloud.tabs.mediaplayer.MediaAnalyticsManager
 import com.cloud.tabs.MediaRecorderContent
-import com.cloud.tabs.mediaplayer.MediaTab
 import com.cloud.tabs.MovieDiscoveryTabContent
 import com.cloud.tabs.NotizenApp
 import com.cloud.tabs.OtherBucketViewer
 import com.cloud.tabs.QuickSettingsTabContent
 import com.cloud.tabs.RemoteDesktopTabContent
-import com.cloud.tabs.mediaplayer.SpotifyDownloaderTab
 import com.cloud.tabs.WeatherTabContent
 import com.cloud.tabs.aitab.AITabContent
 import com.cloud.tabs.audiorecordertab.AudioRecorderContent
 import com.cloud.tabs.authenticator.AuthenticatorTab
 import com.cloud.tabs.exploretab.ExploreTabContent
+import com.cloud.tabs.mediaplayer.AiResponseHistorySheet
+import com.cloud.tabs.mediaplayer.MediaAnalyticsManager
+import com.cloud.tabs.mediaplayer.MediaTab
 import com.cloud.tabs.mediaplayer.PodcastTab
+import com.cloud.tabs.mediaplayer.SpotifyDownloaderTab
 import com.cloud.tabs.school.VocabTab
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
@@ -848,6 +849,11 @@ fun PrivateCloudApp(
 @OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class)
 @Composable
 fun MainCloudScreen(storage: Storage) {
+    val context = LocalContext.current
+    if (!prvt()) {
+        Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+        return
+    }
     data class CloudFileMeta(
         val name: String,
         val updatedAt: String,
@@ -863,7 +869,6 @@ fun MainCloudScreen(storage: Storage) {
     var showDownloadProgress by remember { mutableStateOf(false) }
     var favoritesClickCount by remember { mutableIntStateOf(0) }
     var showOtherBucket by remember { mutableStateOf(false) }
-    val context = LocalContext.current
     var favoriteFiles by remember {
         mutableStateOf(FavoriteManager.loadFavorites(context))
     }
