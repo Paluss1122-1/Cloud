@@ -3521,6 +3521,7 @@ object PodcastShowManager {
     fun assignPattern(pattern: String, showName: String): Boolean {
         val show = shows.find { it.name.equals(showName, ignoreCase = true) }
             ?: createShow(showName)
+        val pattern = pattern.replace('\u2019', '\'').replace('\u2018', '\'').replace('\u201C', '"').replace('\u201D', '"')
         extraPatterns[pattern.lowercase()] = show.id
         val idx = shows.indexOf(show)
         if (idx >= 0) {
@@ -3545,7 +3546,7 @@ object PodcastShowManager {
     }
 
     fun resolveShowForEpisode(path: String, title: String): String {
-        val combined = ("$path $title").lowercase()
+        val combined = ("$path $title").lowercase().replace('\u2019', '\'').replace('\u2018', '\'').replace('\u201C', '"').replace('\u201D', '"')
         extraPatterns.forEach { (pattern, showId) ->
             if (combined.contains(pattern)) return showId
         }
