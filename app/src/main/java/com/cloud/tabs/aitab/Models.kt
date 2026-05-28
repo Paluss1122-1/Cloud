@@ -21,7 +21,7 @@ val nvidiaModels = listOf(
 val geminiModels = listOf(
     Model("gemini-3.1-flash-lite", vision = true, weight = 2),
     Model("gemini-3-flash-preview", vision = true, weight = 2),
-    Model("gemini-2.5-pro", vision = true, weight = 3),
+    //Model("gemini-2.5-pro", vision = true, weight = 3),
     Model("gemini-2.5-flash", vision = true, weight = 2),
     Model("gemini-2.5-flash-lite", vision = true, weight = 1)
 )
