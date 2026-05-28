@@ -259,7 +259,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                                     " (${sizeString.replace("-", " ")})"
                                                 } else ""
                                             val weightInfo =
-                                                if (model.weight > 1) " [${model.weight}x]" else ""
+                                                if (model.weight > 1 && !prvt()) " [${model.weight}x]" else ""
                                             Text(
                                                 "$name$size$weightInfo",
                                                 textAlign = TextAlign.Left,
