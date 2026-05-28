@@ -103,7 +103,6 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
-import kotlin.time.Duration.Companion.minutes
 
 
 data class Vokabel(val latein: String, val deutsch: String, val id: Int)
@@ -201,13 +200,29 @@ fun VocabTab(paddingValues: PaddingValues) {
         val parsed = rawRecentMaterials.mapNotNull(::parseRecentMaterial)
         recentMaterialPreviews = parsed.map { material ->
             if (material.fileName != null && isImageFile(material.fileName)) {
-                val url = try {
-                    Config.client.storage.from("school").createSignedUrl(material.path, 10.minutes)
-                } catch (_: Exception) {
-                    null
-                }
+                val url = resolveFileUrl(context, material.subject, material.fileName)
                 material.copy(previewUrl = url)
             } else material
+        }
+    }
+    LaunchedEffect(Unit) {
+        try {
+            val parsed = rawRecentMaterials.mapNotNull(::parseRecentMaterial)
+            val valid = parsed.filter { material ->
+                if (material.fileName == null) return@filter false
+                val folderFiles = try {
+                    Config.client.storage.from("school").list(material.subject)
+                } catch (_: Exception) {
+                    return@filter true
+                }
+                folderFiles.any { it.name == material.fileName }
+            }
+            if (valid.size != parsed.size) {
+                rawRecentMaterials = valid.map(::serializeRecentMaterial)
+                prefs.edit { putString("recent_materials", rawRecentMaterials.joinToString("\u001e")) }
+            }
+        } catch (_: Exception) {
+        } finally {
         }
     }
     var selectedMaterialSubject by remember { mutableStateOf<String?>(null) }
@@ -459,14 +474,7 @@ fun VocabTab(paddingValues: PaddingValues) {
                     selectedMaterialFile = null
                     screen = VokabelTabScreen.DASHBOARD
                 },
-                savedSets = savedSets,
                 onOpenSet = { set -> openSetAndUpdateLastUsed(set) },
-                onLearnDirectly = {
-                    if (savedSets.isNotEmpty()) {
-                        val latest = savedSets.maxBy { it.lastUsed }
-                        openSetAndUpdateLastUsed(latest)
-                    }
-                },
                 paddingValues = paddingValues,
                 initialSubject = selectedMaterialSubject,
                 initialFile = selectedMaterialFile
