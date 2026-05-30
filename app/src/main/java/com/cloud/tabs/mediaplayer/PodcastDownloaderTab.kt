@@ -24,12 +24,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,25 +43,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import androidx.core.net.toUri
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cloud.core.objects.Config.PODCASTINDEX_API_KEY
 import com.cloud.core.objects.Config.PODCASTINDEX_API_SECRET
 import com.cloud.core.ui.AlertDialogCloud
 import com.cloud.core.ui.FeedCard
 import com.cloud.services.MediaPlayerService
-import com.cloud.spotifydownloader_own.data.DownloadRepositoryImpl
-import com.cloud.spotifydownloader_own.domain.DownloadState
-import com.cloud.spotifydownloader_own.ui.DownloadViewModel
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
 import org.json.JSONObject
 import java.io.File
 import java.net.URL
@@ -83,47 +70,15 @@ data class Episode(
     val publishDate: Long = 0L,
 )
 
-sealed class SearchResult {
-    data class Song(
-        val title: String,
-        val artist: String,
-        val spotifyUrl: String,
-        val coverUrl: String = "",
-    ) : SearchResult()
-
-    data class PodcastResult(
-        val feed: PodcastFeed
-    ) : SearchResult()
-}
+data class SearchResult(
+    val feed: PodcastFeed
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PodcastTab() {
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
-    val httpClient = remember {
-        HttpClient(OkHttp) {
-            install(ContentNegotiation) {
-                json(
-                    Json {
-                        ignoreUnknownKeys = true
-                        prettyPrint = true
-                    }
-                )
-            }
-        }
-    }
-    val factory = remember(context, httpClient) {
-        object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                val repo = DownloadRepositoryImpl(httpClient, context.applicationContext as Context)
-                return DownloadViewModel(repo) as T
-            }
-        }
-    }
-    val viewModel: DownloadViewModel = viewModel(factory = factory)
-    val downloadState by viewModel.downloadState.collectAsState()
 
     var query by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
@@ -132,7 +87,6 @@ fun PodcastTab() {
     var expandedFeedUrl by remember { mutableStateOf<String?>(null) }
     var episodes by remember { mutableStateOf<Map<String, List<Episode>>>(emptyMap()) }
     var loadingEpisodes by remember { mutableStateOf<String?>(null) }
-    var downloadingUrl by remember { mutableStateOf<String?>(null) }
     var feedToUnfav by remember { mutableStateOf<PodcastFeed?>(null) }
 
     suspend fun search(q: String) {
@@ -162,7 +116,7 @@ fun PodcastTab() {
             val arr = JSONObject(json).getJSONArray("feeds")
             val podcastResults = (0 until arr.length()).map { i ->
                 val f = arr.getJSONObject(i)
-                SearchResult.PodcastResult(
+                SearchResult(
                     PodcastFeed(
                         title = f.optString("title"),
                         author = f.optString("author").ifEmpty { f.optString("ownerName") },
@@ -320,23 +274,15 @@ fun PodcastTab() {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 12.dp),
-            placeholder = { Text("Podcast oder Spotify-Link…") },
+            placeholder = { Text("Podcast suchen…") },
             singleLine = true,
             trailingIcon = {
-                if (isSearching || downloadState is DownloadState.Searching) {
+                if (isSearching) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 } else {
                     IconButton(onClick = {
                         keyboard?.hide()
-                        scope.launch {
-                            when {
-                                query.contains("https://open.spotify.com/track/") -> {
-                                    downloadingUrl = query
-                                    viewModel.startDownload(query)
-                                }
-                                else -> search(query)
-                            }
-                        }
+                        scope.launch { search(query) }
                     }) {
                         Icon(Icons.Default.Search, contentDescription = null)
                     }
@@ -345,15 +291,7 @@ fun PodcastTab() {
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = {
                 keyboard?.hide()
-                scope.launch {
-                    when {
-                        query.contains("https://open.spotify.com/track/") -> {
-                            downloadingUrl = query
-                            viewModel.startDownload(query)
-                        }
-                        else -> search(query)
-                    }
-                }
+                scope.launch { search(query) }
             }),
             shape = RoundedCornerShape(12.dp),
         )
@@ -362,106 +300,10 @@ fun PodcastTab() {
             Text("Fehler: $it", color = MaterialTheme.colorScheme.error, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
         }
 
-        // Show comprehensive download status when downloading a song
-        when (downloadState) {
-            is DownloadState.Searching -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(40.dp), strokeWidth = 3.dp)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text("Suche nach Song…", fontSize = 14.sp, color = Color.White.copy(0.8f))
-                    }
-                }
-            }
-            is DownloadState.Downloading -> {
-                val progress = (downloadState as DownloadState.Downloading).progress
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        LinearProgressIndicator(
-                            progress = { progress / 100f },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            "Download: $progress%",
-                            fontSize = 14.sp,
-                            color = Color.White.copy(0.8f)
-                        )
-                    }
-                }
-            }
-            is DownloadState.Converting -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(40.dp), strokeWidth = 3.dp)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text("Konvertiere zu MP3…", fontSize = 14.sp, color = Color.White.copy(0.8f))
-                    }
-                }
-            }
-            is DownloadState.Success -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "✅ Download abgeschlossen!",
-                        fontSize = 14.sp,
-                        color = Color(0xFF4CAF50)
-                    )
-                }
-            }
-            is DownloadState.Error -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "❌ Fehler: ${(downloadState as DownloadState.Error).message}",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-            else -> {}
-        }
-
-        if (results.isEmpty() && !isSearching && downloadState is DownloadState.Idle) {
+        if (results.isEmpty() && !isSearching) {
             if (favorites.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("🎙️ Podcast oder 🎵 Song suchen", color = Color.White.copy(0.5f))
+                    Text("🎙️ Podcast suchen", color = Color.White.copy(0.5f))
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -490,33 +332,26 @@ fun PodcastTab() {
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(results) { result ->
-                    when (result) {
-                        is SearchResult.PodcastResult -> {
-                            val feed = result.feed
-                            val isExpanded = expandedFeedUrl == feed.feedUrl
-                            val feedEpisodes = episodes[feed.feedUrl]
-                            FeedCard(
-                                feed = feed, isExpanded = isExpanded, feedEpisodes = feedEpisodes,
-                                loadingEpisodes = loadingEpisodes, isFavorite = favorites.containsKey(feed.feedUrl),
-                                onToggleExpand = {
-                                    if (isExpanded) expandedFeedUrl = null
-                                    else { expandedFeedUrl = feed.feedUrl; scope.launch { loadEpisodes(feed.feedUrl) } }
-                                },
-                                onToggleFav = {
-                                    if (favorites.containsKey(feed.feedUrl)) feedToUnfav = feed
-                                    else {
-                                        favorites = favorites + (feed.feedUrl to feed)
-                                        saveFavs(favorites)
-                                    }
-                                },
-                                onDownload = { url, title -> downloadEpisode(url, title, feed.title) },
-                                onStream = { url -> streamEpisode(url) }
-                            )
-                        }
-                        is SearchResult.Song -> {
-                            // Song result - can be used for future Spotify search implementation
-                        }
-                    }
+                    val feed = result.feed
+                    val isExpanded = expandedFeedUrl == feed.feedUrl
+                    val feedEpisodes = episodes[feed.feedUrl]
+                    FeedCard(
+                        feed = feed, isExpanded = isExpanded, feedEpisodes = feedEpisodes,
+                        loadingEpisodes = loadingEpisodes, isFavorite = favorites.containsKey(feed.feedUrl),
+                        onToggleExpand = {
+                            if (isExpanded) expandedFeedUrl = null
+                            else { expandedFeedUrl = feed.feedUrl; scope.launch { loadEpisodes(feed.feedUrl) } }
+                        },
+                        onToggleFav = {
+                            if (favorites.containsKey(feed.feedUrl)) feedToUnfav = feed
+                            else {
+                                favorites = favorites + (feed.feedUrl to feed)
+                                saveFavs(favorites)
+                            }
+                        },
+                        onDownload = { url, title -> downloadEpisode(url, title, feed.title) },
+                        onStream = { url -> streamEpisode(url) }
+                    )
                 }
                 item { Spacer(Modifier.height(16.dp)) }
             }
