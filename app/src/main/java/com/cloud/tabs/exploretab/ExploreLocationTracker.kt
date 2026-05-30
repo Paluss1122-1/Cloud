@@ -57,6 +57,8 @@ object ExploreLocationTracker {
     private const val GEOFENCE_ID = "HOME"
     private const val GEOFENCE_RADIUS = 100f
     const val HOME_WIFI_SSID = "FRITZ!Box 5590 XO"
+    private const val NIGHT_START_HOUR = 0
+    private const val NIGHT_END_HOUR = 5
 
     private var locationCallback: LocationCallback? = null
     private var lastLocation: Location? = null
@@ -64,6 +66,11 @@ object ExploreLocationTracker {
 
     @Volatile
     private var isEnabled = false
+    
+    private fun isNightTime(): Boolean {
+        val hour = Instant.now().atZone(java.time.ZoneId.systemDefault()).hour
+        return hour in NIGHT_START_HOUR until NIGHT_END_HOUR
+    }
 
     private fun getClient(context: Context) = LocationServices.getFusedLocationProviderClient(context.applicationContext)
 
@@ -100,6 +107,12 @@ object ExploreLocationTracker {
 
     fun start(context: Context) {
         val appCtx = context.applicationContext
+        if (isNightTime()) {
+            reportError("ExploreTracker", "start() - Night time (0-5 Uhr), wird nicht gestartet", Instant.now().toString(), "LOG")
+            ExploreNightRestartWorker.schedule(appCtx)
+            return
+        }
+        ExploreNightRestartWorker.cancel(appCtx)
         if (isEnabled) {
             return
         }
@@ -118,7 +131,7 @@ object ExploreLocationTracker {
                 stop(appCtx)
                 return@getHomeWifiStatus
             }
-            if (isEnabled) {
+            if (isEnabled && !isNightTime()) {
                 startLocationUpdates(appCtx)
             }
         }
@@ -141,7 +154,7 @@ object ExploreLocationTracker {
 
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
-                if (!isEnabled) {
+                if (!isEnabled || isNightTime()) {
                     stop(context)
                     return
                 }
@@ -195,6 +208,10 @@ object ExploreLocationTracker {
             reportError("ExploreTracker", "stop() - war im Startvorgang, aber wurde gestoppt", Instant.now().toString(), "LOG")
         } else {
             reportError("ExploreTracker", "stop() - war bereits inaktiv", Instant.now().toString(), "LOG")
+        }
+        
+        if (isNightTime()) {
+            ExploreNightRestartWorker.schedule(appCtx)
         }
     }
 }
