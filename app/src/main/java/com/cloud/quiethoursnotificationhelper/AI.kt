@@ -16,9 +16,10 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-private fun buildSystemPrompt(target: String = ""):String {
+private fun buildSystemPrompt(target: String = ""): String {
     val aiTab = if (target == "AITab") " in einem Tab namens AITab" else ""
-    val aiTabInfo = if (target == "AITab") " Der Nutzer kann zwischen verschiedenen NVIDIA-Modellen und verschiedenen Gemini-Modellen auswählen – und hat sich für DICH entschieden." else ""
+    val aiTabInfo =
+        if (target == "AITab") " Der Nutzer kann zwischen verschiedenen NVIDIA-Modellen und verschiedenen Gemini-Modellen auswählen – und hat sich für DICH entschieden." else ""
     val notif = if (target == "notif") " von einem Reply System" else ""
     var str = ""
     if (target.isEmpty()) {
@@ -29,6 +30,18 @@ private fun buildSystemPrompt(target: String = ""):String {
                         * Antworte kurz, klar und auf Deutsch.
                         * Sei ein hilfsbereiter Chat-Assistent."""
             )
+            if (target == "AITab") {
+                append(
+                    """* Nutze Markdown für Formatierungen (Überschriften, Listen, Fettschrift etc.).
+                        * Nutze die folgenden Callouts für einprägsame Informationen (immer in einem eigenen Blockquote):
+                          - [!TIP] oder [!HINT] oder [!IMPORTANT] für Tipps und wichtige Hinweise
+                          - [!WARNING] oder [!CAUTION] oder [!ATTENTION] für einprägsame Informationen
+                          - [!INFO] für allgemeine Informationen
+                          - [!NOTE] für Notizen
+                          - [!SUCCESS] oder [!CHECK] oder [!DONE] für Erfolgsmeldungen
+                          - [!DANGER] oder [!ERROR] für Fehler""${'"'}"""
+                )
+            }
         }
     }
     return str
@@ -38,6 +51,9 @@ suspend fun sendGeminiRequest(
     history: List<ChatMessage>,
     userMessage: String,
     pic: String? = null,
+    audioUri: android.net.Uri? = null,
+    audio: String? = null,
+    ctx: android.content.Context? = null,
     anlytic: Boolean = false,
     model: String = DEF_GEMINI,
     onToken: ((String) -> Unit)? = null,
@@ -60,53 +76,44 @@ suspend fun sendGeminiRequest(
     val generativeModel = Firebase.ai(backend = GenerativeBackend.googleAI())
         .generativeModel(model)
 
-    return try {
-        if (pic != null) {
-            val imageBytes = Base64.decode(pic, Base64.NO_WRAP)
-            val bmp = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+    val promptText = buildGeminiPrompt(history, userMessage)
+    val bmp = pic?.let { Base64.decode(it, Base64.NO_WRAP) }
+        ?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+    val (audioBytes, audioMimeType) = if (audioUri != null && ctx != null) {
+        val mimeType = ctx.contentResolver.getType(audioUri) ?: "audio/mp3"
+        val bytes = ctx.contentResolver.openInputStream(audioUri)?.use { input ->
+            val output = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            var bytesRead: Int
+            while (input.read(buffer).also { bytesRead = it } != -1) {
+                output.write(buffer, 0, bytesRead)
+            }
+            output.toByteArray()
+        }
+        bytes to mimeType
+    } else {
+        audio?.let { Base64.decode(it, Base64.NO_WRAP) } to "audio/mp3"
+    }
 
-            if (onToken != null) {
-                val sb = StringBuilder()
-                generativeModel.generateContentStream(
-                    content {
-                        image(bmp)
-                        text(buildGeminiPrompt(history, userMessage))
-                    }
-                ).collect { chunk ->
-                    val delta = chunk.text ?: ""
-                    if (delta.isNotEmpty()) {
-                        sb.append(delta)
-                        withContext(Dispatchers.Main) { onToken(delta) }
-                    }
+    val requestContent = content {
+        bmp?.let { image(it) }
+        audioBytes?.let { inlineData(it, audioMimeType) }
+        text(promptText)
+    }
+
+    return try {
+        if (onToken != null) {
+            val sb = StringBuilder()
+            generativeModel.generateContentStream(requestContent).collect { chunk ->
+                val delta = chunk.text ?: ""
+                if (delta.isNotEmpty()) {
+                    sb.append(delta)
+                    withContext(Dispatchers.Main) { onToken(delta) }
                 }
-                sb.toString().ifBlank { null }
-            } else {
-                val response = generativeModel.generateContent(
-                    content {
-                        image(bmp)
-                        text(buildGeminiPrompt(history, userMessage))
-                    }
-                )
-                response.text
             }
+            sb.toString().ifBlank { null }
         } else {
-            if (onToken != null) {
-                val sb = StringBuilder()
-                generativeModel.generateContentStream(
-                    buildGeminiPrompt(history, userMessage)
-                ).collect { chunk ->
-                    val delta = chunk.text ?: ""
-                    if (delta.isNotEmpty()) {
-                        sb.append(delta)
-                        withContext(Dispatchers.Main) { onToken(delta) }
-                    }
-                }
-                sb.toString().ifBlank { null }
-            } else {
-                generativeModel.generateContent(
-                    buildGeminiPrompt(history, userMessage)
-                ).text
-            }
+            generativeModel.generateContent(requestContent).text
         }
     } catch (_: Exception) {
         null
@@ -183,7 +190,11 @@ suspend fun sendNvidiaChatMessageAITab(
                     readTimeout = 60_000
                     doOutput = true
                 }
-                connection.outputStream.use { it.write(requestBody.toString().toByteArray(Charsets.UTF_8)) }
+                connection.outputStream.use {
+                    it.write(
+                        requestBody.toString().toByteArray(Charsets.UTF_8)
+                    )
+                }
 
                 if (connection.responseCode != 200) return@withContext ""
 
