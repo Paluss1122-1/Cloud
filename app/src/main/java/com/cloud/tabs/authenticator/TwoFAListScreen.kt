@@ -83,6 +83,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricManager.Authenticators
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
@@ -112,7 +114,7 @@ private val TextT = Color(0xFF55556A)
 
 @SuppressLint("UseKtx")
 @Composable
-fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
+fun TwoFAListScreen(db: TwoFADatabase) {
 
     val scope = rememberCoroutineScope()
     var entries by remember { mutableStateOf<List<TwoFAEntry>>(emptyList()) }
@@ -243,9 +245,6 @@ fun TwoFAListScreen(db: TwoFADatabase, onOpenSettings: () -> Unit) {
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(Icons.Default.QrCodeScanner, null, tint = AccentBlue)
-                            }
-                            IconButton(onClick = onOpenSettings, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Default.Settings, null, tint = TextS)
                             }
                         }
                     }
@@ -887,7 +886,7 @@ object ScreenshotProtectionManager {
 }
 
 @Composable
-fun SettingsScreenWithScreenshotProtection(onBackClick: () -> Unit) {
+fun SettingsScreenWithScreenshotProtection() {
     val context = LocalContext.current
     val activity = LocalActivity.current
     val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -901,6 +900,12 @@ fun SettingsScreenWithScreenshotProtection(onBackClick: () -> Unit) {
             )
         )
     }
+    var showBiometricInfoDialog by remember { mutableStateOf(false) }
+    var biometricErrorMsg by remember { mutableStateOf("") }
+
+    val bm = BiometricManager.from(context)
+    val canAuth = bm.canAuthenticate(Authenticators.BIOMETRIC_STRONG)
+    val isBiometricAvailable = canAuth == BiometricManager.BIOMETRIC_SUCCESS
 
     Box(modifier = Modifier
         .fillMaxSize()
@@ -938,12 +943,27 @@ fun SettingsScreenWithScreenshotProtection(onBackClick: () -> Unit) {
                         Switch(
                             checked = lockEnabled,
                             onCheckedChange = { enabled ->
-                                lockEnabled = enabled
-                                prefs.edit(commit = true) {
-                                    putBoolean("lockEnabled", enabled)
-                                    putBoolean("authenticated", !enabled)
+                                if (isBiometricAvailable || !enabled) {
+                                    lockEnabled = enabled
+                                    prefs.edit(commit = true) {
+                                        putBoolean("lockEnabled", enabled)
+                                        putBoolean("authenticated", !enabled)
+                                    }
+                                } else {
+                                    biometricErrorMsg = when (canAuth) {
+                                        BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> 
+                                            "Keine Authentifizierung eingerichtet. Bitte richte einen Fingerabdruck oder PIN ein."
+                                        BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> 
+                                            "Biometrische Hardware nicht verfügbar"
+                                        BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> 
+                                            "Hardware temporär nicht verfügbar"
+                                        else -> 
+                                            "Authentifizierung nicht verfügbar"
+                                    }
+                                    showBiometricInfoDialog = true
                                 }
                             },
+                            enabled = isBiometricAvailable || lockEnabled,
                             colors = SwitchDefaults.colors(checkedTrackColor = AccentBlue)
                         )
                     }
@@ -1008,15 +1028,20 @@ fun SettingsScreenWithScreenshotProtection(onBackClick: () -> Unit) {
             ) {
                 Text("🔑 Autofill aktivieren", color = TextP)
             }
+        }
 
-            Spacer(Modifier.height(8.dp))
-
-            Button(
-                onClick = onBackClick,
-                colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) { Text("Zurück") }
+        if (showBiometricInfoDialog) {
+            AlertDialog(
+                onDismissRequest = { showBiometricInfoDialog = false },
+                containerColor = Surface1,
+                title = { Text("Biometrie nicht verfügbar", color = TextP) },
+                text = { Text(biometricErrorMsg, color = TextS) },
+                confirmButton = {
+                    TextButton(onClick = { showBiometricInfoDialog = false }) {
+                        Text("OK", color = AccentBlue)
+                    }
+                }
+            )
         }
     }
 }
