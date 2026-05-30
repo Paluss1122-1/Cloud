@@ -67,7 +67,8 @@ import javax.crypto.SecretKey
 
 private enum class AuthTab(val label: String, val icon: String) {
     PASSWORDS("Passwörter", "🔑"),
-    TWOFACTOR("2FA Codes", "🛡️")
+    TWOFACTOR("2FA Codes", "🛡️"),
+    SETTINGS("Einstellungen", "⚙️")
 }
 
 object BiometricKeyHelper {
@@ -290,27 +291,16 @@ private fun AuthenticatedContent(
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
-                TwoFAAppContent(db = twoFaDb)
+                TwoFAListScreen(db = twoFaDb)
             }
-        }
-    }
-}
 
-
-@Composable
-private fun TwoFAAppContent(db: TwoFADatabase) {
-    val navController = rememberNavController()
-    NavHost(navController, startDestination = "list") {
-        composable("list") {
-            TwoFAListScreen(
-                db = db,
-                onOpenSettings = { navController.navigate("settings") }
-            )
-        }
-        composable("settings") {
-            SettingsScreenWithScreenshotProtection(
-                onBackClick = { navController.popBackStack() }
-            )
+            AnimatedVisibility(
+                visible = selectedTab == AuthTab.SETTINGS,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                SettingsScreenWithScreenshotProtection()
+            }
         }
     }
 }
