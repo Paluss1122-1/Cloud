@@ -16,6 +16,8 @@ import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.AudioManager
 import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
@@ -45,6 +47,7 @@ import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.common.text.CueGroup
+import androidx.media3.common.util.BitmapLoader
 import androidx.media3.common.util.Size
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
@@ -64,6 +67,9 @@ import com.cloud.tabs.mediaplayer.FavoritesPlaylist
 import com.cloud.tabs.mediaplayer.ListenSession
 import com.cloud.tabs.mediaplayer.MediaAnalyticsManager
 import com.cloud.tabs.mediaplayer.PodcastShowManager
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.SettableFuture
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -143,14 +149,18 @@ class MediaPlayerService : MediaSessionService() {
 
         const val EXTRA_SONG_PATH = "extra_song_path"
 
-        fun playFromAllSongs(context: Context, path: String) = context.startForegroundService(
-            Intent(context, MediaPlayerService::class.java).apply {
-                action = ACTION_PLAY_ALL_SONGS_AT_INDEX
-                putExtra(EXTRA_SONG_PATH, path)
-            }
-        )
+        fun playFromAllSongs(context: Context, path: String) {
+            ensureServiceIsRunning(context)
+            context.startForegroundService(
+                Intent(context, MediaPlayerService::class.java).apply {
+                    action = ACTION_PLAY_ALL_SONGS_AT_INDEX
+                    putExtra(EXTRA_SONG_PATH, path)
+                }
+            )
+        }
 
-        fun activateAlgorithmicPlaylist(context: Context, sourceId: String, songIndex: Int = 0) =
+        fun activateAlgorithmicPlaylist(context: Context, sourceId: String, songIndex: Int = 0) {
+            ensureServiceIsRunning(context)
             context.startService(
                 Intent(context, MediaPlayerService::class.java).apply {
                     action = ACTION_ACTIVATE_ALGORITHMIC_PLAYLIST
@@ -158,53 +168,77 @@ class MediaPlayerService : MediaSessionService() {
                     putExtra(EXTRA_SONG_INDEX, songIndex)
                 }
             )
+        }
 
-        fun startMusicService(context: Context) = context.startForegroundService(
-            Intent(context, MediaPlayerService::class.java).apply {
-                action = ACTION_SWITCH_TO_MUSIC
-            }
-        )
+        fun startMusicService(context: Context) {
+            ensureServiceIsRunning(context)
+            context.startForegroundService(
+                Intent(context, MediaPlayerService::class.java).apply {
+                    action = ACTION_SWITCH_TO_MUSIC
+                }
+            )
+        }
 
-        fun startAndPlayMusic(context: Context, number: Int? = null) =
+        fun startAndPlayMusic(context: Context, number: Int? = null) {
+            ensureServiceIsRunning(context)
             context.startForegroundService(
                 Intent(context, MediaPlayerService::class.java).apply {
                     action = ACTION_MUSIC_PLAY
                     if (number != null && number > 0) putExtra(EXTRA_SONG_INDEX, number)
                 }
             )
+        }
 
-        fun sendMusicPlayAction(context: Context) = context.startService(
-            Intent(context, MediaPlayerService::class.java).apply { action = ACTION_MUSIC_PLAY }
-        )
+        fun sendMusicPlayAction(context: Context) {
+            ensureServiceIsRunning(context)
+            context.startService(
+                Intent(context, MediaPlayerService::class.java).apply { action = ACTION_MUSIC_PLAY }
+            )
+        }
 
-        fun toggleFavorite(context: Context) = context.startService(
-            Intent(context, MediaPlayerService::class.java).apply {
-                action = ACTION_TOGGLE_FAVORITE
-            }
-        )
+        fun toggleFavorite(context: Context) {
+            ensureServiceIsRunning(context)
+            context.startService(
+                Intent(context, MediaPlayerService::class.java).apply {
+                    action = ACTION_TOGGLE_FAVORITE
+                }
+            )
+        }
 
-        fun toggleFavoritesMode(context: Context) = context.startService(
-            Intent(context, MediaPlayerService::class.java).apply {
-                action = ACTION_TOGGLE_FAVORITES_MODE
-            }
-        )
+        fun toggleFavoritesMode(context: Context) {
+            ensureServiceIsRunning(context)
+            context.startService(
+                Intent(context, MediaPlayerService::class.java).apply {
+                    action = ACTION_TOGGLE_FAVORITES_MODE
+                }
+            )
+        }
 
-        fun startPodcastService(context: Context) = context.startForegroundService(
-            Intent(context, MediaPlayerService::class.java).apply {
-                action = ACTION_SWITCH_TO_PODCAST
-            }
-        )
+        fun startPodcastService(context: Context) {
+            ensureServiceIsRunning(context)
+            context.startForegroundService(
+                Intent(context, MediaPlayerService::class.java).apply {
+                    action = ACTION_SWITCH_TO_PODCAST
+                }
+            )
+        }
 
-        fun sendPodcastPlayAction(context: Context) = context.startService(
-            Intent(context, MediaPlayerService::class.java).apply { action = ACTION_PODCAST_PLAY }
-        )
+        fun sendPodcastPlayAction(context: Context) {
+            ensureServiceIsRunning(context)
+            context.startService(
+                Intent(context, MediaPlayerService::class.java).apply { action = ACTION_PODCAST_PLAY }
+            )
+        }
 
-        fun sendPodcastForwardAction(context: Context, ms: Int) = context.startService(
-            Intent(context, MediaPlayerService::class.java).apply {
-                action = ACTION_PODCAST_FORWARD
-                putExtra(EXTRA_FORWARD_MS, ms)
-            }
-        )
+        fun sendPodcastForwardAction(context: Context, ms: Int) {
+            ensureServiceIsRunning(context)
+            context.startService(
+                Intent(context, MediaPlayerService::class.java).apply {
+                    action = ACTION_PODCAST_FORWARD
+                    putExtra(EXTRA_FORWARD_MS, ms)
+                }
+            )
+        }
 
         fun managePodcast(context: Context) {
             if (isServiceActive()) {
@@ -222,6 +256,13 @@ class MediaPlayerService : MediaSessionService() {
         private var isRunning = false
 
         fun isServiceActive() = isRunning
+
+        fun ensureServiceIsRunning(context: Context) {
+            if (!isRunning) {
+                // Start the service in foreground mode
+                context.startForegroundService(Intent(context, MediaPlayerService::class.java))
+            }
+        }
 
         @SuppressLint("LaunchActivityFromNotification")
         private fun showCompletedPodcastsWithoutService(context: Context) {
@@ -390,12 +431,15 @@ class MediaPlayerService : MediaSessionService() {
             context.startService(intent)
         }
 
-        fun streamRemote(context: Context, url: String) = context.startService(
-            Intent(context, MediaPlayerService::class.java).apply {
-                action = ACTION_STREAM_REMOTE
-                putExtra(EXTRA_STREAM_URL, url)
-            }
-        )
+        fun streamRemote(context: Context, url: String) {
+            ensureServiceIsRunning(context)
+            context.startService(
+                Intent(context, MediaPlayerService::class.java).apply {
+                    action = ACTION_STREAM_REMOTE
+                    putExtra(EXTRA_STREAM_URL, url)
+                }
+            )
+        }
     }
 
     data class Song(val uri: Uri, val name: String, val path: String)
@@ -448,6 +492,7 @@ class MediaPlayerService : MediaSessionService() {
     private var canPostNotifications = true
 
     private var mediaSession: MediaSession? = null
+    private var dummyPlayer: DummyPlayer? = null
     private lateinit var musicPrefs: SharedPreferences
     private lateinit var podcastPrefs: SharedPreferences
     private val handler = Handler(Looper.getMainLooper())
@@ -558,7 +603,7 @@ class MediaPlayerService : MediaSessionService() {
         val wasPlayingPodcast = musicPrefs.getBoolean("was_playing_podcast", false)
 
         Handler(Looper.getMainLooper()).post {
-            if (wasPlayingMusic) {
+           if (wasPlayingMusic) {
                 ensureMusicMode()
                 loadSong(currentSongIndex)
                 val savedPosition = musicPrefs.getLong("music_position_ms", 0L)
@@ -608,7 +653,9 @@ class MediaPlayerService : MediaSessionService() {
             }
 
             ACTION_MUSIC_PLAY -> {
-                ensureMusicMode(); playMusic()
+                ensureMusicMode()
+                deactivatePlaylist()
+                playMusic()
             }
 
             ACTION_STREAM_REMOTE -> {
@@ -1077,9 +1124,64 @@ class MediaPlayerService : MediaSessionService() {
         }
     }
 
+    @OptIn(UnstableApi::class)
     private fun createMediaSession() {
-        mediaSession = MediaSession.Builder(this, DummyPlayer())
+        val bitmapLoader = object : BitmapLoader {
+            override fun supportsMimeType(mimeType: String): Boolean {
+                return mimeType.startsWith("image/")
+            }
+
+            override fun loadBitmap(uri: Uri): ListenableFuture<Bitmap> {
+                val future = SettableFuture.create<Bitmap>()
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val retriever = MediaMetadataRetriever()
+                        try {
+                            retriever.setDataSource(applicationContext, uri)
+                            val pictureBytes = retriever.embeddedPicture
+                            if (pictureBytes != null) {
+                                val bitmap = BitmapFactory.decodeByteArray(pictureBytes, 0, pictureBytes.size)
+                                if (bitmap != null) {
+                                    future.set(bitmap)
+                                } else {
+                                    future.setException(Exception("Failed to decode bitmap"))
+                                }
+                            } else {
+                                future.setException(Exception("No embedded picture found"))
+                            }
+                        } finally {
+                            retriever.release()
+                        }
+                    } catch (e: Exception) {
+                        future.setException(e)
+                    }
+                }
+                return future
+            }
+
+            override fun decodeBitmap(data: ByteArray): ListenableFuture<Bitmap> {
+                val future = SettableFuture.create<Bitmap>()
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size)
+                        if (bitmap != null) {
+                            future.set(bitmap)
+                        } else {
+                            future.setException(Exception("Failed to decode bitmap"))
+                        }
+                    } catch (e: Exception) {
+                        future.setException(e)
+                    }
+                }
+                return future
+            }
+        }
+
+        dummyPlayer = DummyPlayer()
+        mediaSession = MediaSession.Builder(this, dummyPlayer!!)
             .setId("CombinedMediaSession")
+            .setBitmapLoader(bitmapLoader)
+            .setPeriodicPositionUpdateEnabled(false)
             .setSessionActivity(
                 PendingIntent.getActivity(
                     this, 0,
@@ -1160,6 +1262,8 @@ class MediaPlayerService : MediaSessionService() {
             musicPlayer?.start()
             musicPrefs.editAsync { putBoolean("is_playing", true) }
             isPlayingMusic = true
+            dummyPlayer?.setIsPlaying(true)
+            dummyPlayer?.setPlaybackState(Player.STATE_READY)
             updateNotification()
             return
         }
@@ -1218,6 +1322,46 @@ class MediaPlayerService : MediaSessionService() {
                 saveMusicState()
                 updateNotification()
                 musicPrefs.editAsync { putBoolean("is_playing", true) }
+
+                // Extract metadata and update media session
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val retriever = MediaMetadataRetriever()
+                        try {
+                            retriever.setDataSource(applicationContext, song.uri)
+                            val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: song.name
+                            val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: "Unknown Artist"
+                            val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: "Unknown Album"
+
+                            val mediaMetadata = MediaMetadata.Builder()
+                                .setTitle(title)
+                                .setArtist(artist)
+                                .setAlbumTitle(album)
+                                .setArtworkUri(song.uri)
+                                .build()
+
+                            handler.post {
+                                dummyPlayer?.setMediaMetadata(mediaMetadata)
+                                dummyPlayer?.setIsPlaying(true)
+                                dummyPlayer?.setPlaybackState(Player.STATE_READY)
+                            }
+                        } finally {
+                            retriever.release()
+                        }
+                    } catch (_: Exception) {
+                        // Fallback to basic metadata
+                        val mediaMetadata = MediaMetadata.Builder()
+                            .setTitle(song.name)
+                            .setArtworkUri(song.uri)
+                            .build()
+                        handler.post {
+                            dummyPlayer?.setMediaMetadata(mediaMetadata)
+                            dummyPlayer?.setIsPlaying(true)
+                            dummyPlayer?.setPlaybackState(Player.STATE_READY)
+                        }
+                    }
+                }
+
                 return
             } catch (_: Exception) {
                 musicPlayer?.release()
@@ -1228,6 +1372,8 @@ class MediaPlayerService : MediaSessionService() {
         }
 
         isPlayingMusic = false
+        dummyPlayer?.setIsPlaying(false)
+        dummyPlayer?.setPlaybackState(Player.STATE_IDLE)
         updateNotification()
     }
 
@@ -1252,6 +1398,7 @@ class MediaPlayerService : MediaSessionService() {
         musicPlayer?.pause()
         musicPrefs.editAsync { putBoolean("is_playing", false) }
         isPlayingMusic = false
+        dummyPlayer?.setIsPlaying(false)
         updateNotification(instantUpdate = false)
     }
 
@@ -2374,9 +2521,18 @@ class MediaPlayerService : MediaSessionService() {
 
     @UnstableApi
     private class DummyPlayer : Player {
+        private val listeners = mutableListOf<Player.Listener>()
+        private var mediaMetadata: MediaMetadata = MediaMetadata.EMPTY
+        private var isPlayingState: Boolean = false
+        private var playbackState: Int = Player.STATE_IDLE
+
         override fun getApplicationLooper(): Looper = Looper.getMainLooper()
-        override fun addListener(listener: Player.Listener) {}
-        override fun removeListener(listener: Player.Listener) {}
+        override fun addListener(listener: Player.Listener) {
+            listeners.add(listener)
+        }
+        override fun removeListener(listener: Player.Listener) {
+            listeners.remove(listener)
+        }
         override fun setMediaItems(mediaItems: MutableList<MediaItem>) {}
         override fun setMediaItems(mediaItems: MutableList<MediaItem>, resetPosition: Boolean) {}
         override fun setMediaItems(
@@ -2410,9 +2566,9 @@ class MediaPlayerService : MediaSessionService() {
         override fun canAdvertiseSession() = true
         override fun getAvailableCommands(): Player.Commands = Player.Commands.EMPTY
         override fun prepare() {}
-        override fun getPlaybackState() = Player.STATE_IDLE
+        override fun getPlaybackState() = playbackState
         override fun getPlaybackSuppressionReason() = Player.PLAYBACK_SUPPRESSION_REASON_NONE
-        override fun isPlaying() = false
+        override fun isPlaying() = isPlayingState
         override fun getPlayerError(): PlaybackException? = null
         override fun play() {}
         override fun pause() {}
@@ -2448,7 +2604,7 @@ class MediaPlayerService : MediaSessionService() {
             TrackSelectionParameters.DEFAULT
 
         override fun setTrackSelectionParameters(parameters: TrackSelectionParameters) {}
-        override fun getMediaMetadata(): MediaMetadata = MediaMetadata.EMPTY
+        override fun getMediaMetadata(): MediaMetadata = mediaMetadata
         override fun getPlaylistMetadata(): MediaMetadata = MediaMetadata.EMPTY
         override fun setPlaylistMetadata(mediaMetadata: MediaMetadata) {}
         override fun getCurrentManifest(): Any? = null
@@ -2493,6 +2649,21 @@ class MediaPlayerService : MediaSessionService() {
         override fun getContentDuration() = 0L
         override fun getContentPosition() = 0L
         override fun getContentBufferedPosition() = 0L
+
+        fun setMediaMetadata(metadata: MediaMetadata) {
+            mediaMetadata = metadata
+            listeners.forEach { it.onMediaMetadataChanged(metadata) }
+        }
+
+        fun setIsPlaying(isPlaying: Boolean) {
+            isPlayingState = isPlaying
+            listeners.forEach { it.onIsPlayingChanged(isPlaying) }
+        }
+
+        fun setPlaybackState(state: Int) {
+            playbackState = state
+            listeners.forEach { it.onPlaybackStateChanged(state) }
+        }
         override fun getAudioAttributes(): AudioAttributes = AudioAttributes.DEFAULT
         override fun setVolume(volume: Float) {}
         override fun getVolume() = 1f

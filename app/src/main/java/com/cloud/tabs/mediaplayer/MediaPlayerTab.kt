@@ -73,7 +73,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -456,12 +456,24 @@ private fun HomeTab(
             null
         )
     }
+    // Cache for algorithmic playlist data
+    var cachedDetailPlaylistData by remember {
+        mutableStateOf<Pair<PlaylistSource, List<MediaPlayerService.Song>>?>(
+            null
+        )
+    }
 
     val activePodcasts = remember(state.episodes) {
         state.episodes.filter { !it.isCompleted && it.savedPositionMs > 0 }
     }
 
     var detailUserPlaylist by remember { mutableStateOf<MediaPlayerService.Playlist?>(null) }
+    // Cache for user playlist data
+    var cachedDetailUserPlaylistData by remember {
+        mutableStateOf<Pair<MediaPlayerService.Playlist, List<MediaPlayerService.Song>>?>(
+            null
+        )
+    }
 
     val recentSongs = remember(state.songs) {
         val sessions = MediaAnalyticsManager.getSessions()
@@ -496,6 +508,14 @@ private fun HomeTab(
         }
     }
 
+    // Periodic refresh every second, even if sheets are open
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000)
+            onRefresh()
+        }
+    }
+
     if (showAiHistory) {
         AiResponseHistorySheet(
             context = context,
@@ -503,15 +523,10 @@ private fun HomeTab(
         )
     }
 
-    PullToRefreshBox(
-        isRefreshing = state.isLoading,
-        onRefresh = onRefresh,
-        modifier = modifier.fillMaxSize()
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 24.dp)
-        ) {
             item {
                 Column(
                     modifier = Modifier
@@ -589,6 +604,7 @@ private fun HomeTab(
                                     if (source.id == "favorites") {
                                         MediaPlayerService.toggleFavoritesMode(context)
                                     } else {
+                                        cachedDetailPlaylistData = source to songs
                                         detailPlaylist = source to songs
                                     }
                                 }
@@ -607,6 +623,7 @@ private fun HomeTab(
                     ) {
                         items(state.userPlaylists) { playlist ->
                             val songCount = playlist.items.size
+                            val currentSongs = state.songs.filter { playlist.items.contains(it.path) }
                             Box(
                                 modifier = Modifier
                                     .size(160.dp, 200.dp)
@@ -619,7 +636,10 @@ private fun HomeTab(
                                             )
                                         )
                                     )
-                                    .clickable { detailUserPlaylist = playlist }
+                                    .clickable {
+                                        cachedDetailUserPlaylistData = playlist to currentSongs
+                                        detailUserPlaylist = playlist
+                                    }
                                     .padding(16.dp)
                             ) {
                                 Column(
@@ -677,31 +697,52 @@ private fun HomeTab(
                     EmptyState(
                         icon = "🎵",
                         title = "Keine Medien gefunden",
-                        subtitle = "Lege Musik in /Cloud/ ab und ziehe zum Aktualisieren"
+                        subtitle = "Lege Musik in /Cloud/ ab"
                     )
                 }
             }
         }
-    }
-    detailPlaylist?.let { (source, songs) ->
+    // For algorithmic playlist: use cached data if available, otherwise new data
+    (detailPlaylist ?: cachedDetailPlaylistData)?.let { (source, songs) ->
+        // Update cache with current state data for the same source
+        if (detailPlaylist != null) {
+            val currentData = state.algorithmicPlaylists.find { it.first.id == source.id }
+            if (currentData != null) {
+                cachedDetailPlaylistData = currentData
+            }
+        }
         PlaylistDetailSheet(
             title = source.name,
             icon = source.icon,
-            songs = songs,
+            songs = (detailPlaylist ?: cachedDetailPlaylistData)!!.second,
             onStart = { onSongClick(it) },
-            onDismiss = { detailPlaylist = null },
+            onDismiss = {
+                detailPlaylist = null
+                cachedDetailPlaylistData = null
+            },
             algorithmicSourceId = source.id
         )
     }
 
-    detailUserPlaylist?.let { playlist ->
-        val songs = state.songs.filter { playlist.items.contains(it.path) }
+    // For user playlist: use cached data if available, otherwise new data
+    (detailUserPlaylist?.let { playlist ->
+        val currentSongs = state.songs.filter { playlist.items.contains(it.path) }
+        playlist to currentSongs
+    } ?: cachedDetailUserPlaylistData)?.let { (playlist, songs) ->
+        // Update cache with current state data
+        if (detailUserPlaylist != null) {
+            val currentSongs = state.songs.filter { playlist.items.contains(it.path) }
+            cachedDetailUserPlaylistData = playlist to currentSongs
+        }
         PlaylistDetailSheet(
             title = playlist.name,
             icon = "🎵",
             songs = songs,
             onStart = { onSongClick(it) },
-            onDismiss = { detailUserPlaylist = null }
+            onDismiss = {
+                detailUserPlaylist = null
+                cachedDetailUserPlaylistData = null
+            }
         )
     }
 }
@@ -2277,8 +2318,7 @@ private fun playSong(
     song: MediaPlayerService.Song,
     allSongs: List<MediaPlayerService.Song>
 ) {
-    val index = allSongs.indexOf(song) + 1
-    MediaPlayerService.startAndPlayMusic(context, index.coerceAtLeast(1))
+    MediaPlayerService.playFromAllSongs(context, song.path)
 }
 
 private fun playEpisode(context: Context, ep: PodcastEpisode) {
