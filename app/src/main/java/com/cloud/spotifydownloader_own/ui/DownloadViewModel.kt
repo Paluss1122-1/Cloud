@@ -1,16 +1,19 @@
 package com.cloud.spotifydownloader_own.ui
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cloud.spotifydownloader_own.domain.DownloadRepository
 import com.cloud.spotifydownloader_own.domain.DownloadState
+import com.cloud.spotifydownloader_own.domain.generateAndSaveHashtags
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class DownloadViewModel(
-    private val repository: DownloadRepository
+    private val repository: DownloadRepository,
+    private val context: Context
 ) : ViewModel() {
 
     private val _downloadState = MutableStateFlow<DownloadState>(DownloadState.Idle)
@@ -20,6 +23,16 @@ class DownloadViewModel(
         viewModelScope.launch {
             repository.downloadTrack(url).collect { state ->
                 _downloadState.value = state
+                if (state is DownloadState.Success) {
+                    generateAndSaveHashtags(
+                        ctx = context,
+                        trackId = state.trackId,
+                        title = state.title,
+                        artist = state.artist,
+                        album = state.album,
+                        fileUri = state.fileUri
+                    )
+                }
             }
         }
     }
