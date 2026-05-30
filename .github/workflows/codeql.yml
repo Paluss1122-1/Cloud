@@ -35,10 +35,6 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      # gradle/actions/setup-gradle handles all Gradle caching (dependencies,
-      # wrapper, build cache, configuration cache) far more efficiently than
-      # a manual actions/cache step. cache-read-only on PRs prevents untrusted
-      # branches from polluting the shared cache.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
