@@ -33,7 +33,6 @@ import com.cloud.core.ui.c
 import com.cloud.tabs.JsonEditorContent
 import io.github.jan.supabase.storage.storage
 import java.io.File
-import java.io.FileOutputStream
 
 class MyDeviceAdminReceiver : DeviceAdminReceiver()
 
@@ -90,6 +89,14 @@ class MainActivity : FragmentActivity() {
 
         launcher.launch(permissions)
 
+        val musicPrefs = getSharedPreferences("music_player_prefs", MODE_PRIVATE)
+        val wasPlayingMusic = musicPrefs.getBoolean("was_playing_music", false)
+        val wasPlayingPodcast = musicPrefs.getBoolean("was_playing_podcast", false)
+        
+        if (wasPlayingMusic || wasPlayingPodcast) {
+            com.cloud.services.MediaPlayerService.startMusicService(this)
+        }
+
         checkPermissionsAndHandleIntent(intent)
 
         val startTarget = intent.getStringExtra("target")
@@ -131,15 +138,12 @@ class MainActivity : FragmentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
 
-        if (!showJsonEditor) {
-            checkPermissionsAndHandleIntent(intent)
-        } else {
+        if (showJsonEditor) {
             showJsonEditor = false
             jsonFilePath = null
             jsonFileUri = null
-
-            checkPermissionsAndHandleIntent(intent)
         }
+        checkPermissionsAndHandleIntent(intent)
     }
 
     private fun checkPermissionsAndHandleIntent(intent: Intent) {
@@ -201,10 +205,8 @@ class MainActivity : FragmentActivity() {
         }
 
         val tempFile = File(cacheDir, fileName)
-        val outputStream = FileOutputStream(tempFile)
-
-        inputStream.use { input ->
-            outputStream.use { output ->
+        tempFile.outputStream().use { output ->
+            inputStream.use { input ->
                 input.copyTo(output)
             }
         }
