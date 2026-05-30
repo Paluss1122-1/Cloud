@@ -149,21 +149,21 @@ class ShareActivity : ComponentActivity() {
         fileName: String,
         mimeType: String
     ): Boolean {
-        if (laptopIp == "") return false
-        try {
-            val socket = Socket()
-            socket.connect(InetSocketAddress(laptopIp, Config.IMAGE_SHARE_PORT), 3000)
-            val out = socket.getOutputStream()
-
-            val header = "$fileName|$mimeType\n".toByteArray(Charsets.UTF_8)
-            out.write(header)
-            out.write(bytes)
-            out.flush()
-            socket.close()
-            return true
+        if (laptopIp.isEmpty()) return false
+        return try {
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress(laptopIp, Config.IMAGE_SHARE_PORT), 3000)
+                socket.getOutputStream().use { out ->
+                    val header = "$fileName|$mimeType\n".toByteArray(Charsets.UTF_8)
+                    out.write(header)
+                    out.write(bytes)
+                    out.flush()
+                }
+            }
+            true
         } catch (_: Exception) {
+            false
         }
-        return false
     }
 
     private fun getFileNameFromUri(uri: Uri): String {
