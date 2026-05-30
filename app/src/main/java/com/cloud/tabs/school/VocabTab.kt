@@ -171,6 +171,7 @@ fun VocabTab(paddingValues: PaddingValues) {
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var savedSets by remember { mutableStateOf(loadVokabelSets(prefs)) }
     var activeSet by remember { mutableStateOf<VokabelSet?>(null) }
+    var cachedSetName by remember { mutableStateOf<String?>(null) }
     var showSaveDialog by remember { mutableStateOf(false) }
     var saveNameInput by remember { mutableStateOf("") }
     var lastWidths by remember { mutableStateOf<List<WidthState>>(emptyList()) }
@@ -192,6 +193,7 @@ fun VocabTab(paddingValues: PaddingValues) {
         val updatedSet = set.copy(lastUsed = System.currentTimeMillis())
         savedSets = saveVokabelSet(prefs, updatedSet)
         activeSet = updatedSet
+        cachedSetName = set.name
         vokabeln = updatedSet.vokabeln
         screen = VokabelTabScreen.LEARN
     }
@@ -259,6 +261,7 @@ fun VocabTab(paddingValues: PaddingValues) {
                 appScope.launch {
                     val set = VokabelSet(name.trim(), vokabeln)
                     savedSets = saveVokabelSet(prefs, set)
+                    cachedSetName = name.trim()
                     showSaveDialog = false
                     saveNameInput = ""
                     comingFromScan = false
@@ -425,7 +428,7 @@ fun VocabTab(paddingValues: PaddingValues) {
 
             VokabelTabScreen.REVIEW -> ReviewScreen(
                 vokabeln = vokabeln,
-                setName = activeSet?.name,
+                setName = activeSet?.name ?: cachedSetName,
                 isExtracting = isExtracting,
                 fromScan = comingFromScan,
                 onVokabelnChanged = { vokabeln = it },
@@ -454,8 +457,9 @@ fun VocabTab(paddingValues: PaddingValues) {
                     lastWidths = currentWidths
                     screen =
                         if (activeSet != null) VokabelTabScreen.HOME else VokabelTabScreen.REVIEW
+                    activeSet = null
                 },
-                setName = activeSet?.name,
+                setName = activeSet?.name ?: cachedSetName,
                 onVokabelnUpdated = { updatedVokabeln ->
                     vokabeln = updatedVokabeln
                     activeSet = activeSet?.copy(vokabeln = updatedVokabeln)
@@ -519,9 +523,9 @@ fun SchoolDashboard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier
-                        .clickable { onVocabClick() }
                         .clip(RoundedCornerShape(16.dp))
                         .background(MaterialTheme.colorScheme.primary)
+                        .clickable { onVocabClick() }
                         .padding(horizontal = 20.dp, vertical = 18.dp)
                         .weight(1f)
                 ) {
@@ -538,9 +542,9 @@ fun SchoolDashboard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier
-                        .clickable { onMaterialClick() }
                         .clip(RoundedCornerShape(16.dp))
                         .background(MaterialTheme.colorScheme.primary)
+                        .clickable { onMaterialClick() }
                         .padding(horizontal = 20.dp, vertical = 18.dp)
                         .weight(1f)
                 ) {
