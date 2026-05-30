@@ -107,13 +107,13 @@ class DownloadRepositoryImpl(
                 try { URL(it).readBytes() } catch (_: Exception) { null }
             }
 
-            saveFileFromChannel(fileName, channel, contentLength, "audio/mpeg", trackId, trackTitle, artist, album, coverBytes) { progress ->
+            val fileUri = saveFileFromChannel(fileName, channel, contentLength, "audio/mpeg", trackId, trackTitle, artist, album, coverBytes) { progress ->
                 send(DownloadState.Downloading(20 + (progress * 0.7).toInt()))
             }
 
             send(DownloadState.Converting)
             delay(500)
-            send(DownloadState.Success)
+            send(DownloadState.Success(trackId, trackTitle, artist, album, fileName, fileUri))
         } catch (e: Exception) {
             send(DownloadState.Error("Download fehlgeschlagen: ${e.localizedMessage}"))
         }
@@ -131,14 +131,13 @@ class DownloadRepositoryImpl(
         album: String,
         coverBytes: ByteArray?,
         onProgress: suspend (Int) -> Unit
-    ) {
+    ): android.net.Uri {
         val resolver = context.contentResolver
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
             put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Cloud")
 
-            // 1. NEU: Blockiert den Media-Scanner, solange wir schreiben!
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
 
@@ -148,7 +147,6 @@ class DownloadRepositoryImpl(
         try {
             withContext(Dispatchers.IO) {
                 resolver.openOutputStream(uri)?.use { outputStream ->
-                    // Unser eigenes Cover und Metadaten ganz an den Anfang schreiben
                     val id3Tag = buildId3Tag(trackId, title, artist, album, coverBytes)
                     outputStream.write(id3Tag)
 
@@ -164,7 +162,6 @@ class DownloadRepositoryImpl(
                         var writeOffset = 0
                         var writeLength = read
 
-                        // Überspringt den alten ID3 Tag des Streams
                         if (!id3Skipped) {
                             if (id3SkipBytes == 0 && read >= 10 &&
                                 buffer[0] == 0x49.toByte() &&
@@ -172,9 +169,9 @@ class DownloadRepositoryImpl(
                                 buffer[2] == 0x33.toByte()
                             ) {
                                 val tagSize = ((buffer[6].toInt() and 0x7F) shl 21) or
-                                        ((buffer[7].toInt() and 0x7F) shl 14) or
-                                        ((buffer[8].toInt() and 0x7F) shl 7) or
-                                        (buffer[9].toInt() and 0x7F)
+                                    ((buffer[7].toInt() and 0x7F) shl 14) or
+                                    ((buffer[8].toInt() and 0x7F) shl 7) or
+                                    (buffer[9].toInt() and 0x7F)
                                 id3SkipBytes = 10 + tagSize
                             }
                             if (id3SkipBytes > 0) {
@@ -199,8 +196,6 @@ class DownloadRepositoryImpl(
                 }
             }
 
-            // 2. NEU: Datei ist fertig geschrieben und geschlossen.
-            // Jetzt heben wir die Sperre auf und geben dem System die harten Metadaten mit.
             val updateValues = ContentValues().apply {
                 put(MediaStore.MediaColumns.IS_PENDING, 0)
                 put(MediaStore.Audio.Media.TITLE, title)
@@ -213,6 +208,7 @@ class DownloadRepositoryImpl(
             resolver.delete(uri, null, null)
             throw e
         }
+        return uri
     }
 
     private fun buildId3Tag(
@@ -224,7 +220,6 @@ class DownloadRepositoryImpl(
     ): ByteArray {
         val frames = ByteArrayOutputStream()
 
-        // Hilfsfunktion für ID3v2.3 Frame-Größen (Normale 4-Byte Integer)
         fun writeFrameHeader(id: String, size: Int) {
             frames.write(id.toByteArray(Charsets.ISO_8859_1))
             frames.write(byteArrayOf(
@@ -232,39 +227,34 @@ class DownloadRepositoryImpl(
                 ((size shr 16) and 0xFF).toByte(),
                 ((size shr 8) and 0xFF).toByte(),
                 (size and 0xFF).toByte(),
-                0x00, 0x00 // Flags
+                0x00, 0x00
             ))
         }
         fun encodeTextFrame(id: String, text: String) {
-            val textBytes = byteArrayOf(0x03) + text.toByteArray(Charsets.UTF_8) // 0x03 = UTF-8
+            val textBytes = byteArrayOf(0x03) + text.toByteArray(Charsets.UTF_8)
             writeFrameHeader(id, textBytes.size)
             frames.write(textBytes)
         }
 
-        // 1. Text-Frames schreiben
         encodeTextFrame("TIT2", title)
         encodeTextFrame("TPE1", artist)
         encodeTextFrame("TALB", album)
 
-        // 2. UFID-Frame schreiben
         val ufidOwner = "http://www.spotify.com".toByteArray(Charsets.ISO_8859_1)
         val ufidId = "spotify:track:$trackId".toByteArray(Charsets.ISO_8859_1)
         val ufidContent = ufidOwner + byteArrayOf(0x00) + ufidId
         writeFrameHeader("UFID", ufidContent.size)
         frames.write(ufidContent)
 
-        // 3. APIC-Frame (Cover) schreiben
-        // 3. APIC-Frame (Cover) schreiben
         if (coverBytes != null) {
             val mimeBytes = "image/jpeg".toByteArray(Charsets.ISO_8859_1)
 
             val apicHeader = ByteArrayOutputStream().apply {
-                write(0x00) // 1. Text Encoding: ISO-8859-1
-                write(mimeBytes) // 2. MIME type (image/jpeg)
-                write(0x00) // 3. MIME type Terminator
-                write(0x03) // 4. Picture Type: Front Cover
-                write(0x00) // 5. Description (leerer String)
-                // Hinweis: Bei ISO-8859-1 reicht dieses eine 0x00-Byte gleichzeitig als leere Description + Terminator
+                write(0x00)
+                write(mimeBytes)
+                write(0x00)
+                write(0x03)
+                write(0x00)
             }
 
             val apicContent = apicHeader.toByteArray() + coverBytes
@@ -275,7 +265,6 @@ class DownloadRepositoryImpl(
         val framesBytes = frames.toByteArray()
         val tagSize = framesBytes.size
 
-        // Der Haupt-Header (Ganz oben auf Dateiebene) benötigt bei ID3v2.3 IMMER Syncsafe!
         fun toSyncsafe(n: Int) = byteArrayOf(
             ((n shr 21) and 0x7F).toByte(),
             ((n shr 14) and 0x7F).toByte(),
@@ -283,7 +272,6 @@ class DownloadRepositoryImpl(
             (n and 0x7F).toByte()
         )
 
-        // '0x03, 0x00' signalisiert dem Pixel: Das hier ist sauberes ID3v2.3
         val header = byteArrayOf(0x49, 0x44, 0x33, 0x03, 0x00, 0x00) + toSyncsafe(tagSize)
         return header + framesBytes
     }
