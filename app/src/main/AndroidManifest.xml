@@ -90,6 +90,10 @@
         android:usesCleartextTraffic="true"
         android:windowSoftInputMode="adjustResize">
 
+        <meta-data
+            android:name="android.content.pm.ATTRIBUTION_TAGS"
+            android:value="" />
+
         <activity
             android:name=".core.activities.MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|smallestScreenSize"
