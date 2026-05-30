@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -40,6 +42,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -67,6 +70,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -88,6 +92,7 @@ import com.cloud.core.ui.BgSurface
 import com.cloud.core.ui.TextPrimary
 import com.cloud.core.ui.TextSecondary
 import com.cloud.core.ui.TextTertiary
+import com.cloud.core.ui.calloutAwareMarkdownComponents
 import com.cloud.quiethoursnotificationhelper.sendGeminiRequest
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
@@ -105,6 +110,12 @@ data class MaterialUploadState(
 )
 
 enum class UploadStatus { PENDING, UPLOADING, DONE, ERROR }
+
+data class AiSummaryState(
+    val summary: String? = null,
+    val loading: Boolean = false,
+    val analysisStarted: Boolean = false
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -141,6 +152,8 @@ fun MaterialienScreen(
     }
 
     var recentMaterialPreviews by remember { mutableStateOf<List<RecentMaterial>>(emptyList()) }
+
+    var aiSummaryStates by remember { mutableStateOf<Map<String, AiSummaryState>>(emptyMap()) }
 
     fun persistRecentMaterial(subject: String, fileName: String? = null) {
         if (fileName == null) return
@@ -640,103 +653,144 @@ fun MaterialienScreen(
         }
     }
 
+    suspend fun runOcrAndSummary(
+        fileKey: String,
+        subject: String,
+        fileName: String,
+        forceRefresh: Boolean = false
+    ) {
+        val cacheKeyBase = "cache_${subject}_${fileName}"
+        
+        aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(loading = true, analysisStarted = true))
+        
+        if (!forceRefresh) {
+            val cachedOcr = prefs.getString("${cacheKeyBase}_ocr", null)
+            val cachedSummary = prefs.getString("${cacheKeyBase}_summary", null)
+
+            if (cachedOcr != null && cachedSummary != null) {
+                aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(summary = cachedSummary, loading = false, analysisStarted = true))
+                return
+            }
+        }
+
+        try {
+            val localUri = resolveFileUrl(context, subject, fileName)
+                ?: throw Exception("Datei nicht erreichbar")
+
+            val imgBytes = withContext(Dispatchers.IO) {
+                if (localUri.startsWith("file:")) {
+                    java.io.File(java.net.URI(localUri)).readBytes()
+                } else {
+                    java.net.URL(localUri).readBytes()
+                }
+            }
+
+            val base64 = android.util.Base64.encodeToString(
+                imgBytes,
+                android.util.Base64.NO_WRAP
+            )
+
+            val rawText = sendGeminiRequest(
+                history = emptyList(),
+                userMessage = """
+                    Du bist ein hochpräzises System zur strukturierten Inhaltsextraktion für nachfolgende LLM-Verarbeitung. Analysiere das bereitgestellte Bild und generiere eine semantisch perfekt aufbereitete Textrekonstruktion. Halte dich strikt an diese Struktur:
+
+                    # [TITEL/ÜBERSCHRIFT DES MATERIALS]
+
+                    ## 1. TEXTINHALT (WORTLAUT & REKONSTRUKTION)
+                    - Extrahiere JEDEN sichtbaren Text vollständig, buchstabengetreu und in der logischen Lesereihenfolge.
+                    - Nutze sauberes Markdown für Formatierungen (#, ##, **, *).
+                    - Wichtig: Markiere visuelle Hervorhebungen (Textmarker, Unterstreichungen, auffällige Farben) explizit mit einem Inline-Tag, z. B. [HERVORHEBUNG: text].
+
+                    ## 2. STRUKTURELLE & VISUELLE ELEMENTE
+                    - Beschreibe Diagramme, Tabellen, Infografiken, Formeln oder Bilder präzise im Kontext des Materials.
+                    - Erkläre die räumliche Zuordnung (z.B. "In der Infografik rechts neben dem Text wird X dargestellt...").
+                    - Wandle Tabellen in valide Markdown-Tabellen um.
+
+                    ## 3. METADATEN & BEZÜGE
+                    - Notiere Fußnoten, Randnotizen oder Quellenangaben.
+                    - Falls vorhanden: Benenne die logische Beziehung zwischen Textabschnitten und Grafiken.
+
+                    Ziel: Ein kompromisslos strukturierter, semantisch reicher Text, den ein anderes KI-Modell ohne das Originalbild fehlerfrei interpretieren und weiterverarbeiten kann.
+                """.trimIndent(),
+                pic = base64,
+                model = MAX_GEMINI
+            ) ?: throw Exception("OCR fehlgeschlagen")
+
+            val summary = sendGeminiRequest(
+                history = emptyList(),
+                userMessage = """
+                    Du bist ein erfahrener, empathischer Pädagoge und Experte für Didaktik. Deine Aufgabe ist es, den folgenden extrahierten Inhalt eines Lernmaterials so aufzubereiten, dass Schüler oder Studierende das Thema intuitiv, tiefgründig und nachhaltig verstehen. 
+
+                    HIER IST DAS ROHMATERIAL:
+                    $rawText
+
+                    BITTE ERSTELLE EINE DIDAKTISCH WERTVOLLE ERKLÄRUNG NACH FOLGENDEM AUFBAU:
+
+                    1. **Der Anker (Einstieg & Relevanz)**
+                       - Starte mit einer einfachen, greifbaren Analogie oder einem praktischen Alltagsbeispiel, das das Kernthema sofort greifbar macht. Warum ist dieses Thema überhaupt spannend oder wichtig?
+
+                    2. **Die Kernbotschaft (Der rote Faden)**
+                       - Formuliere das Hauptziel oder die Kernaussage des Materials in einem einzigen, klaren Satz.
+
+                    3. **Schritt-für-Schritt-Erklärung (Didaktischer Aufbau)**
+                       - Gliedere das Thema in 2 bis 4 logische Abschnitte (gehe dabei vom Einfachen zum Komplexen über).
+                       - Verwende sprechende, motivierende Überschriften.
+                       - *Wichtig:* Erkläre jeden Fachbegriff (Fachtermini) sofort bei der ersten Nennung auf einfache und anschauliche Weise.
+                       - Falls Grafiken oder Diagramme im Quelltext beschrieben wurden: Erkläre deren didaktische Aussage in eigenen Worten.
+
+                    4. **Spickzettel & Aha-Momente (Kritische Punkte)**
+                       - Fasse die 3 bis 5 absolut kritischen Erkenntnisse prägnant zusammen.
+                       - **STYLING-VORGABE:** Nutze für besonders einprägsame Sachen, typische Klausur-Stolperfallen, Definitionen oder extrem wichtige Merksätze sehr gerne Markdown-Callouts wie `> [!warning]` oder `[!warning] Text` (bzw. passende Varianten wie `[!info]`), damit diese optisch sofort aus dem Text hervorstechen.
+
+                    5. **Selbstcheck (Aktivierung des Gelernten)**
+                       - Beende den Text mit 2 kurzen, reflexiven Fragen (ohne direkt die Antwort zu verraten), mit denen die Lernenden selbst prüfen können, ob sie den Kern der Sache verstanden haben.
+
+                    Tonfall: Motivierend, klar, verständlich, auf Augenhöhe, fehlerfrei auf Deutsch. Vermeide verschachtelte Sätze und kognitive Überlastung.
+                """.trimIndent()
+            ) ?: throw Exception("Summary fehlgeschlagen")
+
+            aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(summary = summary, loading = false, analysisStarted = true))
+
+            prefs.edit {
+                putString("${cacheKeyBase}_ocr", rawText)
+                putString("${cacheKeyBase}_summary", summary)
+            }
+        } catch (e: Exception) {
+            errorMsg = e.localizedMessage
+            aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(summary = null, loading = false, analysisStarted = true))
+        }
+    }
+    
     if (selectedFile != null && selectedSubject != null) {
         val fileKey = remember(selectedFile, selectedSubject) {
             "${selectedSubject}_${selectedFile}"
         }
 
         var fileUrl by remember(fileKey) { mutableStateOf<String?>(null) }
-        var aiSummary by remember(fileKey) { mutableStateOf<String?>(null) }
-        var summaryLoading by remember(fileKey) { mutableStateOf(false) }
-        var analysisStarted by remember(fileKey) { mutableStateOf(false) }
+        
+        val currentState = aiSummaryStates[fileKey] ?: AiSummaryState()
+        val aiSummary = currentState.summary
+        val summaryLoading = currentState.loading
+        val analysisStarted = currentState.analysisStarted
 
-        val cacheKeyBase = "cache_${selectedSubject}_${selectedFile}"
+        var scale by remember { mutableStateOf(1f) }
+        var offsetX by remember { mutableStateOf(0f) }
+        var offsetY by remember { mutableStateOf(0f) }
 
-        suspend fun runOcrAndSummary(forceRefresh: Boolean = false) {
-            if (!forceRefresh) {
-                val cachedOcr = prefs.getString("${cacheKeyBase}_ocr", null)
-                val cachedSummary = prefs.getString("${cacheKeyBase}_summary", null)
-
-                if (cachedOcr != null && cachedSummary != null) {
-                    aiSummary = cachedSummary
-                    summaryLoading = false
-                    return
-                }
-            }
-
-            summaryLoading = true
-            aiSummary = null
-
-            try {
-                val localUri = resolveFileUrl(context, selectedSubject!!, selectedFile!!)
-                    ?: throw Exception("Datei nicht erreichbar")
-
-                val imgBytes = withContext(Dispatchers.IO) {
-                    if (localUri.startsWith("file:")) {
-                        java.io.File(java.net.URI(localUri)).readBytes()
-                    } else {
-                        java.net.URL(localUri).readBytes()
-                    }
-                }
-
-                val base64 = android.util.Base64.encodeToString(
-                    imgBytes,
-                    android.util.Base64.NO_WRAP
-                )
-
-                val rawText = sendGeminiRequest(
-                    history = emptyList(),
-                    userMessage = """
-                    Analysiere dieses Bild vollständig und strukturiert. Extrahiere:
-
-                    1. ALLEN sichtbaren Text – exakt wie er erscheint, mit Formatierung, Überschriften und Absätzen
-                    2. VISUELLE ELEMENTE – beschreibe Diagramme, Grafiken, Tabellen, Formeln oder Bilder kurz aber präzise
-                    3. HERVORHEBUNGEN – notiere fett/unterstrichen/farbig markierte Wörter mit dem Tag [MARKIERT: ...]
-                    4. STRUKTUR – behalte die räumliche Anordnung bei
-
-                    Ziel: Eine vollständige Rekonstruktion des Bildinhalts, die ohne das Original verständlich ist.
-                """.trimIndent(),
-                    pic = base64,
-                    model = MAX_GEMINI
-                ) ?: throw Exception("OCR fehlgeschlagen")
-
-                val summary = sendGeminiRequest(
-                    history = emptyList(),
-                    userMessage = """
-                    Du bekommst extrahierten Inhalt aus einem Lernmaterial. Deine Aufgabe: Erkläre das Thema so, dass jemand, der es noch nie gesehen hat, es danach wirklich versteht.
-
-                    INHALT:
-                    $rawText
-
-                    AUFGABE:
-                    - Beginne mit einem Satz, der das Kernthema nennt
-                    - Gliedere in 2–4 Abschnitte mit aussagekräftigen Überschriften
-                    - Erkläre Fachbegriffe direkt beim ersten Vorkommen
-                    - Hebe die 3–5 wichtigsten Punkte am Ende als Merksätze hervor
-                    - Wenn Diagramme/Grafiken beschrieben wurden: erkläre deren Aussage in eigenen Worten
-                    - Sprache: Deutsch, klar und präzise
-                """.trimIndent()
-                ) ?: throw Exception("Summary fehlgeschlagen")
-
-                aiSummary = summary
-
-                prefs.edit {
-                    putString("${cacheKeyBase}_ocr", rawText)
-                    putString("${cacheKeyBase}_summary", summary)
-                }
-            } catch (e: Exception) {
-                errorMsg = e.localizedMessage
-            } finally {
-                summaryLoading = false
-            }
+        val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
+            scale = (scale * zoomChange).coerceIn(1f, 4f)
+            offsetX += panChange.x
+            offsetY += panChange.y
         }
 
         LaunchedEffect(fileKey) {
             fileUrl = resolveFileUrl(context, selectedSubject!!, selectedFile!!)
 
             if (!analysisStarted && isImageFile(selectedFile!!)) {
-                analysisStarted = true
-                runOcrAndSummary(forceRefresh = false)
+                scope.launch {
+                    runOcrAndSummary(fileKey, selectedSubject!!, selectedFile!!, forceRefresh = false)
+                }
             }
         }
 
@@ -774,18 +828,30 @@ fun MaterialienScreen(
                     }
                 }
 
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(fileUrl)
-                        .scale(Scale.FIT)
-                        .precision(Precision.EXACT)
-                        .build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                )
+                        .transformable(transformableState)
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(fileUrl)
+                            .scale(Scale.FIT)
+                            .precision(Precision.EXACT)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                                translationX = offsetX
+                                translationY = offsetY
+                            }
+                    )
+                }
 
                 Column(
                     modifier = Modifier
@@ -978,7 +1044,8 @@ fun MaterialienScreen(
                                                             lineHeight = 15.sp,
                                                             color = TextPrimary
                                                         )
-                                                    )
+                                                    ),
+                                                    components = calloutAwareMarkdownComponents()
                                                 )
                                             }
                                         }
@@ -1041,7 +1108,10 @@ fun MaterialienScreen(
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(AccentViolet.copy(alpha = 0.15f))
                                 .clickable {
-                                    scope.launch { runOcrAndSummary(forceRefresh = true) }
+                                    scope.launch { 
+                                        val fileKey = "${selectedSubject}_${selectedFile}"
+                                        runOcrAndSummary(fileKey, selectedSubject!!, selectedFile!!, forceRefresh = true) 
+                                    }
                                 }
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
@@ -1061,7 +1131,7 @@ fun MaterialienScreen(
                             .padding(20.dp)
                     ) {
                         if (aiSummary != null) {
-                            androidx.compose.foundation.text.selection.SelectionContainer {
+                            SelectionContainer {
                                 Markdown(
                                     content = aiSummary!!,
                                     colors = markdownColor(text = TextPrimary),
@@ -1107,7 +1177,8 @@ fun MaterialienScreen(
                                             lineHeight = 15.sp,
                                             color = TextPrimary
                                         )
-                                    )
+                                    ),
+                                    components = calloutAwareMarkdownComponents()
                                 )
                             }
                         } else {
