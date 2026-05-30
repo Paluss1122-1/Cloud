@@ -40,6 +40,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.ButtonDefaults.buttonColors
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.HorizontalDivider
@@ -91,6 +92,7 @@ import com.cloud.core.ui.PloppingButton
 import com.cloud.core.ui.SharedViewModel
 import com.cloud.core.ui.TextPrimary
 import com.cloud.core.ui.c
+import com.cloud.core.ui.calloutAwareMarkdownComponents
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
@@ -100,6 +102,51 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
     val listState = rememberLazyListState()
     val alpha = remember { Animatable(0f) }
     val context = LocalContext.current
+    val markdownComponents = calloutAwareMarkdownComponents()
+    val markdownColors = markdownColor(text = TextPrimary)
+    val markdownTypography = markdownTypography(
+        h1 = TextStyle(
+            fontSize = 20.sp,
+            lineHeight = 22.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = TextPrimary,
+            textDecoration = TextDecoration.Underline
+        ),
+        h2 = TextStyle(
+            fontSize = 18.sp,
+            lineHeight = 20.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = TextPrimary,
+            textDecoration = TextDecoration.Underline
+        ),
+        h3 = TextStyle(
+            fontSize = 17.sp,
+            lineHeight = 19.sp,
+            fontWeight = FontWeight.Medium,
+            color = TextPrimary,
+            textDecoration = TextDecoration.Underline
+        ),
+        text = TextStyle(
+            fontSize = 15.sp,
+            lineHeight = 15.sp,
+            color = TextPrimary
+        ),
+        paragraph = TextStyle(
+            fontSize = 15.sp,
+            lineHeight = 15.sp,
+            color = TextPrimary
+        ),
+        list = TextStyle(
+            fontSize = 15.sp,
+            lineHeight = 15.sp,
+            color = TextPrimary
+        ),
+        ordered = TextStyle(
+            fontSize = 15.sp,
+            lineHeight = 15.sp,
+            color = TextPrimary
+        )
+    )
 
     val msgBounds = remember { mutableStateMapOf<Int, Float>() }
     val view = LocalView.current
@@ -131,6 +178,13 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         vm.selectedImageUri = uri
+    }
+
+    val audioPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        vm.selectedAudioUri = uri
+        if (uri != null) vm.selectedImageUri = null
     }
 
     LaunchedEffect(Unit) {
@@ -454,50 +508,9 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                     ) {
                                          Markdown(
                                             content = if (vm.isLoading && msg.text.isEmpty()) "..." else msg.text,
-                                            colors = markdownColor(text = TextPrimary),
-                                            typography = markdownTypography(
-                                                h1 = TextStyle(
-                                                    fontSize = 20.sp,
-                                                    lineHeight = 22.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = TextPrimary,
-                                                    textDecoration = TextDecoration.Underline
-                                                ),
-                                                h2 = TextStyle(
-                                                    fontSize = 18.sp,
-                                                    lineHeight = 20.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = TextPrimary,
-                                                    textDecoration = TextDecoration.Underline
-                                                ),
-                                                h3 = TextStyle(
-                                                    fontSize = 17.sp,
-                                                    lineHeight = 19.sp,
-                                                    fontWeight = FontWeight.Medium,
-                                                    color = TextPrimary,
-                                                    textDecoration = TextDecoration.Underline
-                                                ),
-                                                text = TextStyle(
-                                                    fontSize = 15.sp,
-                                                    lineHeight = 15.sp,
-                                                    color = TextPrimary
-                                                ),
-                                                paragraph = TextStyle(
-                                                    fontSize = 15.sp,
-                                                    lineHeight = 15.sp,
-                                                    color = TextPrimary
-                                                ),
-                                                list = TextStyle(
-                                                    fontSize = 15.sp,
-                                                    lineHeight = 15.sp,
-                                                    color = TextPrimary
-                                                ),
-                                                ordered = TextStyle(
-                                                    fontSize = 15.sp,
-                                                    lineHeight = 15.sp,
-                                                    color = TextPrimary
-                                                )
-                                            )
+                                            colors = markdownColors,
+                                            typography = markdownTypography,
+                                            components = markdownComponents
                                         )
 
                                         if (msg.mode != null) {
@@ -527,6 +540,15 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                     label = "uploadButtonWeight"
                 )
 
+                val audioButtonWeight by animateDpAsState(
+                    targetValue = if (vm.selectedModel.audio) 48.dp else 0.dp,
+                    animationSpec = tween(300), label = ""
+                )
+                val audioButtonAlpha by animateFloatAsState(
+                    targetValue = if (vm.selectedModel.audio) 1f else 0f,
+                    animationSpec = tween(300), label = ""
+                )
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -554,6 +576,23 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                         )
                     }
 
+                    IconButton(
+                        onClick = { audioPickerLauncher.launch("audio/*") },
+                        modifier = Modifier
+                            .size(audioButtonWeight)
+                            .alpha(audioButtonAlpha)
+                            .background(
+                                if (vm.selectedAudioUri != null) Color(0xFF555555) else Color(0xFF333333),
+                                RoundedCornerShape(50)
+                            )
+                    ) {
+                        Icon(
+                            if (vm.selectedAudioUri == null) Icons.Default.MusicNote else Icons.Default.Check,
+                            "Audio Anhängen",
+                            tint = Black
+                        )
+                    }
+
                     TextField(
                         value = vm.currentMsg,
                         onValueChange = { vm.currentMsg = it; vm.isEditMode = false },
@@ -576,8 +615,9 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
 
                     Box(
                         modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(Color(0xFF333333))
                             .size(48.dp)
-                            .background(Color(0xFF333333), RoundedCornerShape(50))
                             .combinedClickable(
                                 onClick = { vm.sendMessage() },
                                 onLongClick = {

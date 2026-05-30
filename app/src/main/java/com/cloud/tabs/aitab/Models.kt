@@ -3,8 +3,16 @@ package com.cloud.tabs.aitab
 data class Model(
     val realname: String,
     val vision: Boolean = false,
+    val audio: Boolean = false,
     val weight: Int = 1,
     val name: String = realname.substringAfter("/", realname)
+)
+
+val geminiModels = listOf(
+    Model("gemini-3.1-flash-lite", vision = true, audio = true, weight = 2),
+    Model("gemini-3-flash-preview", vision = true, audio = true, weight = 2),
+    Model("gemini-2.5-flash", vision = true, audio = true, weight = 2),
+    Model("gemini-2.5-flash-lite", vision = true, audio = true, weight = 1)
 )
 
 val nvidiaModels = listOf(
@@ -16,14 +24,6 @@ val nvidiaModels = listOf(
     Model("meta/llama-3.2-90b-vision-instruct", vision = true, weight = 2),
     Model("meta/llama-4-maverick-17b-128e-instruct", vision = true, weight = 2),
     Model("qwen/qwen3.5-397b-a17b", vision = true, weight = 4)
-)
-
-val geminiModels = listOf(
-    Model("gemini-3.1-flash-lite", vision = true, weight = 2),
-    Model("gemini-3-flash-preview", vision = true, weight = 2),
-    //Model("gemini-2.5-pro", vision = true, weight = 3),
-    Model("gemini-2.5-flash", vision = true, weight = 2),
-    Model("gemini-2.5-flash-lite", vision = true, weight = 1)
 )
 
 val serverModels = listOf(
