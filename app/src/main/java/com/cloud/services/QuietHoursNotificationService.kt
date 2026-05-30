@@ -1290,11 +1290,19 @@ class QuietHoursNotificationService : Service() {
                     } else {
                         "${found.size} neue Folgen verfügbar"
                     }
+                    
+                    val bigText = buildString {
+                        found.forEachIndexed { index, episode ->
+                            if (index > 0) append(", ")
+                            append("📻 ${episode.optString("showName")}: ${episode.optString("title")}")
+                        }
+                    }
 
                     val notification = NotificationCompat.Builder(context, PODCAST_CHANNEL_ID)
                         .setSmallIcon(android.R.drawable.ic_menu_save)
                         .setContentTitle("Neue Podcast-Folgen gefunden")
                         .setContentText(contentText)
+                        .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
                         .setAutoCancel(true)
                         .setContentIntent(pi)
                         .build()
