@@ -107,8 +107,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 svc.activeNotifications?.let {
                     svc.forwardNotificationsToLaptop(it, svc.packageManager)
                 }
-            } catch (se: SecurityException) {
-                Log.w("NotifForwarder", "getActiveNotifications not allowed: ${se.message}")
+            } catch (_: SecurityException) {
             }
         }
 
@@ -173,6 +172,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                         put("title", title)
                         put("text", text)
                         put("time", sbn.postTime)
+                        put("id", sbn.id)
                     })
                 }
 
@@ -327,7 +327,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             ) return
 
             val key = keyFor(sbn.packageName, title)
-            val existingMessages = WhatsAppNotificationListener.messagesByContact[key] ?: mutableListOf()
+            val existingMessages = messagesByContact[key] ?: mutableListOf()
             val lastMessage = existingMessages.lastOrNull()
 
             if (lastMessage != null &&
@@ -343,7 +343,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
             // Alte replyActions bereinigen (älter als 24h)
             val cutoff = System.currentTimeMillis() - 24 * 60 * 60 * 1000
-            WhatsAppNotificationListener.replyActions.entries.removeAll { it.value.timestamp < cutoff }
+            replyActions.entries.removeAll { it.value.timestamp < cutoff }
 
             notification.actions?.forEach { action ->
                 action.remoteInputs?.firstOrNull()?.let { systemRemoteInput ->
@@ -353,7 +353,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                         .setAllowFreeFormInput(systemRemoteInput.allowFreeFormInput)
                         .build()
 
-                    WhatsAppNotificationListener.replyActions[key] = ReplyData(
+                    replyActions[key] = ReplyData(
                         pendingIntent = action.actionIntent,
                         remoteInput = remoteInput,
                         originalResultKey = systemRemoteInput.resultKey,
@@ -366,7 +366,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 }
             }
 
-            WhatsAppNotificationListener.messagesByContact.getOrPut(key) { mutableListOf() }.add(
+            messagesByContact.getOrPut(key) { mutableListOf() }.add(
                 ChatMessage(text, isOwnMessage = false)
             )
 
@@ -430,8 +430,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 val title = sbn.notification.extras.getString(android.app.Notification.EXTRA_TITLE)
                 title?.let {
                     val key = keyFor(sbn.packageName, it)
-                    WhatsAppNotificationListener.replyActions.remove(key)
-                    WhatsAppNotificationListener.messagesByContact.remove(key)
+                    replyActions.remove(key)
+                    messagesByContact.remove(key)
                     Log.d("MessageListener", "Removed reply action for $title")
                 }
             }
@@ -452,8 +452,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         super.onListenerDisconnected()
         listenerConnected = false
         instance = null
-        WhatsAppNotificationListener.replyActions.clear()
-        WhatsAppNotificationListener.messagesByContact.clear()
+        replyActions.clear()
+        messagesByContact.clear()
         NotificationRepository.clear()
     }
 
