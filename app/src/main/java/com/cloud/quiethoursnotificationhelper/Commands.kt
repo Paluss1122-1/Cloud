@@ -392,7 +392,7 @@ private fun getAvailableCommands(context: Context): List<Command> {
         ) {
             MusicPlayerServiceCompat.toggleFavorite(context)
         },
-        Command(
+        /*Command(
             name = "sui",
             aliases = listOf("fav", "f", "star", "⭐"),
             description = "Markiert aktuellen Song als Favorit"
@@ -427,7 +427,7 @@ private fun getAvailableCommands(context: Context): List<Command> {
                 NotificationManagerCompat.from(context).notify(42, notification)
             }
             showCustomNotification(context)
-        },
+        },*/
         Command(
             name = "favmode",
             aliases = listOf("onlyfavs", "favsonly", "favoritesmode"),
