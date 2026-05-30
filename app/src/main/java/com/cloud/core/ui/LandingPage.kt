@@ -23,11 +23,14 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Done
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -191,13 +194,6 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     val overlayScale = remember { Animatable(0f) }
     val overlayAlpha = remember { Animatable(0f) }
 
-    var closingBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    val closeScale = remember { Animatable(1f) }
-    val closeAlpha = remember { Animatable(1f) }
-
-    val appGraphicsLayer = rememberGraphicsLayer()
-    var recordingEnabled by remember { mutableStateOf(false) }
-
     Box(modifier = Modifier.fillMaxSize()) {
 
         if (hasLoadedApp) {
@@ -209,18 +205,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
             }
 
             key(selectedMenuItem, reloadKey) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(
-                            if (recordingEnabled) {
-                                Modifier.drawWithContent {
-                                    appGraphicsLayer.record { this@drawWithContent.drawContent() }
-                                    drawLayer(appGraphicsLayer)
-                                }
-                            } else Modifier
-                        )
-                ) {
+                Box(Modifier.fillMaxSize()) {
                     if (targetMenuItem != null) {
                         PrivateCloudApp(
                             storage = storage,
@@ -300,7 +285,6 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                 delay(80)
                 overlayAlpha.animateTo(0f, tween(durationMillis = 200))
                 previewBitmap = null
-                closingBitmap = null
                 overlayScale.snapTo(0f)
                 pendingOverlayItem = null
             }
@@ -323,26 +307,6 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                         contentScale = ContentScale.FillBounds
                     )
                 }
-            }
-        }
-
-        if (closingBitmap != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = closeScale.value
-                        scaleY = closeScale.value
-                        alpha = closeAlpha.value
-                        transformOrigin = TransformOrigin(0.5f, 0.5f)
-                    }
-            ) {
-                Image(
-                    bitmap = closingBitmap!!,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.FillBounds
-                )
             }
         }
     }
@@ -421,13 +385,14 @@ fun LandingPage(
 ) {
     val context = LocalContext.current
     var recentTabs by remember { mutableStateOf(loadRecentTabs(context)) }
-    LaunchedEffect(Unit) {
-        recentTabs = loadRecentTabs(context)
-    }
     LaunchedEffect(reloadTrigger) {
         recentTabs = loadRecentTabs(context)
     }
-    val allTabsSorted = remember { MenuItem.entries.filter {if (!prvt()) {it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD} else true}.sortedBy { it.title } }
+    val allTabsSorted = remember { 
+        MenuItem.entries.filter { 
+            prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD) 
+        }.sortedBy { it.title } 
+    }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     val neonOrange = c()
     val neonGlow =  when (currentHour) {
@@ -520,6 +485,12 @@ fun LandingPage(
                         modifier = Modifier.align(Alignment.Center),
                         textAlign = TextAlign.Center
                     )
+                    /*IconButton(onClick = {
+
+                    },
+                        modifier = Modifier.align(Alignment.CenterEnd)) {
+                        Icon(Icons.Default.Done, contentDescription = null, tint = Color.Yellow)
+                    }*/
                 }
 
                 LazyColumn(
