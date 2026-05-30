@@ -76,6 +76,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,6 +91,9 @@ import com.cloud.core.ui.PloppingButton
 import com.cloud.core.ui.SharedViewModel
 import com.cloud.core.ui.TextPrimary
 import com.cloud.core.ui.c
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownColor
+import com.mikepenz.markdown.m3.markdownTypography
 
 @Composable
 fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewModel()) {
@@ -448,11 +452,52 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                             vertical = 10.dp
                                         )
                                     ) {
-                                        Text(
-                                            text = if (vm.isLoading && msg.text.isEmpty()) "..." else msg.text,
-                                            color = Black,
-                                            fontSize = 15.sp,
-                                            lineHeight = 21.sp
+                                         Markdown(
+                                            content = if (vm.isLoading && msg.text.isEmpty()) "..." else msg.text,
+                                            colors = markdownColor(text = TextPrimary),
+                                            typography = markdownTypography(
+                                                h1 = TextStyle(
+                                                    fontSize = 20.sp,
+                                                    lineHeight = 22.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = TextPrimary,
+                                                    textDecoration = TextDecoration.Underline
+                                                ),
+                                                h2 = TextStyle(
+                                                    fontSize = 18.sp,
+                                                    lineHeight = 20.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = TextPrimary,
+                                                    textDecoration = TextDecoration.Underline
+                                                ),
+                                                h3 = TextStyle(
+                                                    fontSize = 17.sp,
+                                                    lineHeight = 19.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = TextPrimary,
+                                                    textDecoration = TextDecoration.Underline
+                                                ),
+                                                text = TextStyle(
+                                                    fontSize = 15.sp,
+                                                    lineHeight = 15.sp,
+                                                    color = TextPrimary
+                                                ),
+                                                paragraph = TextStyle(
+                                                    fontSize = 15.sp,
+                                                    lineHeight = 15.sp,
+                                                    color = TextPrimary
+                                                ),
+                                                list = TextStyle(
+                                                    fontSize = 15.sp,
+                                                    lineHeight = 15.sp,
+                                                    color = TextPrimary
+                                                ),
+                                                ordered = TextStyle(
+                                                    fontSize = 15.sp,
+                                                    lineHeight = 15.sp,
+                                                    color = TextPrimary
+                                                )
+                                            )
                                         )
 
                                         if (msg.mode != null) {
