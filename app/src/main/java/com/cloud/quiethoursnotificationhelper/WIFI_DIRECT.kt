@@ -381,7 +381,7 @@ suspend fun callNvidiaVisionApi(
         return this.scale((width * scale).toInt(), (height * scale).toInt())
     }
 
-    val scaledBmp = withContext(Dispatchers.IO) { bmp.scaleForApi(1280) }
+    val scaledBmp = bmp.scaleForApi(1280)
 
     val prompt = """
         Look at this vocabulary list image carefully.
@@ -1194,25 +1194,12 @@ fun deleteAiResponse(context: Context, timestamp: Long) {
 }
 
 fun loadTodayOrYesterdayEntry(context: Context): AiResponseEntry? {
-    val prefs = context.getSharedPreferences("ai_responses", MODE_PRIVATE)
-    val todayKey = getTodayKey()
-    val yesterdayKey = getYesterdayKey()
+    return loadLatestAiResponse(context)
+}
 
-    val todayText = prefs.getString("entry_$todayKey", null)
-    if (todayText != null) {
-        return AiResponseEntry(todayText, prefs.getLong("timestamp_$todayKey", 0L), todayKey)
-    }
-
-    val yesterdayText = prefs.getString("entry_$yesterdayKey", null)
-    if (yesterdayText != null) {
-        return AiResponseEntry(
-            yesterdayText,
-            prefs.getLong("timestamp_$yesterdayKey", 0L),
-            yesterdayKey
-        )
-    }
-
-    return null
+fun loadLatestAiResponse(context: Context): AiResponseEntry? {
+    val allResponses = loadAllAiResponses(context)
+    return allResponses.firstOrNull()
 }
 
 fun loadAllAiResponses(context: Context): List<AiResponseEntry> {
@@ -1236,16 +1223,6 @@ fun getTodayKey(): String {
         timeZone = tz
     }
     return sdf.format(Date())
-}
-
-private fun getYesterdayKey(): String {
-    val tz = TimeZone.getTimeZone("Europe/Berlin")
-    val cal = Calendar.getInstance(tz)
-    cal.add(Calendar.DAY_OF_YEAR, -1)
-    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.GERMANY).apply {
-        timeZone = tz
-    }
-    return sdf.format(cal.time)
 }
 
 suspend fun trySendImageToLaptop(imageBytes: ByteArray): Boolean {
@@ -1406,6 +1383,11 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
 
         "stopMediaPlayerService" -> {
             MediaPlayerService.stopService(context)
+        }
+
+        "deleteNotif" -> {
+            val id = json.optInt("id", -1)
+            context.getSystemService(NotificationManager::class.java).cancel(id)
         }
 
         else -> {}
