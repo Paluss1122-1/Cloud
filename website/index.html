@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud - Die All-in-One Android App</title>
+    <meta name="description" content="Cloud ist eine leistungsstarke, multifunktionale Android-Anwendung, die Drittanbieter-Apps ersetzt und Datenschutz verbessert.">
+    <meta name="keywords" content="Cloud, Android App, Datenschutz, Privatsphäre, All-in-One, App">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #111111;
+            --bg-tertiary: #1a1a1a;
+            --text-primary: #f5f5f5;
+            --text-secondary: #a0a0a0;
+            --text-muted: #666666;
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            --border-color: #2a2a2a;
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        section {
+            padding: 120px 0;
+        }
+
+        .section-title {
+            font-size: clamp(2rem, 5vw, 3rem);
+            font-weight: 700;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .section-subtitle {
+            font-size: 1.125rem;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-bottom: 64px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: rgba(10, 10, 10, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+        }
+
+        .nav-cta {
+            background: var(--accent-gradient);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .nav-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+        }
+
+        .mobile-menu-btn span {
+            width: 24px;
+            height: 2px;
+            background: var(--text-primary);
+            transition: all 0.3s ease;
+        }
+
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding-top: 100px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 800px;
+            height: 800px;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+        }
+
+        .hero-text h1 {
+            font-size: clamp(2.5rem, 6vw, 4rem);
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 24px;
+        }
+
+        .hero-text h1 span {
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-text p {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+            line-height: 1.8;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-primary {
+            background: var(--accent-gradient);
+            color: white;
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 32px rgba(99, 102, 241, 0.5);
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-secondary);
+            transform: translateY(-3px);
+        }
+
+        .hero-image {
+            display: flex;
+            justify-content: center;
+            position: relative;
+        }
+
+        .phone-mockup {
+            width: 320px;
+            height: 640px;
+            background: var(--bg-secondary);
+            border-radius: 40px;
+            padding: 12px;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .phone-mockup::before {
+            content: '';
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 24px;
+            background: var(--bg-primary);
+            border-radius: 0 0 20px 20px;
+        }
+
+        .phone-screen {
+            width: 100%;
+            height: 100%;
+            background: var(--bg-primary);
+            border-radius: 32px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .phone-screen img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        .star-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg-tertiary);
+            padding: 12px 24px;
+            border-radius: 50px;
+            border: 1px solid var(--border-color);
+            margin-top: 24px;
+        }
+
+        .star-icon {
+            color: #fbbf24;
+        }
+
+        .features {
+            background: var(--bg-secondary);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 32px;
+        }
+
+        .feature-card {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 32px;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-8px);
+            border-color: var(--accent-primary);
+            box-shadow: 0 12px 40px rgba(99, 102, 241, 0.2);
+        }
+
+        .feature-icon {
+            width: 56px;
+            height: 56px;
+            background: var(--accent-gradient);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+        }
+
+        .feature-card h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+
+        .screenshots {
+            position: relative;
+        }
+
+        .screenshots-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 24px;
+        }
+
+        .screenshot-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 16px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .screenshot-card:hover {
+            transform: scale(1.05);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .screenshot-card img {
+            width: 100%;
+            height: 450px;
+            object-fit: cover;
+            border-radius: 12px;
+        }
+
+        .screenshot-label {
+            text-align: center;
+            padding: 16px 8px 8px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .about {
+            background: var(--bg-secondary);
+        }
+
+        .about-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 64px;
+            align-items: center;
+        }
+
+        .about-text h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 24px;
+        }
+
+        .about-text p {
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            font-size: 1.1rem;
+            line-height: 1.8;
+        }
+
+        .about-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-top: 48px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 24px;
+            background: var(--bg-tertiary);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-top: 8px;
+        }
+
+        .cta-section {
+            text-align: center;
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+        }
+
+        .cta-content {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .cta-content h2 {
+            font-size: clamp(2rem, 5vw, 3rem);
+            font-weight: 800;
+            margin-bottom: 24px;
+        }
+
+        .cta-content p {
+            color: var(--text-secondary);
+            font-size: 1.25rem;
+            margin-bottom: 40px;
+        }
+
+        .faq {
+            background: var(--bg-secondary);
+        }
+
+        .faq-list {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .faq-item {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .faq-question {
+            padding: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+
+        .faq-question:hover {
+            background: var(--bg-secondary);
+        }
+
+        .faq-answer {
+            padding: 0 24px;
+            max-height: 0;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            color: var(--text-secondary);
+        }
+
+        .faq-answer.active {
+            padding: 24px;
+            max-height: 500px;
+        }
+
+        .faq-toggle {
+            font-size: 1.5rem;
+            transition: transform 0.3s ease;
+        }
+
+        .faq-item.active .faq-toggle {
+            transform: rotate(45deg);
+        }
+
+        .footer {
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border-color);
+            padding: 64px 0 32px;
+        }
+
+        .footer-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 48px;
+            margin-bottom: 48px;
+        }
+
+        .footer-brand h3 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 16px;
+        }
+
+        .footer-brand p {
+            color: var(--text-secondary);
+            line-height: 1.8;
+        }
+
+        .footer-links h4 {
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .footer-links ul {
+            list-style: none;
+        }
+
+        .footer-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            display: block;
+            margin-bottom: 12px;
+            transition: color 0.3s ease;
+        }
+
+        .footer-links a:hover {
+            color: var(--text-primary);
+        }
+
+        .fade-in {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        @media (max-width: 968px) {
+            .nav-links, .nav-cta {
+                display: none;
+            }
+
+            .mobile-menu-btn {
+                display: flex;
+            }
+
+            .hero-content, .about-content {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+
+            .hero-image {
+                order: -1;
+            }
+
+            .hero-buttons {
+                justify-content: center;
+            }
+
+            .about-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .footer-content {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+
+            section {
+                padding: 80px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <div class="nav-container">
+            <div class="nav-logo">Cloud</div>
+            <ul class="nav-links">
+                <li><a href="#features">Funktionen</a></li>
+                <li><a href="#screenshots">Screenshots</a></li>
+                <li><a href="#about">Über</a></li>
+                <li><a href="#faq">FAQ</a></li>
+            </ul>
+            <a href="https://github.com/Paluss1122-1/Cloud" class="nav-cta" target="_blank" rel="noopener">
+                ⭐ Stern geben
+            </a>
+            <button class="mobile-menu-btn">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-text fade-in">
+                    <h1>Eine App für <span>alles.</span> Minimal Tracking. Mehr Privatsphäre.</h1>
+                    <p>Cloud ist eine leistungsstarke, multifunktionale Android-Anwendung mit einem Ziel: Drittanbieter-Apps zu ersetzen und zu verbessern — mit mehr Datenschutz.</p>
+                    <div class="hero-buttons">
+                        <a href="https://github.com/Paluss1122-1/Cloud" class="btn btn-primary" target="_blank" rel="noopener">
+                            ⭐ Auf GitHub sternen
+                        </a>
+                        <a href="#features" class="btn btn-secondary">
+                            Funktionen entdecken
+                        </a>
+                    </div>
+                    <div class="star-badge">
+                        <span class="star-icon">★</span>
+                        <span class="star-count">3</span>
+                        <span>Sterne auf GitHub</span>
+                    </div>
+                </div>
+                <div class="hero-image fade-in">
+                    <div class="phone-mockup">
+                        <div class="phone-screen">
+                            <img src="../Preview/LandingPage.png" alt="Cloud App Screenshot">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="features">
+        <div class="container">
+            <h2 class="section-title fade-in">Alle Funktionen. Ein Ort.</h2>
+            <p class="section-subtitle fade-in">Entdecke die umfassende Palette an Tools, die Cloud zu Offerieren hat.</p>
+            <div class="features-grid">
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">🤖</div>
+                    <h3>AI Chat</h3>
+                    <p>Chatte mit Nvidia & Gemini AI-Modellen mit vollem Kontext-Text und Bildunterstützung.</p>
+                </div>
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">🔑</div>
+                    <h3>Authenticator</h3>
+                    <p>Generiere TOTP-Codes, speichere Passwörter und nutze Autofill für maximalen Komfort.</p>
+                </div>
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">🎵</div>
+                    <h3>Media Player</h3>
+                    <p>Spiele und verwalte Musik & Podcasts lokal. Lade Podcasts & Songs!</p>
+                </div>
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">🎤</div>
+                    <h3>Audio Recorder</h3>
+                    <p>Nimm deine Stimme oder Geräusche auf, die auf deinem Telefon abgespielt werden.</p>
+                </div>
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">🌐</div>
+                    <h3>Browser</h3>
+                    <p>Optimiertes Webview mit Quick-Link-Buttons für den besten Workflow.</p>
+                </div>
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">📅</div>
+                    <h3>Calendar & Calculator</h3>
+                    <p>Plane Aufgaben und berechne Tagesdifferenzen auf einen Blick.</p>
+                </div>
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">🎬</div>
+                    <h3>Movie Discover</h3>
+                    <p>Entdecke tausende Filme in verschiedenen Genres von <br><em>The Movie Data Base</em>.</p>
+                </div>
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">📷</div>
+                    <h3>Gallery</h3>
+                    <p>Betrachte und lösche Bilder und Videos von deinem lokalen Speicher.</p>
+                </div>
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">📝</div>
+                    <h3>Notes</h3>
+                    <p>Erstelle bunte Notizen!</p>
+                </div>
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">📝</div>
+                    <h3>Vocabs</h3>
+                    <p>Extrahiere Vokabeln aus einem Bild und lerne sie!</p>
+                </div>
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">🌤️</div>
+                    <h3>Weather</h3>
+                    <p>Sieh das Wetter für deinen aktuellen Standort mit einer sauberen, animierten Oberfläche.</p>
+                </div>
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">🔕</div>
+                    <h3>Quiet Hours</h3>
+                    <p>MASSIVES Command-System: Führe Befehle via Notification aus — verwalte Todos, antworte auf Nachrichten und vieles mehr.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="screenshots" class="screenshots">
+        <div class="container">
+            <h2 class="section-title fade-in">In Aktion sehen</h2>
+            <p class="section-subtitle fade-in">Erlebe die intuitive Benutzeroberfläche und die vielfältigen Funktionen.</p>
+            <div class="screenshots-grid">
+                <div class="screenshot-card fade-in">
+                    <img src="../Preview/AiTab.jpg" alt="AI Tab">
+                    <div class="screenshot-label">AI Tab</div>
+                </div>
+                <div class="screenshot-card fade-in">
+                    <img src="../Preview/Authenticator.jpg" alt="Authenticator">
+                    <div class="screenshot-label">Authenticator</div>
+                </div>
+                <div class="screenshot-card fade-in">
+                    <img src="../Preview/Browser.jpg" alt="Browser">
+                    <div class="screenshot-label">Browser</div>
+                </div>
+                <div class="screenshot-card fade-in">
+                    <img src="../Preview/DayCalculator.jpg" alt="Day Calculator">
+                    <div class="screenshot-label">Day Calculator</div>
+                </div>
+                <div class="screenshot-card fade-in">
+                    <img src="../Preview/Explore.jpg" alt="Explore">
+                    <div class="screenshot-label">Explore</div>
+                </div>
+                <div class="screenshot-card fade-in">
+                    <img src="../Preview/QuietHourNotification.jpg" alt="Quiet Hours">
+                    <div class="screenshot-label">Quiet Hours</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="about" class="about">
+        <div class="container">
+            <div class="about-content">
+                <div class="about-text fade-in">
+                    <h2>Für mehr Datenschutz gebaut.</h2>
+                    <p>Cloud verfolgt ein Ziel: Drittanbieter-Apps durch eine einzige, integrierte Lösung zu ersetzen — mit minimalem Tracking, optionaler Server-Anbindung und erhöhter Privatsphäre.</p>
+                    <p>AI-Anfragen werden an Nvidia / Google weitergeleitet. Das Projekt ist kompatibel mit Samsung OneUI 8.5 und befindet sich in aktiver Entwicklung. Jeder Beitrag ist willkommen!</p>
+                    <div class="about-stats">
+                        <div class="stat-item">
+                            <div class="stat-number">15+</div>
+                            <div class="stat-label">Tabs & Tools</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">∞</div>
+                            <div class="stat-label">Möglichkeiten</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">0</div>
+                            <div class="stat-label">Eigenes Tracking*</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="about-visual fade-in">
+                    <div class="phone-mockup" style="animation-delay: 1s;">
+                        <div class="phone-screen">
+                            <img src="../Preview/Authenticator.jpg" alt="Cloud App">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta-section">
+        <div class="container">
+            <div class="cta-content fade-in">
+                <h2>Unterstütze das Projekt</h2>
+                <p>Gib uns einen Stern auf GitHub und hilf uns, Cloud bekannter zu machen. Jeder Stern zählt!</p>
+                <a href="https://github.com/Paluss1122-1/Cloud" class="btn btn-primary" target="_blank" rel="noopener">
+                    ⭐ Jetzt Stern geben
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <section id="faq" class="faq">
+        <div class="container">
+            <h2 class="section-title fade-in">Häufig gestellte Fragen</h2>
+            <div class="faq-list">
+                <div class="faq-item fade-in">
+                    <div class="faq-question">
+                        <span>Ist Cloud wirklich kostenlos?</span>
+                        <span class="faq-toggle">+</span>
+                    </div>
+                    <div class="faq-answer">
+                        Ja, Cloud ist vollständig Open Source und kostenlos nutzbar. Du kannst es auf GitHub herunterladen und selbst kompilieren.
+                    </div>
+                </div>
+                <div class="faq-item fade-in">
+                    <div class="faq-question">
+                        <span>Welche Android-Versionen werden unterstützt?</span>
+                        <span class="faq-toggle">+</span>
+                    </div>
+                    <div class="faq-answer">
+                        Cloud ist kompatibel mit Samsung OneUI 8.5. Die genauen Mindestanforderungen findest du in der GitHub-Dokumentation.
+                    </div>
+                </div>
+                <div class="faq-item fade-in">
+                    <div class="faq-question">
+                        <span>Werden meine Daten an Server gesendet?</span>
+                        <span class="faq-toggle">+</span>
+                    </div>
+                    <div class="faq-answer">
+                        AI-Anfragen werden an Nvidia / Google weitergeleitet. Alle anderen Funktionen arbeiten standardmäßig lokal. Einige Funktionen bieten optionales Tracking, das standardmäßig deaktiviert ist.
+                    </div>
+                </div>
+                <div class="faq-item fade-in">
+                    <div class="faq-question">
+                        <span>Wie kann ich beitragen?</span>
+                        <span class="faq-toggle">+</span>
+                    </div>
+                    <div class="faq-answer">
+                        Du kannst auf GitHub Issues öffnen, Feature-Anfragen stellen oder Code beitragen. Jede Hilfe ist willkommen!
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <h3>Cloud</h3>
+                    <p>Eine leistungsstarke, multifunktionale Android-Anwendung für mehr Datenschutz und Komfort.</p>
+                </div>
+                <div class="footer-links">
+                    <h4>Links</h4>
+                    <ul>
+                        <li><a href="https://github.com/Paluss1122-1/Cloud" target="_blank" rel="noopener">GitHub</a></li>
+                        <li><a href="#features">Funktionen</a></li>
+                        <li><a href="#screenshots">Screenshots</a></li>
+                    </ul>
+                </div>
+                <div class="footer-links">
+                    <h4>Rechtliches</h4>
+                    <ul>
+                        <li><a href="#license">Lizenz</a></li>
+                        <li><a href="#privacy">Datenschutz</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <section id="privacy" class="screenshots">
+        <div class="container">
+            <h2 class="section-title fade-in">Datenschutzerklärung</h2>
+            <div class="about-content" style="grid-template-columns: 1fr;">
+                <div class="about-text fade-in" style="text-align: left;">
+                    <h3>1. Datenschutz auf einen Blick</h3>
+                    <h4>Allgemeine Hinweise</h4>
+                    <p>
+                        Auf dieser Website werden keine personenbezogenen Daten erfasst oder gespeichert.
+                    </p>
+                    <h3>2. Datenerfassung auf unserer Website</h3>
+                    <p>
+                        Keine Daten werden automatisch erfasst, gespeichert oder an Dritte weitergegeben.
+                    </p>
+                    <h3>3. Datenschutz bei der Cloud-Android-App</h3>
+                    <p>
+                        Informationen zum Datenschutz der Android-App findest du in der README-Datei und im Quellcode auf GitHub.
+                    </p>
+                    <h4>AI-Funktionen</h4>
+                    <p>
+                        Bei Nutzung der AI-Funktionen werden Anfragen an Nvidia / Google weitergeleitet.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="license" class="about">
+        <div class="container">
+            <h2 class="section-title fade-in">Lizenz</h2>
+            <div class="about-content" style="grid-template-columns: 1fr;">
+                <div class="about-text fade-in" style="text-align: left;">
+                    <h3>Cloud Android App</h3>
+                    <p>
+                        Dieses Projekt ist Open-Source-Software.
+                    </p>
+                    <h3>Verwendete Ressourcen</h3>
+                    <ul style="color: var(--text-secondary); padding-left: 20px;">
+                        <li>Google Fonts (Inter)</li>
+                        <li>App-Screenshots aus dem Preview-Ordner</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.fade-in').forEach(el => {
+            observer.observe(el);
+        });
+
+        document.querySelectorAll('.faq-question').forEach(question => {
+            question.addEventListener('click', () => {
+                const item = question.parentElement;
+                const answer = item.querySelector('.faq-answer');
+                item.classList.toggle('active');
+                answer.classList.toggle('active');
+            });
+        });
+
+        let lastScroll = 0;
+        window.addEventListener('scroll', () => {
+            const nav = document.querySelector('.nav');
+            const currentScroll = window.pageYOffset;
+            
+            if (currentScroll > 100) {
+                nav.style.background = 'rgba(10, 10, 10, 0.95)';
+            } else {
+                nav.style.background = 'rgba(10, 10, 10, 0.8)';
+            }
+            
+            lastScroll = currentScroll;
+        });
+    </script>
+</body>
+</html>
