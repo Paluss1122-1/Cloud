@@ -17,6 +17,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.wifi.WifiInfo
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -24,6 +25,7 @@ import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
 import android.webkit.WebView
+import android.widget.RemoteViews
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
 import androidx.activity.compose.LocalActivityResultRegistryOwner
@@ -46,11 +48,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.cloud.R
 import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.SHOWCOMMANDS
@@ -387,6 +391,42 @@ private fun getAvailableCommands(context: Context): List<Command> {
             description = "Markiert aktuellen Song als Favorit"
         ) {
             MusicPlayerServiceCompat.toggleFavorite(context)
+        },
+        Command(
+            name = "sui",
+            aliases = listOf("fav", "f", "star", "⭐"),
+            description = "Markiert aktuellen Song als Favorit"
+        ) {
+            @SuppressLint("MissingPermission")
+            fun showCustomNotification(context: Context) {
+                val views = RemoteViews(context.packageName, R.layout.notification_custom).apply {
+                    setTextViewText(R.id.notif_title, "Custom Notification")
+                    setTextViewText(R.id.notif_text, "Das ist ein eigenes Layout!")
+
+                    val actionIntent = PendingIntent.getBroadcast(
+                        context, 0,
+                        Intent("com.example.NOTIF_ACTION"),
+                        PendingIntent.FLAG_IMMUTABLE
+                    )
+                    val dismissIntent = PendingIntent.getBroadcast(
+                        context, 1,
+                        Intent("com.example.NOTIF_DISMISS"),
+                        PendingIntent.FLAG_IMMUTABLE
+                    )
+
+                    setOnClickPendingIntent(R.id.notif_btn_action, actionIntent)
+                    setOnClickPendingIntent(R.id.notif_btn_dismiss, dismissIntent)
+                }
+
+                val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.app_icon)
+                    .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+                    .setCustomBigContentView(views)
+                    .build()
+
+                NotificationManagerCompat.from(context).notify(42, notification)
+            }
+            showCustomNotification(context)
         },
         Command(
             name = "favmode",
@@ -2059,20 +2099,11 @@ private fun showSpotifyOverlay(trackId: String, context: Context) {
 private fun optimizeAudioFiles(context: Context) {
     GlobalScope.launch {
         try {
-            val downloadDir = context.getExternalFilesDir(null)?.parentFile?.parentFile
-                ?.let { File(it, "Downloads") } ?: run {
-                    showSimpleNotificationExtern(
-                        "❌ Fehler",
-                        "Download-Verzeichnis nicht gefunden",
-                        context = context
-                    )
-                    return@launch
-                }
+            val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
             
             val cloudDir = File(downloadDir, "Cloud")
             val podcastDir = File(downloadDir, "cloud/podcasts")
-            
-            val notificationManager = context.getSystemService(NotificationManager::class.java)
+
             val prefs = context.getSharedPreferences("audio_optimization", MODE_PRIVATE)
             
             val audioFiles = mutableListOf<File>()
@@ -2109,7 +2140,7 @@ private fun optimizeAudioFiles(context: Context) {
                 val originalSize = file.length()
                 
                 try {
-                    val optimized = optimizeSingleAudioFile(file, context)
+                    val optimized = optimizeSingleAudioFile(file)
                     if (optimized) {
                         successCount++
                         val newSize = file.length()
@@ -2118,7 +2149,7 @@ private fun optimizeAudioFiles(context: Context) {
                             totalSavedBytes += saved
                         }
                         markAsOptimized(file, prefs)
-                        Log.d("AudioOptimize", "✅ ${file.name} optimiert (${originalSize} → ${newSize} bytes)")
+                        Log.d("AudioOptimize", "✅ ${file.name} optimiert (${originalSize} → $newSize bytes)")
                     } else {
                         markAsOptimized(file, prefs) // Markiere auch fehlgeschlagene Dateien, um nicht erneut zu versuchen
                     }
@@ -2130,7 +2161,7 @@ private fun optimizeAudioFiles(context: Context) {
             
             val savedMB = String.format("%.2f", totalSavedBytes / (1024.0 * 1024.0))
             val message = if (successCount > 0) {
-                "✅ $successCount Dateien optimiert\n💾 ${savedMB} MB gespart"
+                "✅ $successCount Dateien optimiert\n💾 $savedMB MB gespart"
             } else {
                 "⚠️ Keine Dateien konnten optimiert werden"
             }
@@ -2151,13 +2182,12 @@ private fun optimizeAudioFiles(context: Context) {
     }
 }
 
-private fun optimizeSingleAudioFile(file: File, context: Context): Boolean {
+private fun optimizeSingleAudioFile(file: File): Boolean {
     return try {
         val fileName = file.nameWithoutExtension
         val extension = file.extension
         val tempFile = File(file.parentFile, "${fileName}_temp_${System.currentTimeMillis()}.$extension")
-        
-        // Versuche FFmpeg zu verwenden
+
         try {
             if (useFFmpegOptimization(file, tempFile)) {
                 return if (tempFile.length() < file.length()) {
@@ -2177,7 +2207,7 @@ private fun optimizeSingleAudioFile(file: File, context: Context): Boolean {
         
         // Fallback: Einfache Umcodierung mit reduzierter Bitrate
         try {
-            if (useSimpleAudioReEncoding(file, tempFile, context)) {
+            if (useSimpleAudioReEncoding(file, tempFile)) {
                 return if (tempFile.length() < file.length()) {
                     file.delete()
                     tempFile.renameTo(file)
@@ -2224,7 +2254,7 @@ private fun useFFmpegOptimization(inputFile: File, outputFile: File): Boolean {
     }
 }
 
-private fun useSimpleAudioReEncoding(inputFile: File, outputFile: File, context: Context): Boolean {
+private fun useSimpleAudioReEncoding(inputFile: File, outputFile: File): Boolean {
     return try {
         val inputBytes = inputFile.readBytes()
         if (inputBytes.isEmpty()) return false
@@ -2272,7 +2302,7 @@ private fun compressMP3(inputFile: File, outputFile: File): Boolean {
         }
         
         false
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         false
     }
 }
@@ -2283,7 +2313,7 @@ private fun compressM4A(inputFile: File, outputFile: File): Boolean {
         // Wir können hier begrenzt optimieren
         inputFile.copyTo(outputFile, overwrite = true)
         outputFile.length() > 0
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         false
     }
 }
