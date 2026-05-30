@@ -50,6 +50,7 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
     var currentMsg by mutableStateOf("")
     var isLoading by mutableStateOf(false)
     var selectedImageUri by mutableStateOf<Uri?>(null)
+    var selectedAudioUri by mutableStateOf<Uri?>(null)
     var showAiModels by mutableStateOf(false)
     var editIndex: Int? by mutableStateOf(null)
     var isEditMode by mutableStateOf(false)
@@ -143,6 +144,7 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
     fun selectModel(model: Model) {
         selectedModel = model
         if (!model.vision) selectedImageUri = null
+        if (!model.audio) selectedAudioUri = null
     }
 
     fun clearHistory() {
@@ -173,8 +175,6 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         val modeAtSend = currentMode
-        val imageBase64 = selectedImageUri?.let { encodeImage(ctx, it) }
-        val effectivePic = if (selectedModel.vision && selectedImageUri != null) imageBase64 else null
 
         history.add(
             ChatMessage(
@@ -207,15 +207,17 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             try {
+                val effectivePic = if (selectedModel.vision && selectedImageUri != null) {
+                    selectedImageUri?.let { encodeImage(ctx, it) }
+                } else null
+                val effectiveAudio = if (currentMode != "Gemini" && selectedModel.audio && selectedAudioUri != null) {
+                    selectedAudioUri?.let { encodeAudio(ctx, it) }
+                } else null
                 val response = withContext(Dispatchers.IO) {
-                    send(
-                        ctx,
-                        userText.ifEmpty { "Beschreibe das Bild" },
-                        effectivePic,
-                        onToken
-                    )
+                    send(ctx, userText.ifEmpty { "Beschreibe das Bild" }, effectivePic, effectiveAudio, onToken)
                 }
                 selectedImageUri = null
+                selectedAudioUri = null
 
                 sendAITabBackgroundNotification(
                     ctx,
@@ -238,27 +240,12 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun send(
-        ctx: Context,
-        txt: String,
-        pic: String?,
-        onToken: (String) -> Unit
-    ): String {
+    private suspend fun send(ctx: Context, txt: String, pic: String?, audio: String?, onToken: (String) -> Unit): String {
         if (!isOnline(ctx)) return "Kein Netzwerk"
         return when (currentMode) {
-            "Nvidia" -> sendNvidiaChatMessageAITab(
-                history, txt, selectedModel.realname, pic,
-                onToken = onToken
-            ) ?: "Fehler"
-
+            "Nvidia" -> sendNvidiaChatMessageAITab(history, txt, selectedModel.realname, pic, onToken = onToken) ?: "Fehler"
             "Server" -> askServer(history, txt, selectedModel.realname, pic)
-
-            "Gemini" -> sendGeminiRequest(
-                history, txt, pic,
-                model = selectedModel.realname,
-                onToken = onToken
-            ) ?: "Fehler"
-
+            "Gemini" -> sendGeminiRequest(history, txt, pic, audioUri = selectedAudioUri, audio = audio, ctx = ctx, model = selectedModel.realname, onToken = onToken) ?: "Fehler"
             else -> "Wähle einen Modus"
         }
     }
@@ -275,14 +262,29 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
     private fun encodeImage(ctx: Context, uri: Uri): String? = try {
         ctx.contentResolver.openInputStream(uri)?.use { input ->
             val bmp = BitmapFactory.decodeStream(input)
-            val bytes = ByteArrayOutputStream().also {
-                bmp.compress(Bitmap.CompressFormat.JPEG, 90, it)
-            }.toByteArray()
-            Base64.encodeToString(bytes, Base64.NO_WRAP)
+            val output = ByteArrayOutputStream()
+            android.util.Base64OutputStream(output, Base64.NO_WRAP).use { base64Out ->
+                bmp.compress(Bitmap.CompressFormat.JPEG, 90, base64Out)
+            }
+            output.toString("UTF-8")
         }
     } catch (_: Exception) {
         null
     }
+
+    private fun encodeAudio(ctx: Context, uri: Uri): String? = try {
+        ctx.contentResolver.openInputStream(uri)?.use { input ->
+            val output = java.io.ByteArrayOutputStream()
+            android.util.Base64OutputStream(output, Base64.NO_WRAP).use { base64Out ->
+                val buffer = ByteArray(8192)
+                var bytesRead: Int
+                while (input.read(buffer).also { bytesRead = it } != -1) {
+                    base64Out.write(buffer, 0, bytesRead)
+                }
+            }
+            output.toString("UTF-8")
+        }
+    } catch (_: Exception) { null }
 
     suspend fun animateAlpha(alpha: Animatable<Float, AnimationVector1D>) {
         delay(100)
