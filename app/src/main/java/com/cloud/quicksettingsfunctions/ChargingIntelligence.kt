@@ -412,7 +412,6 @@ suspend fun simulateAndTestPrediction(context: Context): Int? {
         startHour = cal.get(Calendar.HOUR_OF_DAY)
     )
 
-    // Fake BatterySamples für liveRate (letzte 15 Min, steigend)
     val fakeBatterySamples = (0..8).map { i ->
         BatterySample(
             timestamp = now - (8 - i) * 2 * 60_000L,
