@@ -200,6 +200,7 @@ private var appContext: Context? = null
 private const val PREFS_SYNC = "sync_prefs"
 private const val KEY_SYNC_ACTIVE = "sync_active"
 private const val KEY_SYNC_UNTIL = "sync_until"
+private const val KEY_LAST_SYNC = "last_sync"
 private var lastPushedState: String = ""
 
 private var networkCallback: ConnectivityManager.NetworkCallback? = null
@@ -636,20 +637,26 @@ fun restoreSyncIfNeeded(context: Context) {
     appContext = context.applicationContext
     val prefs = context.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)
     val syncActive = prefs.getBoolean(KEY_SYNC_ACTIVE, false)
-    val syncUntil = prefs.getLong(KEY_SYNC_UNTIL, 0L)
-    val remainingMs = syncUntil - System.currentTimeMillis()
+    val lastSync = prefs.getLong(KEY_LAST_SYNC, 0L)
+    val thirtyMinutesMs = 30 * 60 * 1000L
+    val timeSinceLastSync = System.currentTimeMillis() - lastSync
 
-    if (syncActive && remainingMs > 0) {
-        val remainingMinutes = (remainingMs / 60_000L).toInt().coerceAtLeast(1)
+    if (syncActive && timeSinceLastSync <= thirtyMinutesMs) {
+        val minutesAgo = (timeSinceLastSync / 60_000L).toInt().coerceAtLeast(1)
         isLaptopConnected = true
         startUpdateListener(context)
+        startMediaCommandListener(context)
+        startExecuteListener(context)
+        startMediaStateServer(context)
+        startClipboardListener(context)
+        context.registerReceiver(akkuReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         syncScope.launch {
             delay(5_000)
             syncTodosWithLaptop(context)
         }
         showSimpleNotificationExtern(
             "🔁 Sync wiederhergestellt",
-            "Listener läuft noch $remainingMinutes min",
+            "Letzter Sync vor $minutesAgo min",
             10.seconds,
             context
         )
@@ -772,6 +779,14 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                 "OK" -> {
                     ConnectionGuard.recordSuccess()
                     isLaptopConnected = true
+                    
+                    // Save last sync time
+                    val prefs = context.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)
+                    prefs.edit {
+                        putBoolean(KEY_SYNC_ACTIVE, true)
+                        putLong(KEY_LAST_SYNC, System.currentTimeMillis())
+                    }
+                    
                     startMediaCommandListener(context)
                     startExecuteListener(context)
                     startMediaStateServer(context)
@@ -1386,8 +1401,21 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
         }
 
         "deleteNotif" -> {
-            val id = json.optInt("id", -1)
-            context.getSystemService(NotificationManager::class.java).cancel(id)
+            println(json.toString())
+            println("CALLL")
+            println(json.optJSONObject("extras"))
+            val extras = json.optJSONObject("extras")
+            val idValue = extras?.opt("id")
+            println("idValue: $idValue")
+            
+            val nm = context.getSystemService(NotificationManager::class.java)
+            val notificationId = when (idValue) {
+                is Int -> idValue
+                is Long -> idValue.toInt()
+                is String -> idValue.toIntOrNull()
+                else -> null
+            }
+            notificationId?.let { nm.cancel(it) }
         }
 
         else -> {}
