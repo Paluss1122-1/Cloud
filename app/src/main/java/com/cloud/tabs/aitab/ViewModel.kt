@@ -217,12 +217,6 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 selectedImageUri = null
 
-                if (placeholderIndex < history.size) {
-                    history[placeholderIndex] = ChatMessage(
-                        response, placeholderTs, false, modeAtSend
-                    )
-                }
-
                 sendAITabBackgroundNotification(
                     ctx,
                     title = "AITab answer",
