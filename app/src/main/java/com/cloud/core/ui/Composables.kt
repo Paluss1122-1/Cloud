@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,10 +69,78 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.cloud.tabs.mediaplayer.Episode
 import com.cloud.tabs.mediaplayer.PodcastFeed
+import com.mikepenz.markdown.compose.components.markdownComponents
+import com.mikepenz.markdown.compose.elements.MarkdownBlockQuote
+import com.mikepenz.markdown.m3.Markdown
 import kotlinx.coroutines.launch
-import kotlin.collections.forEachIndexed
-import kotlin.collections.lastIndex
 
+fun parseCalloutType(content: String): Pair<CalloutType?, String> {
+    val calloutPattern = Regex("^\\s*\\[!(\\w+)]\\s*(.*)$", RegexOption.DOT_MATCHES_ALL)
+    val matchResult = calloutPattern.find(content.trim())
+    return if (matchResult != null) {
+        val type = when (matchResult.groupValues[1].uppercase()) {
+            "WARNING", "CAUTION", "ATTENTION" -> CalloutType.WARNING
+            "INFO" -> CalloutType.INFO
+            "NOTE" -> CalloutType.NOTE
+            "TIP", "HINT", "IMPORTANT" -> CalloutType.TIP
+            "SUCCESS", "CHECK", "DONE" -> CalloutType.SUCCESS
+            "DANGER", "ERROR" -> CalloutType.DANGER
+            else -> null
+        }
+        type to matchResult.groupValues[2].trim()
+    } else {
+        null to content
+    }
+}
+
+enum class CalloutType {
+    WARNING, INFO, NOTE, TIP, SUCCESS, DANGER
+}
+
+@Composable
+fun Callout(
+    type: CalloutType,
+    content: @Composable () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val (borderColor, backgroundColor) = when (type) {
+        CalloutType.WARNING -> Color(0xFFFFAB00) to Color(0xFFFFAB00).copy(alpha = 0.1f)
+        CalloutType.INFO -> Color(0xFF2196F3) to Color(0xFF2196F3).copy(alpha = 0.1f)
+        CalloutType.NOTE -> Color(0xFF9E9E9E) to Color(0xFF9E9E9E).copy(alpha = 0.1f)
+        CalloutType.TIP -> Color(0xFF4CAF50) to Color(0xFF4CAF50).copy(alpha = 0.1f)
+        CalloutType.SUCCESS -> Color(0xFF4CAF50) to Color(0xFF4CAF50).copy(alpha = 0.1f)
+        CalloutType.DANGER -> Color(0xFFF44336) to Color(0xFFF44336).copy(alpha = 0.1f)
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(backgroundColor, shape = RoundedCornerShape(8.dp))
+            .drawBehind {
+                drawRect(
+                    color = borderColor,
+                    size = size.copy(width = 4.dp.toPx())
+                )
+            }
+            .padding(start = 12.dp, top = 8.dp, end = 8.dp, bottom = 8.dp)
+    ) {
+        content()
+    }
+}
+
+@Composable
+fun calloutAwareMarkdownComponents() = markdownComponents(
+    blockQuote = {
+        val (calloutType, remainingContent) = parseCalloutType(it.content)
+        if (calloutType != null) {
+            Callout(type = calloutType, content= {
+                Markdown(content = remainingContent)
+            })
+        } else {
+            MarkdownBlockQuote(it.content, it.node, TextStyle.Default)
+        }
+    }
+)
 
 @Composable
 fun PloppingButton(
@@ -86,6 +155,7 @@ fun PloppingButton(
 ) {
     val scale = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
+    val interactionSource = remember { MutableInteractionSource() }
     val containerColor = if (enabled) colors.containerColor else colors.disabledContainerColor
 
     Box(
@@ -99,7 +169,7 @@ fun PloppingButton(
             .background(containerColor)
             .clickable(
                 indication = null,
-                interactionSource = remember { MutableInteractionSource() },
+                interactionSource = interactionSource,
                 enabled = enabled
             ) {
                 scope.launch {
@@ -140,37 +210,29 @@ fun NeonBox(
     onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
+    require(neonColors.size >= 2) { "neonColors must contain at least 2 colors" }
+    
     val gradientBrush = Brush.linearGradient(
-        colors = listOf(
-            neonColors[0].copy(alpha = backgroundAlpha),
-            neonColors[1].copy(alpha = backgroundAlpha)
-        )
+        colors = neonColors.take(2).map { it.copy(alpha = backgroundAlpha) }
     )
 
     Box(
         modifier = modifier
             .drawBehind {
-                val w = size.width
-                val h = size.height
-                val tl = cornerRadius.topStart.toPx(size, this)
-                val tr = cornerRadius.topEnd.toPx(size, this)
-                val br = cornerRadius.bottomEnd.toPx(size, this)
-                val bl = cornerRadius.bottomStart.toPx(size, this)
-
                 val path = Path().apply {
                     addRoundRect(
                         RoundRect(
-                            rect = Rect(0f, 0f, w, h),
-                            topLeft = CornerRadius(tl),
-                            topRight = CornerRadius(tr),
-                            bottomRight = CornerRadius(br),
-                            bottomLeft = CornerRadius(bl)
+                            rect = Rect(0f, 0f, size.width, size.height),
+                            topLeft = CornerRadius(cornerRadius.topStart.toPx(size, this@drawBehind)),
+                            topRight = CornerRadius(cornerRadius.topEnd.toPx(size, this@drawBehind)),
+                            bottomRight = CornerRadius(cornerRadius.bottomEnd.toPx(size, this@drawBehind)),
+                            bottomLeft = CornerRadius(cornerRadius.bottomStart.toPx(size, this@drawBehind))
                         )
                     )
                 }
 
-                drawIntoCanvas {
-                    it.nativeCanvas.apply {
+                drawIntoCanvas { canvas ->
+                    canvas.nativeCanvas.apply {
                         drawPath(
                             path.asAndroidPath(),
                             Paint().apply {
@@ -179,11 +241,6 @@ fun NeonBox(
                                 maskFilter = android.graphics.BlurMaskFilter(glowBlur1, android.graphics.BlurMaskFilter.Blur.OUTER)
                             }
                         )
-                    }
-                }
-
-                drawIntoCanvas {
-                    it.nativeCanvas.apply {
                         drawPath(
                             path.asAndroidPath(),
                             Paint().apply {
@@ -203,8 +260,6 @@ fun NeonBox(
                 shape = cornerRadius
             )
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
-
-
         contentAlignment = Alignment.Center
     ) {
         content()
@@ -385,13 +440,13 @@ fun AlertDialogCloud(
     properties: DialogProperties = DialogProperties()
 ) {
     AlertDialog(
-        onDismissRequest = { onDismiss() },
+        onDismissRequest = onDismiss,
         confirmButton = {
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
                     .background(if (!oneButton) Color(0xFFB71C1C) else MaterialTheme.colorScheme.primary)
-                    .clickable { onConfirm() }
+                    .clickable(onClick = onConfirm)
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) { Text(confirmText, color = TextPrimary, fontWeight = FontWeight.SemiBold) }
         },
@@ -402,7 +457,7 @@ fun AlertDialogCloud(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
                         .background(BgCard)
-                        .clickable { onDismiss() }
+                        .clickable(onClick = onDismiss)
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) { Text("Abbrechen", color = TextSecondary) }
             }
