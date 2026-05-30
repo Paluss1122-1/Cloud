@@ -38,7 +38,7 @@ fun SpotifyDownloaderTab() {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val repo = DownloadRepositoryImpl(httpClient, context.applicationContext as Context)
-                return DownloadViewModel(repo) as T
+                return DownloadViewModel(repo, context.applicationContext as Context) as T
             }
         }
     }
