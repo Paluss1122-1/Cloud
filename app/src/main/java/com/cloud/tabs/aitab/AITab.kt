@@ -498,7 +498,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                     cornerRadius = RoundedCornerShape(2.dp, 10.dp, 10.dp, 10.dp),
                                     backgroundAlpha = 0.91f,
                                     borderWidth = 2.8.dp,
-                                    neonColors = listOf(Color(0xFF00FFAA), Color(0xFF00CCFF)),
+                                    neonColors = listOf(Color(0xFF00DE8C), Color(0xFF00A5D5)),
                                 ) {
                                     Column(
                                         modifier = Modifier.padding(
