@@ -62,6 +62,7 @@ import com.cloud.core.ui.PloppingButton
 import com.cloud.core.ui.showBatteryInfo
 import com.cloud.quicksettingsfunctions.BatteryChartScreen
 import com.cloud.quicksettingsfunctions.showNetworkInfo
+import com.cloud.services.QuietHoursNotificationService.Companion.SSN_CHANNEL_ID
 import kotlinx.coroutines.delay
 import java.net.Inet4Address
 import java.util.Date
@@ -257,8 +258,7 @@ fun showDisplayInfo(context: Context) {
     }
     info.append("🧭 Ausrichtung: $orientationStr\n")
 
-    val channelId = "display_info_channel"
-    val builder = NotificationCompat.Builder(context, channelId)
+    val builder = NotificationCompat.Builder(context, SSN_CHANNEL_ID)
         .setSmallIcon(R.drawable.ic_menu_gallery)
         .setContentTitle("🖥️ Display-Info")
         .setContentText("Auflösung, Dichte, Größe, Refresh Rate")
