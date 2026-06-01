@@ -191,6 +191,7 @@ private var mediaStateJob: Job? = null
 private var clipboardJob: Job? = null
 private var mailNotifyJob: Job? = null
 private var executeJob: Job? = null
+private var smsJob: Job? = null
 
 private val activeServers = mutableListOf<ServerSocket>()
 
@@ -199,7 +200,6 @@ private var appContext: Context? = null
 
 private const val PREFS_SYNC = "sync_prefs"
 private const val KEY_SYNC_ACTIVE = "sync_active"
-private const val KEY_SYNC_UNTIL = "sync_until"
 private const val KEY_LAST_SYNC = "last_sync"
 private var lastPushedState: String = ""
 
@@ -649,6 +649,7 @@ fun restoreSyncIfNeeded(context: Context) {
         startExecuteListener(context)
         startMediaStateServer(context)
         startClipboardListener(context)
+        startSmsListener(context)
         context.registerReceiver(akkuReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         syncScope.launch {
             delay(5_000)
@@ -682,7 +683,7 @@ fun stopAllSyncServices(context: Context) {
 
     listOf(
         mediaCommandJob, mediaStateJob, aiResponseJob, flashcardResponseJob,
-        clipboardJob, mailNotifyJob, executeJob
+        clipboardJob, mailNotifyJob, executeJob, smsJob
     ).forEach { it?.cancel() }
 
     mediaCommandJob = null; mediaStateJob = null; aiResponseJob = null
@@ -791,6 +792,7 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                     startExecuteListener(context)
                     startMediaStateServer(context)
                     startClipboardListener(context)
+                    startSmsListener(context)
                     if (listenerJob == null || listenerJob?.isActive == false) {
                         startUpdateListener(context)
                     }
@@ -1572,9 +1574,7 @@ private fun buildPlaylistsJson(context: Context): String {
             while (cursor.moveToNext()) {
                 val data = cursor.getString(dataCol) ?: continue
                 val norm = data.lowercase()
-                val inCloud = norm.contains("/download/cloud/") ||
-                        norm.contains("/downloads/cloud/") ||
-                        data.contains("/Cloud/", ignoreCase = true)
+                val inCloud = norm.contains("/music/cloud/", ignoreCase = true)
                 if (inCloud && !norm.contains("/podcast")) {
                     val name = cursor.getString(nameCol) ?: continue
                     val title = cursor.getString(titleCol)
@@ -2294,4 +2294,48 @@ fun reportDeviceInformation(intent: Intent) {
             println("Socket error: ${e.message}")
         }
     }
+}
+
+fun startSmsListener(context: Context) {
+    if (smsJob?.isActive == true) return
+    smsJob = launchServer(syncScope, Config.SMS_PORT, "startSmsListener") { client ->
+        val command = BufferedReader(InputStreamReader(client.getInputStream())).readLine()?.trim()
+        if (command == "fetch") {
+            val json = readAllSms(context)
+            client.getOutputStream().apply {
+                write(json.toByteArray(Charsets.UTF_8))
+                flush()
+            }
+        }
+        client.close()
+    }
+}
+
+private fun readAllSms(context: Context): String {
+    val arr = JSONArray()
+    try {
+        context.contentResolver.query(
+            "content://sms/inbox".toUri(),
+            arrayOf("_id", "address", "body", "date", "read"),
+            null, null, "date DESC"
+        )?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow("_id")
+            val addrCol = cursor.getColumnIndexOrThrow("address")
+            val bodyCol = cursor.getColumnIndexOrThrow("body")
+            val dateCol = cursor.getColumnIndexOrThrow("date")
+            val readCol = cursor.getColumnIndexOrThrow("read")
+            while (cursor.moveToNext()) {
+                arr.put(JSONObject().apply {
+                    put("id", cursor.getLong(idCol))
+                    put("address", cursor.getString(addrCol) ?: "")
+                    put("body", cursor.getString(bodyCol) ?: "")
+                    put("date", cursor.getLong(dateCol))
+                    put("read", cursor.getInt(readCol) == 1)
+                })
+            }
+        }
+    } catch (e: Exception) {
+        logError("readAllSms", e)
+    }
+    return arr.toString()
 }
