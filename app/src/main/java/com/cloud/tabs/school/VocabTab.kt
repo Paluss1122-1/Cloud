@@ -84,6 +84,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import com.cloud.core.activities.Cloud.Companion.appScope
 import com.cloud.core.objects.Config
+import com.cloud.core.objects.prvt
 import com.cloud.core.ui.AccentViolet
 import com.cloud.core.ui.AccentVioletDim
 import com.cloud.core.ui.AlertDialogCloud
@@ -538,23 +539,25 @@ fun SchoolDashboard(
                     )
                 }
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.primary)
-                        .clickable { onMaterialClick() }
-                        .padding(horizontal = 20.dp, vertical = 18.dp)
-                        .weight(1f)
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.StickyNote2, contentDescription = "", tint = LocalContentColor.current.copy(0.4f))
-                    Text(
-                        "Materialien",
-                        color = TextPrimary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                if (prvt()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.primary)
+                            .clickable { onMaterialClick() }
+                            .padding(horizontal = 20.dp, vertical = 18.dp)
+                            .weight(1f)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.StickyNote2, contentDescription = "", tint = LocalContentColor.current.copy(0.4f))
+                        Text(
+                            "Materialien",
+                            color = TextPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }
