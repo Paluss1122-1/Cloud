@@ -110,7 +110,7 @@ fun ContactsTabContent(
                     .weight(1f)
                     .height(56.dp)
             ) {
-                Text("Kontakte laden", fontSize = 18.sp)
+                Text("Kontakte laden", fontSize = 15.sp)
             }
 
             Button(
@@ -122,7 +122,7 @@ fun ContactsTabContent(
                     .weight(1f)
                     .height(56.dp)
             ) {
-                Text("Neu erstellen", fontSize = 18.sp)
+                Text("Neu erstellen", fontSize = 15.sp)
             }
         }
 
