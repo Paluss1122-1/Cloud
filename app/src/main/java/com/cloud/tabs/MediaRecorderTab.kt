@@ -291,7 +291,7 @@ fun MediaRecorderContent(
                             try {
                                 val outputFile = File(
                                     Environment.getExternalStoragePublicDirectory(
-                                        Environment.DIRECTORY_DOWNLOADS
+                                        Environment.DIRECTORY_MUSIC
                                     ),
                                     "Cloud"
                                 ).apply { mkdirs() }
@@ -389,7 +389,7 @@ fun MediaRecorderContent(
                             ).format(Date())
                             val audioFile = File(
                                 Environment.getExternalStoragePublicDirectory(
-                                    Environment.DIRECTORY_DOWNLOADS
+                                    Environment.DIRECTORY_MUSIC
                                 ),
                                 "Cloud/recording_$timestamp.wav"
                             ).apply { parentFile?.mkdirs() }
@@ -727,7 +727,7 @@ fun trimAudioToMp3(
 }
 
 fun loadMusicFiles(callback: (List<File>) -> Unit) {
-    val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+    val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
     val cloudDir = File(downloadDir, "Cloud")
 
     val files = if (cloudDir.exists()) {
