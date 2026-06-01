@@ -88,6 +88,7 @@ import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.DEL_GAL_CONF
 import com.cloud.core.objects.Config.cms
 import com.cloud.core.objects.Config.realDevice
+import com.cloud.core.objects.prvt
 import com.cloud.core.objects.reportError
 import com.cloud.core.ui.getDeviceName
 import com.cloud.quiethoursnotificationhelper.AiResponseEntry
@@ -102,7 +103,6 @@ import com.cloud.quiethoursnotificationhelper.createNotification
 import com.cloud.quiethoursnotificationhelper.createNotificationChannel
 import com.cloud.quiethoursnotificationhelper.deleteGalleryImage
 import com.cloud.quiethoursnotificationhelper.ensureReadyForConnect
-import com.cloud.quiethoursnotificationhelper.fetchNewErrors
 import com.cloud.quiethoursnotificationhelper.getTodayKey
 import com.cloud.quiethoursnotificationhelper.isQuietHoursNow
 import com.cloud.quiethoursnotificationhelper.loadGalleryImages
@@ -202,7 +202,6 @@ class QuietHoursNotificationService : Service() {
 
         const val ACTION_MESSAGE_SENT = "com.cloud.ACTION_MESSAGE_SENT"
         const val EXTRA_SENDER = "extra_sender"
-        const val CONFIRMATION_CHANNEL_ID = "message_confirmation_channel"
 
         private lateinit var sharedPreferences: SharedPreferences
         private const val ACTION_OPEN_MUSIC_PLAYER = "com.cloud.ACTION_OPEN_MUSIC_PLAYER"
@@ -242,9 +241,7 @@ class QuietHoursNotificationService : Service() {
         const val ACTION_DELETE_IMAGE = "com.cloud.ACTION_DELETE_IMAGE"
         const val ACTION_CANCEL_DELETE = "com.cloud.ACTION_CANCEL_DELETE"
         const val EXTRA_IMAGE_INDEX = "extra_image_index"
-        const val DELETE_CONFIRMATION_CHANNEL_ID = "delete_confirmation_channel"
         const val MAIL_CHANNEL_ID = "mail_channel"
-        const val ERROR_REPORTS_CHANNEL_ID = "ERROR_REPORTS_CHANNEL_ID"
 
         const val ACTION_MARK_PARTS_READ = "com.cloud.ACTION_MARK_PARTS_READ"
         const val EXTRA_MESSAGE_ID = "extra_message_id"
@@ -685,7 +682,6 @@ class QuietHoursNotificationService : Service() {
                     })
                     ensureReadyForConnect(this@QuietHoursNotificationService)
                     syncTodosWithLaptop(this@QuietHoursNotificationService)
-                    fetchNewErrors(this@QuietHoursNotificationService)
                     START_STICKY
                 }
 
@@ -826,7 +822,7 @@ class QuietHoursNotificationService : Service() {
                         .setContentIntent(pi)
                         .build()
 
-                    if (canNotify(this)) {
+                    if (canNotify(this) && prvt()) {
                         nm.notify(SCHOOL_SUMMARY_NOTIF_ID, notification)
                     }
                     START_STICKY
@@ -1199,7 +1195,7 @@ class QuietHoursNotificationService : Service() {
                     .withNano(0)
                     .toInstant()
 
-                val destDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "cloud/podcasts")
+                val destDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PODCASTS), "/Cloud")
                 destDir.mkdirs()
 
                 val found = mutableListOf<JSONObject>()
@@ -1321,7 +1317,7 @@ class QuietHoursNotificationService : Service() {
         try {
             val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_")
             val filename = "$safeTitle.mp3"
-            val destDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "cloud/podcasts")
+            val destDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PODCASTS), "/Cloud")
             destDir.mkdirs()
 
             val request = DownloadManager.Request(audioUrl.toUri()).apply {
