@@ -66,6 +66,18 @@ data class Movie(
     val genreIds: List<Int>
 )
 
+data class SavedMovie(
+    val id: Int,
+    val title: String,
+    val overview: String,
+    val posterPath: String?,
+    val voteAverage: Double
+) {
+    fun toMovie() = Movie(id, title, overview, posterPath, "", voteAverage, emptyList())
+}
+
+fun Movie.toSaved() = SavedMovie(id, title, overview, posterPath, voteAverage)
+
 @Composable
 fun MovieDiscoveryTabContent(
     modifier: Modifier = Modifier
@@ -76,7 +88,7 @@ fun MovieDiscoveryTabContent(
     var movies by remember { mutableStateOf<List<Movie>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var selectedGenre by remember { mutableStateOf<Int?>(null) }
-    var savedMovieIds by remember { mutableStateOf(loadSavedMovies(context)) }
+    var savedMovies by remember { mutableStateOf(loadSavedMovies(context)) }
     var selectedMovie by remember { mutableStateOf<Movie?>(null) }
     var showSavedOnly by remember { mutableStateOf(false) }
 
@@ -169,7 +181,7 @@ fun MovieDiscoveryTabContent(
                     containerColor = if (showSavedOnly) Color(0xFFFF9800) else Color(0xFF2196F3)
                 )
             ) {
-                Text(if (showSavedOnly) "🎬 Alle anzeigen" else "⭐ Gemerkte (${savedMovieIds.size})")
+                Text(if (showSavedOnly) "🎬 Alle anzeigen" else "⭐ Gemerkte (${savedMovies.size})")
             }
         }
 
@@ -184,7 +196,7 @@ fun MovieDiscoveryTabContent(
             }
         } else {
             val displayMovies = if (showSavedOnly) {
-                movies.filter { savedMovieIds.contains(it.id) }
+                savedMovies.map { it.toMovie() }
             } else {
                 movies
             }
@@ -207,14 +219,14 @@ fun MovieDiscoveryTabContent(
                     items(displayMovies) { movie ->
                         MovieCard(
                             movie = movie,
-                            isSaved = savedMovieIds.contains(movie.id),
+                            isSaved = savedMovies.any { it.id == movie.id },
                             onSaveToggle = {
-                                savedMovieIds = if (savedMovieIds.contains(movie.id)) {
-                                    savedMovieIds - movie.id
+                                savedMovies = if (savedMovies.any { it.id == movie.id }) {
+                                    savedMovies.filter { it.id != movie.id }.toSet()
                                 } else {
-                                    savedMovieIds + movie.id
+                                    savedMovies + movie.toSaved()
                                 }
-                                saveMoviesToPrefs(context, savedMovieIds)
+                                saveMoviesToPrefs(context, savedMovies)
                             },
                             onClick = {
                                 selectedMovie = movie
@@ -229,15 +241,15 @@ fun MovieDiscoveryTabContent(
     selectedMovie?.let { movie ->
         MovieDetailDialog(
             movie = movie,
-            isSaved = savedMovieIds.contains(movie.id),
+            isSaved = savedMovies.any { it.id == movie.id },
             onDismiss = { selectedMovie = null },
             onSaveToggle = {
-                savedMovieIds = if (savedMovieIds.contains(movie.id)) {
-                    savedMovieIds - movie.id
+                savedMovies = if (savedMovies.any { it.id == movie.id }) {
+                    savedMovies.filter { it.id != movie.id }.toSet()
                 } else {
-                    savedMovieIds + movie.id
+                    savedMovies + movie.toSaved()
                 }
-                saveMoviesToPrefs(context, savedMovieIds)
+                saveMoviesToPrefs(context, savedMovies)
             }
         )
     }
@@ -354,20 +366,36 @@ suspend fun fetchMoviesFromTMDB(genreId: Int?): List<Movie> = withContext(Dispat
     }
 }
 
-fun loadSavedMovies(context: Context): Set<Int> {
+fun loadSavedMovies(context: Context): Set<SavedMovie> {
     val prefs = context.getSharedPreferences("cloud_app_prefs", Context.MODE_PRIVATE)
-    return prefs.getStringSet("saved_movies", emptySet())
-        ?.mapNotNull { it.toIntOrNull() }
-        ?.toSet() ?: emptySet()
+    return prefs.getStringSet("saved_movies_v2", emptySet())
+        ?.mapNotNull { json ->
+            runCatching {
+                JSONObject(json).let {
+                    SavedMovie(
+                        id = it.getInt("id"),
+                        title = it.getString("title"),
+                        overview = it.optString("overview", ""),
+                        posterPath = it.optString("posterPath").ifEmpty { null },
+                        voteAverage = it.getDouble("voteAverage")
+                    )
+                }
+            }.getOrNull()
+        }?.toSet() ?: emptySet()
 }
 
-fun saveMoviesToPrefs(context: Context, movieIds: Set<Int>) {
+fun saveMoviesToPrefs(context: Context, movies: Set<SavedMovie>) {
     val prefs = context.getSharedPreferences("cloud_app_prefs", Context.MODE_PRIVATE)
     prefs.edit(commit = true) {
-        putStringSet(
-            "saved_movies",
-            movieIds.map { it.toString() }.toSet()
-        )
+        putStringSet("saved_movies_v2", movies.map { m ->
+            JSONObject().apply {
+                put("id", m.id)
+                put("title", m.title)
+                put("overview", m.overview)
+                put("posterPath", m.posterPath ?: "")
+                put("voteAverage", m.voteAverage)
+            }.toString()
+        }.toSet())
     }
 }
 
