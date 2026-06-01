@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,13 +18,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -87,6 +88,7 @@ import coil.size.Precision
 import coil.size.Scale
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.MAX_GEMINI
+import com.cloud.core.objects.prvt
 import com.cloud.core.ui.AccentViolet
 import com.cloud.core.ui.BgSurface
 import com.cloud.core.ui.TextPrimary
@@ -127,6 +129,10 @@ fun MaterialienScreen(
     initialFile: String? = null
 ) {
     val context = LocalContext.current
+    if (!prvt()) {
+        Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+        return
+    }
     val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("material_cache", Context.MODE_PRIVATE) }
 
@@ -778,7 +784,7 @@ fun MaterialienScreen(
         var offsetX by remember { mutableStateOf(0f) }
         var offsetY by remember { mutableStateOf(0f) }
 
-        val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
+        val transformableState = rememberTransformableState { _, zoomChange, panChange, _ ->
             scale = (scale * zoomChange).coerceIn(1f, 4f)
             offsetX += panChange.x
             offsetY += panChange.y
@@ -1000,7 +1006,7 @@ fun MaterialienScreen(
                                                     .verticalScroll(rememberScrollState())
                                             ) {
                                                 Markdown(
-                                                    content = aiSummary!!,
+                                                    content = aiSummary,
                                                     colors = markdownColor(text = TextPrimary),
                                                     typography = markdownTypography(
                                                         h1 = TextStyle(
@@ -1133,7 +1139,7 @@ fun MaterialienScreen(
                         if (aiSummary != null) {
                             SelectionContainer {
                                 Markdown(
-                                    content = aiSummary!!,
+                                    content = aiSummary,
                                     colors = markdownColor(text = TextPrimary),
                                     typography = markdownTypography(
                                         h1 = TextStyle(
