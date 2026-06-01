@@ -1,12 +1,15 @@
 package com.cloud.tabs.authenticator
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.provider.Settings
 import android.util.Base64
 import android.view.View
@@ -85,6 +88,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
@@ -424,7 +428,8 @@ fun TwoFAListScreen(db: TwoFADatabase) {
                         name = ""; secret = ""
                         showAddDialog = false
                     }
-                }
+                },
+                showScanner = { showScanner = true }
             )
         }
 
@@ -442,7 +447,30 @@ fun TwoFAListScreen(db: TwoFADatabase) {
         }
 
         if (showScanner) {
-            SilentCaptureScreen(onDismiss = { showScanner = false })
+            if (
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.CAMERA
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                Toast.makeText(
+                    context,
+                    "Please enable camera access",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+                val intent = Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", context.packageName, null)
+                )
+                context.startActivity(intent)
+
+                return
+            }
+
+            SilentCaptureScreen(
+                onDismiss = { showScanner = false }
+            )
         }
     }
 }
@@ -784,7 +812,8 @@ private fun TwoFAAddDialog(
     onNameChange: (String) -> Unit,
     onSecretChange: (String) -> Unit,
     onDismiss: () -> Unit,
-    onSave: () -> Unit
+    onSave: () -> Unit,
+    showScanner: () -> Unit
 ) {
     val isValid = name.isNotBlank() && secret.isNotBlank()
 
@@ -835,22 +864,30 @@ private fun TwoFAAddDialog(
                     fontWeight = FontWeight.SemiBold
                 )
                 Spacer(Modifier.height(4.dp))
-                OutlinedTextField(
-                    value = secret,
-                    onValueChange = onSecretChange,
-                    singleLine = true,
-                    placeholder = { Text("Base32-Schlüssel", color = TextT) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AccentBlue,
-                        unfocusedBorderColor = Surface3,
-                        focusedTextColor = TextP,
-                        unfocusedTextColor = TextP,
-                        cursorColor = AccentBlue
+                Row(Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = secret,
+                        onValueChange = onSecretChange,
+                        singleLine = true,
+                        placeholder = { Text("Base32-Schlüssel", color = TextT) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = AccentBlue,
+                            unfocusedBorderColor = Surface3,
+                            focusedTextColor = TextP,
+                            unfocusedTextColor = TextP,
+                            cursorColor = AccentBlue
+                        )
                     )
-                )
+                    IconButton(
+                        onClick = { showScanner() },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.QrCodeScanner, null, tint = AccentBlue)
+                    }
+                }
             }
 
             Spacer(Modifier.height(24.dp))
