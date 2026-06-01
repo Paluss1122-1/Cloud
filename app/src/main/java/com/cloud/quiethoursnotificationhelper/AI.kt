@@ -48,11 +48,10 @@ private fun buildSystemPrompt(target: String = ""): String {
 }
 
 suspend fun sendGeminiRequest(
-    history: List<ChatMessage>,
+    history: List<ChatMessage> = emptyList(),
     userMessage: String,
     pic: String? = null,
     audioUri: android.net.Uri? = null,
-    audio: String? = null,
     ctx: android.content.Context? = null,
     anlytic: Boolean = false,
     model: String = DEF_GEMINI,
@@ -92,12 +91,16 @@ suspend fun sendGeminiRequest(
         }
         bytes to mimeType
     } else {
-        audio?.let { Base64.decode(it, Base64.NO_WRAP) } to "audio/mp3"
+        null to null
     }
 
     val requestContent = content {
         bmp?.let { image(it) }
-        audioBytes?.let { inlineData(it, audioMimeType) }
+        audioBytes?.let {
+            if (audioMimeType != null) {
+                inlineData(it, audioMimeType)
+            }
+        }
         text(promptText)
     }
 
