@@ -39,14 +39,11 @@ suspend fun generateAndSaveHashtags(
             Gib NUR die Hashtags zurück, ohne zusätzlichen Text. Die Hashtags sollen Genres beschreiben oder den Song beschreiben. Trenne sie mit Leerzeichen.
         """.trimIndent()
 
-        val encodedAudio = encodeAudio(ctx, fileUri)
         val hashtags = sendGeminiRequest(
-            history = emptyList(),
             userMessage = userMessage,
             audioUri = fileUri,
-            audio = encodedAudio,
             ctx = ctx,
-            model = "gemini-2.0-flash",
+            model = "gemini-2.5-flash",
             target = ""
         )?.trim()
 
