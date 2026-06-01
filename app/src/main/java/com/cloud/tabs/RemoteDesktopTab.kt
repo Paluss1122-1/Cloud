@@ -113,7 +113,6 @@ import org.json.JSONObject
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
-import java.net.NetworkInterface
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -559,24 +558,6 @@ class RemoteDesktopViewModel : ViewModel() {
         disconnect()
     }
 
-    fun getLocalIpAddress(): String {
-        try {
-            val interfaces = NetworkInterface.getNetworkInterfaces()
-            while (interfaces.hasMoreElements()) {
-                val iface = interfaces.nextElement()
-                val addresses = iface.inetAddresses
-                while (addresses.hasMoreElements()) {
-                    val addr = addresses.nextElement()
-                    if (!addr.isLoopbackAddress && addr.hostAddress?.contains(':') == false) {
-                        return addr.hostAddress ?: ""
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "[NET] IP-Fehler", e)
-        }
-        return "Unbekannt"
-    }
 }
 
 @Composable
@@ -1090,6 +1071,7 @@ fun ConnectedScreen(
     }
 }
 
+@Suppress("unused")
 @Composable
 fun HostingScreen(
     ip: String,
