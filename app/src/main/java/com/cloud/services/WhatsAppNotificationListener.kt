@@ -2,44 +2,17 @@ package com.cloud.services
 
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.PixelFormat
 import android.net.Uri
 import android.os.DeadObjectException
-import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
-import android.view.Gravity
-import android.view.WindowManager
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.lifecycle.setViewTreeViewModelStoreOwner
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.core.objects.Config.BLOCKED_MESSAGES
 import com.cloud.core.objects.Config.NOTIFICATION_PORT
 import com.cloud.core.objects.NotificationRepository
-import com.cloud.core.ui.Cloud
+import com.cloud.core.objects.prvt
 import com.cloud.quiethoursnotificationhelper.isLaptopConnected
 import com.cloud.quiethoursnotificationhelper.laptopIp
 import kotlinx.coroutines.CoroutineScope
@@ -199,10 +172,8 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         super.onDestroy()
     }
 
-    private var testOverlayView: ComposeView? = null
-    private var testOverlayLifecycle: OverlayLifecycleOwner? = null
-
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (!prvt()) return
         try {
             super.onNotificationPosted(sbn)
 
@@ -221,93 +192,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                             "getActiveNotifications not allowed yet: ${se.message}"
                         )
                     }
-                }
-            }
-
-            if (sbn.packageName == "com.google.android.gm") {
-                if (!Settings.canDrawOverlays(this)) {
-                    showSimpleNotificationExtern(
-                        "Fehler",
-                        "Overlay-Berechtigung fehlt!",
-                        context = this
-                    )
-                    return
-                }
-                val text = "${
-                    sbn.notification.extras.getCharSequence("android.text")?.toString() ?: ""
-                } ${sbn.notification.extras.getCharSequence("android.bigText")?.toString() ?: ""}"
-                val code = Regex("\\b\\d{6}\\b").find(text)?.value ?: return
-
-                val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-
-                testOverlayLifecycle = OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
-
-                testOverlayView = ComposeView(this).apply {
-                    setViewTreeLifecycleOwner(testOverlayLifecycle)
-                    setViewTreeSavedStateRegistryOwner(testOverlayLifecycle)
-                    setViewTreeViewModelStoreOwner(testOverlayLifecycle)
-                    setContent {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(Modifier.fillMaxSize().background(Cloud), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Text(code, fontSize = 100.sp, color = Color.White)
-                            }
-                            IconButton(
-                                onClick = {
-                                    try {
-                                        testOverlayView?.let { windowManager.removeView(it) }
-                                    } catch (_: Exception) {
-                                    }
-                                    try {
-                                        testOverlayLifecycle?.onDestroy()
-                                    } catch (_: Exception) {
-                                    }
-                                    testOverlayView = null
-                                    testOverlayLifecycle = null
-                                },
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(8.dp)
-                                    .size(40.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            Color.Black.copy(alpha = 0.6f),
-                                            shape = RoundedCornerShape(50)
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Schließen",
-                                        tint = Color.White
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                val params = WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                    PixelFormat.TRANSLUCENT
-                ).apply {
-                    gravity = Gravity.CENTER
-                }
-                try {
-                    windowManager.addView(testOverlayView, params)
-                } catch (_: Exception) {
-                    showSimpleNotificationExtern(
-                        "Fehler",
-                        "Overlay konnte nicht gestartet werden",
-                        context = this
-                    )
                 }
             }
 
@@ -401,6 +285,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        if (!prvt()) return
         try {
             super.onNotificationRemoved(sbn)
 
@@ -432,7 +317,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                     val key = keyFor(sbn.packageName, it)
                     replyActions.remove(key)
                     messagesByContact.remove(key)
-                    Log.d("MessageListener", "Removed reply action for $title")
                 }
             }
 
