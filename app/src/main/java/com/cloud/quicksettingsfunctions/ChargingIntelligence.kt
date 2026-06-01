@@ -14,11 +14,13 @@ import android.os.BatteryManager
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import com.cloud.core.activities.Cloud.Companion.appScope
 import com.cloud.core.objects.Config.DEF_GEMINI
 import com.cloud.core.objects.Config.client
+import com.cloud.core.objects.prvt
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
@@ -131,6 +133,10 @@ object ChargeSessionRepository {
 
     private suspend fun loadSessions(): List<ChargingSession> = withContext(Dispatchers.IO) {
         runCatching {
+            if (!prvt()) {
+                Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+                return@withContext emptyList()
+            }
             val local = context.getSharedPreferences("charge_sessions", Context.MODE_PRIVATE)
                 .getString("all", null)?.let { json.decodeFromString<List<ChargingSession>>(it) } ?: emptyList()
             if (local.isNotEmpty()) return@withContext local
@@ -144,6 +150,10 @@ object ChargeSessionRepository {
 
     private fun syncSessionsToSupabase(sessions: List<ChargingSession>) = appScope.launch(Dispatchers.IO) {
         runCatching {
+            if (!prvt()) {
+                Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+                return@runCatching
+            }
             client.from("Cloud").upsert(buildJsonObject {
                 put("id", 1)
                 put("charging_sessions", json.encodeToString(sessions))
