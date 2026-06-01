@@ -55,16 +55,30 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import com.cloud.core.TabNavigationViewModel
-import com.cloud.core.objects.Config.WEATHERAPI_KEY
+import com.cloud.core.objects.Config.client
 import com.cloud.core.objects.Config.cms
 import com.google.android.gms.location.LocationServices
+import io.github.jan.supabase.functions.functions
+import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
-import java.net.URL
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.CountDownLatch
+
+@Serializable
+data class WeatherRequest(
+    val lat: Double,
+    val lon: Double,
+    val days: Int
+)
 
 data class HourData(
     val dateFull: String,
@@ -111,56 +125,65 @@ fun iconToEmoji(icon: String): String {
 
 suspend fun fetchWeatherForecast(lat: Double, lon: Double, days: Int = 7): WeatherData =
     withContext(Dispatchers.IO) {
-        val url =
-            "https://api.weatherapi.com/v1/forecast.json?key=$WEATHERAPI_KEY&q=$lat,$lon&days=$days&aqi=no&alerts=no&lang=de"
-        val raw = URL(url).readText()
-        val root = JSONObject(raw)
 
-        val location = root.getJSONObject("location")
-        val current = root.getJSONObject("current")
-        val forecast = root.getJSONObject("forecast")
-        val forecastDays = forecast.getJSONArray("forecastday")
+        val response = client.functions.invoke(
+            function = "weather-api",
+            body = WeatherRequest(lat = lat, lon = lon, days = days)
+        )
 
-        val daysList = mutableListOf<DayData>()
+        val json = Json.parseToJsonElement(response.bodyAsText()).jsonObject
 
-        for (i in 0 until forecastDays.length()) {
-            val dayObj = forecastDays.getJSONObject(i)
-            val date = dayObj.getString("date")
-            val hourArr = dayObj.getJSONArray("hour")
-            val hours = mutableListOf<HourData>()
-            for (j in 0 until hourArr.length()) {
-                val h = hourArr.getJSONObject(j)
-                val dt = h.getString("time")
-                val datePart = dt.substring(0, 10)
-                val timePart = dt.substring(11, 16)
-                val condition = h.getJSONObject("condition")
-                hours.add(
-                    HourData(
-                        dateFull = dt,
-                        date = datePart,
-                        time = timePart,
-                        temp = h.optDouble("temp_c", Double.NaN),
-                        icon = condition.optString("icon", ""),
-                        condition = condition.optString("text", ""),
-                        feelsLike = h.optDouble("feelslike_c", Double.NaN),
-                        humidity = h.optInt("humidity", 0),
-                        wind = h.optDouble("wind_kph", 0.0),
-                        pressure = h.optInt("pressure_mb", 0)
-                    )
+        val location = json["location"]?.jsonObject
+        val current = json["current"]?.jsonObject
+        val forecast = json["forecast"]?.jsonObject
+
+        val forecastDays = forecast?.get("forecastday")?.jsonArray ?: emptyList()
+
+        val daysList = forecastDays.map { dayEl ->
+            val dayObj = dayEl.jsonObject
+
+            val date = dayObj["date"]?.jsonPrimitive?.content ?: ""
+
+            val hourArr = dayObj["hour"]?.jsonArray ?: emptyList()
+
+            val hours = hourArr.map { hEl ->
+                val h = hEl.jsonObject
+                val condition = h["condition"]?.jsonObject
+
+                val dt = h["time"]?.jsonPrimitive?.content ?: ""
+
+                HourData(
+                    dateFull = dt,
+                    date = dt.take(10),
+                    time = dt.takeLast(5),
+                    temp = h["temp_c"]?.jsonPrimitive?.doubleOrNull ?: Double.NaN,
+                    icon = condition?.get("icon")?.jsonPrimitive?.content ?: "",
+                    condition = condition?.get("text")?.jsonPrimitive?.content ?: "",
+                    feelsLike = h["feelslike_c"]?.jsonPrimitive?.doubleOrNull ?: Double.NaN,
+                    humidity = h["humidity"]?.jsonPrimitive?.intOrNull ?: 0,
+                    wind = h["wind_kph"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+                    pressure = h["pressure_mb"]?.jsonPrimitive?.intOrNull ?: 0
                 )
             }
-            val avg = hours.map { it.temp }.filter { !it.isNaN() }
+
+            val avg = hours.map { it.temp }
+                .filter { !it.isNaN() }
                 .let { if (it.isNotEmpty()) it.average() else Double.NaN }
-            val icon = hours.firstOrNull()?.icon ?: ""
-            daysList.add(DayData(date = date, avgTemp = avg, icon = icon, hours = hours))
+
+            DayData(
+                date = date,
+                avgTemp = avg,
+                icon = hours.firstOrNull()?.icon ?: "",
+                hours = hours
+            )
         }
 
         WeatherData(
-            city = location.getString("name"),
-            currentTemp = current.optDouble("temp_c", Double.NaN),
-            currentFeelsLike = current.optDouble("feelslike_c", Double.NaN),
-            currentCondition = current.getJSONObject("condition").optString("text", ""),
-            currentIcon = current.getJSONObject("condition").optString("icon", ""),
+            city = location?.get("name")?.jsonPrimitive?.content ?: "",
+            currentTemp = current?.get("temp_c")?.jsonPrimitive?.doubleOrNull ?: Double.NaN,
+            currentFeelsLike = current?.get("feelslike_c")?.jsonPrimitive?.doubleOrNull ?: Double.NaN,
+            currentCondition = current?.get("condition")?.jsonObject?.get("text")?.jsonPrimitive?.content ?: "",
+            currentIcon = current?.get("condition")?.jsonObject?.get("icon")?.jsonPrimitive?.content ?: "",
             days = daysList
         )
     }
