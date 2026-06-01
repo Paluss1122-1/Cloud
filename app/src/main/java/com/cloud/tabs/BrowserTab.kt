@@ -47,7 +47,10 @@ fun BrowserTabContent(
     val context = LocalContext.current
 
     fun loadAndOpenUrl(targetUrl: String) {
-        val finalUrl = if (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")) {
+
+        val finalUrl = if (targetUrl.contains(" ")) {
+            "https://www.google.com/search?q=${targetUrl.replace(" ", "+")}"
+        } else if (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")) {
             targetUrl
         } else {
             "https://$targetUrl"
