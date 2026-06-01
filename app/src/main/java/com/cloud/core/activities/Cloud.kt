@@ -9,8 +9,14 @@ import com.cloud.core.functions.ERRORINSERTDATA
 import com.cloud.core.functions.errorInsert
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.client
+import com.cloud.core.objects.prvt
 import com.cloud.quicksettingsfunctions.BatteryDataRepository
+import com.google.firebase.Firebase
 import com.google.firebase.FirebaseApp
+import com.google.firebase.appcheck.appCheck
+import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
+import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -35,8 +41,6 @@ class Cloud : Application() {
 
     override fun onCreate() {
         super.onCreate()
-
-        FirebaseApp.initializeApp(this)
 
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
@@ -65,6 +69,24 @@ class Cloud : Application() {
                         "ERROR"
                     )
                 )
+            }
+        }
+
+        if (prvt()) {
+            Firebase.appCheck.installAppCheckProviderFactory(
+                DebugAppCheckProviderFactory.getInstance()
+            )
+        } else {
+            Firebase.appCheck.installAppCheckProviderFactory(
+                PlayIntegrityAppCheckProviderFactory.getInstance()
+            )
+        }
+
+        FirebaseApp.initializeApp(this)
+
+        if (prvt()) {
+            serviceScope.launch {
+                client.auth.awaitInitialization()
             }
         }
 
