@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.content.pm.PackageManager
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -16,6 +17,7 @@ import com.cloud.core.objects.Config.PD_QUEUE
 import com.cloud.core.objects.Config.PODCASTS
 import com.cloud.core.objects.reportError
 import com.cloud.services.PodcastPlayerServiceCompat.startService
+import java.io.File
 import java.time.Instant
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -91,9 +93,13 @@ fun loadPodcastsFromMediaStore(context: Context): List<SimplePodcast> {
                     data.replace("\\", "/").lowercase()
                 }
 
-                val isInPodcasts = normalizedPath.contains("/download/cloud/podcasts/") ||
-                        normalizedPath.contains("/downloads/cloud/podcasts/") ||
-                        data.contains("/Cloud/Podcasts/", ignoreCase = true)
+                val externalRoot = Environment.getExternalStorageDirectory().path
+                val podcastCloudDir = File("$externalRoot/Podcasts/Cloud")
+                if (!podcastCloudDir.exists()) podcastCloudDir.mkdirs()
+
+                val externalRootLower = externalRoot.lowercase()
+                val isInPodcasts = normalizedPath.contains("/emulated/0/podcasts/cloud/") ||
+                        normalizedPath.contains("$externalRootLower/podcasts/cloud/")
 
                 if (isInPodcasts && (name.endsWith(".mp3") || name.endsWith(".m4a"))) {
                     val displayName = if (!title.isNullOrBlank() && title != "<unknown>") {
