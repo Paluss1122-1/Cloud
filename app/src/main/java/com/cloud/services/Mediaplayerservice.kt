@@ -22,6 +22,7 @@ import android.media.AudioManager
 import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -300,9 +301,7 @@ class MediaPlayerService : MediaSessionService() {
                     } catch (_: Exception) {
                         data.replace("\\", "/").lowercase()
                     }
-                    val inPodcasts = norm.contains("/download/cloud/podcasts/") ||
-                            norm.contains("/downloads/cloud/podcasts/") ||
-                            data.contains("/Cloud/Podcasts/", ignoreCase = true)
+                    val inPodcasts = norm.contains("/podcasts/cloud/")
                     if (inPodcasts && (name.endsWith(".mp3") || name.endsWith(".m4a"))) {
                         val isCompleted =
                             podcastPrefs.getBoolean("podcast_completed_${data.hashCode()}", false)
@@ -552,6 +551,13 @@ class MediaPlayerService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+
+        val externalRoot = Environment.getExternalStorageDirectory().path
+        val podcastCloudDir = File("$externalRoot/Podcasts/Cloud")
+        if (!podcastCloudDir.exists()) podcastCloudDir.mkdirs()
+        val musicCloudDir = File("$externalRoot/Music/Cloud")
+        if (!musicCloudDir.exists()) musicCloudDir.mkdirs()
+
         isRunning = true
         musicPrefs = getSharedPreferences(MUSIC_PREFS, MODE_PRIVATE)
         podcastPrefs = getSharedPreferences(PODCAST_PREFS, MODE_PRIVATE)
@@ -710,9 +716,7 @@ class MediaPlayerService : MediaSessionService() {
                         } catch (_: Exception) {
                             data.replace("\\", "/").lowercase()
                         }
-                        val inPodcasts = norm.contains("/download/cloud/podcasts/") ||
-                                norm.contains("/downloads/cloud/podcasts/") ||
-                                data.contains("/Cloud/Podcasts/", ignoreCase = true)
+                        val inPodcasts = norm.contains("/podcasts/cloud/")
                         if (inPodcasts && (name.endsWith(".mp3") || name.endsWith(".m4a"))) {
                             val contentUri = Uri.withAppendedPath(
                                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
@@ -2034,10 +2038,11 @@ class MediaPlayerService : MediaSessionService() {
                     } catch (_: Exception) {
                         data.replace("\\", "/").lowercase()
                     }
-                    val inCloud = norm.contains("/download/cloud/") ||
-                            norm.contains("/downloads/cloud/") ||
-                            data.contains("/Cloud/", ignoreCase = true)
-                    if (inCloud && !norm.contains("/download/cloud/podcast")) {
+                    val inCloud = norm.contains("/music/cloud/", ignoreCase = true)
+                    if (inCloud && !norm.contains("/podcasts/cloud/") &&
+                        !norm.contains("/download/cloud/podcasts/") &&
+                        !norm.contains("/downloads/cloud/podcasts/") &&
+                        !data.contains("/Podcasts/Cloud/", ignoreCase = true)) {
                         val contentUri = Uri.withAppendedPath(
                             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                             id.toString()
@@ -2092,9 +2097,7 @@ class MediaPlayerService : MediaSessionService() {
                     } catch (_: Exception) {
                         data.replace("\\", "/").lowercase()
                     }
-                    val inPodcasts = norm.contains("/download/cloud/podcasts/") ||
-                            norm.contains("/downloads/cloud/podcasts/") ||
-                            data.contains("/Cloud/Podcasts/", ignoreCase = true)
+                    val inPodcasts = norm.contains("/podcasts/cloud/")
                     if (inPodcasts && (name.endsWith(".mp3") || name.endsWith(".m4a"))) {
                         val contentUri = Uri.withAppendedPath(
                             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
