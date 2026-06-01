@@ -73,7 +73,6 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -93,9 +92,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -224,16 +221,6 @@ fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
                     Box(
                         modifier = Modifier
                             .matchParentSize()
-                            .background(Color.White.copy(alpha = 0.1f))
-                            .graphicsLayer {
-                                renderEffect = android.graphics.RenderEffect
-                                    .createBlurEffect(
-                                        20f,
-                                        20f,
-                                        android.graphics.Shader.TileMode.CLAMP
-                                    )
-                                    .asComposeRenderEffect()
-                            }
                     )
 
                     Row(
@@ -3098,10 +3085,8 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
                 } catch (_: Exception) {
                     data.lowercase()
                 }
-                val inCloud = norm.contains("/download/cloud/") ||
-                        norm.contains("/downloads/cloud/") ||
-                        data.contains("/Cloud/", ignoreCase = true)
-                if (inCloud && !norm.contains("/podcast")) {
+                val inCloud = norm.contains("/music/cloud/", ignoreCase = true)
+                if (inCloud && !norm.contains("/podcasts/cloud/")) {
                     val contentUri = Uri.withAppendedPath(
                         MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                         id.toString()
@@ -3149,9 +3134,7 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
                 } catch (_: Exception) {
                     data.lowercase()
                 }
-                val inPodcasts = norm.contains("/download/cloud/podcasts/") ||
-                        norm.contains("/downloads/cloud/podcasts/") ||
-                        data.contains("/Cloud/Podcasts/", ignoreCase = true)
+                val inPodcasts = norm.contains("/podcasts/cloud/")
                 if (inPodcasts && (name.endsWith(".mp3") || name.endsWith(".m4a"))) {
                     val displayName =
                         if (!title.isNullOrBlank() && title != "<unknown>") title else name.substringBeforeLast(
