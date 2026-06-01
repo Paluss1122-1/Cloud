@@ -1,9 +1,9 @@
 # Cloud (Android App)
 
-> [!IMPORTANT]
-> Public Version in Progress...
+> [!INFO]
+> Public Version almost finished...
 >
-> <sub><sub>9:14 AM · 5/26/2026</sub></sub>
+> *5:04 AM · 6/01/2026*
 
 > [!TIP]
 > Cloud is compatible with Samsung OneUI 8.5  
