@@ -27,9 +27,18 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("../keystore/my-release-key.jks")
+            storePassword = "Sec.P1122.!!\"\""
+            keyAlias = "release-key"
+            keyPassword = "Sec.P1122.!!\"\""
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             applicationIdSuffix = ".release"
         }
         create("releaseDebug") {
@@ -90,6 +99,7 @@ dependencies {
     implementation(libs.postgrest.kt)
     implementation(libs.supabase.kt)
     implementation(libs.realtime.kt)
+    implementation(libs.functions.kt)
     implementation(libs.coil.compose)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.material3)
@@ -115,4 +125,8 @@ dependencies {
     implementation(libs.firebase.ai)
     implementation(libs.multiplatform.markdown.renderer.android)
     implementation(libs.multiplatform.markdown.renderer.m3)
+    implementation(libs.firebase.config)
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.appcheck.playintegrity)
+    implementation(libs.firebase.appcheck.debug)
 }
