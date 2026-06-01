@@ -803,7 +803,7 @@ fun AddEditPasswordDialog(
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var url by remember { mutableStateOf(initial?.url ?: "") }
     var username by remember { mutableStateOf(initial?.username ?: "") }
-    var password by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf(initial?.password ?: "") }
     var notes by remember { mutableStateOf(initial?.notes ?: "") }
     var showPass by remember { mutableStateOf(false) }
     var showGen by remember { mutableStateOf(false) }
@@ -825,10 +825,6 @@ fun AddEditPasswordDialog(
             val raw = existingTwoFaEntry?.secret ?: ""
             twoFaSecret = if (raw == "null" || raw.isBlank()) "" else raw
         }
-    }
-
-    LaunchedEffect(existingTwoFaEntry) {
-        Log.d("SASA", "$existingTwoFaEntry")
     }
 
     val strength = remember(password) { PasswordGenerator.strength(password) }
@@ -1139,8 +1135,6 @@ fun PasswordGeneratorSheet(
         )
     }
 
-    val strength = remember(generated) { PasswordGenerator.strength(generated) }
-
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -1188,31 +1182,33 @@ fun PasswordGeneratorSheet(
                             modifier = Modifier.size(18.dp)
                         )
                     }
+                    val hasCharset = useLower || useUpper || useDigits || useSymbols
                     IconButton(
                         onClick = {
-                            generated = PasswordGenerator.generate(
-                                length.toInt(),
-                                useLower,
-                                useUpper,
-                                useDigits,
-                                useSymbols,
-                                noAmbiguous
-                            )
+                            if (hasCharset) {
+                                generated = PasswordGenerator.generate(
+                                    length.toInt(),
+                                    useLower,
+                                    useUpper,
+                                    useDigits,
+                                    useSymbols,
+                                    noAmbiguous
+                                )
+                            }
                         },
+                        enabled = hasCharset,
                         modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
                             null,
-                            tint = AccentBlue,
+                            tint = if (hasCharset) AccentBlue else TextT,
                             modifier = Modifier.size(18.dp)
                         )
                     }
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
-            StrengthBar(strength)
             Spacer(Modifier.height(20.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1252,7 +1248,7 @@ fun PasswordGeneratorSheet(
                 }
                 Button(
                     onClick = { onAccept(generated) },
-                    enabled = generated.isNotEmpty(),
+                    enabled = generated.isNotEmpty() && (useLower || useUpper || useDigits || useSymbols),
                     colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
                     modifier = Modifier.weight(1f)
                 ) { Text("Übernehmen") }
