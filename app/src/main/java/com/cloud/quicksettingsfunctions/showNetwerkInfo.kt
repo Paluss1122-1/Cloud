@@ -13,6 +13,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.cloud.core.objects.Config.cms
+import com.cloud.services.QuietHoursNotificationService.Companion.SSN_CHANNEL_ID
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
@@ -147,8 +148,7 @@ fun showNetworkInfo(context: Context) {
 }
 
 fun showNetworkNotificationNow(context: Context, content: String, notId: Int) {
-    val channelId = "network_info_channel"
-    val builder = NotificationCompat.Builder(context, channelId)
+    val builder = NotificationCompat.Builder(context, SSN_CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_menu_compass)
         .setContentTitle("📡 Netzwerk-Info")
         .setContentText(content.lines().firstOrNull() ?: "Netzwerkinfo")
