@@ -685,7 +685,6 @@ fun PrivateCloudApp(
 
                         val filename = URLUtil.guessFileName(url, contentDisposition, mimetype)
 
-                        // Zuerst normal in Downloads/ runterladen
                         val request = DownloadManager.Request(url.toUri()).apply {
                             setMimeType(mimetype)
                             setTitle(filename)
