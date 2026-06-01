@@ -1,6 +1,6 @@
 # Cloud (Android App)
 
-> [!INFO]
+> [!IMPORTANT]
 > Public Version almost finished...
 >
 > *5:04 AM · 6/01/2026*
