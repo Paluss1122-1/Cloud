@@ -26,8 +26,6 @@ import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_RESTORE
 import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_SYNC_LAPTOP
 import com.cloud.services.QuietHoursNotificationService.Companion.ALARM_REQUEST_CODE
 import com.cloud.services.QuietHoursNotificationService.Companion.CHANNEL_ID
-import com.cloud.services.QuietHoursNotificationService.Companion.CONFIRMATION_CHANNEL_ID
-import com.cloud.services.QuietHoursNotificationService.Companion.DELETE_CONFIRMATION_CHANNEL_ID
 import com.cloud.services.QuietHoursNotificationService.Companion.GALLERY_CHANNEL_ID
 import com.cloud.services.QuietHoursNotificationService.Companion.MAIL_CHANNEL_ID
 import com.cloud.services.QuietHoursNotificationService.Companion.NOTIFICATION_ID
@@ -156,39 +154,6 @@ fun createNotificationChannel(context: Context) {
 
     notificationManager.createNotificationChannel(
         NotificationChannel(
-            "Nachrichten",
-            "Nachrichten",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Nachrichten"
-            setShowBadge(true)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-        })
-
-    notificationManager.createNotificationChannel(
-        NotificationChannel(
-            CONFIRMATION_CHANNEL_ID,
-            "Versandbestätigungen",
-            NotificationManager.IMPORTANCE_DEFAULT
-        ).apply {
-            description = "Bestätigungen für gesendete WhatsApp Nachrichten"
-            setShowBadge(true)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-        })
-
-    notificationManager.createNotificationChannel(
-        NotificationChannel(
-            VOICE_NOTE_CHANNEL_ID,
-            "Sprachnachrichten Player",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Steuerung für WhatsApp Sprachnachrichten"
-            setShowBadge(false)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-        })
-
-    notificationManager.createNotificationChannel(
-        NotificationChannel(
             GALLERY_CHANNEL_ID,
             "Galerie",
             NotificationManager.IMPORTANCE_LOW
@@ -204,86 +169,66 @@ fun createNotificationChannel(context: Context) {
             "Show Simple Notification",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Einfache Benachrichtigung"
+            description = "Generelle Benachrichtigung"
             setShowBadge(false)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         })
 
-    notificationManager.createNotificationChannel(
-        NotificationChannel(
-            DELETE_CONFIRMATION_CHANNEL_ID,
-            "Löschbestätigungen",
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "Bestätigungen zum Löschen von Bildern"
-            setShowBadge(true)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-        })
-
-    notificationManager.createNotificationChannel(
-        NotificationChannel(
-            MAIL_CHANNEL_ID,
-            "AI Zusammenfassungen von E-Mails",
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "AI generierte Zusammenfassungen von E-Mails"
-            setShowBadge(true)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-        })
-
-    notificationManager.createNotificationChannel(
-        NotificationChannel(
-            "network_info_channel",
-            "Netzwerk-Informationen",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Zeigt aktuelle Netzwerkdetails an"
-        })
-
-    notificationManager.createNotificationChannel(
-        NotificationChannel(
-            QuietHoursNotificationService.Companion.ERROR_REPORTS_CHANNEL_ID,
-            "Error Reports",
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "Benachrichtigungen für neue Fehlerberichte"
-            enableVibration(true)
-            enableLights(true)
-        })
-
-    notificationManager.createNotificationChannel(
-        NotificationChannel(
-            "display_info_channel",
-            "Display-Informationen",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Zeigt technische Display-Daten an"
-        })
-
-    notificationManager.createNotificationChannel(
-        NotificationChannel(
-            ChatService.CHANNEL_ID,
-            "Chat Service",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Hintergrund-Service für Chat-Nachrichten"
-            setShowBadge(false)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            setSound(null, null)
-        })
-
-    notificationManager.createNotificationChannel(
-        NotificationChannel(
-            "chat_messages",
-            "Chat Nachrichten",
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "Benachrichtigungen für neue Chat-Nachrichten"
-            setShowBadge(true)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            enableVibration(true)
-            enableLights(true)
-        })
+    if (!prvt()) {
+        notificationManager.createNotificationChannel(
+            NotificationChannel(
+                "Nachrichten",
+                "Nachrichten",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Nachrichten"
+                setShowBadge(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            })
+        notificationManager.createNotificationChannel(
+            NotificationChannel(
+                VOICE_NOTE_CHANNEL_ID,
+                "Sprachnachrichten Player",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Steuerung für WhatsApp Sprachnachrichten"
+                setShowBadge(false)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            })
+        notificationManager.createNotificationChannel(
+            NotificationChannel(
+                MAIL_CHANNEL_ID,
+                "AI Zusammenfassungen von E-Mails",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "AI generierte Zusammenfassungen von E-Mails"
+                setShowBadge(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            })
+        notificationManager.createNotificationChannel(
+            NotificationChannel(
+                ChatService.CHANNEL_ID,
+                "Chat Service",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Hintergrund-Service für Chat-Nachrichten"
+                setShowBadge(false)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setSound(null, null)
+            })
+        notificationManager.createNotificationChannel(
+            NotificationChannel(
+                "chat_messages",
+                "Chat Nachrichten",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Benachrichtigungen für neue Chat-Nachrichten"
+                setShowBadge(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                enableVibration(true)
+                enableLights(true)
+            })
+    }
 
     notificationManager.createNotificationChannel(
         NotificationChannel(
@@ -291,7 +236,7 @@ fun createNotificationChannel(context: Context) {
             "AITab Answers",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Notification if AITab is not opened and receives AI answer"
+            description = "Notification if AITab is not opened and receives an AI answer"
             setShowBadge(true)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             enableVibration(true)
