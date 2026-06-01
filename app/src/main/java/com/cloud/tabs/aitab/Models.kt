@@ -20,7 +20,6 @@ val nvidiaModels = listOf(
     Model("openai/gpt-oss-120b", weight = 2),
     Model("openai/gpt-oss-20b", weight = 1),
     Model("nvidia/nemotron-3-nano-30b-a3b", weight = 2),
-    Model("nvidia/nemoretriever-ocr-v1", vision = true, weight = 1),
     Model("meta/llama-3.2-90b-vision-instruct", vision = true, weight = 2),
     Model("meta/llama-4-maverick-17b-128e-instruct", vision = true, weight = 2),
     Model("qwen/qwen3.5-397b-a17b", vision = true, weight = 4)
