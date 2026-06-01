@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,14 +24,11 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Done
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -76,11 +74,14 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import com.cloud.R
 import com.cloud.core.objects.Config
+import com.cloud.core.objects.Config.client
 import com.cloud.core.objects.Config.realDevice
 import com.cloud.core.objects.PasswordStorage
 import com.cloud.core.objects.prvt
 import com.cloud.services.ChatService
 import com.cloud.services.QuietHoursNotificationService
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
@@ -132,6 +133,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     var hasLoadedApp by rememberSaveable { mutableStateOf(startTarget != null) }
     var selectedMenuItem by rememberSaveable { mutableStateOf<MenuItem?>(null) }
     var masterPw by remember { mutableStateOf(PasswordStorage.loadPassword(context)) }
+    var supabaseReady by remember { mutableStateOf(false) }
     val landingListState = rememberSaveable(saver = LazyListState.Saver) {
         LazyListState()
     }
@@ -148,6 +150,18 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
             return
         }
         Config.masterPassword = masterPw!!
+    }
+
+    LaunchedEffect(Unit) {
+        if (prvt()) {
+            client.auth.awaitInitialization()
+            supabaseReady = client.auth.currentSessionOrNull() != null
+        }
+    }
+
+    if (!supabaseReady && prvt()) {
+        SupabaseLoginScreen { supabaseReady = true }
+        return
     }
 
     DisposableEffect(Unit) {
@@ -374,6 +388,66 @@ fun MasterPasswordSetupScreen(onPasswordSaved: (String) -> Unit) {
     }
 }
 
+@Composable
+fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            "Cloud Login",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(32.dp))
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it },
+            label = { Text("E-Mail") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(12.dp))
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("Passwort") },
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth()
+        )
+        error?.let {
+            Spacer(Modifier.height(8.dp)); Text(
+            it,
+            color = MaterialTheme.colorScheme.error
+        )
+        }
+        Spacer(Modifier.height(24.dp))
+        Button(onClick = {
+            loading = true
+            scope.launch {
+                try {
+                    client.auth.signInWith(Email) { this.email = email; this.password = password }
+                    onLoggedIn()
+                } catch (e: Exception) {
+                    error = e.message
+                } finally {
+                    loading = false
+                }
+            }
+        }, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
+            Text(if (loading) "..." else "Anmelden")
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LandingPage(
@@ -388,14 +462,14 @@ fun LandingPage(
     LaunchedEffect(reloadTrigger) {
         recentTabs = loadRecentTabs(context)
     }
-    val allTabsSorted = remember { 
-        MenuItem.entries.filter { 
-            prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD) 
-        }.sortedBy { it.title } 
+    val allTabsSorted = remember {
+        MenuItem.entries.filter {
+            prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD && it != MenuItem.REMOTEDESKTOP)
+        }.sortedBy { it.title }
     }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     val neonOrange = c()
-    val neonGlow =  when (currentHour) {
+    val neonGlow = when (currentHour) {
         in 11..16 -> Color(0xFF2C2C2C)
         else -> Color(0xFF00177E)
     }
@@ -589,7 +663,11 @@ fun TabCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(72.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primary.copy(
+                    alpha = 0.6f
+                )
+            ),
             shape = RoundedCornerShape(8.dp),
             onClick = onClick
         ) {
