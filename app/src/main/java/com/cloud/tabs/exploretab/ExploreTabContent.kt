@@ -1,6 +1,8 @@
 package com.cloud.tabs.exploretab
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.view.MotionEvent
@@ -34,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -42,12 +45,14 @@ import com.cloud.core.objects.Config
 import com.cloud.core.ui.AlertDialogCloud
 import com.cloud.core.ui.NeonBox
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.tasks.Tasks
 import kotlinx.coroutines.launch
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Overlay
+import java.util.concurrent.TimeUnit
 import kotlin.math.floor
 
 
@@ -85,8 +90,13 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> mapView?.onResume()
                 Lifecycle.Event.ON_PAUSE -> mapView?.onPause()
+                Lifecycle.Event.ON_RESUME -> {
+                    mapView?.onResume()
+                    if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                        ExploreLocationTracker.start(ctx)
+                    }
+                }
                 else -> {}
             }
         }
@@ -130,13 +140,21 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
             ) {
                 AndroidView(
                     factory = { context ->
+                        val loc = try {
+                            Tasks.await(
+                                LocationServices.getFusedLocationProviderClient(context).lastLocation,
+                                1, TimeUnit.SECONDS
+                            )
+                        } catch (_: Exception) { null }
+                        val center = if (loc != null) GeoPoint(loc.latitude, loc.longitude)
+                        else GeoPoint(Config.LAT, Config.LON)
+
                         Configuration.getInstance().userAgentValue = context.packageName
                         MapView(context).apply {
                             setTileSource(TileSourceFactory.MAPNIK)
                             setMultiTouchControls(true)
                             controller.setZoom(15.0)
-                            controller.setCenter(GeoPoint(Config.LAT, Config.LON))
-
+                            controller.setCenter(center)
                             isTilesScaledToDpi = false
                             setScrollableAreaLimitDouble(null)
                         }.also { mapView = it }
