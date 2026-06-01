@@ -2,7 +2,6 @@ package com.cloud.quiethoursnotificationhelper
 
 import android.annotation.SuppressLint
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -12,6 +11,11 @@ import android.content.Context.WINDOW_SERVICE
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.hardware.camera2.CameraManager
+import android.media.MediaCodec
+import android.media.MediaCodecInfo
+import android.media.MediaExtractor
+import android.media.MediaFormat
+import android.media.MediaMuxer
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -25,7 +29,7 @@ import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
 import android.webkit.WebView
-import android.widget.RemoteViews
+import android.widget.Toast
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
 import androidx.activity.compose.LocalActivityResultRegistryOwner
@@ -48,23 +52,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.cloud.R
 import com.cloud.core.functions.showSimpleNotificationExtern
 import com.cloud.core.objects.Config
 import com.cloud.core.objects.Config.SHOWCOMMANDS
+import com.cloud.core.objects.Config.client
+import com.cloud.core.objects.prvt
 import com.cloud.core.ui.showBatteryInfo
 import com.cloud.services.MediaPlayerService
 import com.cloud.services.MusicPlayerServiceCompat
 import com.cloud.services.OverlayLifecycleOwner
 import com.cloud.services.PodcastPlayerServiceCompat
-import com.cloud.services.QuietHoursNotificationService
-import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_SCHOOL_DAY_SUMMARY
 import com.cloud.services.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.cloud.services.QuietHoursNotificationService.Companion.commandHistory
 import com.cloud.services.QuietHoursNotificationService.Companion.showtestOverlay
@@ -77,21 +79,30 @@ import com.cloud.tabs.mediaplayer.MediaAnalyticsManager
 import com.cloud.tabs.mediaplayer.MediaAnalyticsManager.rebuildSessions
 import com.cloud.tabs.mediaplayer.PodcastShowManager
 import com.cloud.tabs.weathernot
+import io.github.jan.supabase.functions.functions
+import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.w3c.dom.Element
-import org.xml.sax.InputSource
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
-import java.io.StringReader
 import java.lang.ref.WeakReference
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import javax.xml.parsers.DocumentBuilderFactory
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration.Companion.seconds
 
 data class Command(
@@ -99,6 +110,14 @@ data class Command(
     val aliases: List<String> = emptyList(),
     val description: String,
     val action: () -> Unit
+)
+
+@Serializable
+data class BahnRequest(
+    val evaNo: String,
+    val date: String,
+    val hour: String,
+    val targetPlannedArrival: String
 )
 
 private var testOverlayView: ComposeView? = null
@@ -127,13 +146,13 @@ fun getHomeWifiStatus(
             caps: NetworkCapabilities
         ) {
             if (hasFired) return
-            
+
             val wifiInfo = caps.transportInfo as? WifiInfo
             val ssid = wifiInfo?.ssid
                 ?.removePrefix("\"")
                 ?.removeSuffix("\"")
                 ?.takeIf { it != "<unknown ssid>" }
-            
+
             if (ssid != null) {
                 hasFired = true
                 Log.d("CLOUDSA", "SSID via callback: $ssid")
@@ -161,25 +180,28 @@ private fun getAvailableCommands(context: Context): List<Command> {
         ) {
             showUnreadMessages(context)
         },
+        // Ausgeblendet in public version:
         Command(
             name = "t",
             aliases = listOf(),
             description = "Zeigt ungelesene Nachrichten"
         ) {
-            val intent = Intent(context, QuietHoursNotificationService::class.java).apply {
-                action = ACTION_SCHOOL_DAY_SUMMARY
-            }
-            val pending = PendingIntent.getService(
-                context, 9001, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
 
-            pending.send()
+
+//            val intent = Intent(context, QuietHoursNotificationService::class.java).apply {
+//                action = ACTION_SCHOOL_DAY_SUMMARY
+//            }
+//            val pending = PendingIntent.getService(
+//                context, 9001, intent,
+//                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+//            )
+//
+//            pending.send()
         },
         Command(
-            name = "nvchat",
-            aliases = listOf("ai", "aichat", "nv"),
-            description = "Erstellt einen neuen NVIDIA-Chat (nvchat [name])"
+            name = "geminiChat",
+            aliases = listOf("ai", "aichat", "gm"),
+            description = "Erstellt einen neuen Gemini-Chat (geminiChat [name optional])"
         ) {},
         Command(
             name = "music",
@@ -242,7 +264,7 @@ private fun getAvailableCommands(context: Context): List<Command> {
         Command(
             name = "voice",
             aliases = listOf("v", "voicenote", "sprachnachricht", "audio"),
-            description = "Spielt Voice Notes ab"
+            description = "Spielt Voice Notes von WhatsApp ab"
         ) {
             playLatestVoiceNote("Manual Command", context)
         },
@@ -317,7 +339,7 @@ private fun getAvailableCommands(context: Context): List<Command> {
         Command(
             name = "extract",
             aliases = listOf("e", "ex", "extrahieren"),
-            description = "Zeigt letzte Nachricht als separate Notification"
+            description = "Zeigt letzte WhatsApp Nachricht als separate Notification"
         ) {
             extractLastMessage(context)
         },
@@ -331,8 +353,9 @@ private fun getAvailableCommands(context: Context): List<Command> {
         Command(
             name = "setdowntime",
             aliases = listOf("set", "dt", "setdr"),
-            description = "Lege Downtime fest (setdowntime [Uhrzeit])"
+            description = "Lege Downtime für QuietHoursNotificationService fest (setdowntime [Stunde])"
         ) {},
+        // Ausgeblendet in public version:
         Command(
             name = "friendmessages",
             aliases = listOf("fm", "friendmsgs", "lastmsgs", "friend"),
@@ -458,7 +481,7 @@ private fun getAvailableCommands(context: Context): List<Command> {
         Command(
             name = "*",
             aliases = listOf("todo", "task", "aufgabe"),
-            description = "Fügt To-do hinzu (Syntax: * \"meine aufgabe\")"
+            description = "Fügt To-do hinzu (Syntax: * meine aufgabe)"
         ) {
             showSimpleNotificationExtern(
                 "ℹ️ To-do",
@@ -476,13 +499,6 @@ private fun getAvailableCommands(context: Context): List<Command> {
                 "Syntax: . dein_command\nBeispiel: . show_notification",
                 context = context
             )
-        },
-        Command(
-            name = "errors",
-            aliases = listOf("err", "errs"),
-            description = "Fetcht neue Fehler von Supabase Table"
-        ) {
-            fetchNewErrors(context)
         },
         Command(
             name = "todos",
@@ -523,11 +539,11 @@ private fun getAvailableCommands(context: Context): List<Command> {
         Command(
             name = "bahn",
             aliases = listOf("zug", "train", "db"),
-            description = "Prüft den DB-Plan für Geltendorf (planmäßige Ankunft 07:05 Uhr)"
+            description = "Prüft den DB-Plan (planmäßige Ankunft 07:05 Uhr)"
         ) {
             showSimpleNotificationExtern(
                 "ℹ️ Bahn-Verbindung",
-                "Syntax: bahn\nPrüft morgen den Zug mit planmäßiger Ankunft 07:05 Uhr in Geltendorf.",
+                "Syntax: bahn\nPrüft morgen den Zug mit planmäßiger Ankunft 07:05 Uhr.",
                 context = context
             )
         },
@@ -677,7 +693,7 @@ private fun getAvailableCommands(context: Context): List<Command> {
         Command(
             name = "Overlay",
             aliases = listOf("o", "ov"),
-            description = "Zeigt Overlay an"
+            description = "Zeigt Youtube Overlay an"
         ) {
             showtestOverlay(context)
         },
@@ -816,7 +832,7 @@ fun executeCommand(commandText: String, context: Context) {
     val argument = if (parts.size > 1) parts[1] else null
 
     when (commandInput) {
-        "nvchat", "ai", "aichat", "nv" -> {
+        "geminiChat", "ai", "aichat", "gm" -> {
             val name = if (parts.size > 1) {
                 commandText.substringAfter(" ", "").trim().ifEmpty { null }
             } else {
@@ -1084,6 +1100,10 @@ fun executeCommand(commandText: String, context: Context) {
         }
 
         "tb", "tagesbericht", "upload", "uploadimage" -> {
+            if (!prvt()) {
+                Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+                return
+            }
             if (argument != null) {
                 val parts = commandText.split(" ", limit = 2)
                 if (parts.size >= 2) {
@@ -1145,6 +1165,10 @@ fun executeCommand(commandText: String, context: Context) {
             return
         }
 
+        "optimize" -> {
+            optimizeAudioFiles(context)
+        }
+
         "speed", "spd", "tempo", "geschwindigkeit" -> {
             if (argument != null) {
                 val speed = argument.toFloatOrNull()
@@ -1195,6 +1219,10 @@ fun executeCommand(commandText: String, context: Context) {
         }
 
         "." -> {
+            if (!prvt()) {
+                Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+                return
+            }
             if (argument != null) {
                 val userInput = parts.drop(1).joinToString(" ")
                 if (userInput.isNotEmpty()) {
@@ -1255,6 +1283,10 @@ fun executeCommand(commandText: String, context: Context) {
         }
 
         "bahn", "zug", "train", "db" -> {
+            if (!prvt()) {
+                Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+                return
+            }
             val daysAhead = argument?.toIntOrNull() ?: 1
             if (daysAhead !in 1..7) {
                 showSimpleNotificationExtern(
@@ -1743,7 +1775,12 @@ fun executeCommand(commandText: String, context: Context) {
             }
             return
         }
+
         "spotify", "sp", "spot" -> {
+            if (!prvt()) {
+                Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+                return
+            }
             val trackId = argument ?: run {
                 showSimpleNotificationExtern(
                     "ℹ️ Spotify",
@@ -1757,7 +1794,14 @@ fun executeCommand(commandText: String, context: Context) {
         }
     }
 
-    val commands = getAvailableCommands(context)
+    val commands = getAvailableCommands(context).filter { cmd ->
+        if (prvt()) true else (
+                cmd.name != "t" && cmd.name != "friendmessages" && cmd.name != "whatsapp" &&
+                        cmd.name != "tb" && cmd.name != "bitwarden" && cmd.name != "." &&
+                        cmd.name != "errors" && cmd.name != "bahn" && cmd.name != "Other" &&
+                        cmd.name != "spotify"
+                )
+    }
 
     val matchedCommand = commands.find { cmd ->
         cmd.name.equals(commandInput, ignoreCase = true) ||
@@ -1814,7 +1858,14 @@ fun executeCommand(commandText: String, context: Context) {
 }
 
 private fun showAvailableCommands(context: Context) {
-    val commands = getAvailableCommands(context)
+    val commands = getAvailableCommands(context).filter { cmd ->
+        if (prvt()) true else (
+                cmd.name != "t" && cmd.name != "friendmessages" && cmd.name != "whatsapp" &&
+                        cmd.name != "tb" && cmd.name != "bitwarden" && cmd.name != "." &&
+                        cmd.name != "errors" && cmd.name != "bahn" && cmd.name != "Other" &&
+                        cmd.name != "spotify"
+                )
+    }
     val notificationManager = context.getSystemService(NotificationManager::class.java)
 
     val chunked = commands.chunked(5)
@@ -1893,114 +1944,94 @@ private fun parseCommandWithQuotes(input: String): List<String> {
 }
 
 private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
-    try {
-        val stationName = "Geltendorf"
-        val evaNo = "8000120"
-        val targetPlannedArrival = "07:05"
+    GlobalScope.launch {
+        try {
+            val stationName = "Geltendorf"
+            val evaNo = "8000120"
+            val targetPlannedArrival = "07:05"
 
-        val cal = Calendar.getInstance()
-        cal.add(Calendar.DAY_OF_MONTH, daysAhead)
-        cal.set(Calendar.HOUR_OF_DAY, 7)
-        cal.set(Calendar.MINUTE, 5)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
+            val cal = Calendar.getInstance()
+            cal.add(Calendar.DAY_OF_MONTH, daysAhead)
+            cal.set(Calendar.HOUR_OF_DAY, 7)
+            cal.set(Calendar.MINUTE, 5)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
 
-        val year = (cal.get(Calendar.YEAR) % 100).toString().padStart(2, '0')
-        val month = (cal.get(Calendar.MONTH) + 1).toString().padStart(2, '0')
-        val day = cal.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')
-        val hour = cal.get(Calendar.HOUR_OF_DAY).toString().padStart(2, '0')
-        val date = "$year$month$day"
+            val year = (cal.get(Calendar.YEAR) % 100).toString().padStart(2, '0')
+            val month = (cal.get(Calendar.MONTH) + 1).toString().padStart(2, '0')
+            val day = cal.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')
+            val hour = cal.get(Calendar.HOUR_OF_DAY).toString().padStart(2, '0')
+            val date = "$year$month$day"
 
-        val dayLabel = when (daysAhead) {
-            1 -> "morgen"
-            2 -> "übermorgen"
-            else -> "in $daysAhead Tagen"
-        }
-
-        val url =
-            "https://apis-test.deutschebahn.com/db-api-marketplace/apis-test/timetables/review/renovate-all-minor-patch/timetables/v1/plan/$evaNo/$date/$hour"
-
-        val client = OkHttpClient()
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("DB-Client-Id", Config.DBKEY)
-            .addHeader("DB-Api-Key", Config.DBKEY1)
-            .addHeader("Accept", "application/xml")
-            .build()
-
-        val response = client.newCall(request).execute()
-
-        if (!response.isSuccessful) {
-            showSimpleNotificationExtern(
-                "❌ Bahn API Fehler",
-                "Status: ${response.code}\n$stationName $dayLabel um 07:05 Uhr (planmäßige Ankunft)",
-                20.seconds,
-                context,
-                silent = false
-            )
-            return
-        }
-
-        val xml = response.body.string()
-        val document = DocumentBuilderFactory.newInstance().newDocumentBuilder()
-            .parse(InputSource(StringReader(xml)))
-        val stops = document.getElementsByTagName("s")
-        var found = false
-        for (i in 0 until stops.length) {
-            val stop = stops.item(i) as? Element ?: continue
-            val arrival = stop.getElementsByTagName("ar").item(0) as? Element ?: continue
-            val plannedTime = arrival.getAttribute("pt")
-            val changedTime = arrival.getAttribute("ct")
-            val shownTime =
-                if (changedTime.isNotBlank()) formatDbPlanTime(changedTime) else formatDbPlanTime(
-                    plannedTime
-                )
-            if (shownTime == targetPlannedArrival) {
-                val tripLabel = stop.getElementsByTagName("tl").item(0) as? Element
-                val trainType = tripLabel?.getAttribute("c").orEmpty().ifBlank { "Zug" }
-                val trainNumber = tripLabel?.getAttribute("n").orEmpty()
-                val trainDisplay = "$trainType $trainNumber".trim()
-                val plannedPlatform = arrival.getAttribute("pp").ifBlank { "?" }
-                val changedPlatform = arrival.getAttribute("cp")
-                val platform = changedPlatform.ifBlank { plannedPlatform }
-                val statusFlag = arrival.getAttribute("cs")
-                val delayMinutes = calculateDbDelayMinutes(plannedTime, changedTime)
-                val route = arrival.getAttribute("cpth").ifBlank { arrival.getAttribute("ppth") }
-                val routeStations = route.split("|").filter { it.isNotBlank() }
-                val fromStation = routeStations.firstOrNull() ?: "Unbekannt"
-                val toStation = routeStations.lastOrNull() ?: "Unbekannt"
-                val statusText = when {
-                    statusFlag == "c" -> "❌ Ausfall"
-                    delayMinutes > 0 -> "⏰ +${delayMinutes} Min"
-                    else -> "✅ Pünktlich"
-                }
-                showSimpleNotificationExtern(
-                    "🚆 $trainDisplay ($dayLabel)",
-                    "📍 $fromStation → $toStation\n⏰ Geltendorf: $shownTime Uhr (Plan $targetPlannedArrival)\n🚪 Gleis: $platform\n$statusText",
-                    context = context,
-                    silent = false
-                )
-                found = true
-                break
+            val dayLabel = when (daysAhead) {
+                1 -> "morgen"
+                2 -> "übermorgen"
+                else -> "in $daysAhead Tagen"
             }
-        }
-        if (!found) {
+
+            val response = withContext(Dispatchers.IO) {
+                client.functions.invoke(
+                    function = "bahn-api",
+                    body = BahnRequest(
+                        evaNo = evaNo,
+                        date = date,
+                        hour = hour,
+                        targetPlannedArrival = targetPlannedArrival
+                    )
+                )
+            }
+
+            val json = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+            println(json)
+            val found = json["found"]?.jsonPrimitive?.content == "true"
+
+            if (!found) {
+                val error = json["error"]?.jsonPrimitive?.content
+                if (error != null) {
+                    showSimpleNotificationExtern(
+                        "❌ Bahn API Fehler",
+                        error,
+                        20.seconds,
+                        context,
+                        silent = false
+                    )
+                } else {
+                    showSimpleNotificationExtern(
+                        "ℹ️ Kein 07:05-Zug",
+                        "In den Plan-Daten wurde kein Zug mit planmäßiger Ankunft 07:05 in $stationName $dayLabel gefunden.",
+                        20.seconds,
+                        context,
+                        silent = false
+                    )
+                }
+                return@launch
+            }
+
+            val trainType = json["trainType"]?.jsonPrimitive?.content ?: "Zug"
+            val trainNumber = json["trainNumber"]?.jsonPrimitive?.content ?: ""
+            val trainDisplay = "$trainType $trainNumber".trim()
+            val platform = json["platform"]?.jsonPrimitive?.content ?: "?"
+            val fromStation = json["fromStation"]?.jsonPrimitive?.content ?: "Unbekannt"
+            val toStation = json["toStation"]?.jsonPrimitive?.content ?: "Unbekannt"
+            val shownTime = json["shownTime"]?.jsonPrimitive?.content ?: targetPlannedArrival
+            val statusText = json["statusText"]?.jsonPrimitive?.content ?: "✅ Pünktlich"
+
             showSimpleNotificationExtern(
-                "ℹ️ Kein 07:05-Zug",
-                "In den Plan-Daten wurde kein Zug mit planmäßiger Ankunft 07:05 in $stationName $dayLabel gefunden.",
+                "🚆 $trainDisplay ($dayLabel)",
+                "📍 $fromStation → $toStation\n⏰ Geltendorf: $shownTime Uhr (Plan $targetPlannedArrival)\n🚪 Gleis: $platform\n$statusText",
+                context = context,
+                silent = false
+            )
+        } catch (e: Exception) {
+            showSimpleNotificationExtern(
+                "❌ Bahn-Fehler",
+                "Verbindungsfehler: ${e.message}",
                 20.seconds,
                 context,
                 silent = false
             )
+            e.printStackTrace()
         }
-    } catch (e: Exception) {
-        showSimpleNotificationExtern(
-            "❌ Bahn-Fehler",
-            "Verbindungsfehler: ${e.message}",
-            20.seconds,
-            context,
-            silent = false
-        )
     }
 }
 
@@ -2096,236 +2127,235 @@ private fun showSpotifyOverlay(trackId: String, context: Context) {
 }
 
 @OptIn(DelicateCoroutinesApi::class)
-private fun optimizeAudioFiles(context: Context) {
-    GlobalScope.launch {
+fun optimizeAudioFiles(context: Context) {
+    GlobalScope.launch(Dispatchers.IO) {
         try {
-            val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            
+            val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
             val cloudDir = File(downloadDir, "Cloud")
-            val podcastDir = File(downloadDir, "cloud/podcasts")
+            val prefs = context.getSharedPreferences("audio_optimization", Context.MODE_PRIVATE)
 
-            val prefs = context.getSharedPreferences("audio_optimization", MODE_PRIVATE)
-            
-            val audioFiles = mutableListOf<File>()
-            if (cloudDir.exists()) {
-                audioFiles.addAll(cloudDir.listFiles()?.filter { 
-                    it.extension in listOf("mp3", "m4a", "aac") && !isAlreadyOptimized(it, prefs) 
-                } ?: emptyList())
-            }
-            if (podcastDir.exists()) {
-                audioFiles.addAll(podcastDir.listFiles()?.filter { 
-                    it.extension in listOf("mp3", "m4a", "aac") && !isAlreadyOptimized(it, prefs) 
-                } ?: emptyList())
-            }
-            
-            if (audioFiles.isEmpty()) {
-                showSimpleNotificationExtern(
-                    "✅ Optimierung",
-                    "Alle Dateien sind bereits optimiert!",
-                    context = context
-                )
+            if (!cloudDir.exists()) {
+                Log.d("AudioOptimize", "cloudDir existiert nicht: ${cloudDir.absolutePath}")
                 return@launch
             }
-            
-            showSimpleNotificationExtern(
-                "🔄 Optimierung läuft",
-                "Komprimiere ${audioFiles.size} Dateien...",
-                context = context
-            )
-            
-            var successCount = 0
-            var totalSavedBytes = 0L
-            
-            audioFiles.forEach { file ->
-                val originalSize = file.length()
-                
-                try {
-                    val optimized = optimizeSingleAudioFile(file)
-                    if (optimized) {
-                        successCount++
-                        val newSize = file.length()
-                        val saved = originalSize - newSize
-                        if (saved > 0) {
-                            totalSavedBytes += saved
+
+            // Alte temporäre Dateien aufräumen
+            cloudDir.walkTopDown().filter { it.name.startsWith(".") && it.name.contains("_opt_tmp.") }.forEach { it.delete() }
+
+            // Alle Audiodateien im Cloud-Ordner und dessen Unterordnern sammeln
+            val audioFiles = cloudDir.walkTopDown()
+                .filter { it.isFile && !it.name.startsWith(".") && it.extension.lowercase() in listOf("mp3", "m4a", "aac") }
+                .filter { !isAlreadyOptimized(it, prefs) }
+                .toList()
+
+            Log.d("AudioOptimize", "Gefundene Dateien zum Optimieren: ${audioFiles.size}")
+
+            if (audioFiles.isEmpty()) {
+                Log.d("AudioOptimize", "Alle Dateien sind bereits optimiert!")
+                return@launch
+            }
+
+            val savedBytes = AtomicLong(0)
+            val successCount = AtomicInteger(0)
+            val semaphore = Semaphore(2) // Maximal 2 Dateien gleichzeitig codieren (CPU-Schonung)
+
+            coroutineScope {
+                audioFiles.map { file ->
+                    async {
+                        semaphore.withPermit {
+                            val originalSize = file.length()
+                            val tempFile = File(file.parentFile, ".${file.nameWithoutExtension}_opt_tmp.${file.extension}")
+
+                            // Target Bitrate auf 96kbps (guter Kompromiss für Audio/Podcasts)
+                            val success = compressAudioSingleFile(file, tempFile, targetBitrate = 96_000)
+
+                            if (success && tempFile.exists() && tempFile.length() < originalSize) {
+                                file.delete()
+                                tempFile.renameTo(file)
+                                successCount.incrementAndGet()
+                                val saved = originalSize - file.length()
+                                if (saved > 0) savedBytes.addAndGet(saved)
+                                Log.d("AudioOptimize", "✅ ${file.name} (${originalSize / 1024}kb → ${file.length() / 1024}kb)")
+                            } else {
+                                tempFile.delete() // Fehlgeschlagene/Größere Temp-Datei löschen
+                                Log.d("AudioOptimize", "⚠️ ${file.name} wurde nicht komprimiert (bereits klein genug oder Fehler).")
+                            }
+                            markAsOptimized(file, prefs)
                         }
-                        markAsOptimized(file, prefs)
-                        Log.d("AudioOptimize", "✅ ${file.name} optimiert (${originalSize} → $newSize bytes)")
-                    } else {
-                        markAsOptimized(file, prefs) // Markiere auch fehlgeschlagene Dateien, um nicht erneut zu versuchen
                     }
-                } catch (e: Exception) {
-                    Log.e("AudioOptimize", "Fehler bei ${file.name}: ${e.message}")
-                    markAsOptimized(file, prefs) // Markiere auch bei Fehler
-                }
+                }.awaitAll()
             }
-            
-            val savedMB = String.format("%.2f", totalSavedBytes / (1024.0 * 1024.0))
-            val message = if (successCount > 0) {
-                "✅ $successCount Dateien optimiert\n💾 $savedMB MB gespart"
-            } else {
-                "⚠️ Keine Dateien konnten optimiert werden"
-            }
-            
-            showSimpleNotificationExtern(
-                "✅ Optimierung abgeschlossen",
-                message,
-                context = context
-            )
+
+            val savedMB = String.format("%.2f", savedBytes.get() / (1024.0 * 1024.0))
+            Log.d("AudioOptimize", "Fertig! $successCount Dateien optimiert. $savedMB MB gespart.")
+
         } catch (e: Exception) {
-            Log.e("AudioOptimize", "Fehler: ${e.message}")
-            showSimpleNotificationExtern(
-                "❌ Fehler",
-                "Optimierung fehlgeschlagen: ${e.message}",
-                context = context
-            )
+            Log.e("AudioOptimize", "Fehler im Ablauf: ${e.message}", e)
         }
     }
 }
 
-private fun optimizeSingleAudioFile(file: File): Boolean {
-    return try {
-        val fileName = file.nameWithoutExtension
-        val extension = file.extension
-        val tempFile = File(file.parentFile, "${fileName}_temp_${System.currentTimeMillis()}.$extension")
+private fun compressAudioSingleFile(inputFile: File, outputFile: File, targetBitrate: Int): Boolean {
+    val extractor = MediaExtractor()
+    var decoder: MediaCodec? = null
+    var encoder: MediaCodec? = null
+    var muxer: MediaMuxer? = null
 
-        try {
-            if (useFFmpegOptimization(file, tempFile)) {
-                return if (tempFile.length() < file.length()) {
-                    file.delete()
-                    tempFile.renameTo(file)
-                    Log.d("AudioOptimize", "FFmpeg: Datei erfolgreich komprimiert")
-                    true
-                } else {
-                    tempFile.delete()
-                    false
+    try {
+        extractor.setDataSource(inputFile.absolutePath)
+
+        // Audiospur finden
+        var trackIndex = -1
+        for (i in 0 until extractor.trackCount) {
+            val format = extractor.getTrackFormat(i)
+            if (format.getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true) {
+                trackIndex = i
+                break
+            }
+        }
+        if (trackIndex == -1) return false
+
+        val inputFormat = extractor.getTrackFormat(trackIndex)
+        val mime = inputFormat.getString(MediaFormat.KEY_MIME) ?: return false
+        val sampleRate = inputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+        val channels = inputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+
+        // Überspringen, falls die Datei bereits eine niedrige Bitrate hat
+        val existingBitrate = if (inputFormat.containsKey(MediaFormat.KEY_BIT_RATE)) {
+            inputFormat.getInteger(MediaFormat.KEY_BIT_RATE)
+        } else Int.MAX_VALUE
+        if (existingBitrate <= targetBitrate + 10_000) return false
+
+        extractor.selectTrack(trackIndex)
+
+        // Neues AAC Format konfigurieren
+        val outputFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, sampleRate, channels).apply {
+            setInteger(MediaFormat.KEY_BIT_RATE, targetBitrate)
+            setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
+            setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 64 * 1024)
+        }
+
+        decoder = MediaCodec.createDecoderByType(mime).apply {
+            configure(inputFormat, null, null, 0)
+            start()
+        }
+
+        encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC).apply {
+            configure(outputFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            start()
+        }
+
+        muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        var muxerTrack = -1
+        var muxerStarted = false
+
+        val bufferInfo = MediaCodec.BufferInfo()
+        var isExtractorDone = false
+        var isDecoderDone = false
+        var isEncoderDone = false
+        var pendingDecoderIndex = -1
+
+        // 0L setzt den Timeout für non-blocking Highspeed-Verarbeitung
+        val timeoutUs = 0L
+
+        while (!isEncoderDone) {
+            // 1. Daten aus Datei in den Decoder schieben
+            if (!isExtractorDone) {
+                val inIdx = decoder.dequeueInputBuffer(timeoutUs)
+                if (inIdx >= 0) {
+                    val buf = decoder.getInputBuffer(inIdx)!!
+                    val sampleSize = extractor.readSampleData(buf, 0)
+                    if (sampleSize < 0) {
+                        decoder.queueInputBuffer(inIdx, 0, 0, 0L, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        isExtractorDone = true
+                    } else {
+                        decoder.queueInputBuffer(inIdx, 0, sampleSize, extractor.sampleTime, 0)
+                        extractor.advance()
+                    }
                 }
             }
-        } catch (e: Exception) {
-            Log.d("AudioOptimize", "FFmpeg nicht verfügbar: ${e.message}")
-            tempFile.delete()
-        }
-        
-        // Fallback: Einfache Umcodierung mit reduzierter Bitrate
-        try {
-            if (useSimpleAudioReEncoding(file, tempFile)) {
-                return if (tempFile.length() < file.length()) {
-                    file.delete()
-                    tempFile.renameTo(file)
-                    Log.d("AudioOptimize", "Re-encoding: Datei erfolgreich komprimiert")
-                    true
-                } else {
-                    tempFile.delete()
-                    false
+
+            // 2. Dekodiertes PCM-Signal abholen
+            if (pendingDecoderIndex == -1 && !isDecoderDone) {
+                val decOutIdx = decoder.dequeueOutputBuffer(bufferInfo, timeoutUs)
+                if (decOutIdx >= 0) {
+                    pendingDecoderIndex = decOutIdx
                 }
             }
-        } catch (e: Exception) {
-            Log.d("AudioOptimize", "Re-encoding fehlgeschlagen: ${e.message}")
-            tempFile.delete()
+
+            // 3. PCM-Signal in den Encoder füttern
+            if (pendingDecoderIndex >= 0) {
+                val encInIdx = encoder.dequeueInputBuffer(timeoutUs)
+                if (encInIdx >= 0) {
+                    val pcmBuf = decoder.getOutputBuffer(pendingDecoderIndex)!!
+                    val encBuf = encoder.getInputBuffer(encInIdx)!!
+                    encBuf.clear()
+
+                    // Exakte Bestimmung der Range im Buffer verhindert NULL-Bytes
+                    pcmBuf.position(bufferInfo.offset)
+                    pcmBuf.limit(bufferInfo.offset + bufferInfo.size)
+                    encBuf.put(pcmBuf)
+
+                    val flags = if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                        MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                    } else 0
+
+                    encoder.queueInputBuffer(encInIdx, 0, bufferInfo.size, bufferInfo.presentationTimeUs, flags)
+                    decoder.releaseOutputBuffer(pendingDecoderIndex, false)
+
+                    if (flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                        isDecoderDone = true
+                    }
+                    pendingDecoderIndex = -1
+                }
+            }
+
+            // 4. Komprimierte AAC-Daten aus dem Encoder in den Muxer schreiben
+            val encOutIdx = encoder.dequeueOutputBuffer(bufferInfo, timeoutUs)
+            when (encOutIdx) {
+                MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                    if (!muxerStarted) {
+                        muxerTrack = muxer.addTrack(encoder.outputFormat)
+                        muxer.start()
+                        muxerStarted = true
+                    }
+                }
+                MediaCodec.INFO_TRY_AGAIN_LATER -> { /* Pipeline arbeitet */ }
+                else -> {
+                    if (encOutIdx >= 0) {
+                        val encodedBuf = encoder.getOutputBuffer(encOutIdx)!!
+                        if (muxerStarted && bufferInfo.size > 0 && (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
+                            encodedBuf.position(bufferInfo.offset)
+                            encodedBuf.limit(bufferInfo.offset + bufferInfo.size)
+                            muxer.writeSampleData(muxerTrack, encodedBuf, bufferInfo)
+                        }
+                        encoder.releaseOutputBuffer(encOutIdx, false)
+                        if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                            isEncoderDone = true
+                        }
+                    }
+                }
+            }
         }
-        
-        false
+        return true
     } catch (e: Exception) {
-        Log.e("AudioOptimize", "Kritischer Fehler: ${e.message}")
-        false
+        Log.e("AudioOptimize", "Fehler bei reEncode: ${e.message}")
+        return false
+    } finally {
+        runCatching { decoder?.stop(); decoder?.release() }
+        runCatching { encoder?.stop(); encoder?.release() }
+        runCatching { muxer?.stop(); muxer?.release() }
+        runCatching { extractor.release() }
     }
 }
 
-private fun useFFmpegOptimization(inputFile: File, outputFile: File): Boolean {
-    return try {
-        val commands = arrayOf(
-            "ffmpeg",
-            "-i", inputFile.absolutePath,
-            "-b:a", "96k",
-            "-c:a", "aac",
-            "-y",
-            outputFile.absolutePath
-        )
-        
-        val process = Runtime.getRuntime().exec(commands)
-        val exitCode = process.waitFor()
-
-        process.inputStream?.close()
-        process.outputStream?.close()
-        process.errorStream?.close()
-        
-        exitCode == 0 && outputFile.exists() && outputFile.length() > 1024
-    } catch (_: Exception) {
-        false
-    }
-}
-
-private fun useSimpleAudioReEncoding(inputFile: File, outputFile: File): Boolean {
-    return try {
-        val inputBytes = inputFile.readBytes()
-        if (inputBytes.isEmpty()) return false
-        
-        return when (inputFile.extension.lowercase()) {
-            "mp3" -> compressMP3(inputFile, outputFile)
-            "m4a", "aac" -> compressM4A(inputFile, outputFile)
-            else -> false
-        }
-    } catch (e: Exception) {
-        Log.e("AudioOptimize", "Re-encoding Fehler: ${e.message}")
-        false
-    }
-}
-
-private fun compressMP3(inputFile: File, outputFile: File): Boolean {
-    return try {
-        val bytes = inputFile.readBytes()
-        
-        // Entferne ID3v2 Tags vom Anfang
-        var startIdx = 0
-        if (bytes.size > 10 && bytes[0] == 0x49.toByte() && 
-            bytes[1] == 0x44.toByte() && bytes[2] == 0x33.toByte()) {
-            // ID3v2 Header: Byte 6-9 enthalten die Größe (mit 7 Bit encoding)
-            val size = ((bytes[6].toInt() and 0x7F) shl 21) or
-                    ((bytes[7].toInt() and 0x7F) shl 14) or
-                    ((bytes[8].toInt() and 0x7F) shl 7) or
-                    (bytes[9].toInt() and 0x7F)
-            startIdx = 10 + size
-        }
-        
-        // Entferne ID3v1 Tags vom Ende
-        var endIdx = bytes.size
-        if (bytes.size > 128) {
-            if (bytes[bytes.size - 128] == 0x54.toByte() &&  // 'T'
-                bytes[bytes.size - 127] == 0x41.toByte() &&  // 'A'
-                bytes[bytes.size - 126] == 0x47.toByte()) {   // 'G'
-                endIdx = bytes.size - 128
-            }
-        }
-        
-        if (startIdx < endIdx) {
-            outputFile.writeBytes(bytes.sliceArray(startIdx until endIdx))
-            return outputFile.length() > 0
-        }
-        
-        false
-    } catch (_: Exception) {
-        false
-    }
-}
-
-private fun compressM4A(inputFile: File, outputFile: File): Boolean {
-    return try {
-        // M4A ist bereits in einem effizienten Format
-        // Wir können hier begrenzt optimieren
-        inputFile.copyTo(outputFile, overwrite = true)
-        outputFile.length() > 0
-    } catch (_: Exception) {
-        false
-    }
-}
-
+// HIER SIND DIE FEHLENDEN METHODEN:
 private fun isAlreadyOptimized(file: File, prefs: android.content.SharedPreferences): Boolean {
-    val key = "optimized_${file.absolutePath.hashCode()}"
+    val key = "optimized_${file.absolutePath.hashCode()}_v3"
     return prefs.getBoolean(key, false)
 }
 
 private fun markAsOptimized(file: File, prefs: android.content.SharedPreferences) {
-    val key = "optimized_${file.absolutePath.hashCode()}"
-    prefs.edit {
-        putBoolean(key, true)
-    }
+    val key = "optimized_${file.absolutePath.hashCode()}_v3"
+    prefs.edit { putBoolean(key, true) }
 }
