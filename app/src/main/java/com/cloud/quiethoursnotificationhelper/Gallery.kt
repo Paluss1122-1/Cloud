@@ -24,7 +24,6 @@ import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_CONFIRM
 import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_DELETE_IMAGE
 import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_NEXT_GALLERY_IMAGE
 import com.cloud.services.QuietHoursNotificationService.Companion.ACTION_PREV_GALLERY_IMAGE
-import com.cloud.services.QuietHoursNotificationService.Companion.DELETE_CONFIRMATION_CHANNEL_ID
 import com.cloud.services.QuietHoursNotificationService.Companion.EXTRA_IMAGE_INDEX
 import com.cloud.services.QuietHoursNotificationService.Companion.GALLERY_CHANNEL_ID
 import com.cloud.services.QuietHoursNotificationService.Companion.currentGalleryIndex
@@ -334,7 +333,7 @@ fun showDeleteConfirmation(imageIndex: Int, context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val builder = NotificationCompat.Builder(context, DELETE_CONFIRMATION_CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, GALLERY_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_delete)
             .setContentTitle("🗑️ Bild löschen?")
             .setContentText("Bild ${imageIndex + 1} von ${galleryImages.size} wirklich löschen?")
