@@ -52,7 +52,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.io.File
 import java.net.URL
 import java.security.MessageDigest
 import javax.xml.parsers.DocumentBuilderFactory
@@ -184,13 +183,22 @@ fun PodcastTab() {
 
     fun downloadEpisode(audioUrl: String, title: String, showName: String) {
         val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_")
-        val filename = "$safeTitle.mp3"
-        val destDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "cloud/podcasts")
-        destDir.mkdirs()
+        val filename  = "$safeTitle.mp3"
+        val subPath   = "Cloud/$filename"
 
-        // Check if file already exists locally
-        val destFile = File(destDir, filename)
-        if (destFile.exists()) {
+        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+
+        val alreadyDone = dm.query(
+            DownloadManager.Query().setFilterByStatus(DownloadManager.STATUS_SUCCESSFUL)
+        )?.use { cursor ->
+            val col = cursor.getColumnIndex(DownloadManager.COLUMN_TITLE)
+            while (cursor.moveToNext()) {
+                if (cursor.getString(col) == filename) return@use true
+            }
+            false
+        } ?: false
+
+        if (alreadyDone) {
             Toast.makeText(context, "Datei existiert bereits", Toast.LENGTH_SHORT).show()
             return
         }
@@ -198,12 +206,11 @@ fun PodcastTab() {
         val request = DownloadManager.Request(audioUrl.toUri()).apply {
             setTitle(filename)
             setDescription("Podcast wird heruntergeladen…")
-            setDestinationUri(File(destDir, filename).toUri())
+            setDestinationInExternalPublicDir(Environment.DIRECTORY_PODCASTS, subPath)
             setAllowedOverMetered(true)
             addRequestHeader("User-Agent", "Mozilla/5.0")
             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
         }
-        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val downloadId = dm.enqueue(request)
 
         val prefs = context.getSharedPreferences("podcast_downloads", Context.MODE_PRIVATE)
