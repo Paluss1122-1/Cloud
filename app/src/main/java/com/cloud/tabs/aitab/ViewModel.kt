@@ -245,7 +245,8 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
         return when (currentMode) {
             "Nvidia" -> sendNvidiaChatMessageAITab(history, txt, selectedModel.realname, pic, onToken = onToken) ?: "Fehler"
             "Server" -> askServer(history, txt, selectedModel.realname, pic)
-            "Gemini" -> sendGeminiRequest(history, txt, pic, audioUri = selectedAudioUri, audio = audio, ctx = ctx, model = selectedModel.realname, onToken = onToken) ?: "Fehler"
+            "Gemini" -> sendGeminiRequest(history, txt, pic, audioUri = selectedAudioUri,
+                ctx = ctx, model = selectedModel.realname, onToken = onToken) ?: "Fehler"
             else -> "Wähle einen Modus"
         }
     }
