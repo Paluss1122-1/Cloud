@@ -25,7 +25,7 @@ private fun buildSystemPrompt(target: String = ""): String {
     if (target.isEmpty()) {
         str = buildString {
             append(
-                """Du wirst per API aus einer Multifunktions-Android-App (names Cloud)${aiTab}${notif} aufgerufen.${aiTabInfo} Deine Aufgabe ist es, die Frage des Nutzers zu beantworten.
+                """Du wirst per API aus einer Multifunktions-Android-App (names Tabslify)${aiTab}${notif} aufgerufen.${aiTabInfo} Deine Aufgabe ist es, die Frage des Nutzers zu beantworten.
                     Wichtige Hinweise:
                         * Antworte kurz, klar und auf Deutsch.
                         * Sei ein hilfsbereiter Chat-Assistent."""
