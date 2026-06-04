@@ -3017,7 +3017,6 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refresh() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
             val songs = withContext(Dispatchers.IO) { loadSongsFromMediaStore() }
             val rawEpisodes = withContext(Dispatchers.IO) { loadEpisodesFromMediaStore() }
             val shows = PodcastShowManager.getShows()
