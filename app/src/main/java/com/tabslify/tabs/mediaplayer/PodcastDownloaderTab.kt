@@ -4,6 +4,7 @@ import android.app.DownloadManager
 import android.content.Context
 import android.os.Environment
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,14 +21,18 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,14 +48,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import androidx.core.net.toUri
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tabslify.core.objects.Config.PODCASTINDEX_API_KEY
 import com.tabslify.core.objects.Config.PODCASTINDEX_API_SECRET
 import com.tabslify.core.ui.AlertDialogTabslify
 import com.tabslify.core.ui.FeedCard
 import com.tabslify.services.MediaPlayerService
+import com.tabslify.spotifydownloader_own.data.DownloadRepositoryImpl
+import com.tabslify.spotifydownloader_own.domain.DownloadState
+import com.tabslify.spotifydownloader_own.ui.DownloadViewModel
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import org.json.JSONObject
 import java.net.URL
 import java.security.MessageDigest
@@ -79,6 +95,32 @@ fun PodcastTab() {
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
 
+    val httpClient = remember {
+        HttpClient(OkHttp) {
+            install(ContentNegotiation) {
+                json(
+                    Json {
+                        ignoreUnknownKeys = true
+                        prettyPrint = true
+                    }
+                )
+            }
+        }
+    }
+
+    val factory = remember(context, httpClient) {
+        object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                val repo = DownloadRepositoryImpl(httpClient, context.applicationContext as Context)
+                return DownloadViewModel(repo, context.applicationContext as Context) as T
+            }
+        }
+    }
+
+    val vm: DownloadViewModel = viewModel(factory = factory)
+    val downloadState by vm.downloadState.collectAsState()
+
     var query by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     var results by remember { mutableStateOf<List<SearchResult>>(emptyList()) }
@@ -87,9 +129,29 @@ fun PodcastTab() {
     var episodes by remember { mutableStateOf<Map<String, List<Episode>>>(emptyMap()) }
     var loadingEpisodes by remember { mutableStateOf<String?>(null) }
     var feedToUnfav by remember { mutableStateOf<PodcastFeed?>(null) }
+    var newEpisodesState by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            try {
+                val svc = com.tabslify.services.QuietHoursNotificationService()
+                val found = svc.checkPodcastsAndNotify(context, true)
+                newEpisodesState = found
+            } catch (e: Exception) {
+            }
+        }
+    }
+
+    val isUrl = remember(query) {
+        android.util.Patterns.WEB_URL.matcher(query).matches() || query.startsWith("http")
+    }
 
     suspend fun search(q: String) {
         if (q.isBlank()) return
+        if (isUrl) {
+            vm.startDownload(q)
+            return
+        }
         isSearching = true
         error = null
         results = emptyList()
@@ -105,7 +167,7 @@ fun PodcastTab() {
                     setRequestProperty("X-Auth-Key", PODCASTINDEX_API_KEY)
                     setRequestProperty("X-Auth-Date", now.toString())
                     setRequestProperty("Authorization", hash)
-                    setRequestProperty("User-Agent", "CloudApp/1.0")
+                    setRequestProperty("User-Agent", "TabslifyApp/1.0")
                     connect()
                 }
             }
@@ -163,7 +225,7 @@ fun PodcastTab() {
                     val timestamp = try {
                         java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z", java.util.Locale.ENGLISH).parse(pubDate)?.time
                             ?: System.currentTimeMillis()
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         try {
                             java.time.Instant.parse(pubDate).toEpochMilli()
                         } catch (_: Exception) {
@@ -184,7 +246,7 @@ fun PodcastTab() {
     fun downloadEpisode(audioUrl: String, title: String, showName: String) {
         val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_")
         val filename  = "$safeTitle.mp3"
-        val subPath   = "Cloud/$filename"
+        val subPath   = "Tabslify/$filename"
 
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
 
@@ -281,7 +343,7 @@ fun PodcastTab() {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 12.dp),
-            placeholder = { Text("Podcast suchen…") },
+            placeholder = { Text("Podcast suchen oder URL eingeben…") },
             singleLine = true,
             trailingIcon = {
                 if (isSearching) {
@@ -307,10 +369,45 @@ fun PodcastTab() {
             Text("Fehler: $it", color = MaterialTheme.colorScheme.error, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
         }
 
-        if (results.isEmpty() && !isSearching) {
+        if (isUrl) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Button(
+                    onClick = { vm.startDownload(query) },
+                    enabled = downloadState is DownloadState.Idle || downloadState is DownloadState.Success || downloadState is DownloadState.Error
+                ) {
+                    Text("Download")
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                when (val state = downloadState) {
+                    is DownloadState.Idle -> Text("URL eingeben und Download starten")
+                    is DownloadState.Searching -> CircularProgressIndicator()
+                    is DownloadState.Downloading -> {
+                        val progress = state.progress
+                        LinearProgressIndicator(progress = { progress / 100f })
+                        Text("Downloading: $progress%")
+                    }
+
+                    is DownloadState.Converting -> {
+                        CircularProgressIndicator()
+                        Text("Converting to MP3...")
+                    }
+
+                    is DownloadState.Success -> Text("Download Complete!")
+                    is DownloadState.Error -> Text("Error: ${state.message}", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        } else if (results.isEmpty() && !isSearching) {
             if (favorites.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("🎙️ Podcast suchen", color = Color.White.copy(0.5f))
+                    Text("🎙️ Podcast suchen oder URL zum Download eingeben", color = Color.White.copy(0.5f))
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -321,17 +418,34 @@ fun PodcastTab() {
                     items(favorites.values.toList()) { feed ->
                         val isExpanded = expandedFeedUrl == feed.feedUrl
                         val feedEpisodes = episodes[feed.feedUrl]
-                        FeedCard(
-                            feed = feed, isExpanded = isExpanded, feedEpisodes = feedEpisodes,
-                            loadingEpisodes = loadingEpisodes, isFavorite = true,
-                            onToggleExpand = {
-                                if (isExpanded) expandedFeedUrl = null
-                                else { expandedFeedUrl = feed.feedUrl; scope.launch { loadEpisodes(feed.feedUrl) } }
-                            },
-                            onToggleFav = { feedToUnfav = feed },
-                            onDownload = { url, title -> downloadEpisode(url, title, feed.title) },
-                            onStream = { url -> streamEpisode(url) }
-                        )
+                        val hasNew = newEpisodesState.any { it.optString("showName") == feed.title }
+                        
+                        Box {
+                            FeedCard(
+                                feed = feed, isExpanded = isExpanded, feedEpisodes = feedEpisodes,
+                                loadingEpisodes = loadingEpisodes, isFavorite = true,
+                                onToggleExpand = {
+                                    if (isExpanded) expandedFeedUrl = null
+                                    else { 
+                                        expandedFeedUrl = feed.feedUrl
+                                        scope.launch { loadEpisodes(feed.feedUrl) }
+                                        newEpisodesState = newEpisodesState.filterNot { it.optString("showName") == feed.title }
+                                    }
+                                },
+                                onToggleFav = { feedToUnfav = feed },
+                                onDownload = { url, title -> downloadEpisode(url, title, feed.title) },
+                                onStream = { url -> streamEpisode(url) }
+                            )
+                            if (hasNew && !isExpanded) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(8.dp)
+                                        .size(12.dp)
+                                        .background(Color.Red, androidx.compose.foundation.shape.CircleShape)
+                                )
+                            }
+                        }
                     }
                     item { Spacer(Modifier.height(16.dp)) }
                 }
