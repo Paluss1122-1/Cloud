@@ -143,15 +143,15 @@ import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.cms
 import com.tabslify.core.objects.FavoriteManager
 import com.tabslify.core.objects.prvt
-import com.tabslify.privatecloudapp.FileIcon
-import com.tabslify.privatecloudapp.FullscreenImageDialog
-import com.tabslify.privatecloudapp.fileExistsInDCIM
-import com.tabslify.privatecloudapp.fileExistsLocallyWithSameSize
-import com.tabslify.privatecloudapp.getFileNameFromUri
-import com.tabslify.privatecloudapp.getLocalFileWithPath
-import com.tabslify.privatecloudapp.getMimeType
-import com.tabslify.privatecloudapp.isImageFile
-import com.tabslify.privatecloudapp.isOnline
+import com.tabslify.privatetabslifyapp.FileIcon
+import com.tabslify.privatetabslifyapp.FullscreenImageDialog
+import com.tabslify.privatetabslifyapp.fileExistsInDCIM
+import com.tabslify.privatetabslifyapp.fileExistsLocallyWithSameSize
+import com.tabslify.privatetabslifyapp.getFileNameFromUri
+import com.tabslify.privatetabslifyapp.getLocalFileWithPath
+import com.tabslify.privatetabslifyapp.getMimeType
+import com.tabslify.privatetabslifyapp.isImageFile
+import com.tabslify.privatetabslifyapp.isOnline
 import com.tabslify.tabs.BrowserTabContent
 import com.tabslify.tabs.CalendarTabContent
 import com.tabslify.tabs.ContactsRepository
@@ -160,7 +160,7 @@ import com.tabslify.tabs.ContactsViewModel
 import com.tabslify.tabs.DateCalculatorContent
 import com.tabslify.tabs.GalleryTab
 import com.tabslify.tabs.GmailTabContent
-import com.tabslify.tabs.MediaRecorderContent
+import com.tabslify.tabs.audiorecordertab.AudioRecorderContent
 import com.tabslify.tabs.MovieDiscoveryTabContent
 import com.tabslify.tabs.NotizenApp
 import com.tabslify.tabs.OtherBucketViewer
@@ -175,7 +175,6 @@ import com.tabslify.tabs.mediaplayer.AiResponseHistorySheet
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
 import com.tabslify.tabs.mediaplayer.MediaTab
 import com.tabslify.tabs.mediaplayer.PodcastTab
-import com.tabslify.tabs.mediaplayer.SpotifyDownloaderTab
 import com.tabslify.tabs.school.VocabTab
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
@@ -200,8 +199,8 @@ enum class MenuItem(
     val icon: String,
     val content: @Composable (setGesturesEnabled: (Boolean) -> Unit) -> Unit
 ) {
-    PRIVATE_CLOUD(
-        "Private Cloud",
+    PRIVATE_TABSLIFY(
+        "Private Tabslify",
         "☁️",
         {}
     ),
@@ -231,7 +230,7 @@ enum class MenuItem(
     AUTHENTICATOR(
         "Authenticator",
         "🔒",
-        { AuthenticatorTab() }
+        { }
     ),
     WEATHER(
         "Wetter",
@@ -290,16 +289,6 @@ enum class MenuItem(
         "📖",
         { NotizenApp() }
     ),
-    MEDIARECORDER(
-        "Media Recorder",
-        "🎵",
-        { MediaRecorderContent() }
-    ),
-    SPOTIFYDOWNLOADER(
-        "Spotify Downloader",
-        "🎧",
-        { SpotifyDownloaderTab() }
-    ),
     MEDIAPLAYERTAB(
         "Media Player",
         "️️🎶",
@@ -342,7 +331,7 @@ enum class MenuItem(
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrivateCloudApp(
+fun PrivateTabslifyApp(
     storage: Storage,
     startTarget: String?,
     initialMenuItem: MenuItem,
@@ -421,8 +410,8 @@ fun PrivateCloudApp(
                     )
                 }
 
-                MenuItem.PRIVATE_CLOUD -> {
-                    MainCloudScreen(storage = storage)
+                MenuItem.PRIVATE_TABSLIFY -> {
+                    MainTabslifyScreen(storage = storage)
                 }
 
                 MenuItem.AITAB -> {
@@ -488,7 +477,7 @@ fun PrivateCloudApp(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Cloud.copy(0.5f))
+                    .background(APP_COLOR.copy(0.5f))
             )
             Scaffold(
                 modifier = Modifier
@@ -569,7 +558,7 @@ fun PrivateCloudApp(
                             onEnterFullScreen = { isFullScreen = true }
                         )
 
-                        MenuItem.PRIVATE_CLOUD -> MainCloudScreen(storage = storage)
+                        MenuItem.PRIVATE_TABSLIFY -> MainTabslifyScreen(storage = storage)
 
                         MenuItem.Vocabs -> VocabTab(paddingValues)
 
@@ -735,7 +724,7 @@ fun PrivateCloudApp(
                                             Environment.getExternalStoragePublicDirectory(
                                                 Environment.DIRECTORY_DOWNLOADS
                                             ),
-                                            "cloud/podcasts"
+                                            "tabslify/podcasts"
                                         )
                                         destDir.mkdirs()
                                         val dest = File(destDir, filename)
@@ -744,7 +733,7 @@ fun PrivateCloudApp(
 
                                         Toast.makeText(
                                             ctx,
-                                            if (moved) "Gespeichert in cloud/podcasts/" else "Download OK, Verschieben fehlgeschlagen",
+                                            if (moved) "Gespeichert in tabslify/podcasts/" else "Download OK, Verschieben fehlgeschlagen",
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     }
@@ -849,19 +838,19 @@ fun PrivateCloudApp(
 
 @OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class)
 @Composable
-fun MainCloudScreen(storage: Storage) {
+fun MainTabslifyScreen(storage: Storage) {
     val context = LocalContext.current
     if (!prvt()) {
         Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
         return
     }
-    data class CloudFileMeta(
+    data class TabslifyFileMeta(
         val name: String,
         val updatedAt: String,
         val size: Long,
     )
 
-    var fileList by remember { mutableStateOf<List<CloudFileMeta>>(emptyList()) }
+    var fileList by remember { mutableStateOf<List<TabslifyFileMeta>>(emptyList()) }
     var isUploading by remember { mutableStateOf(false) }
     var isDownloading by remember { mutableStateOf<String?>(null) }
     var selectedFilter by remember { mutableStateOf("Alle") }
@@ -892,7 +881,7 @@ fun MainCloudScreen(storage: Storage) {
                 storage.from(Config.SUPABASE_BUCKET).list()
             }
 
-            val groupedFiles: List<CloudFileMeta> = files
+            val groupedFiles: List<TabslifyFileMeta> = files
                 .filter { it.name != ".emptyFolderPlaceholder" }
                 .groupBy { file ->
                     if (file.name.contains(".part")) {
@@ -911,7 +900,7 @@ fun MainCloudScreen(storage: Storage) {
                         val latestDate = chunks.mapNotNull { it.updatedAt }.maxOrNull()
                         val updatedAtString = latestDate?.toString() ?: ""
 
-                        CloudFileMeta(
+                        TabslifyFileMeta(
                             name = baseName,
                             updatedAt = updatedAtString,
                             size = totalSize,
@@ -925,7 +914,7 @@ fun MainCloudScreen(storage: Storage) {
                             }
                             ?.toString() ?: ""
 
-                        CloudFileMeta(
+                        TabslifyFileMeta(
                             name = file.name,
                             updatedAt = localDate,
                             size = 0L,
@@ -943,7 +932,7 @@ fun MainCloudScreen(storage: Storage) {
         }
     }
 
-    suspend fun deleteFile(file: CloudFileMeta) {
+    suspend fun deleteFile(file: TabslifyFileMeta) {
         try {
             val fileName = file.name
             withContext(Dispatchers.IO) {
@@ -1400,7 +1389,7 @@ fun MainCloudScreen(storage: Storage) {
                                                                             val appFolder =
                                                                                 File(
                                                                                     dcimDir,
-                                                                                    "Cloud"
+                                                                                    "Tabslify"
                                                                                 )
                                                                             if (!appFolder.exists()) {
                                                                                 appFolder.mkdirs()
@@ -1719,7 +1708,7 @@ fun MainCloudScreen(storage: Storage) {
                                                                     }
 
                                                                 val appFolder =
-                                                                    File(targetBaseFolder, "Cloud")
+                                                                    File(targetBaseFolder, "Tabslify")
                                                                 if (!appFolder.exists()) {
                                                                     appFolder.mkdirs()
                                                                 }
@@ -1958,7 +1947,7 @@ fun MainCloudScreen(storage: Storage) {
                         }
                         val dcimDir =
                             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
-                        val appFolder = File(dcimDir, "Cloud")
+                        val appFolder = File(dcimDir, "Tabslify")
                         if (!appFolder.exists()) appFolder.mkdirs()
                         val outputFile = File(appFolder, name)
                         withContext(Dispatchers.IO) {
@@ -2170,7 +2159,7 @@ fun showBatteryInfo(context: Context) {
 }
 
 
-const val PREFS_NAME = "cloud_app_prefs"
+const val PREFS_NAME = "tabslify_app_prefs"
 
 private const val KEY_LAST_URL = "last_browser_url"
 
