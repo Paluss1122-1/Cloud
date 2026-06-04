@@ -129,7 +129,7 @@ import com.tabslify.quiethoursnotificationhelper.syncTodosWithLaptop
 import com.tabslify.quiethoursnotificationhelper.timeChangeReceiver
 import com.tabslify.quiethoursnotificationhelper.updateNotification
 import com.tabslify.quiethoursnotificationhelper.updateSingleSenderNotification
-import com.tabslify.tabs.AudioRecorder
+import com.tabslify.tabs.audiorecordertab.AudioForegroundService
 import com.tabslify.tabs.exploretab.ExploreLocationTracker
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.getSessions
@@ -196,40 +196,40 @@ class QuietHoursNotificationService : Service() {
             return WHATSAPP_PACKAGES.contains(packageName) || TELEGRAM_PACKAGES.contains(packageName)
         }
 
-        const val ACTION_SHOW_MESSAGES = "com.cloud.ACTION_SHOW_MESSAGES"
-        const val ACTION_SCHEDULED_START = "com.cloud.ACTION_QUIET_SCHEDULED_START"
-        const val ACTION_SCHEDULED_STOP = "com.cloud.ACTION_QUIET_SCHEDULED_STOP"
-        private const val ACTION_OPEN_SETTINGS = "com.cloud.ACTION_OPEN_SETTINGS"
+        const val ACTION_SHOW_MESSAGES = "com.tabslify.ACTION_SHOW_MESSAGES"
+        const val ACTION_SCHEDULED_START = "com.tabslify.ACTION_QUIET_SCHEDULED_START"
+        const val ACTION_SCHEDULED_STOP = "com.tabslify.ACTION_QUIET_SCHEDULED_STOP"
+        private const val ACTION_OPEN_SETTINGS = "com.tabslify.ACTION_OPEN_SETTINGS"
 
-        const val ACTION_MESSAGE_SENT = "com.cloud.ACTION_MESSAGE_SENT"
+        const val ACTION_MESSAGE_SENT = "com.tabslify.ACTION_MESSAGE_SENT"
         const val EXTRA_SENDER = "extra_sender"
 
         private lateinit var sharedPreferences: SharedPreferences
-        private const val ACTION_OPEN_MUSIC_PLAYER = "com.cloud.ACTION_OPEN_MUSIC_PLAYER"
+        private const val ACTION_OPEN_MUSIC_PLAYER = "com.tabslify.ACTION_OPEN_MUSIC_PLAYER"
         const val ACTION_RESTART_MUSIC_PLAYER =
-            "com.cloud.ACTION_RESTART_MUSIC_PLAYER"
+            "com.tabslify.ACTION_RESTART_MUSIC_PLAYER"
 
         const val ACTION_NOTIFICATION_DISMISSED =
-            "com.cloud.ACTION_NOTIFICATION_DISMISSED"
+            "com.tabslify.ACTION_NOTIFICATION_DISMISSED"
 
-        const val ACTION_CHANGE_START = "com.cloud.ACTION_CHANGE_START"
-        const val ACTION_CHANGE_END = "com.cloud.ACTION_CHANGE_END"
+        const val ACTION_CHANGE_START = "com.tabslify.ACTION_CHANGE_START"
+        const val ACTION_CHANGE_END = "com.tabslify.ACTION_CHANGE_END"
 
 
-        const val ACTION_PLAY_VOICE_NOTE = "com.cloud.ACTION_PLAY_VOICE_NOTE"
-        const val ACTION_NEXT_VOICE_NOTE = "com.cloud.ACTION_NEXT_VOICE_NOTE"
-        const val ACTION_PREV_VOICE_NOTE = "com.cloud.ACTION_PREV_VOICE_NOTE"
-        const val ACTION_STOP_VOICE_NOTE = "com.cloud.ACTION_STOP_VOICE_NOTE"
+        const val ACTION_PLAY_VOICE_NOTE = "com.tabslify.ACTION_PLAY_VOICE_NOTE"
+        const val ACTION_NEXT_VOICE_NOTE = "com.tabslify.ACTION_NEXT_VOICE_NOTE"
+        const val ACTION_PREV_VOICE_NOTE = "com.tabslify.ACTION_PREV_VOICE_NOTE"
+        const val ACTION_STOP_VOICE_NOTE = "com.tabslify.ACTION_STOP_VOICE_NOTE"
         const val EXTRA_SENDER_FOR_VOICE = "extra_sender_for_voice"
 
         const val VOICE_NOTE_CHANNEL_ID = "voice_note_player_channel"
-        const val ACTION_EXECUTE_COMMAND = "com.cloud.ACTION_EXECUTE_COMMAND"
+        const val ACTION_EXECUTE_COMMAND = "com.tabslify.ACTION_EXECUTE_COMMAND"
 
         val commandHistory = mutableListOf<String>()
 
-        private const val ACTION_SHOW_GALLERY = "com.cloud.ACTION_SHOW_GALLERY"
-        const val ACTION_NEXT_GALLERY_IMAGE = "com.cloud.ACTION_NEXT_GALLERY_IMAGE"
-        const val ACTION_PREV_GALLERY_IMAGE = "com.cloud.ACTION_PREV_GALLERY_IMAGE"
+        private const val ACTION_SHOW_GALLERY = "com.tabslify.ACTION_SHOW_GALLERY"
+        const val ACTION_NEXT_GALLERY_IMAGE = "com.tabslify.ACTION_NEXT_GALLERY_IMAGE"
+        const val ACTION_PREV_GALLERY_IMAGE = "com.tabslify.ACTION_PREV_GALLERY_IMAGE"
         const val GALLERY_CHANNEL_ID = "gallery_channel"
 
         const val SSN_CHANNEL_ID = "show_simple_not_channel"
@@ -238,13 +238,13 @@ class QuietHoursNotificationService : Service() {
         const val SCHOOL_SUMMARY_NOTIF_ID = 9002
 
         const val ACTION_CONFIRM_DELETE_IMAGE =
-            "com.cloud.ACTION_CONFIRM_DELETE_IMAGE"
-        const val ACTION_DELETE_IMAGE = "com.cloud.ACTION_DELETE_IMAGE"
-        const val ACTION_CANCEL_DELETE = "com.cloud.ACTION_CANCEL_DELETE"
+            "com.tabslify.ACTION_CONFIRM_DELETE_IMAGE"
+        const val ACTION_DELETE_IMAGE = "com.tabslify.ACTION_DELETE_IMAGE"
+        const val ACTION_CANCEL_DELETE = "com.tabslify.ACTION_CANCEL_DELETE"
         const val EXTRA_IMAGE_INDEX = "extra_image_index"
         const val MAIL_CHANNEL_ID = "mail_channel"
 
-        const val ACTION_MARK_PARTS_READ = "com.cloud.ACTION_MARK_PARTS_READ"
+        const val ACTION_MARK_PARTS_READ = "com.tabslify.ACTION_MARK_PARTS_READ"
         const val EXTRA_MESSAGE_ID = "extra_message_id"
         const val ALARM_REQUEST_CODE = 1001
 
@@ -252,19 +252,19 @@ class QuietHoursNotificationService : Service() {
         const val MAX_MESSAGES_PER_CONTACT = 15
         const val MAX_VOICE_NOTE_FILES = 20
 
-        const val ACTION_RESTORE_NOTIFICATION = "com.cloud.ACTION_RESTORE_NOTIFICATION"
+        const val ACTION_RESTORE_NOTIFICATION = "com.tabslify.ACTION_RESTORE_NOTIFICATION"
 
-        const val ACTION_UPDATE_SINGLE_SENDER = "com.cloud.ACTION_UPDATE_SINGLE_SENDER"
-        const val ACTION_CONTENT_INTENT = "com.cloud.ACTION_CONTENT_INTENT"
-        const val ACTION_SYNC_LAPTOP = "com.cloud.ACTION_SYNC_LAPTOP"
-        const val SHOW_OVERLAY = "com.cloud.SHOW_OVERLAY"
-        const val ACTION_DAILY_MUSIC_SUMMARY = "com.cloud.ACTION_DAILY_MUSIC_SUMMARY"
-        const val ACTION_SCHOOL_DAY_SUMMARY = "com.cloud.ACTION_SCHOOL_DAY_SUMMARY"
-        const val SCHEDULE_DAILY_SUMMARY_ALARM = "com.cloud.SCHEDULE_DAILY_SUMMARY_ALARM"
+        const val ACTION_UPDATE_SINGLE_SENDER = "com.tabslify.ACTION_UPDATE_SINGLE_SENDER"
+        const val ACTION_CONTENT_INTENT = "com.tabslify.ACTION_CONTENT_INTENT"
+        const val ACTION_SYNC_LAPTOP = "com.tabslify.ACTION_SYNC_LAPTOP"
+        const val SHOW_OVERLAY = "com.tabslify.SHOW_OVERLAY"
+        const val ACTION_DAILY_MUSIC_SUMMARY = "com.tabslify.ACTION_DAILY_MUSIC_SUMMARY"
+        const val ACTION_SCHOOL_DAY_SUMMARY = "com.tabslify.ACTION_SCHOOL_DAY_SUMMARY"
+        const val SCHEDULE_DAILY_SUMMARY_ALARM = "com.tabslify.SCHEDULE_DAILY_SUMMARY_ALARM"
 
-        const val ACTION_PODCAST_CHECK = "com.cloud.ACTION_PODCAST_CHECK"
-        const val ACTION_PODCAST_DOWNLOAD = "com.cloud.ACTION_PODCAST_DOWNLOAD"
-        const val ACTION_PODCAST_RETRY = "com.cloud.ACTION_PODCAST_RETRY"
+        const val ACTION_PODCAST_CHECK = "com.tabslify.ACTION_PODCAST_CHECK"
+        const val ACTION_PODCAST_DOWNLOAD = "com.tabslify.ACTION_PODCAST_DOWNLOAD"
+        const val ACTION_PODCAST_RETRY = "com.tabslify.ACTION_PODCAST_RETRY"
         const val PODCAST_CHANNEL_ID = "podcast_check_channel"
         const val PODCAST_NOTIFICATION_ID = 9100
 
@@ -281,8 +281,6 @@ class QuietHoursNotificationService : Service() {
         var currentGalleryIndex = 0
         var isCurrentlyQuietHours = false
         val handler = Handler(Looper.getMainLooper())
-
-        var audioRecorder: AudioRecorder? = null
 
         fun getCheckRunnable(context: Context): Runnable = Runnable {
             try {
@@ -1105,12 +1103,7 @@ class QuietHoursNotificationService : Service() {
         }
         voiceNotePlayer = null
 
-        try {
-            audioRecorder?.stopRecording()
-        } catch (e: Exception) {
-            reportServiceError("onDestroy:audioRecorderStop", e)
-        }
-        audioRecorder = null
+        stopService(Intent(this, AudioForegroundService::class.java))
 
         readMessageIds.clear()
         voiceNoteFiles = emptyList()
@@ -1184,27 +1177,26 @@ class QuietHoursNotificationService : Service() {
     }
 
     @SuppressLint("LaunchActivityFromNotification")
-    private fun checkPodcastsAndNotify(context: Context) {
-        errorScope.launch {
-            try {
-                val prefs = context.getSharedPreferences("podcast_favs", MODE_PRIVATE)
-                val raw = prefs.getString("favs", null) ?: return@launch
+    fun checkPodcastsAndNotify(context: Context, forGui: Boolean = false): List<JSONObject> {
+        val found = mutableListOf<JSONObject>()
+        try {
+            val prefs = context.getSharedPreferences("podcast_favs", MODE_PRIVATE)
+            val raw = prefs.getString("favs", null) ?: return found
                 val favsArr = JSONArray(raw)
+                val prefsDl = context.getSharedPreferences("podcast_downloads", MODE_PRIVATE)
 
                 val threshold = ZonedDateTime.now(ZoneId.systemDefault())
-                    .minusDays(1)
+                    .minusDays(7)
                     .withHour(15)
                     .withMinute(30)
                     .withSecond(0)
                     .withNano(0)
                     .toInstant()
 
-                val destDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PODCASTS), "/Cloud")
-                destDir.mkdirs()
+            val destDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PODCASTS), "/Tabslify")
+            destDir.mkdirs()
 
-                val found = mutableListOf<JSONObject>()
-
-                for (i in 0 until favsArr.length()) {
+            for (i in 0 until favsArr.length()) {
                     try {
                         val o = favsArr.getJSONObject(i)
                         val feedTitle = o.optString("title")
@@ -1247,6 +1239,7 @@ class QuietHoursNotificationService : Service() {
 
                                 if (pubInstant == null) continue
                                 if (pubInstant <= threshold) continue
+                                if (prefsDl.getBoolean("dl_$audioUrl", false)) continue
 
                                 val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_")
                                 val filename = "$safeTitle.mp3"
@@ -1260,11 +1253,11 @@ class QuietHoursNotificationService : Service() {
                             } catch (_: Exception) { }
                         }
                     } catch (_: Exception) { }
-                }
+            }
 
-                if (found.isNotEmpty()) {
-                    val arr = JSONArray()
-                    found.forEach { arr.put(it) }
+            if (found.isNotEmpty() && !forGui) {
+                val arr = JSONArray()
+                found.forEach { arr.put(it) }
 
                     val nm = context.getSystemService(NotificationManager::class.java)
                     if (nm.getNotificationChannel(PODCAST_CHANNEL_ID) == null) {
@@ -1307,21 +1300,21 @@ class QuietHoursNotificationService : Service() {
                         .setContentIntent(pi)
                         .build()
 
-                    if (canNotify(context)) {
-                        nm.notify(PODCAST_NOTIFICATION_ID, notification)
-                    }
+                if (canNotify(context)) {
+                    nm.notify(PODCAST_NOTIFICATION_ID, notification)
                 }
-            } catch (e: Exception) {
-                reportServiceError("checkPodcastsAndNotify", e)
             }
+        } catch (e: Exception) {
+            reportServiceError("checkPodcastsAndNotify", e)
         }
+        return found
     }
 
     private fun startPodcastDownload(audioUrl: String, title: String, showName: String, context: Context) {
         try {
             val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_")
             val filename = "$safeTitle.mp3"
-            val destDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PODCASTS), "/Cloud")
+            val destDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PODCASTS), "/Tabslify")
             destDir.mkdirs()
 
             val request = DownloadManager.Request(audioUrl.toUri()).apply {
@@ -1341,6 +1334,7 @@ class QuietHoursNotificationService : Service() {
                     put("safeTitle", safeTitle)
                     put("showName", showName)
                 }.toString())
+                putBoolean("dl_$audioUrl", true)
             }
         } catch (e: Exception) {
             reportServiceError("startPodcastDownload", e)

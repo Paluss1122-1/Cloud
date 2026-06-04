@@ -121,7 +121,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
             val jsonArray = org.json.JSONArray()
             notifications
-                .filter { it.packageName != "com.example.cloud" && it.packageName != "com.android.systemui" }
+                .filter { it.packageName != "com.example.tabslify" && it.packageName != "com.android.systemui" }
                 .sortedByDescending { it.postTime }
                 .forEach { sbn ->
                     val extras = sbn.notification.extras
@@ -177,7 +177,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         try {
             super.onNotificationPosted(sbn)
 
-            if (sbn.packageName != "com.example.cloud" && sbn.packageName != "com.android.systemui") {
+            if (sbn.packageName != "com.example.tabslify" && sbn.packageName != "com.android.systemui") {
                 if (listenerConnected) {
                     try {
                         activeNotifications?.let {
@@ -289,7 +289,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         try {
             super.onNotificationRemoved(sbn)
 
-            if (sbn.packageName != "com.example.cloud" &&
+            if (sbn.packageName != "com.example.tabslify" &&
                 sbn.packageName != "com.android.systemui" &&
                 sbn.packageName != "com.google.android.gms.supervision" &&
                 sbn.packageName != "com.spotify.music"

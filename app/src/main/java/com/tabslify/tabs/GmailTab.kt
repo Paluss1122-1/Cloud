@@ -1,6 +1,5 @@
 package com.tabslify.tabs
 
-import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -125,8 +124,7 @@ private suspend fun fetchEmailsStreaming(
                             )
                         )
                     }
-                } catch (e: Exception) {
-                    Log.e("CLOUDSA", "Stream parse error: $e")
+                } catch (_: Exception) {
                 }
             }
         }

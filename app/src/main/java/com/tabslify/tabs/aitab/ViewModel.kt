@@ -21,7 +21,7 @@ import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tabslify.core.objects.prvt
-import com.tabslify.privatecloudapp.isOnline
+import com.tabslify.privatetabslifyapp.isOnline
 import com.tabslify.quiethoursnotificationhelper.askServer
 import com.tabslify.quiethoursnotificationhelper.sendGeminiRequest
 import com.tabslify.quiethoursnotificationhelper.sendNvidiaChatMessageAITab

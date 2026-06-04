@@ -95,8 +95,8 @@ import com.tabslify.core.TabNavigationViewModel
 import com.tabslify.core.objects.prvt
 import com.tabslify.core.ui.PloppingButton
 import com.tabslify.core.ui.gruen
-import com.tabslify.privatecloudapp.getVideoFirstFrame
-import com.tabslify.privatecloudapp.isVideoFile
+import com.tabslify.privatetabslifyapp.getVideoFirstFrame
+import com.tabslify.privatetabslifyapp.isVideoFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch

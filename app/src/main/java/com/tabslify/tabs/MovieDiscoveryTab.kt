@@ -367,7 +367,7 @@ suspend fun fetchMoviesFromTMDB(genreId: Int?): List<Movie> = withContext(Dispat
 }
 
 fun loadSavedMovies(context: Context): Set<SavedMovie> {
-    val prefs = context.getSharedPreferences("cloud_app_prefs", Context.MODE_PRIVATE)
+    val prefs = context.getSharedPreferences("tabslify_app_prefs", Context.MODE_PRIVATE)
     return prefs.getStringSet("saved_movies_v2", emptySet())
         ?.mapNotNull { json ->
             runCatching {
@@ -385,7 +385,7 @@ fun loadSavedMovies(context: Context): Set<SavedMovie> {
 }
 
 fun saveMoviesToPrefs(context: Context, movies: Set<SavedMovie>) {
-    val prefs = context.getSharedPreferences("cloud_app_prefs", Context.MODE_PRIVATE)
+    val prefs = context.getSharedPreferences("tabslify_app_prefs", Context.MODE_PRIVATE)
     prefs.edit(commit = true) {
         putStringSet("saved_movies_v2", movies.map { m ->
             JSONObject().apply {
