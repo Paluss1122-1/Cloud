@@ -18,7 +18,7 @@ import com.tabslify.core.functions.ERRORINSERTDATA
 import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.prvt
-import com.tabslify.privatecloudapp.isOnline
+import com.tabslify.privatetabslifyapp.isOnline
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -99,7 +99,7 @@ abstract class PasswordDatabase : RoomDatabase() {
                 Room.databaseBuilder(
                     context.applicationContext,
                     PasswordDatabase::class.java,
-                    "cloud_passwords_v1.db"
+                    "tabslify_passwords_v1.db"
                 )
                     .fallbackToDestructiveMigration(true)
                     .build()
