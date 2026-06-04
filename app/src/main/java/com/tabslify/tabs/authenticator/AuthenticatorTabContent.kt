@@ -71,7 +71,7 @@ private enum class AuthTab(val label: String, val icon: String) {
 }
 
 object BiometricKeyHelper {
-    private const val KEY_NAME = "cloud_auth_key"
+    private const val KEY_NAME = "tabslify_auth_key" // er soll den "tabslify_auth_key" löschen und jz immer "tabslify_auth_key" nutzen
 
     fun getOrCreateKey(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").also { it.load(null) }
@@ -472,7 +472,7 @@ private fun showBiometricPrompt(
     )
 
     val promptInfo = BiometricPrompt.PromptInfo.Builder()
-        .setTitle("Cloud Passwort-Manager")
+        .setTitle("Tabslify Passwort-Manager")
         .setSubtitle("Authentifizieren um fortzufahren")
         .setAllowedAuthenticators(Authenticators.BIOMETRIC_STRONG)
         .setNegativeButtonText("Abbrechen")
