@@ -1,5 +1,6 @@
 package com.tabslify.tabs.school
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -51,6 +52,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -63,6 +65,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -99,6 +102,7 @@ import com.tabslify.quiethoursnotificationhelper.sendGeminiRequest
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
+import com.tabslify.core.ui.AlertDialogTabslify
 import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -119,6 +123,7 @@ data class AiSummaryState(
     val analysisStarted: Boolean = false
 )
 
+@SuppressLint("AutoboxingStateCreation")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MaterialienScreen(
@@ -156,6 +161,7 @@ fun MaterialienScreen(
                 ?: emptyList()
         )
     }
+    var showAiSummaryToRefresh by remember { mutableStateOf(false) }
 
     var recentMaterialPreviews by remember { mutableStateOf<List<RecentMaterial>>(emptyList()) }
 
@@ -289,6 +295,124 @@ fun MaterialienScreen(
                 }
             }
         }
+    }
+
+    suspend fun runOcrAndSummary(
+        fileKey: String,
+        subject: String,
+        fileName: String,
+        forceRefresh: Boolean = false
+    ) {
+        val cacheKeyBase = "cache_${subject}_${fileName}"
+
+        aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(loading = true, analysisStarted = true))
+
+        if (!forceRefresh) {
+            val cachedOcr = prefs.getString("${cacheKeyBase}_ocr", null)
+            val cachedSummary = prefs.getString("${cacheKeyBase}_summary", null)
+
+            if (cachedOcr != null && cachedSummary != null) {
+                aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(summary = cachedSummary, loading = false, analysisStarted = true))
+                return
+            }
+        }
+
+        try {
+            val localUri = resolveFileUrl(context, subject, fileName)
+                ?: throw Exception("Datei nicht erreichbar")
+
+            val imgBytes = withContext(Dispatchers.IO) {
+                if (localUri.startsWith("file:")) {
+                    java.io.File(java.net.URI(localUri)).readBytes()
+                } else {
+                    java.net.URL(localUri).readBytes()
+                }
+            }
+
+            val base64 = android.util.Base64.encodeToString(
+                imgBytes,
+                android.util.Base64.NO_WRAP
+            )
+
+            val rawText = sendGeminiRequest(
+                history = emptyList(),
+                userMessage = """
+                    Du bist ein hochpräzises System zur strukturierten Inhaltsextraktion für nachfolgende LLM-Verarbeitung. Analysiere das bereitgestellte Bild und generiere eine semantisch perfekt aufbereitete Textrekonstruktion. Halte dich strikt an diese Struktur:
+
+                    # [TITEL/ÜBERSCHRIFT DES MATERIALS]
+
+                    ## 1. TEXTINHALT (WORTLAUT & REKONSTRUKTION)
+                    - Extrahiere JEDEN sichtbaren Text vollständig, buchstabengetreu und in der logischen Lesereihenfolge.
+                    - Nutze sauberes Markdown für Formatierungen (#, ##, **, *).
+                    - Wichtig: Markiere visuelle Hervorhebungen (Textmarker, Unterstreichungen, auffällige Farben) explizit mit einem Inline-Tag, z. B. [HERVORHEBUNG: text].
+
+                    ## 2. STRUKTURELLE & VISUELLE ELEMENTE
+                    - Beschreibe Diagramme, Tabellen, Infografiken, Formeln oder Bilder präzise im Kontext des Materials.
+                    - Erkläre die räumliche Zuordnung (z.B. "In der Infografik rechts neben dem Text wird X dargestellt...").
+                    - Wandle Tabellen in valide Markdown-Tabellen um.
+
+                    ## 3. METADATEN & BEZÜGE
+                    - Notiere Fußnoten, Randnotizen oder Quellenangaben.
+                    - Falls vorhanden: Benenne die logische Beziehung zwischen Textabschnitten und Grafiken.
+
+                    Ziel: Ein kompromisslos strukturierter, semantisch reicher Text, den ein anderes KI-Modell ohne das Originalbild fehlerfrei interpretieren und weiterverarbeiten kann.
+                """.trimIndent(),
+                pic = base64,
+                model = MAX_GEMINI
+            ) ?: throw Exception("OCR fehlgeschlagen")
+
+            val summary = sendGeminiRequest(
+                history = emptyList(),
+                userMessage = """
+                    Du bist ein erfahrener, empathischer Pädagoge und Experte für Didaktik. Deine Aufgabe ist es, den folgenden extrahierten Inhalt eines Lernmaterials so aufzubereiten, dass Schüler oder Studierende das Thema intuitiv, tiefgründig und nachhaltig verstehen. 
+
+                    HIER IST DAS ROHMATERIAL:
+                    $rawText
+
+                    BITTE ERSTELLE EINE DIDAKTISCH WERTVOLLE ERKLÄRUNG NACH FOLGENDEM AUFBAU:
+
+                    1. **Der Anker (Einstieg & Relevanz)**
+                       - Starte mit einer einfachen, greifbaren Analogie oder einem praktischen Alltagsbeispiel, das das Kernthema sofort greifbar macht. Warum ist dieses Thema überhaupt spannend oder wichtig?
+
+                    2. **Die Kernbotschaft (Der rote Faden)**
+                       - Formuliere das Hauptziel oder die Kernaussage des Materials in einem einzigen, klaren Satz.
+
+                    3. **Schritt-für-Schritt-Erklärung (Didaktischer Aufbau)**
+                       - Gliedere das Thema in 2 bis 4 logische Abschnitte (gehe dabei vom Einfachen zum Komplexen über).
+                       - Verwende sprechende, motivierende Überschriften.
+                       - *Wichtig:* Erkläre jeden Fachbegriff (Fachtermini) sofort bei der ersten Nennung auf einfache und anschauliche Weise.
+                       - Falls Grafiken oder Diagramme im Quelltext beschrieben wurden: Erkläre deren didaktische Aussage in eigenen Worten.
+
+                    4. **Spickzettel & Aha-Momente (Kritische Punkte)**
+                       - Fasse die 3 bis 5 absolut kritischen Erkenntnisse prägnant zusammen.
+                       - **STYLING-VORGABE:** Nutze für besonders einprägsame Sachen, typische Klausur-Stolperfallen, Definitionen oder extrem wichtige Merksätze sehr gerne Markdown-Callouts wie `> [!warning]` oder `[!warning] Text` (bzw. passende Varianten wie `[!info]`), damit diese optisch sofort aus dem Text hervorstechen.
+
+                    5. **Selbstcheck (Aktivierung des Gelernten)**
+                       - Beende den Text mit 2 kurzen, reflexiven Fragen (ohne direkt die Antwort zu verraten), mit denen die Lernenden selbst prüfen können, ob sie den Kern der Sache verstanden haben.
+
+                    Tonfall: Motivierend, klar, verständlich, auf Augenhöhe, fehlerfrei auf Deutsch. Vermeide verschachtelte Sätze und kognitive Überlastung.
+                """.trimIndent()
+            ) ?: throw Exception("Summary fehlgeschlagen")
+
+            aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(summary = summary, loading = false, analysisStarted = true))
+
+            prefs.edit {
+                putString("${cacheKeyBase}_ocr", rawText)
+                putString("${cacheKeyBase}_summary", summary)
+            }
+        } catch (e: Exception) {
+            errorMsg = e.localizedMessage
+            aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(summary = null, loading = false, analysisStarted = true))
+        }
+    }
+
+    if (showAiSummaryToRefresh) {
+        AlertDialogTabslify(
+            onConfirm = { scope.launch { runOcrAndSummary("${selectedSubject}_${selectedFile}", selectedSubject!!, selectedFile!!, forceRefresh = true) }},
+            onDismiss = {showAiSummaryToRefresh = false},
+            title = "Möchtest du wirklich deine AI Zusammenfassung neu generieren?",
+            text = "Die jetzige geht dabei verloren"
+        )
     }
 
     if (showSubjectDialog) {
@@ -658,115 +782,6 @@ fun MaterialienScreen(
             }
         }
     }
-
-    suspend fun runOcrAndSummary(
-        fileKey: String,
-        subject: String,
-        fileName: String,
-        forceRefresh: Boolean = false
-    ) {
-        val cacheKeyBase = "cache_${subject}_${fileName}"
-        
-        aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(loading = true, analysisStarted = true))
-        
-        if (!forceRefresh) {
-            val cachedOcr = prefs.getString("${cacheKeyBase}_ocr", null)
-            val cachedSummary = prefs.getString("${cacheKeyBase}_summary", null)
-
-            if (cachedOcr != null && cachedSummary != null) {
-                aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(summary = cachedSummary, loading = false, analysisStarted = true))
-                return
-            }
-        }
-
-        try {
-            val localUri = resolveFileUrl(context, subject, fileName)
-                ?: throw Exception("Datei nicht erreichbar")
-
-            val imgBytes = withContext(Dispatchers.IO) {
-                if (localUri.startsWith("file:")) {
-                    java.io.File(java.net.URI(localUri)).readBytes()
-                } else {
-                    java.net.URL(localUri).readBytes()
-                }
-            }
-
-            val base64 = android.util.Base64.encodeToString(
-                imgBytes,
-                android.util.Base64.NO_WRAP
-            )
-
-            val rawText = sendGeminiRequest(
-                history = emptyList(),
-                userMessage = """
-                    Du bist ein hochpräzises System zur strukturierten Inhaltsextraktion für nachfolgende LLM-Verarbeitung. Analysiere das bereitgestellte Bild und generiere eine semantisch perfekt aufbereitete Textrekonstruktion. Halte dich strikt an diese Struktur:
-
-                    # [TITEL/ÜBERSCHRIFT DES MATERIALS]
-
-                    ## 1. TEXTINHALT (WORTLAUT & REKONSTRUKTION)
-                    - Extrahiere JEDEN sichtbaren Text vollständig, buchstabengetreu und in der logischen Lesereihenfolge.
-                    - Nutze sauberes Markdown für Formatierungen (#, ##, **, *).
-                    - Wichtig: Markiere visuelle Hervorhebungen (Textmarker, Unterstreichungen, auffällige Farben) explizit mit einem Inline-Tag, z. B. [HERVORHEBUNG: text].
-
-                    ## 2. STRUKTURELLE & VISUELLE ELEMENTE
-                    - Beschreibe Diagramme, Tabellen, Infografiken, Formeln oder Bilder präzise im Kontext des Materials.
-                    - Erkläre die räumliche Zuordnung (z.B. "In der Infografik rechts neben dem Text wird X dargestellt...").
-                    - Wandle Tabellen in valide Markdown-Tabellen um.
-
-                    ## 3. METADATEN & BEZÜGE
-                    - Notiere Fußnoten, Randnotizen oder Quellenangaben.
-                    - Falls vorhanden: Benenne die logische Beziehung zwischen Textabschnitten und Grafiken.
-
-                    Ziel: Ein kompromisslos strukturierter, semantisch reicher Text, den ein anderes KI-Modell ohne das Originalbild fehlerfrei interpretieren und weiterverarbeiten kann.
-                """.trimIndent(),
-                pic = base64,
-                model = MAX_GEMINI
-            ) ?: throw Exception("OCR fehlgeschlagen")
-
-            val summary = sendGeminiRequest(
-                history = emptyList(),
-                userMessage = """
-                    Du bist ein erfahrener, empathischer Pädagoge und Experte für Didaktik. Deine Aufgabe ist es, den folgenden extrahierten Inhalt eines Lernmaterials so aufzubereiten, dass Schüler oder Studierende das Thema intuitiv, tiefgründig und nachhaltig verstehen. 
-
-                    HIER IST DAS ROHMATERIAL:
-                    $rawText
-
-                    BITTE ERSTELLE EINE DIDAKTISCH WERTVOLLE ERKLÄRUNG NACH FOLGENDEM AUFBAU:
-
-                    1. **Der Anker (Einstieg & Relevanz)**
-                       - Starte mit einer einfachen, greifbaren Analogie oder einem praktischen Alltagsbeispiel, das das Kernthema sofort greifbar macht. Warum ist dieses Thema überhaupt spannend oder wichtig?
-
-                    2. **Die Kernbotschaft (Der rote Faden)**
-                       - Formuliere das Hauptziel oder die Kernaussage des Materials in einem einzigen, klaren Satz.
-
-                    3. **Schritt-für-Schritt-Erklärung (Didaktischer Aufbau)**
-                       - Gliedere das Thema in 2 bis 4 logische Abschnitte (gehe dabei vom Einfachen zum Komplexen über).
-                       - Verwende sprechende, motivierende Überschriften.
-                       - *Wichtig:* Erkläre jeden Fachbegriff (Fachtermini) sofort bei der ersten Nennung auf einfache und anschauliche Weise.
-                       - Falls Grafiken oder Diagramme im Quelltext beschrieben wurden: Erkläre deren didaktische Aussage in eigenen Worten.
-
-                    4. **Spickzettel & Aha-Momente (Kritische Punkte)**
-                       - Fasse die 3 bis 5 absolut kritischen Erkenntnisse prägnant zusammen.
-                       - **STYLING-VORGABE:** Nutze für besonders einprägsame Sachen, typische Klausur-Stolperfallen, Definitionen oder extrem wichtige Merksätze sehr gerne Markdown-Callouts wie `> [!warning]` oder `[!warning] Text` (bzw. passende Varianten wie `[!info]`), damit diese optisch sofort aus dem Text hervorstechen.
-
-                    5. **Selbstcheck (Aktivierung des Gelernten)**
-                       - Beende den Text mit 2 kurzen, reflexiven Fragen (ohne direkt die Antwort zu verraten), mit denen die Lernenden selbst prüfen können, ob sie den Kern der Sache verstanden haben.
-
-                    Tonfall: Motivierend, klar, verständlich, auf Augenhöhe, fehlerfrei auf Deutsch. Vermeide verschachtelte Sätze und kognitive Überlastung.
-                """.trimIndent()
-            ) ?: throw Exception("Summary fehlgeschlagen")
-
-            aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(summary = summary, loading = false, analysisStarted = true))
-
-            prefs.edit {
-                putString("${cacheKeyBase}_ocr", rawText)
-                putString("${cacheKeyBase}_summary", summary)
-            }
-        } catch (e: Exception) {
-            errorMsg = e.localizedMessage
-            aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(summary = null, loading = false, analysisStarted = true))
-        }
-    }
     
     if (selectedFile != null && selectedSubject != null) {
         val fileKey = remember(selectedFile, selectedSubject) {
@@ -780,8 +795,8 @@ fun MaterialienScreen(
         val summaryLoading = currentState.loading
         val analysisStarted = currentState.analysisStarted
 
-        var scale by remember { mutableStateOf(1f) }
-        var offsetX by remember { mutableStateOf(0f) }
+        var scale by remember { mutableFloatStateOf(1f) }
+        var offsetX by remember { mutableFloatStateOf(0f) }
         var offsetY by remember { mutableStateOf(0f) }
 
         val transformableState = rememberTransformableState { _, zoomChange, panChange, _ ->
@@ -1114,18 +1129,20 @@ fun MaterialienScreen(
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(AccentViolet.copy(alpha = 0.15f))
                                 .clickable {
-                                    scope.launch { 
-                                        val fileKey = "${selectedSubject}_${selectedFile}"
-                                        runOcrAndSummary(fileKey, selectedSubject!!, selectedFile!!, forceRefresh = true) 
-                                    }
+                                    showAiSummaryToRefresh = true
                                 }
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Text(
                                 "Aktualisieren",
                                 color = AccentViolet,
-                                fontSize = 13.sp,
+                                fontSize = 7.sp,
                                 fontWeight = FontWeight.SemiBold
+                            )
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "Reanalyze Picture",
+                                tint = Color.White
                             )
                         }
                     }
