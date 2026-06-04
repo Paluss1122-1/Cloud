@@ -1,4 +1,4 @@
-package com.tabslify.privatecloudapp
+package com.tabslify.privatetabslifyapp
 
 import android.Manifest
 import android.content.Context
@@ -63,7 +63,7 @@ import kotlin.time.Duration.Companion.seconds
 
 fun fileExistsInDCIM(fileName: String): File? {
     val dcimDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
-    val appFolder = File(dcimDir, "Cloud")
+    val appFolder = File(dcimDir, "Tabslify")
     val file = File(appFolder, fileName)
     return if (file.exists()) file else null
 }
@@ -75,7 +75,7 @@ fun fileExistsLocallyWithSameSize(fileName: String, remoteSize: Long): Boolean {
     if (downloadFile.exists() && downloadFile.length() == remoteSize) return true
 
     val dcimDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
-    val dcimFile = File(dcimDir, "Cloud/$fileName")
+    val dcimFile = File(dcimDir, "Tabslify/$fileName")
     return dcimFile.exists() && dcimFile.length() == remoteSize
 }
 
@@ -284,7 +284,7 @@ fun getLocalFileWithPath(fileName: String, remoteSize: Long): File? {
     if (downloadFile.exists() && downloadFile.length() == remoteSize) return downloadFile
 
     val dcimDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
-    val dcimFile = File(dcimDir, "Cloud/$fileName")
+    val dcimFile = File(dcimDir, "Tabslify/$fileName")
     if (dcimFile.exists() && dcimFile.length() == remoteSize) return dcimFile
 
     return null
