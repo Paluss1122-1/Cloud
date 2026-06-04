@@ -15,7 +15,7 @@ val localProps = Properties().apply {
 }
 
 android {
-    namespace = "com.tabslify1"
+    namespace = "com.tabslify"
     compileSdk = 36
 
     defaultConfig {
