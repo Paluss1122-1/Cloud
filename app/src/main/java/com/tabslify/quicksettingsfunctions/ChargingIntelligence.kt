@@ -140,7 +140,7 @@ object ChargeSessionRepository {
             val local = context.getSharedPreferences("charge_sessions", Context.MODE_PRIVATE)
                 .getString("all", null)?.let { json.decodeFromString<List<ChargingSession>>(it) } ?: emptyList()
             if (local.isNotEmpty()) return@withContext local
-            val remote = client.from("Cloud").select().decodeSingle<JsonObject>()
+            val remote = client.from("Tabslify").select().decodeSingle<JsonObject>()
                 .let { it["charging_sessions"]?.jsonPrimitive?.content }
                 ?.let { json.decodeFromString<List<ChargingSession>>(it) }
                 ?: emptyList()
@@ -154,7 +154,7 @@ object ChargeSessionRepository {
                 Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
                 return@runCatching
             }
-            client.from("Cloud").upsert(buildJsonObject {
+            client.from("Tabslify").upsert(buildJsonObject {
                 put("id", 1)
                 put("charging_sessions", json.encodeToString(sessions))
             })
@@ -255,7 +255,7 @@ class ChargingTrackerService : Service() {
     override fun onBind(intent: Intent?) = null
 
     companion object {
-        const val ACTION_ALLOW = "com.cloud.CHARGING_LOG_ALLOW"
+        const val ACTION_ALLOW = "com.tabslify.CHARGING_LOG_ALLOW"
         private const val NOTIF_PERMISSION_ID = 9824
     }
 }
