@@ -1,0 +1,24 @@
+package com.tabslify.core.functions
+
+import com.tabslify.core.objects.Config
+import io.github.jan.supabase.postgrest.from
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class ERRORINSERTDATA(
+    val serviceName: String,
+    val errorMessage: String,
+    val createdAt: String,
+    val severity: String,
+    val id: Int? = null
+)
+
+suspend fun errorInsert(data: ERRORINSERTDATA): Int {
+    if (!Config.realDevice) return 0
+    try {
+        Config.client.from("error_reports").insert(data)
+        return 1
+    } catch (_: Exception) {
+    }
+    return 0
+}

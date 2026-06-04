@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Cloud</string>
+    <string name="app_name">Tabslify</string>
     <string name="shortcut_weather_short">Wetter</string>
     <string name="shortcut_weather_long">Wetter öffnen</string>
     <string name="accessibility_service_desc">AutoKlicker</string>

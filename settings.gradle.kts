@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Cloud"
+rootProject.name = "Tabslify"
 include(":app")
 include(":extern_accessibily")

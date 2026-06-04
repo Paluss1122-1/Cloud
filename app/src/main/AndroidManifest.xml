@@ -69,7 +69,7 @@
         android:required="false" />
 
     <application
-        android:name=".core.activities.Cloud"
+        android:name=".core.activities.Tabslify"
         android:allowBackup="true"
         android:allowClearUserData="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -79,7 +79,7 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@drawable/app_icon_foreground"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Cloud"
+        android:theme="@style/Theme.Tabslify"
         android:usesCleartextTraffic="true"
         android:windowSoftInputMode="adjustResize">
 
@@ -91,7 +91,7 @@
             android:name=".core.activities.MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|smallestScreenSize"
             android:exported="true"
-            android:theme="@style/Theme.Cloud">
+            android:theme="@style/Theme.Tabslify">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -249,8 +249,8 @@
         <activity
             android:name=".inactive.ImageProviderActivity"
             android:exported="true"
-            android:label="Cloud"
-            android:theme="@style/Theme.Cloud">
+            android:label="Tabslify"
+            android:theme="@style/Theme.Tabslify">
             <intent-filter>
                 <action android:name="android.intent.action.GET_CONTENT" />
 
@@ -262,9 +262,9 @@
         </activity>
 
         <service
-            android:name=".tabs.authenticator.CloudAutofillService"
+            android:name=".tabs.authenticator.TabslifyAutofillService"
             android:exported="true"
-            android:label="Cloud Authenticator"
+            android:label="Tabslify Authenticator"
             android:permission="android.permission.BIND_AUTOFILL_SERVICE">
 
             <intent-filter>

@@ -6,11 +6,11 @@ keystore/
 postcommit.py
 AI/
 local.properties
-app/src/main/java/com/cloud/sm.py
+app/src/main/java/com/tabslify/sm.py
 scan_cache.json
 scan_report.json
 project_summary.md
 summarize.py
-app/src/main/java/com/cloud/core/objects/Config.kt
-app/src/main/java/com/cloud/python/get_fav_songs.py
+app/src/main/java/com/tabslify/core/objects/Config.kt
+app/src/main/java/com/tabslify/python/get_fav_songs.py
 .trae/

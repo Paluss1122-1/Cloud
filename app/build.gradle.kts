@@ -15,11 +15,11 @@ val localProps = Properties().apply {
 }
 
 android {
-    namespace = "com.cloud"
+    namespace = "com.tabslify1"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.cloud"
+        applicationId = "com.paluss1122.tabslify"
         minSdk = 35
         targetSdk = 36
         versionCode = 1
