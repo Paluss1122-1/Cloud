@@ -94,12 +94,12 @@ fun loadPodcastsFromMediaStore(context: Context): List<SimplePodcast> {
                 }
 
                 val externalRoot = Environment.getExternalStorageDirectory().path
-                val podcastTabslifyDir = File("$externalRoot/Podcasts/Cloud")
+                val podcastTabslifyDir = File("$externalRoot/Podcasts/Tabslify")
                 if (!podcastTabslifyDir.exists()) podcastTabslifyDir.mkdirs()
 
                 val externalRootLower = externalRoot.lowercase()
-                val isInPodcasts = normalizedPath.contains("/emulated/0/podcasts/cloud/") ||
-                        normalizedPath.contains("$externalRootLower/podcasts/cloud/")
+                val isInPodcasts = normalizedPath.contains("/emulated/0/podcasts/tabslify/") ||
+                        normalizedPath.contains("$externalRootLower/podcasts/tabslify/")
 
                 if (isInPodcasts && (name.endsWith(".mp3") || name.endsWith(".m4a"))) {
                     val displayName = if (!title.isNullOrBlank() && title != "<unknown>") {
