@@ -96,29 +96,29 @@ class MediaPlayerService : MediaSessionService() {
 
         const val CHANNEL_ID = "media_player_channel"
 
-        private const val ACTION_MUSIC_PLAY = "com.cloud.ACTION_MUSIC_PLAY"
-        private const val ACTION_MUSIC_PAUSE = "com.cloud.ACTION_MUSIC_PAUSE"
-        private const val ACTION_MUSIC_NEXT = "com.cloud.ACTION_MUSIC_NEXT"
-        private const val ACTION_MUSIC_PREVIOUS = "com.cloud.ACTION_MUSIC_PREVIOUS"
-        const val ACTION_TOGGLE_REPEAT = "com.cloud.ACTION_TOGGLE_REPEAT"
-        private const val ACTION_TOGGLE_FAVORITE = "com.cloud.ACTION_TOGGLE_FAVORITE"
+        private const val ACTION_MUSIC_PLAY = "com.tabslify.ACTION_MUSIC_PLAY"
+        private const val ACTION_MUSIC_PAUSE = "com.tabslify.ACTION_MUSIC_PAUSE"
+        private const val ACTION_MUSIC_NEXT = "com.tabslify.ACTION_MUSIC_NEXT"
+        private const val ACTION_MUSIC_PREVIOUS = "com.tabslify.ACTION_MUSIC_PREVIOUS"
+        const val ACTION_TOGGLE_REPEAT = "com.tabslify.ACTION_TOGGLE_REPEAT"
+        private const val ACTION_TOGGLE_FAVORITE = "com.tabslify.ACTION_TOGGLE_FAVORITE"
         const val ACTION_TOGGLE_FAVORITES_MODE = "TOGGLE_FAVORITES_MODE"
 
-        private const val ACTION_PODCAST_PLAY = "com.cloud.ACTION_PODCAST_PLAY"
-        const val ACTION_PODCAST_PLAY_SPECIFIED = "com.cloud.ACTION_PODCAST_PLAY_SPECIFIED"
-        private const val ACTION_PODCAST_PAUSE = "com.cloud.ACTION_PODCAST_PAUSE"
-        private const val ACTION_PODCAST_REWIND = "com.cloud.ACTION_PODCAST_REWIND"
-        private const val ACTION_PODCAST_FORWARD = "com.cloud.ACTION_PODCAST_FORWARD"
-        private const val ACTION_SELECT_PODCAST = "com.cloud.ACTION_SELECT_PODCAST"
-        private const val ACTION_DELETE_SINGLE = "com.cloud.ACTION_DELETE_SINGLE_"
+        private const val ACTION_PODCAST_PLAY = "com.tabslify.ACTION_PODCAST_PLAY"
+        const val ACTION_PODCAST_PLAY_SPECIFIED = "com.tabslify.ACTION_PODCAST_PLAY_SPECIFIED"
+        private const val ACTION_PODCAST_PAUSE = "com.tabslify.ACTION_PODCAST_PAUSE"
+        private const val ACTION_PODCAST_REWIND = "com.tabslify.ACTION_PODCAST_REWIND"
+        private const val ACTION_PODCAST_FORWARD = "com.tabslify.ACTION_PODCAST_FORWARD"
+        private const val ACTION_SELECT_PODCAST = "com.tabslify.ACTION_SELECT_PODCAST"
+        private const val ACTION_DELETE_SINGLE = "com.tabslify.ACTION_DELETE_SINGLE_"
         const val ACTION_SHOW_DELETE_COMPLETED = "ACTION_SHOW_DELETE_COMPLETED"
-        const val ACTION_STREAM_REMOTE = "com.cloud.ACTION_STREAM_REMOTE"
+        const val ACTION_STREAM_REMOTE = "com.tabslify.ACTION_STREAM_REMOTE"
         const val EXTRA_STREAM_URL = "extra_stream_url"
         const val ACTION_SET_SPEED = "ACTION_SET_SPEED"
         const val EXTRA_SPEED = "SPEED"
 
-        const val ACTION_SWITCH_TO_MUSIC = "com.cloud.ACTION_SWITCH_TO_MUSIC"
-        const val ACTION_SWITCH_TO_PODCAST = "com.cloud.ACTION_SWITCH_TO_PODCAST"
+        const val ACTION_SWITCH_TO_MUSIC = "com.tabslify.ACTION_SWITCH_TO_MUSIC"
+        const val ACTION_SWITCH_TO_PODCAST = "com.tabslify.ACTION_SWITCH_TO_PODCAST"
 
         private const val ACTION_NOTIFICATION_DELETED = "ACTION_NOTIFICATION_DELETED"
 
@@ -143,10 +143,10 @@ class MediaPlayerService : MediaSessionService() {
         private const val KEY_ACTIVE_PLAYLIST = "active_playlist_id"
 
         private const val KEY_ACTIVE_ALGORITHMIC_PLAYLIST = "active_algorithmic_playlist_id"
-        const val ACTION_ACTIVATE_ALGORITHMIC_PLAYLIST = "com.cloud.ACTION_ACTIVATE_ALG_PLAYLIST"
+        const val ACTION_ACTIVATE_ALGORITHMIC_PLAYLIST = "com.tabslify.ACTION_ACTIVATE_ALG_PLAYLIST"
         const val EXTRA_PLAYLIST_SOURCE_ID = "PLAYLIST_SOURCE_ID"
 
-        const val ACTION_PLAY_ALL_SONGS_AT_INDEX = "com.cloud.ACTION_PLAY_ALL_SONGS_AT_INDEX"
+        const val ACTION_PLAY_ALL_SONGS_AT_INDEX = "com.tabslify.ACTION_PLAY_ALL_SONGS_AT_INDEX"
 
         const val EXTRA_SONG_PATH = "extra_song_path"
 
@@ -301,7 +301,7 @@ class MediaPlayerService : MediaSessionService() {
                     } catch (_: Exception) {
                         data.replace("\\", "/").lowercase()
                     }
-                    val inPodcasts = norm.contains("/podcasts/cloud/")
+                    val inPodcasts = norm.contains("/podcasts/tabslify/")
                     if (inPodcasts && (name.endsWith(".mp3") || name.endsWith(".m4a"))) {
                         val isCompleted =
                             podcastPrefs.getBoolean("podcast_completed_${data.hashCode()}", false)
@@ -553,9 +553,9 @@ class MediaPlayerService : MediaSessionService() {
         super.onCreate()
 
         val externalRoot = Environment.getExternalStorageDirectory().path
-        val podcastTabslifyDir = File("$externalRoot/Podcasts/Cloud")
+        val podcastTabslifyDir = File("$externalRoot/Podcasts/Tabslify")
         if (!podcastTabslifyDir.exists()) podcastTabslifyDir.mkdirs()
-        val musicTabslifyDir = File("$externalRoot/Music/Cloud")
+        val musicTabslifyDir = File("$externalRoot/Music/Tabslify")
         if (!musicTabslifyDir.exists()) musicTabslifyDir.mkdirs()
 
         isRunning = true
@@ -715,7 +715,7 @@ class MediaPlayerService : MediaSessionService() {
                         } catch (_: Exception) {
                             data.replace("\\", "/").lowercase()
                         }
-                        val inPodcasts = norm.contains("/podcasts/cloud/")
+                        val inPodcasts = norm.contains("/podcasts/tabslify/")
                         if (inPodcasts && (name.endsWith(".mp3") || name.endsWith(".m4a"))) {
                             val contentUri = Uri.withAppendedPath(
                                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
@@ -2037,11 +2037,11 @@ class MediaPlayerService : MediaSessionService() {
                     } catch (_: Exception) {
                         data.replace("\\", "/").lowercase()
                     }
-                    val inTabslify = norm.contains("/music/cloud/", ignoreCase = true)
-                    if (inTabslify && !norm.contains("/podcasts/cloud/") &&
-                        !norm.contains("/download/cloud/podcasts/") &&
-                        !norm.contains("/downloads/cloud/podcasts/") &&
-                        !data.contains("/Podcasts/Cloud/", ignoreCase = true)) {
+                    val inTabslify = norm.contains("/music/tabslify/", ignoreCase = true)
+                    if (inTabslify && !norm.contains("/podcasts/tabslify/") &&
+                        !norm.contains("/download/tabslify/podcasts/") &&
+                        !norm.contains("/downloads/tabslify/podcasts/") &&
+                        !data.contains("/Podcasts/Tabslify/", ignoreCase = true)) {
                         val contentUri = Uri.withAppendedPath(
                             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                             id.toString()
@@ -2096,7 +2096,7 @@ class MediaPlayerService : MediaSessionService() {
                     } catch (_: Exception) {
                         data.replace("\\", "/").lowercase()
                     }
-                    val inPodcasts = norm.contains("/podcasts/cloud/")
+                    val inPodcasts = norm.contains("/podcasts/tabslify/")
                     if (inPodcasts && (name.endsWith(".mp3") || name.endsWith(".m4a"))) {
                         val contentUri = Uri.withAppendedPath(
                             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
