@@ -88,11 +88,7 @@ import com.tabslify.tabs.mediaplayer.ListenSession
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.getSessions
 import com.tabslify.tabs.school.Vokabel
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
@@ -140,6 +136,7 @@ import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 private data class Cache(
@@ -272,6 +269,7 @@ private fun launchServer(
     val mutex = getServerMutex(port)
 
     mutex.withLock {
+        var bindRetries = 0
         while (isActive) {
             var server: ServerSocket? = null
             try {
@@ -309,10 +307,15 @@ private fun launchServer(
                         break
                     }
                 }
+                bindRetries = 0
             } catch (e: BindException) {
                 // Port still in use, wait longer before retry
-                logError("$errorTag-bind", e)
-                delay(5000)
+                bindRetries++
+                if (bindRetries > 5) {
+                    logError("$errorTag-bind-fatal", Exception("Port $port is permanently in use. Giving up after 5 retries.", e))
+                    break
+                }
+                delay(5000.milliseconds)
             } catch (e: Exception) {
                 logError(errorTag, e)
             } finally {
@@ -321,7 +324,7 @@ private fun launchServer(
                     runCatching { it.close() }
                 }
             }
-            if (isActive) delay(2000)
+            if (isActive) delay(2000.milliseconds)
         }
     }
 }
@@ -440,39 +443,6 @@ suspend fun callNvidiaVisionApi(
     }
 }
 
-private object ConnectionGuard {
-    private var lastFailedAttempt: Long = 0L
-    private var consecutiveFailures: Int = 0
-    private var lastSuccessfulConnection: Long = 0L
-    private var isWifiConnected: Boolean = false
-    private var isAtHomeLocation: Boolean = false
-
-    fun updateWifiStatus(connected: Boolean) {
-        isWifiConnected = connected
-        if (!connected) consecutiveFailures = 0
-    }
-
-    fun updateLocationStatus(atHome: Boolean) {
-        isAtHomeLocation = atHome
-        if (!atHome) consecutiveFailures = 0
-    }
-
-    fun canAttemptConnection(): Boolean {
-        return !(!isWifiConnected && !isAtHomeLocation)
-    }
-
-    fun recordFailure() {
-        lastFailedAttempt = System.currentTimeMillis()
-        consecutiveFailures++
-    }
-
-    fun recordSuccess() {
-        lastSuccessfulConnection = System.currentTimeMillis()
-        consecutiveFailures = 0
-        lastFailedAttempt = 0L
-    }
-}
-
 @Volatile
 var laptopIp: String = ""
 
@@ -490,16 +460,11 @@ data class AiResponseEntry(
 )
 
 fun startTriggerListenerIfHomeWifi(context: Context) {
-    // Trigger Listener immer starten
     startTriggerListener(context)
     registerWifiReconnectReceiver(context)
     
-    // Location Status prüfen (aber Listener wird nicht blockiert wenn es fehlschlägt)
-    checkIfNearLocation(context) { atHome ->
-        ConnectionGuard.updateLocationStatus(atHome)
-    }
+    checkIfNearLocation(context) { } // Async check trigger
     
-    // IP vom Laptop holen
     syncScope.launch {
         val ip = fetchIpFromSupabase()
         if (!ip.isNullOrEmpty()) laptopIp = ip
@@ -517,7 +482,6 @@ fun registerWifiReconnectReceiver(context: Context) {
 
     val callback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
-            ConnectionGuard.updateWifiStatus(true)
             fun getLocalIp(): String {
                 return try {
                     NetworkInterface.getNetworkInterfaces()
@@ -542,18 +506,13 @@ fun registerWifiReconnectReceiver(context: Context) {
             if (now - lastTriggerTime < MIN_TRIGGER_INTERVAL) return
             lastTriggerTime = now
             checkIfNearLocation(context) { atHome ->
-                ConnectionGuard.updateLocationStatus(atHome)
-                if (!atHome) {
-                    return@checkIfNearLocation
-                }
-                if (ConnectionGuard.canAttemptConnection() && !isLaptopConnected) {
+                if (atHome && !isLaptopConnected) {
                     syncTodosWithLaptop(context)
                 }
             }
         }
 
         override fun onLost(network: Network) {
-            ConnectionGuard.updateWifiStatus(false)
             syncInProgress.set(false)
             pendingSyncJob?.cancel()
             if (isLaptopConnected) {
@@ -561,7 +520,7 @@ fun registerWifiReconnectReceiver(context: Context) {
             }
             // Nach Connection Verlust: Trigger Listener wieder starten
             syncScope.launch {
-                delay(2000)
+                delay(2000.milliseconds)
                 if (triggerJob?.isActive != true) {
                     startTriggerListener(context)
                 }
@@ -614,7 +573,6 @@ fun startTriggerListener(context: Context) {
             when {
                 command.startsWith("CONNECT") -> {
                     laptopIp = command.substringAfter("CONNECT:", "")
-                    ConnectionGuard.recordSuccess()
                     showSimpleNotificationExtern("📡 CONNECT", "Starte Sync...", 10.seconds, context)
 
                     val syncWl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:SyncWakeLock")
@@ -652,7 +610,7 @@ fun restoreSyncIfNeeded(context: Context) {
         startSmsListener(context)
         context.registerReceiver(akkuReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         syncScope.launch {
-            delay(5_000)
+            delay(5_000.milliseconds)
             syncTodosWithLaptop(context)
         }
         showSimpleNotificationExtern(
@@ -740,7 +698,7 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
             if (localip != null) insertMobileIpToSupabase(localip)
 
             if (!connected) {
-                val fetched = withTimeoutOrNull(35_000L) {
+                val fetched = withTimeoutOrNull(35_000L.milliseconds) {
                     fetchIpFromSupabase()
                 }
                 if (fetched.isNullOrEmpty()) {
@@ -778,7 +736,6 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
 
             when (response) {
                 "OK" -> {
-                    ConnectionGuard.recordSuccess()
                     isLaptopConnected = true
                     
                     // Save last sync time
@@ -813,15 +770,12 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                 else -> throw IOException("Unbekannte Antwort: $response")
             }
         } catch (e: ConnectException) {
-            ConnectionGuard.recordFailure()
             showSimpleNotificationExtern("Error", "${e.message}", 10.seconds, context)
         } catch (e: SocketTimeoutException) {
-            ConnectionGuard.recordFailure()
             showSimpleNotificationExtern("Error", "${e.message}", 10.seconds, context)
         } catch (e: Exception) {
             val msg = e.message
             if (msg == null || !msg.contains("Connection reset")) {
-                ConnectionGuard.recordFailure()
                 logError("syncTodosWithLaptop", e)
                 withContext(Dispatchers.Main) {
                     showSimpleNotificationExtern("❌ Sync Fehler", msg ?: "Unbekannter Fehler", 10.seconds, context)
@@ -1343,7 +1297,7 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
             val isPlaying = prefs.getBoolean("is_playing", false)
             val mode = prefs.getString("current_mode", "music") ?: "music"
             if (isPlaying) {
-                sendIntent(if (mode == "music") "com.cloud.ACTION_MUSIC_PAUSE" else "com.cloud.ACTION_PODCAST_PAUSE")
+                sendIntent(if (mode == "music") "com.tabslify.ACTION_MUSIC_PAUSE" else "com.tabslify.ACTION_PODCAST_PAUSE")
             } else {
                 if (mode == "music") MediaPlayerService.sendMusicPlayAction(context)
                 else MediaPlayerService.sendPodcastPlayAction(context)
@@ -1351,17 +1305,17 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
         }
 
         "play" -> MediaPlayerService.sendMusicPlayAction(context)
-        "pause" -> sendIntent("com.cloud.ACTION_MUSIC_PAUSE")
-        "next" -> sendIntent("com.cloud.ACTION_MUSIC_NEXT")
-        "previous" -> sendIntent("com.cloud.ACTION_MUSIC_PREVIOUS")
+        "pause" -> sendIntent("com.tabslify.ACTION_MUSIC_PAUSE")
+        "next" -> sendIntent("com.tabslify.ACTION_MUSIC_NEXT")
+        "previous" -> sendIntent("com.tabslify.ACTION_MUSIC_PREVIOUS")
         "toggleRepeat" -> sendIntent(ACTION_TOGGLE_REPEAT)
-        "toggleFavorite" -> sendIntent("com.cloud.ACTION_TOGGLE_FAVORITE")
+        "toggleFavorite" -> sendIntent("com.tabslify.ACTION_TOGGLE_FAVORITE")
 
         "activatePlaylist" -> {
             val playlistId = json.optString("playlistId", "")
             val songIndex = json.optInt("index", 0)
             if (playlistId.isNotEmpty()) {
-                sendIntent("com.cloud.ACTION_ACTIVATE_PLAYLIST") {
+                sendIntent("com.tabslify.ACTION_ACTIVATE_PLAYLIST") {
                     putExtra("PLAYLIST_ID", playlistId)
                     putExtra(MediaPlayerService.EXTRA_SONG_INDEX, songIndex)
                 }
@@ -1377,7 +1331,7 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
         }
 
         "seek" -> {
-            sendIntent("com.cloud.ACTION_SEEK") {
+            sendIntent("com.tabslify.ACTION_SEEK") {
                 putExtra("SEEK_POSITION_MS", json.optLong("positionMs", 0L))
             }
         }
@@ -1574,7 +1528,7 @@ private fun buildPlaylistsJson(context: Context): String {
             while (cursor.moveToNext()) {
                 val data = cursor.getString(dataCol) ?: continue
                 val norm = data.lowercase()
-                val inTabslify = norm.contains("/music/cloud/", ignoreCase = true)
+                val inTabslify = norm.contains("/music/tabslify/", ignoreCase = true)
                 if (inTabslify && !norm.contains("/podcast")) {
                     val name = cursor.getString(nameCol) ?: continue
                     val title = cursor.getString(titleCol)
@@ -1628,6 +1582,7 @@ fun pushMediaStateToLaptop(context: Context) {
     }
 }
 
+@SuppressLint("MissingPermission")
 fun checkIfNearLocation(
     context: Context,
     targetLat: Double = Config.LAT,
@@ -1638,59 +1593,20 @@ fun checkIfNearLocation(
     if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
         != PackageManager.PERMISSION_GRANTED
     ) {
-        // Wenn keine Permission: Default zu zuhause (true)
         callback(true)
         return
     }
 
     val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-    val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
-        .setMinUpdateIntervalMillis(500L)
-        .setMaxUpdateDelayMillis(2000L)
-        .setMaxUpdates(1)
-        .build()
-
-    var callbackCalled = false
-    
-    val locationCallback = object : LocationCallback() {
-        override fun onLocationResult(locationResult: LocationResult) {
-            if (callbackCalled) return
-            callbackCalled = true
-            
-            val location = locationResult.lastLocation
+    fusedLocationClient.lastLocation
+        .addOnSuccessListener { location ->
             if (location != null) {
-                callback(
-                    distanceBetween(
-                        location.latitude,
-                        location.longitude,
-                        targetLat,
-                        targetLon
-                    ) <= radiusMeters
-                )
+                callback(distanceBetween(location.latitude, location.longitude, targetLat, targetLon) <= radiusMeters)
             } else {
-                // Wenn Location null: Default zu zuhause (true)
                 callback(true)
             }
-            fusedLocationClient.removeLocationUpdates(this)
         }
-    }
-
-    syncScope.launch(Dispatchers.Main) {
-        delay(8000)
-        if (!callbackCalled) {
-            callbackCalled = true
-            // Timeout: Default zu zuhause (true)
-            callback(true)
-            runCatching { fusedLocationClient.removeLocationUpdates(locationCallback) }
-        }
-    }
-
-    @SuppressLint("MissingPermission")
-    fusedLocationClient.requestLocationUpdates(
-        locationRequest,
-        locationCallback,
-        context.mainLooper
-    )
+        .addOnFailureListener { callback(true) }
 }
 
 fun distanceBetween(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
@@ -1781,6 +1697,7 @@ fun startClipboardListener(context: Context) {
 
 fun startMailNotifyListener(context: Context) {
     mailNotifyJob?.cancel()
+    return
     mailNotifyJob =
         launchServer(syncScope, Config.MAIL_NOTIFY_PORT, "startMailNotifyListener") { client ->
             val text = client.inputStream.readBytes().toString(Charsets.UTF_8)
@@ -1836,10 +1753,10 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
         "play_music" -> {
             val intent = Intent(context, MediaPlayerService::class.java).apply {
                 this.action = when (args.optString("action", "play")) {
-                    "pause" -> "com.cloud.ACTION_MUSIC_PAUSE"
-                    "next" -> "com.cloud.ACTION_MUSIC_NEXT"
-                    "previous" -> "com.cloud.ACTION_MUSIC_PREVIOUS"
-                    else -> "com.cloud.ACTION_MUSIC_PLAY"
+                    "pause" -> "com.tabslify.ACTION_MUSIC_PAUSE"
+                    "next" -> "com.tabslify.ACTION_MUSIC_NEXT"
+                    "previous" -> "com.tabslify.ACTION_MUSIC_PREVIOUS"
+                    else -> "com.tabslify.ACTION_MUSIC_PLAY"
                 }
             }
             context.startService(intent)
@@ -2180,7 +2097,7 @@ private suspend fun fetchIpFromSupabase(mobile: Boolean = false): String? = with
             connection?.disconnect()
         }
 
-        if (attempt < 2) delay(1000L * (attempt + 1))
+        if (attempt < 2) delay((1000L * (attempt + 1)).milliseconds)
     }
     null
 }
