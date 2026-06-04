@@ -44,8 +44,8 @@ class ChatService : Service() {
 
     companion object {
         const val CHANNEL_ID = "chat_service_channel"
-        private const val ACTION_REPLY = "com.cloud.ACTION_CHAT_REPLY"
-        private const val ACTION_SHOW_HISTORY = "com.cloud.ACTION_SHOW_HISTORY"
+        private const val ACTION_REPLY = "com.tabslify.ACTION_CHAT_REPLY"
+        private const val ACTION_SHOW_HISTORY = "com.tabslify.ACTION_SHOW_HISTORY"
         private const val KEY_REPLY_TEXT = "key_reply_text"
         private const val KEY_NOTIFICATION_ID = "key_notification_id"
 
