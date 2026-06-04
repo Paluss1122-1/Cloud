@@ -153,6 +153,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class QuietHoursNotificationService : Service() {
@@ -553,6 +554,9 @@ class QuietHoursNotificationService : Service() {
 
                 SCHEDULE_DAILY_SUMMARY_ALARM -> {
                     scheduleDailySummaryAlarm()
+                    if (prvt()) {
+                        checkPermissionsForPrvt()
+                    }
                     START_NOT_STICKY
                 }
 
@@ -688,7 +692,7 @@ class QuietHoursNotificationService : Service() {
                 ACTION_DAILY_MUSIC_SUMMARY -> {
                     appScope.launch {
                         try {
-                            kotlinx.coroutines.delay(500)
+                            kotlinx.coroutines.delay(500.milliseconds)
                             MediaAnalyticsManager.init(this@QuietHoursNotificationService)
                             val lastAiTimestamp =
                                 loadTodayOrYesterdayEntry(this@QuietHoursNotificationService)?.timestamp
@@ -1391,6 +1395,34 @@ class QuietHoursNotificationService : Service() {
         } catch (e: Exception) {
             Log.e("QuietHoursService", "Error checking WiFi connectivity", e)
             false
+        }
+    }
+
+    private fun checkPermissionsForPrvt() {
+        try {
+            val dpm = getSystemService(DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+            val adminComponent = android.content.ComponentName(this, "com.tabslify.core.activities.MyDeviceAdminReceiver")
+            if (!dpm.isAdminActive(adminComponent)) {
+                val intent = Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                    putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
+                    putExtra(
+                        android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                        "Ermöglicht Sicherheitsfunktionen."
+                    )
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(intent)
+            }
+
+            val listeners = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+            if (listeners == null || !listeners.contains(packageName)) {
+                val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(intent)
+            }
+        } catch (e: Exception) {
+            reportServiceError("checkPermissionsForPrvt", e)
         }
     }
 
