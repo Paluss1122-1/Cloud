@@ -1,4 +1,4 @@
-# Cloud (Android App)
+# Tabslify (Android App)
 
 > [!IMPORTANT]
 > Public Version almost finished...
@@ -6,7 +6,7 @@
 > *5:04 AM · 6/01/2026*
 
 > [!TIP]
-> Cloud is compatible with Samsung OneUI 8.5  
+> Tabslify is compatible with Samsung OneUI 8.5  
 > <sub><sub>9:11 PM · 5/19/2026</sub></sub>
 
 This project is a powerful, multi-functional Android application with **ONE** goal: **Replacing** and **improving** third-party apps with a **single** app — **no tracking** (optional tracking for the Music Player for AI analysis, disabled by default), **optional server binding**, and **enhanced privacy**!
