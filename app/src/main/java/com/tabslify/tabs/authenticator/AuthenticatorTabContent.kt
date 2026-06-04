@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
@@ -101,7 +102,7 @@ object BiometricKeyHelper {
 
 
 @Composable
-fun AuthenticatorTab() {
+fun AuthenticatorTab(paddingButtom: Dp) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -209,7 +210,8 @@ fun AuthenticatorTab() {
                 AuthenticatedContent(
                     selectedTab = selectedTab,
                     onTabSelected = { selectedTab = it },
-                    context = context
+                    context = context,
+                    paddingButtom
                 )
             }
 
@@ -233,7 +235,8 @@ fun AuthenticatorTab() {
 private fun AuthenticatedContent(
     selectedTab: AuthTab,
     onTabSelected: (AuthTab) -> Unit,
-    context: Context
+    context: Context,
+    paddingButtom: Dp
 ) {
     val passwordDb = remember { PasswordDatabase.getDatabase(context) }
     val twoFaDb = remember { TwoFADatabase.getDatabase(context) }
@@ -248,6 +251,7 @@ private fun AuthenticatedContent(
             ) {
                 AuthTab.entries.forEach { tab ->
                     NavigationBarItem(
+                        modifier = Modifier.padding(bottom = paddingButtom),
                         selected = selectedTab == tab,
                         onClick = { onTabSelected(tab) },
                         icon = {

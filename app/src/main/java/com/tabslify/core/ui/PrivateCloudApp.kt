@@ -555,7 +555,7 @@ fun PrivateCloudApp(
                 Box(
                     modifier = Modifier
                         .padding(
-                            if (selectedMenuItem != MenuItem.Vocabs && selectedMenuItem != MenuItem.MEDIAPLAYERTAB) paddingValues else PaddingValues(
+                            if (selectedMenuItem != MenuItem.Vocabs && selectedMenuItem != MenuItem.MEDIAPLAYERTAB && selectedMenuItem != MenuItem.AUTHENTICATOR) paddingValues else PaddingValues(
                                 0.dp
                             )
                         )
@@ -574,6 +574,8 @@ fun PrivateCloudApp(
                         MenuItem.Vocabs -> VocabTab(paddingValues)
 
                         MenuItem.MEDIAPLAYERTAB -> MediaTab(onBack = { onMenuClick?.invoke() })
+
+                        MenuItem.AUTHENTICATOR -> AuthenticatorTab(paddingValues.calculateBottomPadding())
                         else -> selectedMenuItem.content(setGesturesEnabled)
                     }
                 }
