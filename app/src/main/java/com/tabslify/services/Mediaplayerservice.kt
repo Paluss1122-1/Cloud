@@ -660,7 +660,6 @@ class MediaPlayerService : MediaSessionService() {
 
             ACTION_MUSIC_PLAY -> {
                 ensureMusicMode()
-                deactivatePlaylist()
                 playMusic()
             }
 
