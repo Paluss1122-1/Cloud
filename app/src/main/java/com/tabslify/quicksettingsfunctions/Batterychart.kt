@@ -144,7 +144,7 @@ object BatteryDataRepository {
                 Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
                 return@runCatching
             }
-            client.from("Cloud").upsert(buildJsonObject {
+            client.from("Tabslify").upsert(buildJsonObject {
                 put("id", 1)
                 put("battery_samples", json.encodeToString(samples))
             })
@@ -158,7 +158,7 @@ object BatteryDataRepository {
                     Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
                     return@withContext emptyList()
                 }
-                val row = client.from("Cloud").select().decodeSingle<JsonObject>()
+                val row = client.from("Tabslify").select().decodeSingle<JsonObject>()
                 val str =
                     row["battery_samples"]?.jsonPrimitive?.content ?: return@withContext emptyList()
                 json.decodeFromString<List<BatterySample>>(str)
