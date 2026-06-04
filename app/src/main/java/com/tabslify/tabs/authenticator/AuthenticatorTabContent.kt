@@ -62,6 +62,7 @@ import java.time.Instant
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
+import kotlin.time.Duration.Companion.milliseconds
 
 private enum class AuthTab(val label: String, val icon: String) {
     PASSWORDS("Passwörter", "🔑"),
@@ -172,7 +173,7 @@ fun AuthenticatorTab(paddingButtom: Dp) {
 
     LaunchedEffect(shouldShowPrompt) {
         if (shouldShowPrompt && lockEnabled && !isAuthenticated) {
-            delay(100)
+            delay(100.milliseconds)
             showBiometricPrompt(
                 activity = activity,
                 onSuccess = { _ ->
