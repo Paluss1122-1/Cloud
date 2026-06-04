@@ -1,7 +1,7 @@
 import subprocess
 import os
 
-project_path = r"C:\Users\pauls\AndroidStudioProjects\Cloud"
+project_path = r"C:\Users\Paul\AndroidStudioProjects\Tabslify1"
 gradle_cmd = os.path.join(project_path, "gradlew.bat")
 
 # Use Android Studio's bundled JDK
