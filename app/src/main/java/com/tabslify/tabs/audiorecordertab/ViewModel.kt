@@ -68,7 +68,7 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
         }
     }
 
-    fun handleButtonClick(scope: CoroutineScope) {
+    fun handleButtonClick(scope: CoroutineScope, isMediaRecorderMode: Boolean) {
         if (isRecording) {
             stopAudioService(getApplication<Application>().applicationContext)
             isRecording = false
@@ -78,7 +78,7 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
             }
         } else {
             val file = createAudioFile(getApplication<Application>().applicationContext)
-            startAudioService(getApplication<Application>().applicationContext, file.absolutePath)
+            startAudioService(getApplication<Application>().applicationContext, file.absolutePath, isMediaRecorderMode)
             isRecording = true
         }
     }
@@ -184,10 +184,11 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
         return File(context.getExternalFilesDir(null), "audio_$timestamp.m4a")
     }
 
-    fun startAudioService(context: Context, path: String) {
+    fun startAudioService(context: Context, path: String, isMediaRecorderMode: Boolean) {
         try {
             val intent = Intent(context, AudioForegroundService::class.java).apply {
                 putExtra("filePath", path)
+                putExtra("isMediaRecorderMode", isMediaRecorderMode)
             }
             ContextCompat.startForegroundService(context, intent)
         } catch (_: Exception) {

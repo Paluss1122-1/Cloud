@@ -78,13 +78,50 @@ fun AudioRecorderContent(
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        var isMediaRecorderMode by remember { mutableStateOf(false) }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF333333), shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Button(
+                onClick = { isMediaRecorderMode = false },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (!isMediaRecorderMode) Color(0xFF4CAF50) else Color.Transparent,
+                    contentColor = Color.White
+                )
+            ) {
+                Text("🎙️ Mikrofon")
+            }
+            Button(
+                onClick = { isMediaRecorderMode = true },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isMediaRecorderMode) Color(0xFF4CAF50) else Color.Transparent,
+                    contentColor = Color.White
+                )
+            ) {
+                Text("🎵 Onscreen")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         Button(
             onClick = {
-                vm.handleButtonClick(scope)
+                vm.handleButtonClick(scope, isMediaRecorderMode)
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(60.dp)
+                .height(60.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (vm.isRecording) Color.Red else Color(0xFF1DB954),
+                contentColor = Color.White
+            )
         ) {
             Text(
                 text = if (vm.isRecording) "⏹️ Aufnahme Beenden" else "⏺️ Aufnahme Starten",

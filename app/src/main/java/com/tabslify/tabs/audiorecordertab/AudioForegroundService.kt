@@ -21,10 +21,11 @@ class AudioForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val filePath = intent?.getStringExtra("filePath") ?: return START_NOT_STICKY
+        val isMediaRecorderMode = intent.getBooleanExtra("isMediaRecorderMode", false)
         try {
             createNotificationChannel()
             startForeground(1, createNotification())
-            startRecording(filePath)
+            startRecording(filePath, isMediaRecorderMode)
         } catch (_: Exception) {
             stopSelf()
         }
@@ -32,10 +33,10 @@ class AudioForegroundService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startRecording(path: String) {
+    private fun startRecording(path: String, isMediaRecorderMode: Boolean) {
         try {
             recorder = (MediaRecorder(this)).apply {
-                setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+                setAudioSource(if (isMediaRecorderMode) MediaRecorder.AudioSource.REMOTE_SUBMIX else MediaRecorder.AudioSource.VOICE_COMMUNICATION)
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
 
