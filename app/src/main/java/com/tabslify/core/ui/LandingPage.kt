@@ -221,7 +221,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
             key(selectedMenuItem, reloadKey) {
                 Box(Modifier.fillMaxSize()) {
                     if (targetMenuItem != null) {
-                        PrivateCloudApp(
+                        PrivateTabslifyApp(
                             storage = storage,
                             startTarget = null,
                             initialMenuItem = targetMenuItem,
@@ -263,7 +263,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                     }
                     .background(APP_COLOR)
             ) {
-                PrivateCloudApp(
+                PrivateTabslifyApp(
                     storage = storage,
                     startTarget = null,
                     initialMenuItem = item,
@@ -404,7 +404,7 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            "Cloud Login",
+            "Tabslify Login",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
@@ -464,7 +464,7 @@ fun LandingPage(
     }
     val allTabsSorted = remember {
         MenuItem.entries.filter {
-            prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD && it != MenuItem.REMOTEDESKTOP)
+            prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_TABSLIFY && it != MenuItem.REMOTEDESKTOP)
         }.sortedBy { it.title }
     }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
@@ -553,7 +553,7 @@ fun LandingPage(
                         }
                     }
                     Text(
-                        text = "CLOUD",
+                        text = "Tabslify",
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.align(Alignment.Center),
