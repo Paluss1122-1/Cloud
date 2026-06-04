@@ -31,7 +31,7 @@ import com.tabslify.core.functions.ERRORINSERTDATA
 import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.objects.Config
 import com.tabslify.core.ui.c
-import com.tabslify.privatecloudapp.isOnline
+import com.tabslify.privatetabslifyapp.isOnline
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
