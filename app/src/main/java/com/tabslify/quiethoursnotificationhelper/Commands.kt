@@ -796,13 +796,6 @@ private fun getAvailableCommands(context: Context): List<Command> {
             windowManager.addView(testOverlayView, params)
         },
         Command(
-            name = "optimize",
-            aliases = listOf("opt", "compress", "komprimir"),
-            description = "Komprimiert alle heruntergeladenen Audio-Dateien (Musik & Podcasts)"
-        ) {
-            optimizeAudioFiles(context)
-        },
-        Command(
             name = "spotify",
             aliases = listOf("sp", "spot"),
             description = "Zeigt Spotify Embed Overlay (Syntax: spotify [track-id])"
@@ -1162,10 +1155,6 @@ fun executeCommand(commandText: String, context: Context) {
                 PodcastPlayerServiceCompat.sendPlayAction(context)
             }
             return
-        }
-
-        "optimize" -> {
-            optimizeAudioFiles(context)
         }
 
         "speed", "spd", "tempo", "geschwindigkeit" -> {
