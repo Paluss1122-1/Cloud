@@ -97,7 +97,7 @@ class TabslifyAutofillService : AutofillService() {
                 val field = Field.Builder()
                     .setValue(AutofillValue.forText(code))
                     .setPresentations(buildPresentations(
-                        PasswordEntry(name = entry.name, username = code, password = ""),
+                        PasswordEntry(name = entry.name, username = code, password = "", totpSecret = null),
                         index, inlineRequest
                     ))
                     .build()
