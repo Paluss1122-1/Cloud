@@ -85,25 +85,17 @@ fun parseBitwardenExport(json: String): Triple<List<PasswordEntry>, List<TwoFAEn
             ?.optJSONObject(0)
             ?.optString("uri", "") ?: ""
 
+        val totp = if (login.isNull("totp")) "" else login.optString("totp", "")
         passwords.add(
             PasswordEntry(
                 name = name,
                 url = url,
                 username = username,
                 password = password,
-                notes = notes.takeIf { it != "null" } ?: ""
+                notes = notes.takeIf { it != "null" } ?: "",
+                totpSecret = if (totp.isNotBlank()) totp.trim().replace(" ", "").uppercase() else null
             )
         )
-
-        val totp = if (login.isNull("totp")) "" else login.optString("totp", "")
-        if (totp.isNotBlank()) {
-            totpEntries.add(
-                TwoFAEntry(
-                    name = name,
-                    secret = totp.trim().replace(" ", "").uppercase()
-                )
-            )
-        }
     }
 
     return Triple(passwords, totpEntries, skipped)
