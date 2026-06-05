@@ -208,12 +208,7 @@ fun AuthenticatorTab(paddingButtom: Dp) {
     Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
         when {
             !lockEnabled || isAuthenticated -> {
-                AuthenticatedContent(
-                    selectedTab = selectedTab,
-                    onTabSelected = { selectedTab = it },
-                    context = context,
-                    paddingButtom
-                )
+                AuthenticatedContent(context = context, paddingButtom = paddingButtom)
             }
 
             showError -> {
@@ -233,76 +228,16 @@ fun AuthenticatorTab(paddingButtom: Dp) {
 
 
 @Composable
-private fun AuthenticatedContent(
-    selectedTab: AuthTab,
-    onTabSelected: (AuthTab) -> Unit,
-    context: Context,
-    paddingButtom: Dp
-) {
+private fun AuthenticatedContent(context: Context, paddingButtom: Dp) {
     val passwordDb = remember { PasswordDatabase.getDatabase(context) }
     val twoFaDb = remember { TwoFADatabase.getDatabase(context) }
+    var showSettings by remember { mutableStateOf(false) }
 
-    @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
-    Scaffold(
-        containerColor = Color.Transparent,
-        bottomBar = {
-            NavigationBar(
-                containerColor = Color(0xFF17171C),
-                tonalElevation = 0.dp
-            ) {
-                AuthTab.entries.forEach { tab ->
-                    NavigationBarItem(
-                        modifier = Modifier.padding(bottom = paddingButtom),
-                        selected = selectedTab == tab,
-                        onClick = { onTabSelected(tab) },
-                        icon = {
-                            Text(tab.icon, style = MaterialTheme.typography.titleMedium)
-                        },
-                        label = {
-                            Text(
-                                tab.label,
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Color.White,
-                            selectedTextColor = Color.White,
-                            indicatorColor = Color(0xFF4A90E2),
-                            unselectedIconColor = Color(0xFF6B6B80),
-                            unselectedTextColor = Color(0xFF6B6B80)
-                        )
-                    )
-                }
-            }
-        }
-    ) { _ ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-        ) {
-            AnimatedVisibility(
-                visible = selectedTab == AuthTab.PASSWORDS,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                PasswordManagerScreen(db = passwordDb, twoFaDb)
-            }
-
-            AnimatedVisibility(
-                visible = selectedTab == AuthTab.TWOFACTOR,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                TwoFAListScreen(db = twoFaDb)
-            }
-
-            AnimatedVisibility(
-                visible = selectedTab == AuthTab.SETTINGS,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                SettingsScreenWithScreenshotProtection()
-            }
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (showSettings) {
+            SettingsScreenWithScreenshotProtection()
+        } else {
+            PasswordManagerScreen(db = passwordDb, twoFaDb = twoFaDb, onSettingsClick = { showSettings = true })
         }
     }
 }
