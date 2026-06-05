@@ -3,6 +3,7 @@
 package com.tabslify.core.ui
 
 import android.Manifest
+import android.R.attr.top
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Activity.RESULT_OK
@@ -199,8 +200,8 @@ enum class MenuItem(
     val icon: String,
     val content: @Composable (setGesturesEnabled: (Boolean) -> Unit) -> Unit
 ) {
-    PRIVATE_TABSLIFY(
-        "Private Tabslify",
+    PRIVATE_CLOUD(
+        "Private Cloud",
         "☁️",
         {}
     ),
@@ -410,7 +411,7 @@ fun PrivateTabslifyApp(
                     )
                 }
 
-                MenuItem.PRIVATE_TABSLIFY -> {
+                MenuItem.PRIVATE_CLOUD -> {
                     MainTabslifyScreen(storage = storage)
                 }
 
@@ -544,9 +545,11 @@ fun PrivateTabslifyApp(
                 Box(
                     modifier = Modifier
                         .padding(
-                            if (selectedMenuItem != MenuItem.Vocabs && selectedMenuItem != MenuItem.MEDIAPLAYERTAB && selectedMenuItem != MenuItem.AUTHENTICATOR) paddingValues else PaddingValues(
-                                0.dp
-                            )
+                            when (selectedMenuItem) {
+                                MenuItem.Vocabs, MenuItem.MEDIAPLAYERTAB -> PaddingValues(0.dp)
+                                MenuItem.AUTHENTICATOR -> PaddingValues(top = paddingValues.calculateTopPadding())
+                                else -> paddingValues
+                            }
                         )
                         .zIndex(1000000f)
                 ) {
@@ -558,7 +561,7 @@ fun PrivateTabslifyApp(
                             onEnterFullScreen = { isFullScreen = true }
                         )
 
-                        MenuItem.PRIVATE_TABSLIFY -> MainTabslifyScreen(storage = storage)
+                        MenuItem.PRIVATE_CLOUD -> MainTabslifyScreen(storage = storage)
 
                         MenuItem.Vocabs -> VocabTab(paddingValues)
 
