@@ -46,14 +46,17 @@ private fun normalizeSecret(secret: String): String =
 @Serializable
 data class TwoFaEntrySupabase(
     val id: String? = null,
-    val account_name: String,
+    val account_name: String? = null,
     val issuer: String? = null,
-    val secret: String
+    val secret: String? = null
 )
 
 fun TwoFaEntrySupabase.toLocal(): TwoFAEntry? {
-    val decryptedSecret = CloudCrypto.decryptFromCloud(this.secret) ?: return null
-    return TwoFAEntry(supabaseId = this.id, name = this.account_name, secret = decryptedSecret)
+    val s = this.secret ?: return null
+    val n = this.account_name ?: "Unknown"
+    val decryptedSecret = CloudCrypto.decryptFromCloud(s) ?: return null
+    if (decryptedSecret.isEmpty()) return null
+    return TwoFAEntry(supabaseId = this.id, name = n, secret = decryptedSecret)
 }
 
 fun TwoFAEntry.toSupabase(): TwoFaEntrySupabase {
