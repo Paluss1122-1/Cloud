@@ -464,7 +464,7 @@ fun LandingPage(
     }
     val allTabsSorted = remember {
         MenuItem.entries.filter {
-            prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_TABSLIFY && it != MenuItem.REMOTEDESKTOP)
+            prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD && it != MenuItem.REMOTEDESKTOP)
         }.sortedBy { it.title }
     }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
