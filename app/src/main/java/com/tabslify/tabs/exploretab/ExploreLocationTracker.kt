@@ -52,8 +52,8 @@ class ExploreGeofenceReceiver : BroadcastReceiver() {
 
 object ExploreLocationTracker {
 
-    const val HOME_LAT = Config.LAT
-    const val HOME_LNG = Config.LON
+    val HOME_LAT = Config.LAT
+    val HOME_LNG = Config.LON
     private const val GEOFENCE_ID = "HOME"
     private const val GEOFENCE_RADIUS = 100f
     const val HOME_WIFI_SSID = "FRITZ!Box 5590 XO"
