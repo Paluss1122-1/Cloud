@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -114,7 +115,11 @@ private val TextS = Color(0xFF8A8A9F)
 private val TextT = Color(0xFF55556A)
 
 @Composable
-fun PasswordManagerScreen(db: PasswordDatabase, twoFaDb: TwoFADatabase) {
+fun PasswordManagerScreen(
+    db: PasswordDatabase,
+    twoFaDb: TwoFADatabase,
+    onSettingsClick: () -> Unit = {}
+) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -183,10 +188,22 @@ fun PasswordManagerScreen(db: PasswordDatabase, twoFaDb: TwoFADatabase) {
                         ) {
                             Icon(Icons.Default.FileUpload, "Import", tint = AccentBlue)
                         }
+                        IconButton(
+                            onClick = onSettingsClick,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.Settings, "Einstellungen", tint = AccentBlue)
+                        }
                         if (prvt()) {
                             var clickcount by remember { mutableIntStateOf(0) }
                             IconButton(
-                                onClick = { scope.launch { clickcount++; if (clickcount >= 5) { db.passwordDao().deleteAll(); reload(); clickcount = 0 }} },
+                                onClick = {
+                                    scope.launch {
+                                        clickcount++; if (clickcount >= 5) {
+                                        db.passwordDao().deleteAll(); reload(); clickcount = 0
+                                    }
+                                    }
+                                },
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(Icons.Default.Delete, "Import", tint = AccentBlue)
@@ -198,15 +215,25 @@ fun PasswordManagerScreen(db: PasswordDatabase, twoFaDb: TwoFADatabase) {
                                             "sync_prefs",
                                             Context.MODE_PRIVATE
                                         )
-                                        val lastSyncTime = prefs.getLong("last_sync_pw_timestamp", 0L)
+                                        val lastSyncTime =
+                                            prefs.getLong("last_sync_pw_timestamp", 0L)
                                         val currentTime = System.currentTimeMillis()
 
                                         if (currentTime - lastSyncTime > 20_000L) {
                                             isSyncing = true
                                             scope.launch {
                                                 try {
-                                                    if (syncPasswordEntriesWithCloud(db, twoFaDb, context).error != null){
-                                                        Toast.makeText(context, "Kein Netzwerk verfügbar", Toast.LENGTH_LONG).show()
+                                                    if (syncPasswordEntriesWithCloud(
+                                                            db,
+                                                            twoFaDb,
+                                                            context
+                                                        ).error != null
+                                                    ) {
+                                                        Toast.makeText(
+                                                            context,
+                                                            "Kein Netzwerk verfügbar",
+                                                            Toast.LENGTH_LONG
+                                                        ).show()
                                                         return@launch
                                                     }
                                                     entries = db.passwordDao().getAll()
@@ -500,6 +527,8 @@ private fun PasswordDetailSheet(
             val entryUrl = entry.url.lowercase()
             n.contains(entryName) || entryName.contains(n) ||
                     (entryUrl.isNotEmpty() && n.split(" ").any { entryUrl.contains(it) })
+        } ?: entry.totpSecret?.let { secret ->
+            TwoFAEntry(name = entry.name, secret = secret)
         }
     }
 
@@ -1068,7 +1097,8 @@ fun AddEditPasswordDialog(
                             PasswordEntry(
                                 name = name.trim(), url = url.trim(),
                                 username = username.trim(), password = password,
-                                notes = notes.trim()
+                                notes = notes.trim(),
+                                totpSecret = null
                             )
                         }
                         if (twoFaSecret.isNotEmpty()) {
