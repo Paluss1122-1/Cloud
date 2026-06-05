@@ -3084,8 +3084,8 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
                 } catch (_: Exception) {
                     data.lowercase()
                 }
-                val inTabslify = norm.contains("/music/cloud/", ignoreCase = true)
-                if (inTabslify && !norm.contains("/podcasts/cloud/")) {
+                val inTabslify = norm.contains("/music/tabslify/", ignoreCase = true)
+                if (inTabslify && !norm.contains("/podcasts/tabslify/")) {
                     val contentUri = Uri.withAppendedPath(
                         MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                         id.toString()
@@ -3133,7 +3133,7 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
                 } catch (_: Exception) {
                     data.lowercase()
                 }
-                val inPodcasts = norm.contains("/podcasts/cloud/")
+                val inPodcasts = norm.contains("/podcasts/tabslify/")
                 if (inPodcasts && (name.endsWith(".mp3") || name.endsWith(".m4a"))) {
                     val displayName =
                         if (!title.isNullOrBlank() && title != "<unknown>") title else name.substringBeforeLast(
