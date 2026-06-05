@@ -44,7 +44,8 @@ data class PasswordEntry(
     val password: String = "",
     val notes: String = "NULL",
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val totpSecret: String?
 )
 
 
@@ -85,7 +86,7 @@ interface PasswordDao {
 }
 
 
-@Database(entities = [PasswordEntry::class], version = 4, exportSchema = false)
+@Database(entities = [PasswordEntry::class], version = 5, exportSchema = false)
 abstract class PasswordDatabase : RoomDatabase() {
 
     abstract fun passwordDao(): PasswordDao
@@ -252,7 +253,9 @@ data class PasswordEntrySupabase(
 )
 
 suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: TwoFADatabase, context: Context): SyncResult {
-    if (prvt()) return SyncResult(uploaded = 0, downloaded = 0, total = 0)
+    if (!prvt()) {
+        return SyncResult(uploaded = 0, downloaded = 0, total = 0)
+    }
     if (!isOnline(context)) {
         return SyncResult(uploaded = 0, downloaded = 0, total = 0, error = "Kein Internet")
     }
@@ -284,8 +287,24 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
                 }
                 val existing = localPasswords.find { it.name == cloud.name && it.username == cloud.username }
                 if (existing == null) {
-                    passwordDb.passwordDao().insert(PasswordEntry(name = cloud.name, url = cloud.url ?: "", username = cloud.username ?: "", password = decryptedPw))
+                    passwordDb.passwordDao().insert(PasswordEntry(
+                        name = cloud.name,
+                        url = cloud.url ?: "",
+                        username = cloud.username ?: "",
+                        password = decryptedPw,
+                        totpSecret = cloud.totp_secret
+                    ))
                     downloaded++
+
+                    cloud.totp_secret?.let { encryptedTotp ->
+                        val decryptedTotp = CloudCrypto.decryptFromCloud(encryptedTotp)
+                        if (!decryptedTotp.isNullOrEmpty()) {
+                            val existingTwoFa = localTwoFa.find { it.secret == decryptedTotp }
+                            if (existingTwoFa == null) {
+                                twoFaDb.twoFADao().insertOrIgnore(TwoFAEntry(name = cloud.name, secret = decryptedTotp))
+                            }
+                        }
+                    }
                 }
             }
 
