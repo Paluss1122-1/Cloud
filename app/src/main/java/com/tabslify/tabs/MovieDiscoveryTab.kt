@@ -49,7 +49,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.tabslify.core.objects.TMDBConfig
+import com.tabslify.core.objects.Config
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -341,7 +341,7 @@ fun MovieCard(
 }
 
 suspend fun fetchMoviesFromTMDB(genreId: Int?): List<Movie> = withContext(Dispatchers.IO) {
-    val apiKey = TMDBConfig.APIKEY
+    val apiKey = Config.TMDB_API_KEY
     val randomPage = (1..5).random()
     val genreParam = if (genreId != null) "&with_genres=$genreId" else ""
     val url =
