@@ -14,6 +14,8 @@ val localProps = Properties().apply {
     load(rootProject.file("local.properties").inputStream())
 }
 
+fun prop(key: String) = "\"${localProps.getProperty(key)}\""
+
 android {
     namespace = "com.tabslify"
     compileSdk = 36
@@ -25,31 +27,36 @@ android {
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "SUPABASE_URL", prop("SUPABASE_URL"))
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", prop("SUPABASE_PUBLISHABLE_KEY"))
+        buildConfigField("String", "BWMP", prop("BWMP"))
+        buildConfigField("String", "DBKEY", prop("DBKEY"))
+        buildConfigField("String", "DBKEY1", prop("DBKEY1"))
+        buildConfigField("String", "NVIDIA", prop("NVIDIA"))
+        buildConfigField("String", "WEATHERAPI_KEY", prop("WEATHERAPI_KEY"))
+        buildConfigField("String", "RAPID_API_KEY", prop("RAPID_API_KEY"))
+        buildConfigField("String", "PODCASTINDEX_API_KEY", prop("PODCASTINDEX_API_KEY"))
+        buildConfigField("String", "PODCASTINDEX_API_SECRET", prop("PODCASTINDEX_API_SECRET"))
+        buildConfigField("String", "TMDB_API_KEY", prop("TMDB_API_KEY"))
+        buildConfigField("Double", "LAT", localProps.getProperty("LAT"))
+        buildConfigField("Double", "LON", localProps.getProperty("LON"))
     }
 
     signingConfigs {
         create("release") {
             storeFile = file("../keystore/my-release-key.jks")
-            storePassword = "Sec.P1122.!!\"\""
+            storePassword = localProps.getProperty("storePassword")
             keyAlias = "release-key"
-            keyPassword = "Sec.P1122.!!\"\""
+            keyPassword = localProps.getProperty("keyPassword")
         }
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".private"
+        }
         release {
             signingConfig = signingConfigs.getByName("release")
-            applicationIdSuffix = ".release"
-        }
-        create("releaseDebug") {
-            initWith(getByName("debug"))
-            isDebuggable = true
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
-            applicationIdSuffix = ".releasedebug"
-            matchingFallbacks += listOf("debug")
         }
     }
     compileOptions {
