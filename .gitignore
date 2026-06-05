@@ -14,5 +14,5 @@ summarize.py
 app/src/main/java/com/tabslify/core/objects/Config.kt
 app/src/main/java/com/tabslify/python/get_fav_songs.py
 .trae/
-.clinerules/avoid-comments.md
+.clinerules
 app/google-services.json
