@@ -272,9 +272,9 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             }
 
             val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-            val prefs = getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
-            val quietEnd = prefs.getString("saved_number", null)?.toIntOrNull() ?: 21
-            val quietStart = prefs.getString("saved_number_start", null)?.toIntOrNull() ?: 7
+            val prefs = getSharedPreferences("quiet_hours_prefs", MODE_PRIVATE)
+            val quietEnd = prefs.getString("quiet_hours_start", null)?.toIntOrNull() ?: 7
+            val quietStart = prefs.getString("quiet_hours_end", null)?.toIntOrNull() ?: 21
 
             // Fix: außerhalb der aktiven Stunden → zurückhalten
             if (hour in quietStart..<quietEnd) return
