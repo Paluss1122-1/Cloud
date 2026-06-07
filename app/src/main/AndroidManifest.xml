@@ -80,8 +80,7 @@
         android:roundIcon="@drawable/app_icon_foreground"
         android:supportsRtl="true"
         android:theme="@style/Theme.Tabslify"
-        android:usesCleartextTraffic="true"
-        android:windowSoftInputMode="adjustResize">
+        android:usesCleartextTraffic="true">
 
         <meta-data
             android:name="android.content.pm.ATTRIBUTION_TAGS"
@@ -91,6 +90,7 @@
             android:name=".core.activities.MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|smallestScreenSize"
             android:exported="true"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.Tabslify">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -289,5 +289,10 @@
                 <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
             </intent-filter>
         </receiver>
+
+        <activity
+            android:name=".quiethoursnotificationhelper.ImportActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
     </application>
 </manifest>
