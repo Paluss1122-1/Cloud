@@ -64,6 +64,11 @@ import androidx.core.net.toUri
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.google.android.gms.location.LocationServices
+import com.google.firebase.Firebase
+import com.google.firebase.ai.ai
+import com.google.firebase.ai.type.GenerativeBackend
+import com.google.firebase.ai.type.content
 import com.tabslify.core.activities.Tabslify.Companion.coroutineExceptionHandler
 import com.tabslify.core.functions.ERRORINSERTDATA
 import com.tabslify.core.functions.errorInsert
@@ -74,6 +79,7 @@ import com.tabslify.core.objects.Config.INFO_PORT
 import com.tabslify.core.objects.Config.SYNC_PORT
 import com.tabslify.core.objects.Config.TODOS
 import com.tabslify.core.objects.Config.UPDATE_PORT
+import com.tabslify.core.ui.APP_COLOR
 import com.tabslify.services.MediaPlayerService
 import com.tabslify.services.MediaPlayerService.Companion.ACTION_TOGGLE_REPEAT
 import com.tabslify.services.OverlayLifecycleOwner
@@ -88,12 +94,6 @@ import com.tabslify.tabs.mediaplayer.ListenSession
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.getSessions
 import com.tabslify.tabs.school.Vokabel
-import com.google.android.gms.location.LocationServices
-import com.google.firebase.Firebase
-import com.google.firebase.ai.ai
-import com.google.firebase.ai.type.GenerativeBackend
-import com.google.firebase.ai.type.content
-import com.tabslify.core.ui.APP_COLOR
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -269,7 +269,6 @@ private fun launchServer(
     val mutex = getServerMutex(port)
 
     mutex.withLock {
-        var bindRetries = 0
         while (isActive) {
             var server: ServerSocket? = null
             try {
@@ -300,22 +299,13 @@ private fun launchServer(
                             }
                         }
                     } catch (_: SocketTimeoutException) {
-                        // Normal timeout, check isActive and continue
                         continue
                     } catch (_: SocketException) {
-                        // Socket closed, exit inner loop
                         break
                     }
                 }
-                bindRetries = 0
-            } catch (e: BindException) {
-                // Port still in use, wait longer before retry
-                bindRetries++
-                if (bindRetries > 5) {
-                    logError("$errorTag-bind-fatal", Exception("Port $port is permanently in use. Giving up after 5 retries.", e))
-                    break
-                }
-                delay(5000.milliseconds)
+            } catch (_: BindException) {
+                continue
             } catch (e: Exception) {
                 logError(errorTag, e)
             } finally {
@@ -335,7 +325,6 @@ private fun todosToJsonArray(todos: List<TodoItem>): JSONArray = JSONArray().app
             put("id", todo.id)
             put("text", todo.text)
             put("completed", todo.completed)
-            put("timestamp", todo.timestamp)
         })
     }
 }
@@ -449,8 +438,7 @@ var laptopIp: String = ""
 data class TodoItem(
     val id: Long,
     val text: String,
-    val completed: Boolean,
-    val timestamp: Long
+    val completed: Boolean
 )
 
 data class AiResponseEntry(
@@ -463,7 +451,7 @@ fun startTriggerListenerIfHomeWifi(context: Context) {
     startTriggerListener(context)
     registerWifiReconnectReceiver(context)
     
-    checkIfNearLocation(context) { } // Async check trigger
+    checkIfNearLocation(context) { }
     
     syncScope.launch {
         val ip = fetchIpFromSupabase()
@@ -926,8 +914,7 @@ fun addTodo(text: String, context: Context) {
         TodoItem(
             id = System.currentTimeMillis(),
             text = text,
-            completed = false,
-            timestamp = System.currentTimeMillis()
+            completed = false
         )
     )
     saveTodos(context, todos)
@@ -1048,8 +1035,7 @@ private fun parseTodosFromJson(jsonData: String): List<TodoItem> =
                 TodoItem(
                     getLong("id"),
                     getString("text"),
-                    getBoolean("completed"),
-                    getLong("timestamp")
+                    getBoolean("completed")
                 )
             }
         }
