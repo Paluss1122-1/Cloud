@@ -81,8 +81,8 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.activities.MainActivity
+import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.functions.canNotify
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.DEL_GAL_CONF
@@ -388,7 +388,7 @@ class QuietHoursNotificationService : Service() {
 
     private val prefChangeListener =
         SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == "saved_number" || key == "saved_number_start") {
+            if (key == "quiet_hours_start" || key == "quiet_hours_end") {
                 handler.removeCallbacks(checkRunnable)
 
                 try {
@@ -407,7 +407,7 @@ class QuietHoursNotificationService : Service() {
         realDevice = getDeviceName().trim().equals("Samsung SM-S921U1", ignoreCase = true)
         requestIgnoreBatteryOptimizations(this)
         Config.init(this)
-        sharedPreferences = getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
+        sharedPreferences = getSharedPreferences("quiet_hours_prefs", MODE_PRIVATE)
         createNotificationChannel(this)
 
         isCurrentlyQuietHours = isQuietHoursNow(this)
