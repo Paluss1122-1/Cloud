@@ -11,11 +11,6 @@ import android.content.Context.WINDOW_SERVICE
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.hardware.camera2.CameraManager
-import android.media.MediaCodec
-import android.media.MediaCodecInfo
-import android.media.MediaExtractor
-import android.media.MediaFormat
-import android.media.MediaMuxer
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -57,6 +52,7 @@ import androidx.core.content.edit
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.SHOWCOMMANDS
@@ -84,12 +80,7 @@ import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -101,8 +92,6 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration.Companion.seconds
 
 data class Command(
@@ -1016,8 +1005,8 @@ fun executeCommand(commandText: String, context: Context) {
 
         "setdowntime", "set", "dt", "setdt" -> {
             if (argument !== null) {
-                context.getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
-                    .edit(commit = true) { putString("saved_number", argument) }
+                context.getSharedPreferences("quiet_hours_prefs", MODE_PRIVATE)
+                    .edit(commit = true) { putString("quiet_hours_start", argument) }
             } else {
                 showSimpleNotificationExtern(
                     "Setdowntime",
@@ -1932,7 +1921,7 @@ private fun parseCommandWithQuotes(input: String): List<String> {
 }
 
 private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
-    GlobalScope.launch {
+    appScope.launch {
         try {
             val stationName = "Geltendorf"
             val evaNo = "8000120"
