@@ -1,11 +1,16 @@
-@file:Suppress("AssignedValueIsNeverRead")
-
 package com.tabslify.tabs.audiorecordertab
 
-import android.widget.Toast
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,6 +32,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -36,26 +43,127 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tabslify.core.objects.Config
+import com.tabslify.core.objects.toast
+import com.tabslify.core.ui.AlertDialogTabslify
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 
+@Composable
+private fun MicPermissionDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialogTabslify(
+        onDismiss = onDismiss,
+        title = "Mikrofonzugriff benötigt",
+        text = "Dieser Tab benötigt Zugriff auf das Mikrofon, um Aufnahmen erstellen zu können.\n\n" +
+                        "Bitte erlaube den Zugriff in den App-Einstellungen:\n" +
+                        "Berechtigungen → Mikrofon → Option 1 oder 2.",
+        confirmText = "Zu den Einstellungen",
+        onConfirm = onConfirm
+    )
+}
 
 @Composable
-fun AudioRecorderContent(
+fun AudioRecorderTab(
     modifier: Modifier = Modifier,
     vm: AudioRecorderTabViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var restartKey by remember { mutableIntStateOf(0) }
+    var directedToSettings by remember { mutableStateOf(false) }
+    var showPermissionDialog by remember { mutableStateOf(false) }
+    var hasPermission by remember { mutableStateOf(vm.hasPermission) }  // NEU
 
-    if (!vm.hasPermission) {
-        Toast.makeText(context, "Keine Mikrofon Berechtigung", Toast.LENGTH_SHORT).show()
-        return
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions[Manifest.permission.RECORD_AUDIO] == true
+        if (granted) {
+            hasPermission = true
+            restartKey++
+        }
     }
+
+    LaunchedEffect(Unit) {
+        if (!vm.hasPermission) {
+            val canAskDirectly = Config.requestPermission("mic", launcher, context)
+            if (!canAskDirectly || ActivityCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.RECORD_AUDIO
+                ) != PackageManager.PERMISSION_GRANTED) {
+                showPermissionDialog = true
+            }
+        }
+    }
+
+    if (showPermissionDialog) {
+        MicPermissionDialog(
+            onConfirm = {
+                showPermissionDialog = false
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                }
+                context.startActivity(intent)
+                directedToSettings = true
+            },
+            onDismiss = {
+                showPermissionDialog = false
+                toast(context, "Dieser Tab benötigt die Mikrofon-Berechtigung.")
+            }
+        )
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && directedToSettings) {
+                showPermissionDialog = false
+                directedToSettings = false
+                val permissionGranted = ActivityCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.RECORD_AUDIO
+                ) == PackageManager.PERMISSION_GRANTED
+
+                if (permissionGranted) {
+                    hasPermission = true
+                    restartKey++
+                } else {
+                    toast(context, "Dieser Tab benötigt die nicht vorhandene Mikrofon-Berechtigung.")
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    if (hasPermission) {
+        key(restartKey) {
+            AudioRecorderTabContent(modifier = modifier, vm = vm)
+        }
+    } else {
+        Box(Modifier.fillMaxSize().padding(40.dp), contentAlignment = Alignment.Center) {
+            Text("Dieser Tab benötigt die nicht vorhandene Mikrofon Berechtigung!", color = Color.LightGray, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, fontSize = 30.sp, lineHeight = 40.sp)
+        }
+    }
+}
+
+@Composable
+private fun AudioRecorderTabContent(
+    modifier: Modifier,
+    vm: AudioRecorderTabViewModel
+) {
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         vm.refreshFiles()
@@ -83,7 +191,10 @@ fun AudioRecorderContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF333333), shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                .background(
+                    Color(0xFF333333),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                )
                 .padding(4.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -161,9 +272,7 @@ fun AudioRecorderContent(
                 FileItem(
                     file = file,
                     isSelected = vm.selectedFile == file,
-                    onClick = {
-                        vm.onSelect(file)
-                    },
+                    onClick = { vm.onSelect(file) },
                     onShareDirect = { vm.onShareDirect(file) }
                 )
             }
@@ -176,12 +285,11 @@ fun AudioRecorderContent(
             maxDuration = if (vm.shareRange.endInclusive > 0) vm.shareRange.endInclusive else 1f,
             isProcessing = vm.isProcessing,
             onDismiss = { vm.onDismiss() },
-            onShare = { range -> vm.onFinalShare(range, scope)},
+            onShare = { range -> vm.onFinalShare(range, scope) },
             vm = vm
         )
     }
 }
-
 
 @Composable
 fun PlayerSection(
@@ -279,7 +387,8 @@ fun FileItem(
             Text(
                 "📤", fontSize = 20.sp, modifier = Modifier
                     .padding(end = 12.dp)
-                    .clickable { onShareDirect() })
+                    .clickable { onShareDirect() }
+            )
         }
     }
 }
