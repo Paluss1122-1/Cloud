@@ -413,7 +413,8 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
             value = email,
             onValueChange = { email = it },
             label = { Text("E-Mail") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
         Spacer(Modifier.height(12.dp))
         OutlinedTextField(
@@ -421,15 +422,19 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
             onValueChange = { password = it },
             label = { Text("Passwort") },
             visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
-        error?.let {
-            Spacer(Modifier.height(8.dp)); Text(
-            it,
-            color = MaterialTheme.colorScheme.error
-        )
+        Box(modifier = Modifier.height(36.dp).padding(top = 8.dp)) {
+            error?.let {
+                val formattedError = when {
+                    it.contains("invalid_credentials") -> "Invalid Credentials"
+                    else -> it
+                }
+                Text(formattedError, color = MaterialTheme.colorScheme.error)
+            }
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
         Button(onClick = {
             loading = true
             scope.launch {
