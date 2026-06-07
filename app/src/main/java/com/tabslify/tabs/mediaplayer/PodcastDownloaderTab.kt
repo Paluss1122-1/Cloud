@@ -124,6 +124,7 @@ fun PodcastTab() {
     var query by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     var results by remember { mutableStateOf<List<SearchResult>>(emptyList()) }
+    var hasSearched by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var expandedFeedUrl by remember { mutableStateOf<String?>(null) }
     var episodes by remember { mutableStateOf<Map<String, List<Episode>>>(emptyMap()) }
@@ -153,6 +154,7 @@ fun PodcastTab() {
             return
         }
         isSearching = true
+        hasSearched = true
         error = null
         results = emptyList()
         try {
@@ -162,7 +164,14 @@ fun PodcastTab() {
                 .joinToString("") { "%02x".format(it) }
 
             val conn = withContext(Dispatchers.IO) {
-                val u = URL("https://api.podcastindex.org/api/1.0/search/byterm?q=${java.net.URLEncoder.encode(q, "UTF-8")}")
+                val u = URL(
+                    "https://api.podcastindex.org/api/1.0/search/byterm?q=${
+                        java.net.URLEncoder.encode(
+                            q,
+                            "UTF-8"
+                        )
+                    }"
+                )
                 (u.openConnection() as java.net.HttpURLConnection).apply {
                     setRequestProperty("X-Auth-Key", PODCASTINDEX_API_KEY)
                     setRequestProperty("X-Auth-Date", now.toString())
@@ -216,14 +225,19 @@ fun PodcastTab() {
                     val node = children.item(j)
                     when (node.nodeName) {
                         "title" -> title = node.textContent.trim()
-                        "enclosure" -> audioUrl = node.attributes?.getNamedItem("url")?.nodeValue ?: ""
+                        "enclosure" -> audioUrl =
+                            node.attributes?.getNamedItem("url")?.nodeValue ?: ""
+
                         "pubDate" -> pubDate = node.textContent.trim()
                         "isoDate" -> if (pubDate.isEmpty()) pubDate = node.textContent.trim()
                     }
                 }
                 if (audioUrl.isEmpty()) null else {
                     val timestamp = try {
-                        java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z", java.util.Locale.ENGLISH).parse(pubDate)?.time
+                        java.text.SimpleDateFormat(
+                            "EEE, dd MMM yyyy HH:mm:ss Z",
+                            java.util.Locale.ENGLISH
+                        ).parse(pubDate)?.time
                             ?: System.currentTimeMillis()
                     } catch (_: Exception) {
                         try {
@@ -245,8 +259,8 @@ fun PodcastTab() {
 
     fun downloadEpisode(audioUrl: String, title: String, showName: String) {
         val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_")
-        val filename  = "$safeTitle.mp3"
-        val subPath   = "Tabslify/$filename"
+        val filename = "$safeTitle.mp3"
+        val subPath = "Tabslify/$filename"
 
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
 
@@ -299,10 +313,17 @@ fun PodcastTab() {
             val arr = org.json.JSONArray(raw)
             (0 until arr.length()).associate { i ->
                 val o = arr.getJSONObject(i)
-                val f = PodcastFeed(o.getString("title"), o.getString("author"), o.getString("image"), o.getString("feedUrl"))
+                val f = PodcastFeed(
+                    o.getString("title"),
+                    o.getString("author"),
+                    o.getString("image"),
+                    o.getString("feedUrl")
+                )
                 f.feedUrl to f
             }
-        } catch (_: Exception) { emptyMap() }
+        } catch (_: Exception) {
+            emptyMap()
+        }
     }
 
     fun saveFavs(favs: Map<String, PodcastFeed>) {
@@ -366,7 +387,14 @@ fun PodcastTab() {
         )
 
         error?.let {
-            Text("Fehler: $it", color = MaterialTheme.colorScheme.error, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
+            if (!hasSearched && !query.isNotBlank()) {
+                Text(
+                    "Fehler: $it",
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
         }
 
         if (isUrl) {
@@ -401,39 +429,67 @@ fun PodcastTab() {
                     }
 
                     is DownloadState.Success -> Text("Download Complete!")
-                    is DownloadState.Error -> Text("Error: ${state.message}", color = MaterialTheme.colorScheme.error)
+                    is DownloadState.Error -> Text(
+                        "Error: ${state.message}",
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         } else if (results.isEmpty() && !isSearching) {
-            if (favorites.isEmpty()) {
+            if (hasSearched && query.isNotBlank()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("🎙️ Podcast suchen oder URL zum Download eingeben", color = Color.White.copy(0.5f))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("🔍", fontSize = 48.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Keine Podcast Shows gefunden", color = Color.White.copy(0.5f))
+                        Text(
+                            "Versuche es mit einem anderen Suchbegriff",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(0.3f)
+                        )
+                    }
+                }
+            } else if (favorites.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        "🎙️ Podcast suchen oder URL zum Download eingeben",
+                        color = Color.White.copy(0.5f)
+                    )
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
-                        Text("Lieblings-Podcasts", fontSize = 13.sp, color = Color(0xFF7A7880),
-                            modifier = Modifier.padding(vertical = 4.dp))
+                        Text(
+                            "Lieblings-Podcasts", fontSize = 13.sp, color = Color(0xFF7A7880),
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
                     }
                     items(favorites.values.toList()) { feed ->
                         val isExpanded = expandedFeedUrl == feed.feedUrl
                         val feedEpisodes = episodes[feed.feedUrl]
                         val hasNew = newEpisodesState.any { it.optString("showName") == feed.title }
-                        
+
                         Box {
                             FeedCard(
                                 feed = feed, isExpanded = isExpanded, feedEpisodes = feedEpisodes,
                                 loadingEpisodes = loadingEpisodes, isFavorite = true,
                                 onToggleExpand = {
                                     if (isExpanded) expandedFeedUrl = null
-                                    else { 
+                                    else {
                                         expandedFeedUrl = feed.feedUrl
                                         scope.launch { loadEpisodes(feed.feedUrl) }
-                                        newEpisodesState = newEpisodesState.filterNot { it.optString("showName") == feed.title }
+                                        newEpisodesState =
+                                            newEpisodesState.filterNot { it.optString("showName") == feed.title }
                                     }
                                 },
                                 onToggleFav = { feedToUnfav = feed },
-                                onDownload = { url, title -> downloadEpisode(url, title, feed.title) },
+                                onDownload = { url, title ->
+                                    downloadEpisode(
+                                        url,
+                                        title,
+                                        feed.title
+                                    )
+                                },
                                 onStream = { url -> streamEpisode(url) }
                             )
                             if (hasNew && !isExpanded) {
@@ -442,7 +498,10 @@ fun PodcastTab() {
                                         .align(Alignment.TopEnd)
                                         .padding(8.dp)
                                         .size(12.dp)
-                                        .background(Color.Red, androidx.compose.foundation.shape.CircleShape)
+                                        .background(
+                                            Color.Red,
+                                            androidx.compose.foundation.shape.CircleShape
+                                        )
                                 )
                             }
                         }
@@ -457,11 +516,17 @@ fun PodcastTab() {
                     val isExpanded = expandedFeedUrl == feed.feedUrl
                     val feedEpisodes = episodes[feed.feedUrl]
                     FeedCard(
-                        feed = feed, isExpanded = isExpanded, feedEpisodes = feedEpisodes,
-                        loadingEpisodes = loadingEpisodes, isFavorite = favorites.containsKey(feed.feedUrl),
+                        feed = feed,
+                        isExpanded = isExpanded,
+                        feedEpisodes = feedEpisodes,
+                        loadingEpisodes = loadingEpisodes,
+                        isFavorite = favorites.containsKey(feed.feedUrl),
                         onToggleExpand = {
                             if (isExpanded) expandedFeedUrl = null
-                            else { expandedFeedUrl = feed.feedUrl; scope.launch { loadEpisodes(feed.feedUrl) } }
+                            else {
+                                expandedFeedUrl =
+                                    feed.feedUrl; scope.launch { loadEpisodes(feed.feedUrl) }
+                            }
                         },
                         onToggleFav = {
                             if (favorites.containsKey(feed.feedUrl)) feedToUnfav = feed
