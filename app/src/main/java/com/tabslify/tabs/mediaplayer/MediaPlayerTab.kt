@@ -12,6 +12,7 @@ import android.provider.MediaStore
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -67,6 +68,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.NavigationBarItem
@@ -108,6 +110,9 @@ import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import com.google.gson.reflect.TypeToken
 import com.tabslify.core.ui.NeonBox
 import com.tabslify.quiethoursnotificationhelper.AiResponseEntry
 import com.tabslify.quiethoursnotificationhelper.aiResponseFlow
@@ -115,9 +120,7 @@ import com.tabslify.quiethoursnotificationhelper.deleteAiResponse
 import com.tabslify.quiethoursnotificationhelper.loadAllAiResponses
 import com.tabslify.quiethoursnotificationhelper.loadTodayOrYesterdayEntry
 import com.tabslify.services.MediaPlayerService
-import com.google.gson.Gson
-import com.google.gson.GsonBuilder
-import com.google.gson.reflect.TypeToken
+import com.tabslify.tabs.audiorecordertab.AudioRecorderTab
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -177,7 +180,7 @@ fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
     val nowPlaying by viewModel.nowPlaying.collectAsState()
 
     BackHandler {
-        if (state.currentTab == MediaTab.DOWNLOADER) {
+        if (state.currentTab == MediaTab.DOWNLOADER || state.currentTab == MediaTab.RECORDER) {
             viewModel.setTab(MediaTab.HOME)
             return@BackHandler
         }
@@ -239,21 +242,38 @@ fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
 
                         Row {
                             IconButton(onClick = {
-                                if (state.currentTab != MediaTab.DOWNLOADER) viewModel.setTab(MediaTab.DOWNLOADER)
+                                if (state.currentTab != MediaTab.DOWNLOADER) viewModel.setTab(
+                                    MediaTab.DOWNLOADER
+                                )
                                 else viewModel.setTab(MediaTab.HOME)
                             }) {
+                                val color by animateColorAsState(
+                                    targetValue = if (state.currentTab == MediaTab.DOWNLOADER) MaterialTheme.colorScheme.primary else Color.White,
+                                    animationSpec = tween(durationMillis = 300),
+                                    label = "containerColor"
+                                )
                                 Icon(
                                     Icons.Default.Download,
                                     contentDescription = "Open Downloader",
-                                    tint = Color.White
+                                    tint = color
                                 )
                             }
 
-                            IconButton(onClick = { }) {
+                            IconButton(onClick = {
+                                if (state.currentTab != MediaTab.RECORDER) viewModel.setTab(
+                                    MediaTab.RECORDER
+                                )
+                                else viewModel.setTab(MediaTab.HOME)
+                            }) {
+                                val color by animateColorAsState(
+                                    targetValue = if (state.currentTab == MediaTab.RECORDER) MaterialTheme.colorScheme.primary else Color.White,
+                                    animationSpec = tween(durationMillis = 300),
+                                    label = "containerColor"
+                                )
                                 Icon(
                                     Icons.Default.Mic,
                                     contentDescription = "Open Recorder",
-                                    tint = Color.White
+                                    tint = color
                                 )
                             }
                         }
@@ -267,7 +287,9 @@ fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
                 ) { tab ->
                     when (tab) {
                         MediaTab.HOME -> HomeTab(
-                            modifier = Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding()),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(bottom = innerPadding.calculateBottomPadding()),
                             state = state,
                             onSongClick = { song -> playSong(context, song, state.songs) },
                             onSongLongClick = { analyticsTarget = it },
@@ -311,7 +333,7 @@ fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
                         }
 
                         MediaTab.RECORDER -> {
-
+                            AudioRecorderTab()
                         }
                     }
                 }
@@ -514,181 +536,181 @@ private fun HomeTab(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-            item {
-                Column(
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(BgSurface)
+                    .padding(16.dp)
+            ) {
+                val stats = state.globalStats
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    StatItem("⏰", formatDuration(stats.totalListenedMs), "Gesamt")
+                    StatDivider()
+                    StatItem(
+                        "🔥", "${stats.listeningStreakDays}d", "Streak",
+                        dimmed = !stats.playedToday
+                    )
+                    StatDivider()
+                    StatItem("🎵", "${stats.totalSongsPlayed}", "Songs gespielt")
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(BgSurface)
-                        .padding(16.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(AccentViolet.copy(alpha = 0.15f))
+                        .clickable { showStatsSheet = true }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    val stats = state.globalStats
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        StatItem("⏰", formatDuration(stats.totalListenedMs), "Gesamt")
-                        StatDivider()
-                        StatItem(
-                            "🔥", "${stats.listeningStreakDays}d", "Streak",
-                            dimmed = !stats.playedToday
+                        Text("📊", fontSize = 14.sp)
+                        Text(
+                            "Alle Statistiken",
+                            color = AccentViolet,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
-                        StatDivider()
-                        StatItem("🎵", "${stats.totalSongsPlayed}", "Songs gespielt")
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(AccentViolet.copy(alpha = 0.15f))
-                            .clickable { showStatsSheet = true }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text("📊", fontSize = 14.sp)
-                            Text(
-                                "Alle Statistiken",
-                                color = AccentViolet,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
                     }
                 }
             }
+        }
 
-            aiEntry?.let { entry ->
-                item {
-                    AiResponseCard(
-                        entry = entry,
-                        onShowHistory = { showAiHistory = true }
-                    )
-                }
+        aiEntry?.let { entry ->
+            item {
+                AiResponseCard(
+                    entry = entry,
+                    onShowHistory = { showAiHistory = true }
+                )
             }
+        }
 
-            if (state.algorithmicPlaylists.isNotEmpty()) {
-                item {
-                    SectionHeader("Für dich")
-                }
-                item {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(state.algorithmicPlaylists) { (source, songs) ->
-                            AlgorithmicPlaylistCard(
-                                source = source,
-                                songCount = songs.size,
-                                onClick = {
-                                    if (source.id == "favorites") {
-                                        MediaPlayerService.toggleFavoritesMode(context)
-                                    } else {
-                                        cachedDetailPlaylistData = source to songs
-                                        detailPlaylist = source to songs
-                                    }
+        if (state.algorithmicPlaylists.isNotEmpty()) {
+            item {
+                SectionHeader("Für dich")
+            }
+            item {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(state.algorithmicPlaylists) { (source, songs) ->
+                        AlgorithmicPlaylistCard(
+                            source = source,
+                            songCount = songs.size,
+                            onClick = {
+                                if (source.id == "favorites") {
+                                    MediaPlayerService.toggleFavoritesMode(context)
+                                } else {
+                                    cachedDetailPlaylistData = source to songs
+                                    detailPlaylist = source to songs
                                 }
-                            )
-                        }
+                            }
+                        )
                     }
                 }
             }
+        }
 
-            if (state.userPlaylists.isNotEmpty()) {
-                item { SectionHeader("Meine Playlists") }
-                item {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(state.userPlaylists) { playlist ->
-                            val songCount = playlist.items.size
-                            val currentSongs = state.songs.filter { playlist.items.contains(it.path) }
-                            Box(
-                                modifier = Modifier
-                                    .size(160.dp, 200.dp)
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(
-                                        Brush.linearGradient(
-                                            listOf(
-                                                AccentViolet,
-                                                AccentVioletDim
-                                            )
+        if (state.userPlaylists.isNotEmpty()) {
+            item { SectionHeader("Meine Playlists") }
+            item {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(state.userPlaylists) { playlist ->
+                        val songCount = playlist.items.size
+                        val currentSongs = state.songs.filter { playlist.items.contains(it.path) }
+                        Box(
+                            modifier = Modifier
+                                .size(160.dp, 200.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(
+                                            AccentViolet,
+                                            AccentVioletDim
                                         )
                                     )
-                                    .clickable {
-                                        cachedDetailUserPlaylistData = playlist to currentSongs
-                                        detailUserPlaylist = playlist
-                                    }
-                                    .padding(16.dp)
+                                )
+                                .clickable {
+                                    cachedDetailUserPlaylistData = playlist to currentSongs
+                                    detailUserPlaylist = playlist
+                                }
+                                .padding(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Column(
-                                    modifier = Modifier.fillMaxSize(),
-                                    verticalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("▶️", fontSize = 36.sp)
-                                    Column {
-                                        Text(
-                                            playlist.name,
-                                            color = TextPrimary,
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Spacer(Modifier.height(4.dp))
-                                        Text(
-                                            "$songCount Songs",
-                                            color = TextSecondary,
-                                            fontSize = 12.sp
-                                        )
-                                    }
+                                Text("▶️", fontSize = 36.sp)
+                                Column {
+                                    Text(
+                                        playlist.name,
+                                        color = TextPrimary,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        "$songCount Songs",
+                                        color = TextSecondary,
+                                        fontSize = 12.sp
+                                    )
                                 }
                             }
                         }
                     }
                 }
             }
+        }
 
-            if (activePodcasts.isNotEmpty()) {
-                item { SectionHeader("Weiter hören") }
-                items(activePodcasts.take(5)) { ep ->
-                    PodcastEpisodeRow(
-                        episode = ep,
-                        showName = state.shows.find { it.id == ep.showId }?.name ?: "Sonstige",
-                        onClick = { onEpisodeClick(ep) },
-                        onLongClick = {}
-                    )
-                }
-            }
-            if (recentSongs.isNotEmpty()) {
-                item { SectionHeader("Zuletzt gehört") }
-                items(recentSongs) { song ->
-                    SongRow(
-                        song = song,
-                        onClick = { onSongClick(song) },
-                        onLongClick = { onSongLongClick(song) }
-                    )
-                }
-            }
-
-            if (state.songs.isEmpty() && state.episodes.isEmpty() && !state.isLoading) {
-                item {
-                    EmptyState(
-                        icon = "🎵",
-                        title = "Keine Medien gefunden",
-                        subtitle = "Lege Musik in /Cloud/ ab"
-                    )
-                }
+        if (activePodcasts.isNotEmpty()) {
+            item { SectionHeader("Weiter hören") }
+            items(activePodcasts.take(5)) { ep ->
+                PodcastEpisodeRow(
+                    episode = ep,
+                    showName = state.shows.find { it.id == ep.showId }?.name ?: "Sonstige",
+                    onClick = { onEpisodeClick(ep) },
+                    onLongClick = {}
+                )
             }
         }
+        if (recentSongs.isNotEmpty()) {
+            item { SectionHeader("Zuletzt gehört") }
+            items(recentSongs) { song ->
+                SongRow(
+                    song = song,
+                    onClick = { onSongClick(song) },
+                    onLongClick = { onSongLongClick(song) }
+                )
+            }
+        }
+
+        if (state.songs.isEmpty() && state.episodes.isEmpty() && !state.isLoading) {
+            item {
+                EmptyState(
+                    icon = "🎵",
+                    title = "Keine Medien gefunden",
+                    subtitle = "Lege Musik in /Cloud/ ab"
+                )
+            }
+        }
+    }
     // For algorithmic playlist: use cached data if available, otherwise new data
     (detailPlaylist ?: cachedDetailPlaylistData)?.let { (source, songs) ->
         // Update cache with current state data for the same source
@@ -3543,7 +3565,8 @@ object PodcastShowManager {
     fun assignPattern(pattern: String, showName: String): Boolean {
         val show = shows.find { it.name.equals(showName, ignoreCase = true) }
             ?: createShow(showName)
-        val pattern = pattern.replace('\u2019', '\'').replace('\u2018', '\'').replace('\u201C', '"').replace('\u201D', '"')
+        val pattern = pattern.replace('\u2019', '\'').replace('\u2018', '\'').replace('\u201C', '"')
+            .replace('\u201D', '"')
         extraPatterns[pattern.lowercase()] = show.id
         val idx = shows.indexOf(show)
         if (idx >= 0) {
@@ -3568,7 +3591,8 @@ object PodcastShowManager {
     }
 
     fun resolveShowForEpisode(path: String, title: String): String {
-        val combined = ("$path $title").lowercase().replace('\u2019', '\'').replace('\u2018', '\'').replace('\u201C', '"').replace('\u201D', '"')
+        val combined = ("$path $title").lowercase().replace('\u2019', '\'').replace('\u2018', '\'')
+            .replace('\u201C', '"').replace('\u201D', '"')
         extraPatterns.forEach { (pattern, showId) ->
             if (combined.contains(pattern)) return showId
         }
