@@ -65,14 +65,14 @@ fun checkQuietHours(context: Context) {
 }
 
 private fun getQuietStartHour(context: Context): Int {
-    val prefs = context.getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
-    val start = prefs.getString("saved_number_start", null)?.toIntOrNull() ?: 21
+    val prefs = context.getSharedPreferences("quiet_hours_prefs", MODE_PRIVATE)
+    val start = prefs.getString("quiet_hours_end", null)?.toIntOrNull() ?: 21
     return start
 }
 
 private fun getQuietEndHour(context: Context): Int {
-    val prefs = context.getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
-    val end = prefs.getString("saved_number", null)?.toIntOrNull() ?: 7
+    val prefs = context.getSharedPreferences("quiet_hours_prefs", MODE_PRIVATE)
+    val end = prefs.getString("quiet_hours_start", null)?.toIntOrNull() ?: 7
     return end
 }
 
@@ -326,9 +326,9 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
             settingsPendingIntent
         )
     } else {
-        val prefs = context.getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
-        val currentStart = prefs.getString("saved_number_start", "21") ?: "21"
-        val currentEnd = prefs.getString("saved_number", "7") ?: "7"
+        val prefs = context.getSharedPreferences("quiet_hours_prefs", MODE_PRIVATE)
+        val currentStart = prefs.getString("quiet_hours_end", "21") ?: "21"
+        val currentEnd = prefs.getString("quiet_hours_start", "7") ?: "7"
 
         val endRemoteInput = RemoteInput.Builder("key_time_input")
             .setLabel("Endzeit (0-23)")
@@ -385,9 +385,9 @@ fun updateNotification(context: Context) {
 
 fun isQuietHoursNow(context: Context): Boolean {
     val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-    val prefs = context.getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
-    val quietStart = prefs.getString("saved_number", null)?.toIntOrNull() ?: 7
-    val quietEnd = prefs.getString("saved_number_start", null)?.toIntOrNull() ?: 21
+    val prefs = context.getSharedPreferences("quiet_hours_prefs", MODE_PRIVATE)
+    val quietStart = prefs.getString("quiet_hours_start", null)?.toIntOrNull() ?: 7
+    val quietEnd = prefs.getString("quiet_hours_end", null)?.toIntOrNull() ?: 21
     return if (quietStart <= quietEnd) {
         hour in quietStart..<quietEnd
     } else {
