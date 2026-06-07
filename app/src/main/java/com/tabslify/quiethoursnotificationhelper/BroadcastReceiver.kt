@@ -35,15 +35,15 @@ import org.json.JSONObject
 
 class QuietActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val prefs = context.getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
+        val prefs = context.getSharedPreferences("quiet_hours_prefs", MODE_PRIVATE)
 
         when (intent.action) {
             "SET_START" -> {
-                prefs.edit(commit = true) { putString("saved_number_start", "21") }
+                prefs.edit(commit = true) { putString("quiet_hours_end", "21") }
             }
 
             "SET_END" -> {
-                prefs.edit(commit = true) { putString("saved_number", "7") }
+                prefs.edit(commit = true) { putString("quiet_hours_start", "7") }
             }
         }
     }
@@ -124,13 +124,13 @@ val timeChangeReceiver = object : BroadcastReceiver() {
             val timeValue = newTime.toIntOrNull()
 
             if (timeValue != null && timeValue in 0..23) {
-                val prefs = context.getSharedPreferences("quick_settings_prefs", MODE_PRIVATE)
+                val prefs = context.getSharedPreferences("quiet_hours_prefs", MODE_PRIVATE)
 
                 when (intent.action) {
                     ACTION_CHANGE_START -> {
                         prefs.edit(commit = true) {
                             putString(
-                                "saved_number_start",
+                                "quiet_hours_end",
                                 timeValue.toString()
                             )
                         }
@@ -144,7 +144,7 @@ val timeChangeReceiver = object : BroadcastReceiver() {
                     ACTION_CHANGE_END -> {
                         prefs.edit(commit = true) {
                             putString(
-                                "saved_number",
+                                "quiet_hours_start",
                                 timeValue.toString()
                             )
                         }
