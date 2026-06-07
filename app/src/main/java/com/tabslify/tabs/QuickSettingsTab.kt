@@ -75,15 +75,15 @@ fun QuickSettingsTabContent() {
     val context = LocalContext.current
     var showBatteryChart by remember { mutableStateOf(false) }
 
-    val sharedPrefs = context.getSharedPreferences("quick_settings_prefs", Context.MODE_PRIVATE)
+    val sharedPrefs = context.getSharedPreferences("quiet_hours_prefs", Context.MODE_PRIVATE)
     var savedNumber by remember {
         mutableStateOf(
-            sharedPrefs.getString("saved_number", "21") ?: "21"
+            sharedPrefs.getString("quiet_hours_start", "7") ?: "7"
         )
     }
     var savedNumber1 by remember {
         mutableStateOf(
-            sharedPrefs.getString("saved_number_start", "7") ?: "7"
+            sharedPrefs.getString("quiet_hours_end", "21") ?: "21"
         )
     }
     var showNumberDialog by remember { mutableStateOf(false) }
@@ -161,13 +161,13 @@ fun QuickSettingsTabContent() {
 }
 
 private fun saveNumber(context: Context, number: String) {
-    val sharedPrefs = context.getSharedPreferences("quick_settings_prefs", Context.MODE_PRIVATE)
-    sharedPrefs.edit(commit = true) { putString("saved_number", number) }
+    val sharedPrefs = context.getSharedPreferences("quiet_hours_prefs", Context.MODE_PRIVATE)
+    sharedPrefs.edit(commit = true) { putString("quiet_hours_start", number) }
 }
 
 private fun saveNumber1(context: Context, number: String) {
-    val sharedPrefs = context.getSharedPreferences("quick_settings_prefs", Context.MODE_PRIVATE)
-    sharedPrefs.edit(commit = true) { putString("saved_number_start", number) }
+    val sharedPrefs = context.getSharedPreferences("quiet_hours_prefs", Context.MODE_PRIVATE)
+    sharedPrefs.edit(commit = true) { putString("quiet_hours_end", number) }
 }
 
 @Composable
