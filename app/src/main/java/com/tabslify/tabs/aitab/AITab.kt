@@ -40,6 +40,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.ButtonDefaults.buttonColors
 import androidx.compose.material3.DropdownMenu
@@ -84,7 +85,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownColor
+import com.mikepenz.markdown.m3.markdownTypography
 import com.tabslify.core.objects.prvt
+import com.tabslify.core.ui.AlertDialogTabslify
 import com.tabslify.core.ui.BgSurface
 import com.tabslify.core.ui.NeonBox
 import com.tabslify.core.ui.PloppingButton
@@ -92,10 +97,6 @@ import com.tabslify.core.ui.SharedViewModel
 import com.tabslify.core.ui.TextPrimary
 import com.tabslify.core.ui.c
 import com.tabslify.core.ui.calloutAwareMarkdownComponents
-import com.mikepenz.markdown.m3.Markdown
-import com.mikepenz.markdown.m3.markdownColor
-import com.mikepenz.markdown.m3.markdownTypography
-import com.tabslify.core.ui.AlertDialogTabslify
 
 @Composable
 fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewModel()) {
@@ -157,6 +158,9 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
         animationSpec = tween(400),
         label = "overlay"
     )
+
+    var clearHistoryConfirmation by remember { mutableStateOf(false) }
+
     LaunchedEffect(vm.history.size) {
         val sel = vm.selectedMsg
         if (sel != null && sel >= vm.history.size) {
@@ -204,572 +208,600 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
         )
     }
 
+    if (clearHistoryConfirmation) {
+        AlertDialogTabslify(
+            onDismiss = { clearHistoryConfirmation = false },
+            onConfirm = { vm.clearHistory(); clearHistoryConfirmation = false },
+            title = "Chat leeren?",
+            text = "Alle Nachrichten in diesem Chat werden dauerhaft entfernt",
+            confirmText = "Chat leeren"
+        )
+    }
+
     val cs = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 
     Box(
         Modifier
             .fillMaxSize()
-            .background(Transparent)
             .imePadding()
             .alpha(alpha.value)
     ) {
-        Column(verticalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxSize()) {
-            Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(
-                    modifier = Modifier.padding(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val isPrivate = prvt()
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val isPrivate = prvt()
 
-                    listOfNotNull(
-                        "Nvidia",
-                        "Gemini",
-                        if (isPrivate) "Server" else null
-                    ).forEachIndexed { index, mode ->
-                        val containerColor by animateColorAsState(
-                            targetValue = if (vm.currentMode == mode) Color(0xFF555555) else Color(
-                                0xFF333333
-                            ),
-                            animationSpec = tween(durationMillis = 300),
-                            label = "containerColor"
-                        )
-                        Box {
-                            PloppingButton(
-                                onClick = {
-                                    if (vm.currentMode == mode) vm.showAiModels = true
-                                    vm.setMode(mode)
-                                },
-                                colors = buttonColors(containerColor = containerColor),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text(mode, color = White)
-                            }
-
-                            if (index == 0) {
-                                DropdownMenu(
-                                    expanded = vm.showAiModels,
-                                    onDismissRequest = { vm.showAiModels = false },
-                                    containerColor = Color(0xFF333333),
-                                    shape = RoundedCornerShape(30.dp),
-                                    modifier = Modifier.padding(10.dp, 0.dp)
-                                ) {
-                                    var showedDiv = false
-                                    vm.availableModels.forEach { model ->
-                                        if (model.vision && !showedDiv && !vm.availableModels[0].vision) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .padding(vertical = 16.dp)
-                                                    .fillMaxWidth(),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                HorizontalDivider(
-                                                    modifier = Modifier.weight(1f),
-                                                    thickness = 1.dp,
-                                                    color = White.copy(alpha = 0.3f)
-                                                )
-
-                                                Text(
-                                                    text = "VISION MODELS:",
-                                                    modifier = Modifier.padding(horizontal = 8.dp)
-                                                )
-
-                                                HorizontalDivider(
-                                                    modifier = Modifier.weight(1f),
-                                                    thickness = 1.dp,
-                                                    color = White.copy(alpha = 0.3f)
-                                                )
-                                            }
-                                            showedDiv = true
-                                        }
-                                        val containerColorModel by animateColorAsState(
-                                            targetValue = if (vm.selectedModel == model) Color(
-                                                0xFF555555
-                                            ) else Color(0xFF333333),
-                                            animationSpec = tween(durationMillis = 300),
-                                            label = "containerColor"
-                                        )
-                                        PloppingButton(
-                                            onClick = {
-                                                vm.selectModel(model)
-                                            },
-                                            onFinishedClick = { vm.showAiModels = false },
-                                            colors = buttonColors(containerColor = containerColorModel),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            val sizeRegex = Regex("""-\d+b""")
-                                            val sizeRegex1 = Regex("""\d+b""")
-                                            val name = model.name
-                                                .replace(sizeRegex, "")
-                                                .replace("-", " ")
-                                                .substringBeforeLast(":")
-                                            val sizeString: String? =
-                                                when (vm.currentMode) {
-                                                    "Nvidia" -> sizeRegex1.find(
-                                                        model.name
-                                                    )?.value
-
-                                                    "Gemini" -> null
-                                                    else -> model.name.substringAfter(":")
-                                                }
-                                            val size =
-                                                if (sizeString != null && sizeString != "null") {
-                                                    " (${sizeString.replace("-", " ")})"
-                                                } else ""
-                                            val weightInfo =
-                                                if (model.weight > 1 && !prvt()) " [${model.weight}x]" else ""
-                                            Text(
-                                                "$name$size$weightInfo",
-                                                textAlign = TextAlign.Left,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (vm.currentMode != "Server" && !prvt()) {
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        LinearProgressIndicator(
-                            progress = { vm.getUsageProgress() },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(RoundedCornerShape(12.dp)),
-                            color = Color(0xFF00FFAA),
-                            trackColor = Color(0xFF444444),
-                            strokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                vm.getUsageResetText(),
-                                color = White.copy(alpha = 0.8f),
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(start = 10.dp)
-                            )
-                            Text(
-                                "${vm.todayUsage}/$DAILY_LIMIT",
-                                color = White,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(end = 10.dp)
-                            )
-                        }
-                    }
-                }
-
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(
-                        vm.history.size,
-                        key = { index -> "${vm.history[index].ts}_${vm.history[index].own}" }) { index ->
-                        val msg = vm.history[index]
-                        val isUser = msg.own
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .zIndex(1f)
-                                .onGloballyPositioned { coords ->
-                                    val rootBounds = coords.boundsInRoot()
-                                    val windowInsets =
-                                        WindowInsetsCompat.toWindowInsetsCompat(view.rootWindowInsets)
-                                    val statusBarHeight =
-                                        windowInsets.getInsets(WindowInsetsCompat.Type.statusBars()).top
-                                    msgBounds[index] = rootBounds.bottom - statusBarHeight
-                                },
-                            contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
-                        ) {
-                            if (isUser) {
-                                Box(
-                                    modifier = Modifier
-                                        .widthIn(max = 280.dp)
-                                        .padding(
-                                            start = 40.dp,
-                                            end = 8.dp
-                                        )
-                                ) {
-                                    if (vm.isEditMode && index == vm.editIndex) {
-                                        TextField(
-                                            value = vm.currentEditMsg,
-                                            onValueChange = { vm.currentEditMsg = it },
-                                            textStyle = TextStyle(
-                                                color = White,
-                                                fontSize = 15.sp,
-                                                lineHeight = 21.sp
-                                            ),
-                                            shape = RoundedCornerShape(14.dp),
-                                            placeholder = {
-                                                Text(
-                                                    "Nachricht bearbeiten...",
-                                                    color = Color(0xFF888888)
-                                                )
-                                            },
-                                            colors = TextFieldDefaults.colors(
-                                                focusedTextColor = White,
-                                                unfocusedTextColor = White,
-                                                cursorColor = White,
-                                                focusedContainerColor = MaterialTheme.colorScheme.primary,
-                                                unfocusedContainerColor = MaterialTheme.colorScheme.primary,
-                                                focusedIndicatorColor = Transparent,
-                                                unfocusedIndicatorColor = Transparent
-                                            ),
-                                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                                            keyboardActions = KeyboardActions(onGo = { vm.sendMessage() }),
-                                            modifier = Modifier
-                                                .clip(
-                                                    RoundedCornerShape(
-                                                        topEnd = 10.dp,
-                                                        bottomEnd = 20.dp,
-                                                        bottomStart = 10.dp,
-                                                        topStart = 2.dp
-                                                    )
-                                                )
-                                                .zIndex(1000000f)
-                                                .combinedClickable(
-                                                    onLongClick = {
-                                                        vm.selectedMsg = vm.history.indexOf(msg)
-                                                        svm.fireEvent(true)
-                                                        vm.lastSelectedMsg = vm.selectedMsg
-                                                    },
-                                                    onClick = {}
-                                                )
-                                        )
-                                    } else {
-                                        Text(
-                                            text = msg.text,
-                                            color = White,
-                                            fontSize = 15.sp,
-                                            lineHeight = 21.sp,
-                                            modifier = Modifier
-                                                .clip(
-                                                    RoundedCornerShape(
-                                                        topEnd = 2.dp,
-                                                        bottomEnd = 10.dp,
-                                                        bottomStart = 10.dp,
-                                                        topStart = 10.dp
-                                                    )
-                                                )
-                                                .background(MaterialTheme.colorScheme.primary)
-                                                .zIndex(1000000f)
-                                                .combinedClickable(
-                                                    onLongClick = {
-                                                        vm.selectedMsg = vm.history.indexOf(msg)
-                                                        svm.fireEvent(true)
-                                                        vm.lastSelectedMsg = vm.selectedMsg
-                                                    },
-                                                    onClick = {}
-                                                )
-                                                .padding(horizontal = 14.dp, vertical = 10.dp)
-                                        )
-                                    }
-                                }
-                            } else {
-                                NeonBox(
-                                    modifier = Modifier
-                                        .combinedClickable(
-                                            onLongClick = {
-                                                vm.selectedMsg = vm.history.indexOf(msg)
-                                                svm.fireEvent(true)
-                                                vm.lastSelectedMsg = vm.selectedMsg
-                                            },
-                                            onClick = {}
-                                        )
-                                        .widthIn(max = 380.dp)
-                                        .padding(
-                                            start = 8.dp,
-                                            end = 40.dp
-                                        ),
-                                    cornerRadius = RoundedCornerShape(2.dp, 10.dp, 10.dp, 10.dp),
-                                    backgroundAlpha = 0.91f,
-                                    borderWidth = 2.8.dp,
-                                    neonColors = listOf(Color(0xFF00DE8C), Color(0xFF00A5D5)),
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(
-                                            horizontal = 14.dp,
-                                            vertical = 10.dp
-                                        )
-                                    ) {
-                                         Markdown(
-                                            content = if (vm.isLoading && msg.text.isEmpty()) "..." else msg.text,
-                                            colors = markdownColors,
-                                            typography = markdownTypography,
-                                            components = markdownComponents
-                                        )
-
-                                        if (msg.mode != null) {
-                                            Text(
-                                                text = msg.mode,
-                                                color = Color.Gray,
-                                                fontSize = 10.sp,
-                                                modifier = Modifier.padding(top = 4.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                val uploadButtonWeight by animateDpAsState(
-                    targetValue = if (vm.selectedModel.vision) 48.dp else 0.dp,
-                    animationSpec = tween(durationMillis = 300),
-                    label = "uploadButtonWeight"
-                )
-
-                val uploadButtonAlpha by animateFloatAsState(
-                    targetValue = if (vm.selectedModel.vision) 1f else 0f,
-                    animationSpec = tween(durationMillis = 300),
-                    label = "uploadButtonWeight"
-                )
-
-                val audioButtonWeight by animateDpAsState(
-                    targetValue = if (vm.selectedModel.audio) 48.dp else 0.dp,
-                    animationSpec = tween(300), label = ""
-                )
-                val audioButtonAlpha by animateFloatAsState(
-                    targetValue = if (vm.selectedModel.audio) 1f else 0f,
-                    animationSpec = tween(300), label = ""
-                )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .zIndex(1f)
-                        .padding(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = { imagePickerLauncher.launch("image/*") },
-                        modifier = Modifier
-                            .size(uploadButtonWeight)
-                            .alpha(uploadButtonAlpha)
-                            .background(
-                                if (vm.selectedImageUri != null) Color(0xFF555555) else Color(
-                                    0xFF333333
-                                ),
-                                RoundedCornerShape(50)
-                            )
-                    ) {
-                        Icon(
-                            if (vm.selectedImageUri == null) Icons.Default.CameraAlt else Icons.Default.Check,
-                            "Bild Anhängen",
-                            tint = Black
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { audioPickerLauncher.launch("audio/*") },
-                        modifier = Modifier
-                            .size(audioButtonWeight)
-                            .alpha(audioButtonAlpha)
-                            .background(
-                                if (vm.selectedAudioUri != null) Color(0xFF555555) else Color(0xFF333333),
-                                RoundedCornerShape(50)
-                            )
-                    ) {
-                        Icon(
-                            if (vm.selectedAudioUri == null) Icons.Default.MusicNote else Icons.Default.Check,
-                            "Audio Anhängen",
-                            tint = Black
-                        )
-                    }
-
-                    TextField(
-                        value = vm.currentMsg,
-                        onValueChange = { vm.currentMsg = it; vm.isEditMode = false },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        shape = RoundedCornerShape(24.dp),
-                        placeholder = { Text("Nachricht eingeben...", color = Color(0xFF888888)) },
-                        colors = TextFieldDefaults.colors(
-                            focusedTextColor = White,
-                            unfocusedTextColor = White,
-                            cursorColor = White,
-                            focusedContainerColor = Color(0xFF2A2A2A),
-                            unfocusedContainerColor = Color(0xFF2A2A2A),
-                            focusedIndicatorColor = Transparent,
-                            unfocusedIndicatorColor = Transparent
+                listOfNotNull(
+                    "Nvidia",
+                    "Gemini",
+                    if (isPrivate) "Server" else null
+                ).forEachIndexed { index, mode ->
+                    val containerColor by animateColorAsState(
+                        targetValue = if (vm.currentMode == mode) Color(0xFF555555) else Color(
+                            0xFF333333
                         ),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                        keyboardActions = KeyboardActions(onGo = { vm.sendMessage() })
+                        animationSpec = tween(durationMillis = 300),
+                        label = "containerColor"
                     )
+                    Box {
+                        PloppingButton(
+                            onClick = {
+                                if (vm.currentMode == mode) vm.showAiModels = true
+                                vm.setMode(mode)
+                            },
+                            colors = buttonColors(containerColor = containerColor),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(mode, color = White, fontSize = 13.sp)
+                        }
 
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(Color(0xFF333333))
-                            .size(48.dp)
-                            .combinedClickable(
-                                onClick = { vm.sendMessage() },
-                                onLongClick = {
-                                    vm.clearHistory()
+                        if (index == 0) {
+                            DropdownMenu(
+                                expanded = vm.showAiModels,
+                                onDismissRequest = { vm.showAiModels = false },
+                                containerColor = Color(0xFF333333),
+                                shape = RoundedCornerShape(30.dp),
+                                modifier = Modifier.padding(10.dp, 0.dp)
+                            ) {
+                                var showedDiv = false
+                                vm.availableModels.forEach { model ->
+                                    if (model.vision && !showedDiv && !vm.availableModels[0].vision) {
+                                        Row(
+                                            modifier = Modifier
+                                                .padding(vertical = 16.dp)
+                                                .fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            HorizontalDivider(
+                                                modifier = Modifier.weight(1f),
+                                                thickness = 1.dp,
+                                                color = White.copy(alpha = 0.3f)
+                                            )
+
+                                            Text(
+                                                text = "VISION MODELS:",
+                                                modifier = Modifier.padding(horizontal = 8.dp)
+                                            )
+
+                                            HorizontalDivider(
+                                                modifier = Modifier.weight(1f),
+                                                thickness = 1.dp,
+                                                color = White.copy(alpha = 0.3f)
+                                            )
+                                        }
+                                        showedDiv = true
+                                    }
+                                    val containerColorModel by animateColorAsState(
+                                        targetValue = if (vm.selectedModel == model) Color(
+                                            0xFF555555
+                                        ) else Color(0xFF333333),
+                                        animationSpec = tween(durationMillis = 300),
+                                        label = "containerColor"
+                                    )
+                                    PloppingButton(
+                                        onClick = {
+                                            vm.selectModel(model)
+                                        },
+                                        onFinishedClick = { vm.showAiModels = false },
+                                        colors = buttonColors(containerColor = containerColorModel),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        val sizeRegex = Regex("""-\d+b""")
+                                        val sizeRegex1 = Regex("""\d+b""")
+                                        val name = model.name
+                                            .replace(sizeRegex, "")
+                                            .replace("-", " ")
+                                            .substringBeforeLast(":")
+                                        val sizeString: String? =
+                                            when (vm.currentMode) {
+                                                "Nvidia" -> sizeRegex1.find(
+                                                    model.name
+                                                )?.value
+
+                                                "Gemini" -> null
+                                                else -> model.name.substringAfter(":")
+                                            }
+                                        val size =
+                                            if (sizeString != null && sizeString != "null") {
+                                                " (${sizeString.replace("-", " ")})"
+                                            } else ""
+                                        val weightInfo =
+                                            if (model.weight > 1 && !prvt()) " [${model.weight}x]" else ""
+                                        Text(
+                                            "$name$size$weightInfo",
+                                            textAlign = TextAlign.Left,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
                                 }
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send message")
+                            }
+                        }
+                    }
+                }
+
+                val clearButtonVisible = vm.history.isNotEmpty()
+
+                val clearButtonAlpha by animateFloatAsState(
+                    targetValue = if (clearButtonVisible) 1f else 0f,
+                    animationSpec = tween(durationMillis = 300),
+                    label = "clearButtonAlpha"
+                )
+
+                Box {
+                    if (clearButtonVisible || clearButtonAlpha > 0f) {
+                        PloppingButton(
+                            onClick = { clearHistoryConfirmation = true },
+                            modifier = Modifier
+                                .alpha(clearButtonAlpha),
+                            colors = buttonColors(containerColor = Color.Red),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Delete, "Clear AI History")
+                        }
                     }
                 }
             }
 
-            // Context Menu
-            if (overlayAlpha.value > 0) {
+            if (vm.currentMode != "Server" && !prvt()) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    LinearProgressIndicator(
+                        progress = { vm.getUsageProgress() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                        color = Color(0xFF00FFAA),
+                        trackColor = Color(0xFF444444),
+                        strokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            vm.getUsageResetText(),
+                            color = White.copy(alpha = 0.8f),
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(start = 10.dp)
+                        )
+                        Text(
+                            "${vm.todayUsage}/$DAILY_LIMIT",
+                            color = White,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(end = 10.dp)
+                        )
+                    }
+                }
+            }
+
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(
+                    vm.history.size,
+                    key = { index -> "${vm.history[index].ts}_${vm.history[index].own}" }) { index ->
+                    val msg = vm.history[index]
+                    val isUser = msg.own
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .zIndex(1f)
+                            .onGloballyPositioned { coords ->
+                                val rootBounds = coords.boundsInRoot()
+                                val windowInsets =
+                                    WindowInsetsCompat.toWindowInsetsCompat(view.rootWindowInsets)
+                                val statusBarHeight =
+                                    windowInsets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+                                msgBounds[index] = rootBounds.bottom - statusBarHeight
+                            },
+                        contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
+                    ) {
+                        if (isUser) {
+                            Box(
+                                modifier = Modifier
+                                    .widthIn(max = 280.dp)
+                                    .padding(
+                                        start = 40.dp,
+                                        end = 8.dp
+                                    )
+                            ) {
+                                if (vm.isEditMode && index == vm.editIndex) {
+                                    TextField(
+                                        value = vm.currentEditMsg,
+                                        onValueChange = { vm.currentEditMsg = it },
+                                        textStyle = TextStyle(
+                                            color = White,
+                                            fontSize = 15.sp,
+                                            lineHeight = 21.sp
+                                        ),
+                                        shape = RoundedCornerShape(14.dp),
+                                        placeholder = {
+                                            Text(
+                                                "Nachricht bearbeiten...",
+                                                color = Color(0xFF888888)
+                                            )
+                                        },
+                                        colors = TextFieldDefaults.colors(
+                                            focusedTextColor = White,
+                                            unfocusedTextColor = White,
+                                            cursorColor = White,
+                                            focusedContainerColor = MaterialTheme.colorScheme.primary,
+                                            unfocusedContainerColor = MaterialTheme.colorScheme.primary,
+                                            focusedIndicatorColor = Transparent,
+                                            unfocusedIndicatorColor = Transparent
+                                        ),
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                                        keyboardActions = KeyboardActions(onGo = { vm.sendMessage() }),
+                                        modifier = Modifier
+                                            .clip(
+                                                RoundedCornerShape(
+                                                    topEnd = 10.dp,
+                                                    bottomEnd = 20.dp,
+                                                    bottomStart = 10.dp,
+                                                    topStart = 2.dp
+                                                )
+                                            )
+                                            .zIndex(1000000f)
+                                            .combinedClickable(
+                                                onLongClick = {
+                                                    vm.selectedMsg = vm.history.indexOf(msg)
+                                                    svm.fireEvent(true)
+                                                    vm.lastSelectedMsg = vm.selectedMsg
+                                                },
+                                                onClick = {}
+                                            )
+                                    )
+                                } else {
+                                    Text(
+                                        text = msg.text,
+                                        color = White,
+                                        fontSize = 15.sp,
+                                        lineHeight = 21.sp,
+                                        modifier = Modifier
+                                            .clip(
+                                                RoundedCornerShape(
+                                                    topEnd = 2.dp,
+                                                    bottomEnd = 10.dp,
+                                                    bottomStart = 10.dp,
+                                                    topStart = 10.dp
+                                                )
+                                            )
+                                            .background(MaterialTheme.colorScheme.primary)
+                                            .zIndex(1000000f)
+                                            .combinedClickable(
+                                                onLongClick = {
+                                                    vm.selectedMsg = vm.history.indexOf(msg)
+                                                    svm.fireEvent(true)
+                                                    vm.lastSelectedMsg = vm.selectedMsg
+                                                },
+                                                onClick = {}
+                                            )
+                                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                                    )
+                                }
+                            }
+                        } else {
+                            NeonBox(
+                                modifier = Modifier
+                                    .combinedClickable(
+                                        onLongClick = {
+                                            vm.selectedMsg = vm.history.indexOf(msg)
+                                            svm.fireEvent(true)
+                                            vm.lastSelectedMsg = vm.selectedMsg
+                                        },
+                                        onClick = {}
+                                    )
+                                    .widthIn(max = 380.dp)
+                                    .padding(
+                                        start = 8.dp,
+                                        end = 40.dp
+                                    ),
+                                cornerRadius = RoundedCornerShape(2.dp, 10.dp, 10.dp, 10.dp),
+                                backgroundAlpha = 0.91f,
+                                borderWidth = 2.8.dp,
+                                neonColors = listOf(Color(0xFF00DE8C), Color(0xFF00A5D5)),
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(
+                                        horizontal = 14.dp,
+                                        vertical = 10.dp
+                                    )
+                                ) {
+                                    Markdown(
+                                        content = if (vm.isLoading && msg.text.isEmpty()) "..." else msg.text,
+                                        colors = markdownColors,
+                                        typography = markdownTypography,
+                                        components = markdownComponents
+                                    )
+
+                                    if (msg.mode != null) {
+                                        Text(
+                                            text = msg.mode,
+                                            color = Color.Gray,
+                                            fontSize = 10.sp,
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            val uploadButtonWeight by animateDpAsState(
+                targetValue = if (vm.selectedModel.vision) 48.dp else 0.dp,
+                animationSpec = tween(durationMillis = 300),
+                label = "uploadButtonWeight"
+            )
+
+            val uploadButtonAlpha by animateFloatAsState(
+                targetValue = if (vm.selectedModel.vision) 1f else 0f,
+                animationSpec = tween(durationMillis = 300),
+                label = "uploadButtonWeight"
+            )
+
+            val audioButtonWeight by animateDpAsState(
+                targetValue = if (vm.selectedModel.audio) 48.dp else 0.dp,
+                animationSpec = tween(300), label = ""
+            )
+            val audioButtonAlpha by animateFloatAsState(
+                targetValue = if (vm.selectedModel.audio) 1f else 0f,
+                animationSpec = tween(300), label = ""
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .zIndex(1f)
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { imagePickerLauncher.launch("image/*") },
+                    modifier = Modifier
+                        .size(uploadButtonWeight)
+                        .alpha(uploadButtonAlpha)
+                        .background(
+                            if (vm.selectedImageUri != null) Color(0xFF555555) else Color(
+                                0xFF333333
+                            ),
+                            RoundedCornerShape(50)
+                        )
+                ) {
+                    Icon(
+                        if (vm.selectedImageUri == null) Icons.Default.CameraAlt else Icons.Default.Check,
+                        "Bild Anhängen",
+                        tint = Black
+                    )
+                }
+
+                IconButton(
+                    onClick = { audioPickerLauncher.launch("audio/*") },
+                    modifier = Modifier
+                        .size(audioButtonWeight)
+                        .alpha(audioButtonAlpha)
+                        .background(
+                            if (vm.selectedAudioUri != null) Color(0xFF555555) else Color(
+                                0xFF333333
+                            ),
+                            RoundedCornerShape(50)
+                        )
+                ) {
+                    Icon(
+                        if (vm.selectedAudioUri == null) Icons.Default.MusicNote else Icons.Default.Check,
+                        "Audio Anhängen",
+                        tint = Black
+                    )
+                }
+
+                TextField(
+                    value = vm.currentMsg,
+                    onValueChange = { vm.currentMsg = it; vm.isEditMode = false },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    shape = RoundedCornerShape(24.dp),
+                    placeholder = { Text("Nachricht eingeben...", color = Color(0xFF888888)) },
+                    colors = TextFieldDefaults.colors(
+                        focusedTextColor = White,
+                        unfocusedTextColor = White,
+                        cursorColor = White,
+                        focusedContainerColor = Color(0xFF2A2A2A),
+                        unfocusedContainerColor = Color(0xFF2A2A2A),
+                        focusedIndicatorColor = Transparent,
+                        unfocusedIndicatorColor = Transparent
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                    keyboardActions = KeyboardActions(onGo = { vm.sendMessage() })
+                )
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Color(0xFF333333))
+                        .size(48.dp)
+                        .clickable(onClick = { vm.sendMessage() }),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send message")
+                }
+            }
+        }
+
+        if (overlayAlpha.value > 0) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .zIndex(2f)
+                    .alpha(overlayAlpha.value)
+                    .alpha(alpha.value)
+            ) {
+                var message: ChatMessage? by remember { mutableStateOf(null) }
+                message = vm.selectedMsg?.let { vm.history.getOrNull(it) }
+
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .zIndex(2f)
-                        .alpha(overlayAlpha.value)
-                        .alpha(alpha.value)
-                ) {
-                    var message: ChatMessage? by remember { mutableStateOf(null) }
-                    message = vm.selectedMsg?.let { vm.history.getOrNull(it) }
+                        .background(Black.copy(0.6f))
+                        .imePadding()
+                        .then(
+                            if (vm.selectedMsg != null && overlayAlpha.value > 0.5f) Modifier.clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) {
+                                vm.selectedMsg = null
+                                svm.fireEvent(false)
+                            } else Modifier
+                        )
+                )
 
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(Black.copy(0.6f))
-                            .imePadding()
-                            .then(
-                                if (vm.selectedMsg != null && overlayAlpha.value > 0.5f) Modifier.clickable(
-                                    indication = null,
-                                    interactionSource = remember { MutableInteractionSource() }
-                                ) {
-                                    vm.selectedMsg = null
-                                    svm.fireEvent(false)
-                                } else Modifier
+                val menuHeightPx = with(density) { 260.dp.roundToPx() }
+
+                Row(
+                    Modifier
+                        .offset {
+                            IntOffset(
+                                0,
+                                if (menuGoesUp) contextMenuY1 - menuHeightPx else contextMenuY1 - 150
                             )
-                    )
-
-                    val menuHeightPx = with(density) { 260.dp.roundToPx() }
-
-                    Row(
-                        Modifier
-                            .offset {
-                                IntOffset(
-                                    0,
-                                    if (menuGoesUp) contextMenuY1 - menuHeightPx else contextMenuY1 - 150
+                        }
+                        .align(
+                            if (message?.own ?: return) Alignment.TopEnd else Alignment.TopStart
+                        )
+                        .padding(
+                            end = if (message?.own ?: false) 10.dp else 0.dp,
+                            start = if (message?.own ?: false) 0.dp else 10.dp
+                        )
+                        .width(200.dp)
+                        .clip(
+                            if (menuGoesUp) {
+                                RoundedCornerShape(
+                                    topEnd = 10.dp,
+                                    bottomEnd = 2.dp,
+                                    bottomStart = 10.dp,
+                                    topStart = 20.dp
+                                )
+                            } else if (message?.own == false) {
+                                RoundedCornerShape(
+                                    bottomStart = 10.dp,
+                                    topStart = 2.dp,
+                                    topEnd = 10.dp,
+                                    bottomEnd = 20.dp
+                                )
+                            } else {
+                                RoundedCornerShape(
+                                    topStart = 10.dp,
+                                    topEnd = 2.dp,
+                                    bottomEnd = 10.dp,
+                                    bottomStart = 20.dp
                                 )
                             }
-                            .align(
-                                if (message?.own ?: return) Alignment.TopEnd else Alignment.TopStart
-                            )
-                            .padding(
-                                end = if (message?.own ?: false) 10.dp else 0.dp,
-                                start = if (message?.own ?: false) 0.dp else 10.dp
-                            )
-                            .width(200.dp)
-                            .clip(
-                                if (menuGoesUp) {
-                                    RoundedCornerShape(
-                                        topEnd = 10.dp,
-                                        bottomEnd = 2.dp,
-                                        bottomStart = 10.dp,
-                                        topStart = 20.dp
-                                    )
-                                } else if (message?.own == false) {
-                                    RoundedCornerShape(
-                                        bottomStart = 10.dp,
-                                        topStart = 2.dp,
-                                        topEnd = 10.dp,
-                                        bottomEnd = 20.dp
-                                    )
-                                } else {
-                                    RoundedCornerShape(
-                                        topStart = 10.dp,
-                                        topEnd = 2.dp,
-                                        bottomEnd = 10.dp,
-                                        bottomStart = 20.dp
-                                    )
-                                }
-                            )
-                            .background(BgSurface)
-                            .height(150.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
+                        )
+                        .background(BgSurface)
+                        .height(150.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.End
                     ) {
-                        Column(
-                            verticalArrangement = Arrangement.Center,
-                            horizontalAlignment = Alignment.End
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(c())
+                                .clickable {
+                                    val text = message?.text ?: return@clickable
+                                    val clip = ClipData(
+                                        ClipDescription(
+                                            "AITab Message",
+                                            arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN)
+                                        ),
+                                        ClipData.Item(text)
+                                    )
+                                    cs.setPrimaryClip(clip)
+                                    vm.selectedMsg = null
+                                    svm.fireEvent(false)
+                                }
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
+                            Text(
+                                "Kopieren",
+                                color = TextPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 22.sp
+                            )
+                        }
+
+                        if (message?.own ?: false) {
+                            Spacer(Modifier.height(12.dp))
+
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(c())
                                     .clickable {
-                                        val text = message?.text ?: return@clickable
-                                        val clip = ClipData(
-                                            ClipDescription(
-                                                "AITab Message",
-                                                arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN)
-                                            ),
-                                            ClipData.Item(text)
-                                        )
-                                        cs.setPrimaryClip(clip)
+                                        val msgIndex = vm.selectedMsg ?: return@clickable
+                                        vm.currentEditMsg = vm.history[msgIndex].text
+                                        vm.editIndex = msgIndex
+                                        vm.isEditMode = true
                                         vm.selectedMsg = null
                                         svm.fireEvent(false)
                                     }
                                     .padding(horizontal = 16.dp, vertical = 8.dp)
                             ) {
                                 Text(
-                                    "Kopieren",
+                                    "Bearbeiten",
                                     color = TextPrimary,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 22.sp
                                 )
-                            }
-
-                            if (message?.own ?: false) {
-                                Spacer(Modifier.height(12.dp))
-
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(c())
-                                        .clickable {
-                                            val msgIndex = vm.selectedMsg ?: return@clickable
-                                            vm.currentEditMsg = vm.history[msgIndex].text
-                                            vm.editIndex = msgIndex
-                                            vm.isEditMode = true
-                                            vm.selectedMsg = null
-                                            svm.fireEvent(false)
-                                        }
-                                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                                ) {
-                                    Text(
-                                        "Bearbeiten",
-                                        color = TextPrimary,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 22.sp
-                                    )
-                                }
                             }
                         }
                     }
                 }
             }
         }
+    }
 
-        LaunchedEffect(vm.history.size, vm.isLoading) {
-            if (vm.history.isNotEmpty()) listState.animateScrollToItem(vm.history.lastIndex + if (vm.isLoading) 1 else 0)
-        }
+    LaunchedEffect(vm.history.size, vm.isLoading) {
+        if (vm.history.isNotEmpty()) listState.animateScrollToItem(vm.history.lastIndex + if (vm.isLoading) 1 else 0)
     }
 }
