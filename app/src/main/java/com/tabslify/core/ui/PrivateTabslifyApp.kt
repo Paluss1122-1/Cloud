@@ -3,7 +3,6 @@
 package com.tabslify.core.ui
 
 import android.Manifest
-import android.R.attr.top
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Activity.RESULT_OK
@@ -161,7 +160,6 @@ import com.tabslify.tabs.ContactsViewModel
 import com.tabslify.tabs.DateCalculatorContent
 import com.tabslify.tabs.GalleryTab
 import com.tabslify.tabs.GmailTabContent
-import com.tabslify.tabs.audiorecordertab.AudioRecorderContent
 import com.tabslify.tabs.MovieDiscoveryTabContent
 import com.tabslify.tabs.NotizenApp
 import com.tabslify.tabs.OtherBucketViewer
@@ -169,7 +167,7 @@ import com.tabslify.tabs.QuickSettingsTabContent
 import com.tabslify.tabs.RemoteDesktopTabContent
 import com.tabslify.tabs.WeatherTabContent
 import com.tabslify.tabs.aitab.AITabContent
-import com.tabslify.tabs.audiorecordertab.AudioRecorderContent
+import com.tabslify.tabs.audiorecordertab.AudioRecorderTab
 import com.tabslify.tabs.authenticator.AuthenticatorTab
 import com.tabslify.tabs.exploretab.ExploreTabContent
 import com.tabslify.tabs.mediaplayer.AiResponseHistorySheet
@@ -273,7 +271,7 @@ enum class MenuItem(
     RECORDER(
         "Recorder",
         "🎙️",
-        { AudioRecorderContent() }
+        { AudioRecorderTab() }
     ),
     DATECALCULATOR(
         "Date Calculator",
