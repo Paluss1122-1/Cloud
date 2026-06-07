@@ -53,8 +53,10 @@ import androidx.media3.common.util.Size
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import com.tabslify.core.activities.Tabslify.Companion.appScope
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.SettableFuture
 import com.tabslify.core.activities.MainActivity
+import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.functions.canNotify
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config.COMPLETED_PODCASTS
@@ -68,8 +70,6 @@ import com.tabslify.tabs.mediaplayer.FavoritesPlaylist
 import com.tabslify.tabs.mediaplayer.ListenSession
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
 import com.tabslify.tabs.mediaplayer.PodcastShowManager
-import com.google.common.util.concurrent.ListenableFuture
-import com.google.common.util.concurrent.SettableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -83,6 +83,7 @@ import java.time.LocalTime.now
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 @OptIn(UnstableApi::class)
@@ -1910,7 +1911,7 @@ class MediaPlayerService : MediaSessionService() {
         pendingUpdateTime = scheduledTime
 
         updateNotJob = appScope.launch {
-            delay(cooldownMsIntern)
+            delay(cooldownMsIntern.milliseconds)
 
             if (pendingUpdateTime == scheduledTime) {
                 val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
