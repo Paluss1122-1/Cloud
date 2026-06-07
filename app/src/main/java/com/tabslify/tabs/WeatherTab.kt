@@ -5,9 +5,16 @@ import android.R
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Resources
 import android.location.Location
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Animatable
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.Animatable
@@ -18,7 +25,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,9 +37,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocationOff
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -47,17 +63,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import com.tabslify.core.TabNavigationViewModel
+import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.client
 import com.tabslify.core.objects.Config.cms
-import com.google.android.gms.location.LocationServices
+import com.tabslify.core.objects.toast
 import io.github.jan.supabase.functions.functions
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.Dispatchers
@@ -71,7 +95,11 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
 import java.util.concurrent.CountDownLatch
+import kotlin.time.Duration.Companion.milliseconds
 
 @Serializable
 data class WeatherRequest(
@@ -188,6 +216,54 @@ suspend fun fetchWeatherForecast(lat: Double, lon: Double, days: Int = 7): Weath
         )
     }
 
+suspend fun fetchCoordsForCity(city: String): Pair<Double, Double>? = withContext(Dispatchers.IO) {
+    try {
+        val encoded = URLEncoder.encode(city, "UTF-8")
+        val conn = URL("https://nominatim.openstreetmap.org/search?q=$encoded&format=json&limit=1")
+            .openConnection() as HttpURLConnection
+        conn.setRequestProperty("User-Agent", "CloudApp/1.0")
+        val text = conn.inputStream.bufferedReader().readText()
+        conn.disconnect()
+        val arr = Json.parseToJsonElement(text).jsonArray
+        if (arr.isEmpty()) return@withContext null
+        val obj = arr[0].jsonObject
+        val lat = obj["lat"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: return@withContext null
+        val lon = obj["lon"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: return@withContext null
+        Pair(lat, lon)
+    } catch (_: Exception) { null }
+}
+
+suspend fun getCurrentLocation(context: Context): Location? {
+    return withContext(Dispatchers.IO) {
+        try {
+            val fused = LocationServices.getFusedLocationProviderClient(context)
+            if (ActivityCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                return@withContext null
+            }
+            var loc: Location? = null
+            val task = fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+            val latch = CountDownLatch(1)
+            task.addOnSuccessListener {
+                loc = it
+                latch.countDown()
+            }.addOnFailureListener {
+                latch.countDown()
+            }
+            latch.await()
+            loc
+        } catch (_: Exception) {
+            null
+        }
+    }
+}
+
 suspend fun getLastKnownLocation(context: Context): Location? {
     return withContext(Dispatchers.IO) {
         try {
@@ -232,6 +308,25 @@ fun WeatherTabContent(
     var weather by remember { mutableStateOf<WeatherData?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var searchText by remember { mutableStateOf("") }
+    var directedToSettings by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    val animIconbg = remember { Animatable(1f) }
+    val animIconbgColor = remember { Animatable(Color(0xFF001FBB)) }
+
+    val blink = {
+        scope.launch {
+            animIconbgColor.animateTo(Color.Red)
+            animIconbg.animateTo(0.3f, animationSpec = tween(durationMillis = 400))
+            delay(300.milliseconds)
+            animIconbg.animateTo(0.8f, animationSpec = tween(durationMillis = 400))
+            delay(300.milliseconds)
+            animIconbg.animateTo(0.4f, animationSpec = tween(durationMillis = 400))
+            delay(300.milliseconds)
+            animIconbg.animateTo(1f, animationSpec = tween(durationMillis = 400))
+        }
+    }
 
     LaunchedEffect(selectionState.hour, selectionState.dayIndex) {
         val canGoBack = selectionState.hour != null || selectionState.dayIndex != null
@@ -261,13 +356,64 @@ fun WeatherTabContent(
         }
     }
 
-    val refreshWeather: () -> Unit = {
+    var refreshWeather: () -> Unit = {}
+    val manualLoc = {
+        if (ActivityCompat.checkSelfPermission(
+                ctx,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED || ActivityCompat.checkSelfPermission(
+                ctx,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            refreshWeather()
+        } else {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", ctx.packageName, null)
+            }
+            ctx.startActivity(intent)
+            val locale = Resources.getSystem().configuration.locales[0]
+            val language = locale.language
+
+            if (language == "de") {
+                toast(ctx, "Berechtigungen -> Standort -> Immer erlauben")
+            } else {
+                toast(ctx, "Permissions -> Location -> Allow all the time")
+            }
+            directedToSettings = true
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) {
+            refreshWeather()
+        }
+    }
+
+    refreshWeather = {
         scope.launch {
             isLoading = true
             error = null
-            val loc = getLastKnownLocation(ctx)
+            if (ActivityCompat.checkSelfPermission(
+                    ctx,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                    ctx,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                isLoading = false
+                blink()
+                Config.requestPermission("loc", permissionLauncher, ctx)
+                return@launch
+            }
+            val loc = getCurrentLocation(ctx)
             if (loc == null) {
-                error = "Standort nicht verfügbar"
+                blink()
                 isLoading = false
                 return@launch
             }
@@ -277,6 +423,7 @@ fun WeatherTabContent(
                 error = "Fehler: ${e.message}"
             } finally {
                 isLoading = false
+                animIconbgColor.animateTo(Color(0xFF001FBB), animationSpec = tween(durationMillis = 500))
             }
         }
     }
@@ -285,16 +432,50 @@ fun WeatherTabContent(
         refreshWeather()
     }
 
+    val searchWeather: (String) -> Unit = { query ->
+        scope.launch {
+            isLoading = true
+            error = null
+            selectionState = SelectionState(hour = null, dayIndex = null)
+            try {
+                val coords = fetchCoordsForCity(query)
+                if (coords == null) {
+                    error = "Ort nicht gefunden: $query"
+                } else {
+                    weather = fetchWeatherForecast(coords.first, coords.second, days = 14)
+                }
+            } catch (e: Exception) {
+                error = "Fehler: ${e.message}"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(weather?.city) {
+        weather?.city?.takeIf { it.isNotEmpty() }?.let { searchText = it }
+    }
+
     val alpha = remember { Animatable(0f) }
 
     LaunchedEffect(Unit) {
-        delay(100)
+        delay(100.milliseconds)
         alpha.animateTo(
             1f, animationSpec = tween(
                 durationMillis = 150,
                 easing = FastOutSlowInEasing
             )
         )
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && directedToSettings) {
+                refreshWeather()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     PullToRefreshBox(
@@ -318,6 +499,56 @@ fun WeatherTabContent(
             if (error != null) {
                 Text(error!!, color = Color.Red, modifier = Modifier.padding(vertical = 8.dp))
             }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = searchText,
+                    onValueChange = { searchText = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Ort suchen...", color = Color.Gray) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF6B6BFF),
+                        unfocusedBorderColor = Color(0xFF44444F),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        cursorColor = Color(0xFF6B6BFF)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { searchWeather(searchText) })
+                )
+                Spacer(Modifier.width(8.dp))
+                IconButton(onClick = { searchWeather(searchText) }) {
+                    Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White)
+                }
+                if (ActivityCompat.checkSelfPermission(
+                        ctx,
+                        Manifest.permission.ACCESS_FINE_LOCATION
+                    ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                        ctx,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                animIconbgColor.value.copy(alpha = animIconbg.value),
+                                shape = RoundedCornerShape(100)
+                            )
+                            .clip(RoundedCornerShape(8.dp))
+                    ) {
+                        IconButton(onClick = { manualLoc() }) {
+                            Icon( Icons.Default.LocationOff, contentDescription = null, tint = Color.White)
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
 
             AnimatedContent(
                 targetState = Triple(weather, selectionState.hour, selectionState.dayIndex),
@@ -672,7 +903,8 @@ fun WeatherDetailBox(icon: String, label: String, value: String) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(icon, fontSize = 24.sp)
+            //Text(icon, fontSize = 24.sp)
+            Icon(Icons.Default.Thermostat, contentDescription = "Thermostat")
             Spacer(Modifier.height(4.dp))
             Text(
                 label,
@@ -689,153 +921,6 @@ fun WeatherDetailBox(icon: String, label: String, value: String) {
         }
     }
 }
-
-@Composable
-fun TodayView(data: WeatherData, onDaySelected: (Int) -> Unit, onHourSelected: (HourData) -> Unit) {
-    val today = data.days.firstOrNull()
-    if (today == null) {
-        Text("Keine Tagesdaten", color = Color.White)
-        return
-    }
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF22222A))
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                "${data.city}",
-                color = Color.White,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "${data.currentTemp.toInt()}°C  ${iconToEmojiShort(data.currentIcon())}",
-                color = Color.White,
-                fontSize = 40.sp
-            )
-            Text(data.currentCondition, color = Color.LightGray)
-            Spacer(Modifier.height(12.dp))
-
-            Text(
-                "Stundenvorhersage",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                today.hours.forEach { hour ->
-                    Card(
-                        modifier = Modifier
-                            .padding(8.dp)
-                            .width(110.dp)
-                            .clickable { onHourSelected(hour) },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF2F2F3A))
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(hour.time, color = Color.White)
-                            Text(iconToEmojiShort(hour.icon), fontSize = 28.sp)
-                            Text("${hour.temp.toInt()}°C", color = Color.White)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun WeatherData.currentIcon() = currentIcon
-private fun iconToEmojiShort(icon: String) = iconToEmoji(icon)
-
-@Composable
-fun SmallHourCard(hour: HourData) {
-    Column(
-        modifier = Modifier
-            .padding(8.dp)
-            .width(80.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(hour.time, color = Color.White)
-        Text(iconToEmojiShort(hour.icon), fontSize = 24.sp)
-        Text("${hour.temp.toInt()}°", color = Color.White)
-    }
-}
-
-@Composable
-fun DaysOverview(days: List<DayData>, onDayClick: (Int) -> Unit) {
-    Column {
-        Text("Tage", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-            days.forEachIndexed { idx, d ->
-                Card(
-                    modifier = Modifier
-                        .padding(8.dp)
-                        .width(120.dp)
-                        .clickable { onDayClick(idx) },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A3A))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(d.date, color = Color.White)
-                        Text(iconToEmojiShort(d.icon), fontSize = 32.sp)
-                        Text(
-                            "${d.avgTemp.toInt()}°C",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun WeatherDetailSmall(icon: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(icon, fontSize = 18.sp)
-        Text(value, color = Color.White, fontSize = 12.sp)
-    }
-}
-
-@Composable
-fun WeatherWidgetPreview(data: WeatherData) {
-    Card(
-        modifier = Modifier
-            .width(200.dp)
-            .height(120.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A3A)),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.Start,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(data.city, color = Color.White, fontWeight = FontWeight.Bold)
-            Row(
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("${data.currentTemp.toInt()}°C", color = Color.White, fontSize = 20.sp)
-                Text(iconToEmojiShort(data.currentIcon()), fontSize = 20.sp)
-            }
-        }
-    }
-}
-
 
 suspend fun weathernot(context: Context, day: String, hour: String, weatherData: WeatherData?) {
     if (weatherData == null) {
