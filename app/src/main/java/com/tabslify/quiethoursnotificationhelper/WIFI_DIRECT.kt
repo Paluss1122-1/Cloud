@@ -793,7 +793,7 @@ fun startUpdateListener(context: Context) {
                     val jsonData = reader.readLine()
                     client.close()
 
-                    if (jsonData != null) {
+                    if (!jsonData.isNullOrBlank()) {
                         val updatedTodos = parseTodosFromJson(jsonData)
                         saveTodos(context, updatedTodos)
                         withContext(Dispatchers.Main) {
