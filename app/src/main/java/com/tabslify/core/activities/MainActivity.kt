@@ -30,7 +30,7 @@ import com.tabslify.core.objects.Config.requestPermission
 import com.tabslify.core.objects.prvt
 import com.tabslify.core.ui.LandingPageOrApp
 import com.tabslify.core.ui.Typography
-import com.tabslify.core.ui.c
+import com.tabslify.core.ui.rememberAppColor
 import com.tabslify.tabs.JsonEditorContent
 import io.github.jan.supabase.storage.storage
 import java.io.File
@@ -94,16 +94,17 @@ class MainActivity : FragmentActivity() {
         val startTarget = intent.getStringExtra("target")
         this.startTarget = startTarget
         setContent {
+            val appColor = rememberAppColor()
             MaterialTheme(
                 colorScheme = MaterialTheme.colorScheme.copy(
-                    primary = c(),
+                    primary = appColor,
                     onSurface = Color.White
                 ),
                 typography = Typography,
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = c()
+                    color = appColor
                 ) {
                     if (showJsonEditor && jsonFilePath != null) {
                         JsonEditorContent(

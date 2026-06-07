@@ -1,10 +1,27 @@
 package com.tabslify.core.ui
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.Typography
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.tabslify.R
 import java.util.Calendar
 
@@ -27,6 +44,53 @@ fun c(): Color {
         in 11..16 -> Color(0xFF383838)
         else -> Color(0xFF001FBB)
     }
+}
+
+@Composable
+fun rememberAppColor(): Color {
+    var targetColor by remember { mutableStateOf(c()) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val context = LocalContext.current
+
+    val color by animateColorAsState(
+        targetValue = targetColor,
+        animationSpec = tween(
+            durationMillis = 1500,
+            easing = LinearEasing
+        ),
+        label = "appColorAnimation"
+    )
+
+    DisposableEffect(lifecycle) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                if (intent?.action == Intent.ACTION_TIME_TICK) {
+                    targetColor = c()
+                }
+            }
+        }
+
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    targetColor = c()
+                    context.registerReceiver(receiver, IntentFilter(Intent.ACTION_TIME_TICK))
+                }
+                Lifecycle.Event.ON_PAUSE -> {
+                    context.unregisterReceiver(receiver)
+                }
+                else -> {}
+            }
+        }
+
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            runCatching { context.unregisterReceiver(receiver) }
+        }
+    }
+
+    return color
 }
 
 val AppFontFamily = FontFamily(
