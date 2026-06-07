@@ -1,6 +1,5 @@
 package com.tabslify.core.activities
 
-import android.Manifest
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.app.admin.DeviceAdminReceiver
@@ -27,6 +26,8 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
 import com.tabslify.core.objects.Config
+import com.tabslify.core.objects.Config.requestPermission
+import com.tabslify.core.objects.prvt
 import com.tabslify.core.ui.LandingPageOrApp
 import com.tabslify.core.ui.Typography
 import com.tabslify.core.ui.c
@@ -45,9 +46,7 @@ class MainActivity : FragmentActivity() {
     private var showJsonEditor by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        if (savedInstanceState == null) {
-            installSplashScreen()
-        }
+        installSplashScreen()
         super.onCreate(savedInstanceState)
 
         enableEdgeToEdge()
@@ -74,27 +73,20 @@ class MainActivity : FragmentActivity() {
             window.decorView
         ).isAppearanceLightStatusBars = false
 
-        val permissions = arrayOf(
-            Manifest.permission.READ_MEDIA_AUDIO,
-            Manifest.permission.READ_MEDIA_IMAGES,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.CAMERA,
-            Manifest.permission.READ_CONTACTS,
-            Manifest.permission.POST_NOTIFICATIONS
-        )
+        if (prvt()) {
+            val launcher = registerForActivityResult(
+                ActivityResultContracts.RequestMultiplePermissions()
+            ) { _ -> }
 
-        val launcher = registerForActivityResult(
-            ActivityResultContracts.RequestMultiplePermissions()
-        ) { _ -> }
+            requestPermission("all", launcher, this)
 
-        launcher.launch(permissions)
+            val musicPrefs = getSharedPreferences("music_player_prefs", MODE_PRIVATE)
+            val wasPlayingMusic = musicPrefs.getBoolean("was_playing_music", false)
+            val wasPlayingPodcast = musicPrefs.getBoolean("was_playing_podcast", false)
 
-        val musicPrefs = getSharedPreferences("music_player_prefs", MODE_PRIVATE)
-        val wasPlayingMusic = musicPrefs.getBoolean("was_playing_music", false)
-        val wasPlayingPodcast = musicPrefs.getBoolean("was_playing_podcast", false)
-        
-        if (wasPlayingMusic || wasPlayingPodcast) {
-            com.tabslify.services.MediaPlayerService.startMusicService(this)
+            if (wasPlayingMusic || wasPlayingPodcast) {
+                com.tabslify.services.MediaPlayerService.startMusicService(this)
+            }
         }
 
         checkPermissionsAndHandleIntent(intent)
