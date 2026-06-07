@@ -41,11 +41,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.tabslify.core.objects.Config
-import com.tabslify.core.ui.NeonBox
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.tasks.Tasks
+import com.tabslify.core.objects.Config
 import com.tabslify.core.ui.AlertDialogTabslify
+import com.tabslify.core.ui.NeonBox
 import kotlinx.coroutines.launch
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory

@@ -67,11 +67,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
-import com.tabslify.tabs.mediaplayer.Episode
-import com.tabslify.tabs.mediaplayer.PodcastFeed
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.compose.elements.MarkdownBlockQuote
 import com.mikepenz.markdown.m3.Markdown
+import com.tabslify.tabs.mediaplayer.Episode
+import com.tabslify.tabs.mediaplayer.PodcastFeed
 import kotlinx.coroutines.launch
 
 fun parseCalloutType(content: String): Pair<CalloutType?, String> {

@@ -2,13 +2,13 @@ package com.tabslify.quiethoursnotificationhelper
 
 import android.graphics.BitmapFactory
 import android.util.Base64
-import com.tabslify.core.objects.Config
-import com.tabslify.core.objects.Config.DEF_GEMINI
-import com.tabslify.tabs.aitab.ChatMessage
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
 import com.google.firebase.ai.type.content
+import com.tabslify.core.objects.Config
+import com.tabslify.core.objects.Config.DEF_GEMINI
+import com.tabslify.tabs.aitab.ChatMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
