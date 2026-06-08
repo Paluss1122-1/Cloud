@@ -7,9 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.location.Location
 import android.os.Looper
-import com.tabslify.core.objects.Config
-import com.tabslify.core.objects.reportError
-import com.tabslify.quiethoursnotificationhelper.getHomeWifiStatus
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingEvent
 import com.google.android.gms.location.GeofencingRequest
@@ -18,6 +15,9 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.tabslify.core.objects.Config
+import com.tabslify.core.objects.reportError
+import com.tabslify.quiethoursnotificationhelper.getHomeWifiStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
