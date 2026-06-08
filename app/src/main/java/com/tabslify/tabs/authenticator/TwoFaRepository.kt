@@ -27,7 +27,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.tabslify.core.functions.ERRORINSERTDATA
 import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.objects.Config
 import com.tabslify.core.ui.c
@@ -86,12 +85,11 @@ suspend fun loadTwoFaEntriesFromSupabase(): List<TwoFAEntry> {
             supabaseEntries.mapNotNull { it.toLocal() }
         } catch (e: Exception) {
             errorInsert(
-                ERRORINSERTDATA(
                     "TwoFaRepository",
                     "Fehler bei Laden von Einträgen aus Supabase: ${e.message}",
                     Instant.now().toString(),
                     "ERROR"
-                )
+                
             )
             emptyList()
         }
@@ -118,12 +116,11 @@ suspend fun saveTwoFaEntryToSupabase(entry: TwoFAEntry, db: TwoFADatabase? = nul
             true
         } catch (e: Exception) {
             errorInsert(
-                ERRORINSERTDATA(
                     "TwoFARepository",
                     "❌ Supabase Fehler: ${e.message}",
                     Instant.now().toString(),
                     "ERROR"
-                )
+                
             )
             false
         }
@@ -135,12 +132,11 @@ suspend fun updateTwoFaEntryInSupabase(entry: TwoFAEntry): Boolean {
         try {
             if (entry.supabaseId == null) {
                 errorInsert(
-                    ERRORINSERTDATA(
                         "TwoFARepository",
                         "Keine Supabase-ID vorhanden, überspringe Update",
                         Instant.now().toString(),
                         "Warning"
-                    )
+                    
                 )
                 return@withContext false
             }
@@ -160,12 +156,11 @@ suspend fun updateTwoFaEntryInSupabase(entry: TwoFAEntry): Boolean {
             true
         } catch (e: Exception) {
             errorInsert(
-                ERRORINSERTDATA(
                     "TwoFARepository",
                     "❌ Supabase Update-Fehler: ${e.message}",
                     Instant.now().toString(),
                     "ERROR"
-                )
+                
             )
             false
         }
@@ -211,12 +206,11 @@ suspend fun syncTwoFaEntriesWithConfirmation(context: Context, db: TwoFADatabase
                     }
                 } catch (e: Exception) {
                     errorInsert(
-                        ERRORINSERTDATA(
                             "TwoFARepository",
                             "❌ Fehler beim lokalen Speichern: ${entry.name} (${e.message})",
                             Instant.now().toString(),
                             "ERROR"
-                        )
+                        
                     )
                 }
             }
@@ -229,12 +223,11 @@ suspend fun syncTwoFaEntriesWithConfirmation(context: Context, db: TwoFADatabase
             )
         } catch (e: Exception) {
             errorInsert(
-                ERRORINSERTDATA(
                     "TwoFARepository",
                     "❌ Fehler beim Synchronisieren: ${e.message}",
                     Instant.now().toString(),
                     "ERROR"
-                )
+                
             )
             SyncResult(uploaded = 0, downloaded = 0, total = 0, error = e.message)
         }
@@ -277,12 +270,11 @@ suspend fun processSyncDecision(
             }
         } catch (e: Exception) {
             errorInsert(
-                ERRORINSERTDATA(
                     "TwoFaRepository",
                     "Fehler in processSyncDecision: ${e.message}",
                     Instant.now().toString(),
                     "ERROR"
-                )
+                
             )
             false
         }
@@ -433,12 +425,11 @@ suspend fun deleteTwoFaEntryFromSupabase(entry: TwoFAEntry): Boolean {
             true
         } catch (e: Exception) {
             errorInsert(
-                ERRORINSERTDATA(
                     "TwoFARepository",
                     "❌ Supabase Delete-Fehler: ${e.message}",
                     Instant.now().toString(),
                     "ERROR"
-                )
+                
             )
             false
         }

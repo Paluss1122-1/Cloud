@@ -17,7 +17,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.content.PermissionChecker
 import androidx.lifecycle.AndroidViewModel
-import com.tabslify.core.functions.ERRORINSERTDATA
 import com.tabslify.core.functions.errorInsert
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -162,12 +161,11 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
                 isProcessing = false
                 scope.launch {
                     errorInsert(
-                        data = ERRORINSERTDATA(
                             "AudioRecorderContent.shareDialog.onError",
                             it,
                             Instant.now().toString(),
                             "ERROR"
-                        )
+                        
                     )
                 }
             }

@@ -70,7 +70,6 @@ import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
 import com.google.firebase.ai.type.content
 import com.tabslify.core.activities.Tabslify.Companion.coroutineExceptionHandler
-import com.tabslify.core.functions.ERRORINSERTDATA
 import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config
@@ -214,12 +213,11 @@ private fun PowerManager.WakeLock?.safeRelease() {
 private fun logError(service: String, e: Exception) {
     syncScope.launch {
         errorInsert(
-            ERRORINSERTDATA(
                 service,
                 e.stackTraceToString(),
                 Instant.now().toString(),
                 "ERROR"
-            )
+            
         )
     }
 }

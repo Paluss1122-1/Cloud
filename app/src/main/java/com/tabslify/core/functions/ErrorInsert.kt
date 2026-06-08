@@ -1,24 +1,23 @@
 package com.tabslify.core.functions
 
 import com.tabslify.core.objects.Config
-import io.github.jan.supabase.postgrest.from
-import kotlinx.serialization.Serializable
+import io.github.jan.supabase.functions.functions
 
-@Serializable
-data class ERRORINSERTDATA(
-    val serviceName: String,
-    val errorMessage: String,
-    val createdAt: String,
-    val severity: String,
-    val id: Int? = null
-)
-
-suspend fun errorInsert(data: ERRORINSERTDATA): Int {
+suspend fun errorInsert(serviceName: String, errorMessage: String, createdAt: String, severity: String): Int {
     if (!Config.realDevice) return 0
-    try {
-        Config.client.from("error_reports").insert(data)
-        return 1
-    } catch (_: Exception) {
+    return try {
+        val response = Config.client.functions.invoke(
+            function = "report_error",
+            body = mapOf(
+                "serviceName" to serviceName,
+                "errorMessage" to errorMessage,
+                "createdAt" to createdAt,
+                "severity" to severity
+            )
+        )
+        response.status.value
+    } catch (e: Exception) {
+        println("Error invoking Edge Function: ${e.message}")
+        500
     }
-    return 0
 }

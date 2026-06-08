@@ -10,7 +10,6 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.appcheck.appCheck
 import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
-import com.tabslify.core.functions.ERRORINSERTDATA
 import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.client
@@ -47,12 +46,11 @@ class Tabslify : Application() {
             runBlocking {
                 try {
                     errorInsert(
-                        ERRORINSERTDATA(
                             "UncaughtException: ${thread.name}",
                             throwable.stackTraceToString().take(8000),
                             Instant.now().toString(),
                             "ERROR"
-                        )
+                        
                     )
                 } catch (_: Exception) {}
             }
@@ -62,12 +60,11 @@ class Tabslify : Application() {
         coroutineExceptionHandler = CoroutineExceptionHandler { context, throwable ->
             CoroutineScope(Dispatchers.IO).launch {
                 errorInsert(
-                    ERRORINSERTDATA(
                         "CoroutineException: $context",
                         throwable.stackTraceToString().take(8000),
                         Instant.now().toString(),
                         "ERROR"
-                    )
+                    
                 )
             }
         }

@@ -45,7 +45,6 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.tabslify.core.functions.ERRORINSERTDATA
 import com.tabslify.core.functions.errorInsert
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -111,12 +110,11 @@ fun AuthenticatorTab(paddingButtom: Dp) {
     if (activity == null) {
         LaunchedEffect(Unit) {
             errorInsert(
-                ERRORINSERTDATA(
                     "AuthenticatorTab",
                     "❌ FragmentActivity fehlt",
                     Instant.now().toString(),
                     "ERROR"
-                )
+                
             )
         }
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -181,12 +179,11 @@ fun AuthenticatorTab(paddingButtom: Dp) {
                         isAuthenticated = false
                         coroutineScope.launch {
                             errorInsert(
-                                ERRORINSERTDATA(
                                     "AuthenticatorTab",
                                     "❌ AUTH: $error",
                                     Instant.now().toString(),
                                     "ERROR"
-                                )
+                                
                             )
                         }
                     } else {

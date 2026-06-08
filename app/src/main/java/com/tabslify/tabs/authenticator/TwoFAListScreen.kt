@@ -95,7 +95,6 @@ import com.google.zxing.ResultPoint
 import com.journeyapps.barcodescanner.BarcodeCallback
 import com.journeyapps.barcodescanner.BarcodeResult
 import com.journeyapps.barcodescanner.DecoratedBarcodeView
-import com.tabslify.core.functions.ERRORINSERTDATA
 import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.objects.Config.realDevice
 import kotlinx.coroutines.Dispatchers
@@ -164,12 +163,11 @@ fun TwoFAListScreen(db: TwoFADatabase) {
                         Toast.makeText(context, "Offline: ${result.error}", Toast.LENGTH_LONG)
                             .show()
                         errorInsert(
-                            ERRORINSERTDATA(
                                 "TwoFAListScreen",
                                 "❌ Sync-Fehler: ${result.error}",
                                 Instant.now().toString(),
                                 "ERROR"
-                            )
+                            
                         )
                     } else {
                         prefs.edit(commit = true) {
@@ -190,12 +188,11 @@ fun TwoFAListScreen(db: TwoFADatabase) {
                     Toast.makeText(context, "Synchronisation fehlgeschlagen", Toast.LENGTH_LONG)
                         .show()
                     errorInsert(
-                        ERRORINSERTDATA(
                             "TwoFAListScreen",
                             "❌ Sync-Exception: ${e.message}",
                             Instant.now().toString(),
                             "ERROR"
-                        )
+                        
                     )
                 } finally {
                     isSyncing = false
@@ -1123,12 +1120,11 @@ fun SilentCaptureScreen(
                                                     Toast.LENGTH_LONG
                                                 ).show()
                                                 errorInsert(
-                                                    ERRORINSERTDATA(
                                                         "Capture Activity",
                                                         "❌ Ungültiges Format! ($uri)",
                                                         Instant.now().toString(),
                                                         "ERROR"
-                                                    )
+                                                    
                                                 )
                                                 isProcessing = false; onDismiss()
                                             }
@@ -1148,12 +1144,11 @@ fun SilentCaptureScreen(
                                                 Toast.LENGTH_LONG
                                             ).show()
                                             errorInsert(
-                                                ERRORINSERTDATA(
                                                     "Capture Activity",
                                                     "❌ Kein Secret! ($uri)",
                                                     Instant.now().toString(),
                                                     "ERROR"
-                                                )
+                                                
                                             )
                                             isProcessing = false; onDismiss()
                                             return@launch
@@ -1215,12 +1210,11 @@ fun SilentCaptureScreen(
                                             Toast.LENGTH_LONG
                                         ).show()
                                         errorInsert(
-                                            ERRORINSERTDATA(
                                                 "Capture Activity",
                                                 "❌ ${e.message}",
                                                 Instant.now().toString(),
                                                 "ERROR"
-                                            )
+                                            
                                         )
                                         isProcessing = false; onDismiss()
                                     }
