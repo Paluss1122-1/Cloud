@@ -11,11 +11,11 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
+import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config.COMPLETED_PODCASTS
 import com.tabslify.core.objects.Config.PD_QUEUE
 import com.tabslify.core.objects.Config.PODCASTS
-import com.tabslify.core.objects.reportError
 import com.tabslify.services.PodcastPlayerServiceCompat.startService
 import java.io.File
 import java.time.Instant
@@ -45,7 +45,7 @@ fun clearPodcastSelectionNotifications(context: Context) {
             context
         )
 
-        reportError(
+        errorInsert(
             "clearPodcastSelectionNotification",
             "Konnte Notifications nicht löschen: ${e.message}",
             Instant.now().toString(),
@@ -113,7 +113,7 @@ fun loadPodcastsFromMediaStore(context: Context): List<SimplePodcast> {
             }
         }
     } catch (e: Exception) {
-        reportError(
+        errorInsert(
             "loadPodcastsFromMediaStore",
             "Fehler bei Laden von Podcasts von MediaStore: ${e.message}",
             Instant.now().toString(),

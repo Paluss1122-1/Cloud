@@ -137,15 +137,13 @@ fun ContactsTabContent(
             state.error != null -> {
                 Text("Fehler: ${state.error}", color = Color.Red)
                 LaunchedEffect(Unit) {
-                    scope.launch {
                         errorInsert(
                                 "tabcontentoriginal",
                                 "❌ Fehler beim Laden von Kontakten: ${state.error}",
                                 Instant.now().toString(),
                                 "ERROR"
-                            
+
                         )
-                    }
                 }
             }
 
@@ -331,7 +329,7 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
                         "❌ Fehler beim Laden von von Kontakten: ${e.message}",
                         Instant.now().toString(),
                         "ERROR"
-                    
+
                 )
             }
         }
@@ -350,7 +348,7 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
                             "❌ Fehler beim Speichern von Kontakten",
                             Instant.now().toString(),
                             "ERROR"
-                        
+
                     )
                 }
             } catch (e: Exception) {
@@ -360,7 +358,7 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
                         "❌ Fehler beim Speichern von Kontakten: ${e.message}",
                         Instant.now().toString(),
                         "ERROR"
-                    
+
                 )
             }
         }
@@ -379,7 +377,7 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
                             "❌ Fehler beim Löschen von Kontakten",
                             Instant.now().toString(),
                             "ERROR"
-                        
+
                     )
                 }
             } catch (e: Exception) {
@@ -389,7 +387,7 @@ class ContactsViewModel(private val repository: ContactsRepository) : ViewModel(
                         "❌ Fehler beim Löschen von Kontakten: ${e.message}",
                         Instant.now().toString(),
                         "ERROR"
-                    
+
                 )
             }
         }
@@ -539,7 +537,7 @@ class ContactsRepository(private val context: Context) {
                     "Fehler beim Speichern von Kontakt: $contact: ${e.message}",
                     Instant.now().toString(),
                     "ERROR"
-                
+
             )
             false
         }
@@ -614,7 +612,7 @@ class ContactsRepository(private val context: Context) {
                     "Fehler bei Löschen von Kontakten: ${e.message}",
                     Instant.now().toString(),
                     "Error"
-                
+
             )
             false
         }

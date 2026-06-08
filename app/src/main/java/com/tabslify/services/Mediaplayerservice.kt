@@ -58,12 +58,12 @@ import com.google.common.util.concurrent.SettableFuture
 import com.tabslify.core.activities.MainActivity
 import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.functions.canNotify
+import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config.COMPLETED_PODCASTS
 import com.tabslify.core.objects.Config.MEDIA_PLAYER
 import com.tabslify.core.objects.Config.PLALISTS
 import com.tabslify.core.objects.Config.PODCASTS
-import com.tabslify.core.objects.reportError
 import com.tabslify.quiethoursnotificationhelper.pushMediaStateToLaptop
 import com.tabslify.tabs.mediaplayer.AlgorithmicPlaylistRegistry
 import com.tabslify.tabs.mediaplayer.FavoritesPlaylist
@@ -2915,7 +2915,7 @@ class MediaPlayerService : MediaSessionService() {
                             onPodcastComplete()
                         }
                         setOnErrorListener { _, what, extra ->
-                            reportError("streamFromUrl", "MediaPlayer error $what/$extra", Instant.now().toString(), "ERROR")
+                            errorInsert("streamFromUrl", "MediaPlayer error $what/$extra", Instant.now().toString(), "ERROR")
                             saveStreamSession()
                             isPlayingPodcast = false
                             updateNotification()
@@ -2927,7 +2927,7 @@ class MediaPlayerService : MediaSessionService() {
                         prepareAsync()
                     }
                 } catch (e: Exception) {
-                    reportError("streamFromUrl", "${e.message}", Instant.now().toString(), "ERROR")
+                    errorInsert("streamFromUrl", "${e.message}", Instant.now().toString(), "ERROR")
                     isPlayingPodcast = false
                     updateNotification()
                 }

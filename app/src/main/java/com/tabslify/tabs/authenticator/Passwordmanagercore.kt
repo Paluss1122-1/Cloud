@@ -19,12 +19,10 @@ import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.prvt
 import com.tabslify.privatetabslifyapp.isOnline
 import io.github.jan.supabase.postgrest.postgrest
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import java.nio.ByteBuffer
@@ -127,9 +125,7 @@ object CloudCrypto {
         return try {
             decryptWithKey(ciphertext, cachedKey)
         } catch (e: Exception) {
-            CoroutineScope(Dispatchers.IO).launch {
                 errorInsert("CloudCrypto", "Decrypt fehlgeschlagen: ${e.message}", Instant.now().toString(), "ERROR")
-            }
             null
         }
     }

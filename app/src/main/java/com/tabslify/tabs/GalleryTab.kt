@@ -62,7 +62,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
-import com.tabslify.core.objects.reportError
+import com.tabslify.core.functions.errorInsert
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -450,7 +450,7 @@ fun loadImagesFromMediaStore(context: Context): List<GalleryMediaItem> {
             }
         }
     } catch (e: Exception) {
-        reportError(
+        errorInsert(
             "GalleryTab",
             "Fehler bei Laden von Bildern: ${e.message}",
             Instant.now().toString(),
@@ -488,7 +488,7 @@ fun loadVideosFromMediaStore(context: Context): List<GalleryMediaItem> {
             }
         }
     } catch (e: Exception) {
-        reportError(
+        errorInsert(
             "GalleryTab",
             "Fehler bei Laden von Videos: ${e.message}",
             Instant.now().toString(),

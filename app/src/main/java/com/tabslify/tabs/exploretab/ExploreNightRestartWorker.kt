@@ -5,7 +5,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
-import com.tabslify.core.objects.reportError
+import com.tabslify.core.functions.errorInsert
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
 class ExploreNightRestartWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
     override fun doWork(): Result {
         val ctx = applicationContext
-        reportError("ExploreTracker", "NightRestartWorker - Starting tracker", Instant.now().toString(), "LOG")
+        errorInsert("ExploreTracker", "NightRestartWorker - Starting tracker", Instant.now().toString(), "LOG")
         ExploreLocationTracker.start(ctx)
         return Result.success()
     }
@@ -37,7 +37,7 @@ class ExploreNightRestartWorker(ctx: Context, params: WorkerParameters) : Worker
             WorkManager.getInstance(context)
                 .enqueueUniqueWork(TAG, androidx.work.ExistingWorkPolicy.REPLACE, req)
             
-            reportError("ExploreTracker", "NightRestartWorker - Scheduled for $next5AM", Instant.now().toString(), "LOG")
+            errorInsert("ExploreTracker", "NightRestartWorker - Scheduled for $next5AM", Instant.now().toString(), "LOG")
         }
 
         fun cancel(context: Context) {

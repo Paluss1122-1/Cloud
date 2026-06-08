@@ -84,12 +84,12 @@ import androidx.work.WorkManager
 import com.tabslify.core.activities.MainActivity
 import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.functions.canNotify
+import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.DEL_GAL_CONF
 import com.tabslify.core.objects.Config.cms
 import com.tabslify.core.objects.Config.realDevice
 import com.tabslify.core.objects.prvt
-import com.tabslify.core.objects.reportError
 import com.tabslify.core.ui.getDeviceName
 import com.tabslify.quiethoursnotificationhelper.AiResponseEntry
 import com.tabslify.quiethoursnotificationhelper.CleanupWorker
@@ -165,7 +165,7 @@ class QuietHoursNotificationService : Service() {
         Log.e("QuietHoursService", "Unhandled error in $where", t)
         val stack = t.stackTraceToString()
         val trimmed = if (stack.length > 8000) stack.take(8000) + "\n...[truncated]" else stack
-        reportError("QuietHoursNotificationService:$where",
+        errorInsert("QuietHoursNotificationService:$where",
             trimmed,
             Instant.now().toString(),
             "ERROR")
@@ -287,7 +287,7 @@ class QuietHoursNotificationService : Service() {
                 checkQuietHours(context)
                 scheduleNextCheck(context)
             } catch (e: Exception) {
-                reportError(
+                errorInsert(
                     "QuietHoursNotificationService:checkRunnable",
                     e.stackTraceToString().take(8000),
                     Instant.now().toString(),

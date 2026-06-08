@@ -47,7 +47,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.tabslify.core.functions.errorInsert
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.security.KeyStore
 import java.time.Instant
 import javax.crypto.Cipher
@@ -177,7 +176,6 @@ fun AuthenticatorTab(paddingButtom: Dp) {
                         showError = true
                         shouldShowPrompt = false
                         isAuthenticated = false
-                        coroutineScope.launch {
                             errorInsert(
                                     "AuthenticatorTab",
                                     "❌ AUTH: $error",
@@ -185,7 +183,6 @@ fun AuthenticatorTab(paddingButtom: Dp) {
                                     "ERROR"
                                 
                             )
-                        }
                     } else {
                         shouldShowPrompt = false
                     }

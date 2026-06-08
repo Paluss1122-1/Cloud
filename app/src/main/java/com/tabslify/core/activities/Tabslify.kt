@@ -46,27 +46,26 @@ class Tabslify : Application() {
             runBlocking {
                 try {
                     errorInsert(
-                            "UncaughtException: ${thread.name}",
-                            throwable.stackTraceToString().take(8000),
-                            Instant.now().toString(),
-                            "ERROR"
-                        
+                        "UncaughtException: ${thread.name}",
+                        throwable.stackTraceToString().take(8000),
+                        Instant.now().toString(),
+                        "ERROR"
+
                     )
-                } catch (_: Exception) {}
+                } catch (_: Exception) {
+                }
             }
             defaultHandler?.uncaughtException(thread, throwable)
         }
 
         coroutineExceptionHandler = CoroutineExceptionHandler { context, throwable ->
-            CoroutineScope(Dispatchers.IO).launch {
-                errorInsert(
-                        "CoroutineException: $context",
-                        throwable.stackTraceToString().take(8000),
-                        Instant.now().toString(),
-                        "ERROR"
-                    
-                )
-            }
+            errorInsert(
+                "CoroutineException: $context",
+                throwable.stackTraceToString().take(8000),
+                Instant.now().toString(),
+                "ERROR"
+
+            )
         }
 
         if (prvt()) {

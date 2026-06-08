@@ -211,15 +211,13 @@ private fun PowerManager.WakeLock?.safeRelease() {
 }
 
 private fun logError(service: String, e: Exception) {
-    syncScope.launch {
-        errorInsert(
-                service,
-                e.stackTraceToString(),
-                Instant.now().toString(),
-                "ERROR"
-            
-        )
-    }
+    errorInsert(
+        service,
+        e.stackTraceToString(),
+        Instant.now().toString(),
+        "ERROR"
+
+    )
 }
 
 fun ensureReadyForConnect(context: Context) {
@@ -448,9 +446,9 @@ data class AiResponseEntry(
 fun startTriggerListenerIfHomeWifi(context: Context) {
     startTriggerListener(context)
     registerWifiReconnectReceiver(context)
-    
+
     checkIfNearLocation(context) { }
-    
+
     syncScope.launch {
         val ip = fetchIpFromSupabase()
         if (!ip.isNullOrEmpty()) laptopIp = ip
@@ -561,13 +559,18 @@ fun startTriggerListener(context: Context) {
                     laptopIp = command.substringAfter("CONNECT:", "")
                     showSimpleNotificationExtern("📡 CONNECT", "Starte Sync...", 10.seconds, context)
 
-                    val syncWl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:SyncWakeLock")
+                    val syncWl =
+                        pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:SyncWakeLock")
                     syncWl.acquire(60_000L)
                     syncScope.launch {
-                        try { syncTodosWithLaptop(context, true) }
-                        finally { syncWl.safeRelease() }
+                        try {
+                            syncTodosWithLaptop(context, true)
+                        } finally {
+                            syncWl.safeRelease()
+                        }
                     }
                 }
+
                 command == "REQUEST_SESSIONS" -> syncScope.launch { sendSessionDataToLaptop(context) }
                 command == "DISCONNECT" -> stopAllSyncServices(context)
             }
@@ -638,7 +641,8 @@ fun stopAllSyncServices(context: Context) {
 
     synchronized(activeServers) {
         activeServers.removeAll { server ->
-            val isTriggerServer = runCatching { server.localPort }.getOrNull() == Config.TRIGGER_PORT
+            val isTriggerServer =
+                runCatching { server.localPort }.getOrNull() == Config.TRIGGER_PORT
             if (!isTriggerServer) {
                 runCatching { server.close() }
             }
@@ -695,7 +699,12 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                 }
                 laptopIp = fetched
                 val insertedIp = fetchIpFromSupabase(true)
-                showSimpleNotificationExtern("Fetched laptopIp, inserted ip", "$fetched, $insertedIp", 10.seconds, context)
+                showSimpleNotificationExtern(
+                    "Fetched laptopIp, inserted ip",
+                    "$fetched, $insertedIp",
+                    10.seconds,
+                    context
+                )
             }
 
             val currentIp = laptopIp
@@ -723,14 +732,14 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
             when (response) {
                 "OK" -> {
                     isLaptopConnected = true
-                    
+
                     // Save last sync time
                     val prefs = context.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)
                     prefs.edit {
                         putBoolean(KEY_SYNC_ACTIVE, true)
                         putLong(KEY_LAST_SYNC, System.currentTimeMillis())
                     }
-                    
+
                     startMediaCommandListener(context)
                     startExecuteListener(context)
                     startMediaStateServer(context)
@@ -748,8 +757,12 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                     }
                     pushMediaStateToLaptop(context)
                     cache = Cache()
-                    context.registerReceiver(akkuReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                    context.registerReceiver(
+                        akkuReceiver,
+                        IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+                    )
                 }
+
                 "EMPTY" -> throw IOException("Server erhielt leere Daten")
                 "TIMEOUT" -> throw IOException("Server-Timeout beim Lesen")
                 "ERROR" -> throw IOException("Server konnte Daten nicht verarbeiten")
@@ -764,7 +777,12 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
             if (msg == null || !msg.contains("Connection reset")) {
                 logError("syncTodosWithLaptop", e)
                 withContext(Dispatchers.Main) {
-                    showSimpleNotificationExtern("❌ Sync Fehler", msg ?: "Unbekannter Fehler", 10.seconds, context)
+                    showSimpleNotificationExtern(
+                        "❌ Sync Fehler",
+                        msg ?: "Unbekannter Fehler",
+                        10.seconds,
+                        context
+                    )
                 }
             }
         } finally {
@@ -795,11 +813,19 @@ fun startUpdateListener(context: Context) {
                         val updatedTodos = parseTodosFromJson(jsonData)
                         saveTodos(context, updatedTodos)
                         withContext(Dispatchers.Main) {
-                            showSimpleNotificationExtern("🔄 To-dos aktualisiert", "Änderungen vom Laptop empfangen", 10.seconds, context)
+                            showSimpleNotificationExtern(
+                                "🔄 To-dos aktualisiert",
+                                "Änderungen vom Laptop empfangen",
+                                10.seconds,
+                                context
+                            )
                         }
                     }
-                } catch (_: SocketException) { break }
-                catch (e: Exception) { logError("startUpdateListener", e) }
+                } catch (_: SocketException) {
+                    break
+                } catch (e: Exception) {
+                    logError("startUpdateListener", e)
+                }
             }
         } catch (e: Exception) {
             logError("startUpdateListener", e)
@@ -1347,7 +1373,7 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
             val extras = json.optJSONObject("extras")
             val idValue = extras?.opt("id")
             println("idValue: $idValue")
-            
+
             val nm = context.getSystemService(NotificationManager::class.java)
             val notificationId = when (idValue) {
                 is Int -> idValue
@@ -1585,7 +1611,14 @@ fun checkIfNearLocation(
     fusedLocationClient.lastLocation
         .addOnSuccessListener { location ->
             if (location != null) {
-                callback(distanceBetween(location.latitude, location.longitude, targetLat, targetLon) <= radiusMeters)
+                callback(
+                    distanceBetween(
+                        location.latitude,
+                        location.longitude,
+                        targetLat,
+                        targetLon
+                    ) <= radiusMeters
+                )
             } else {
                 callback(true)
             }
@@ -2048,43 +2081,47 @@ fun sendAiExecuteCommand(context: Context, userInput: String) {
     }
 }
 
-private suspend fun fetchIpFromSupabase(mobile: Boolean = false): String? = withContext(Dispatchers.IO) {
-    repeat(3) { attempt ->
-        var connection: HttpURLConnection? = null
-        try {
-            val column = if (!mobile) "laptop" else "handy"
-            val url = "${Config.SUPABASE_URL}/rest/v1/device_ips" +
-                    "?device_id=eq.$column&select=ip_address"
+private suspend fun fetchIpFromSupabase(mobile: Boolean = false): String? =
+    withContext(Dispatchers.IO) {
+        repeat(3) { attempt ->
+            var connection: HttpURLConnection? = null
+            try {
+                val column = if (!mobile) "laptop" else "handy"
+                val url = "${Config.SUPABASE_URL}/rest/v1/device_ips" +
+                        "?device_id=eq.$column&select=ip_address"
 
-            connection = URL(url).openConnection() as HttpURLConnection
-            connection.requestMethod = "GET"
-            connection.connectTimeout = 5_000
-            connection.readTimeout = 5_000
-            connection.useCaches = false
-            connection.setRequestProperty("Cache-Control", "no-cache, no-store")
-            connection.setRequestProperty("Pragma", "no-cache")
-            connection.setRequestProperty("apikey", Config.SUPABASE_PUBLISHABLE_KEY)
-            connection.setRequestProperty("Authorization", "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}")
+                connection = URL(url).openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 5_000
+                connection.readTimeout = 5_000
+                connection.useCaches = false
+                connection.setRequestProperty("Cache-Control", "no-cache, no-store")
+                connection.setRequestProperty("Pragma", "no-cache")
+                connection.setRequestProperty("apikey", Config.SUPABASE_PUBLISHABLE_KEY)
+                connection.setRequestProperty(
+                    "Authorization",
+                    "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}"
+                )
 
-            val code = connection.responseCode
+                val code = connection.responseCode
 
-            if (code == 200) {
-                val jsonArray = JSONArray(connection.inputStream.bufferedReader().readText())
-                if (jsonArray.length() > 0) {
-                    val ip = jsonArray.getJSONObject(0).optString("ip_address", "")
-                    if (ip.isNotEmpty()) return@withContext ip
+                if (code == 200) {
+                    val jsonArray = JSONArray(connection.inputStream.bufferedReader().readText())
+                    if (jsonArray.length() > 0) {
+                        val ip = jsonArray.getJSONObject(0).optString("ip_address", "")
+                        if (ip.isNotEmpty()) return@withContext ip
+                    }
                 }
+            } catch (e: Exception) {
+                if (attempt == 2) logError("SupabaseFetch", e)
+            } finally {
+                connection?.disconnect()
             }
-        } catch (e: Exception) {
-            if (attempt == 2) logError("SupabaseFetch", e)
-        } finally {
-            connection?.disconnect()
-        }
 
-        if (attempt < 2) delay((1000L * (attempt + 1)).milliseconds)
+            if (attempt < 2) delay((1000L * (attempt + 1)).milliseconds)
+        }
+        null
     }
-    null
-}
 
 private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
     withContext(Dispatchers.IO) {
@@ -2166,7 +2203,7 @@ fun reportDeviceInformation(intent: Intent) {
     if (now - cache.lastSync < 3000) return
     cache.lastSync = now
     val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1).takeIf { it >= 0 }.toString()
-        .ifEmpty { return  }
+        .ifEmpty { return }
     val temp =
         intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1).takeIf { it != -1 }?.div(10f)
             .toString().ifEmpty { return }

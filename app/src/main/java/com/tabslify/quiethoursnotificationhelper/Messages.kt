@@ -17,9 +17,9 @@ import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
 import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.functions.canNotify
+import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config.cms
-import com.tabslify.core.objects.reportError
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_MARK_PARTS_READ
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_MESSAGE_SENT
 import com.tabslify.services.QuietHoursNotificationService.Companion.EXTRA_MESSAGE_ID
@@ -375,7 +375,7 @@ fun markMessageAsRead(messageId: String, readMessageIds: MutableSet<String>, con
         for (i in 0 until 100) nm.cancel(notifId + i)
         nm.cancel(notifId + 1000000)
     } catch (e: Exception) {
-        reportError("markMessageAsRead", "ERROR: ${e.message}", Instant.now().toString(), "ERROR")
+        errorInsert("markMessageAsRead", "ERROR: ${e.message}", Instant.now().toString(), "ERROR")
     }
 }
 

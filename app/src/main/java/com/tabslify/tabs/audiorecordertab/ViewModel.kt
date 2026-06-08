@@ -159,7 +159,6 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
             },
             onError = {
                 isProcessing = false
-                scope.launch {
                     errorInsert(
                             "AudioRecorderContent.shareDialog.onError",
                             it,
@@ -167,7 +166,6 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
                             "ERROR"
                         
                     )
-                }
             }
         )
     }
