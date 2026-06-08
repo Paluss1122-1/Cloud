@@ -1,5 +1,6 @@
 package com.tabslify.core.activities
 
+import android.Manifest
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.app.admin.DeviceAdminReceiver
@@ -31,6 +32,7 @@ import com.tabslify.core.objects.prvt
 import com.tabslify.core.ui.LandingPageOrApp
 import com.tabslify.core.ui.Typography
 import com.tabslify.core.ui.rememberAppColor
+import com.tabslify.services.QuietHoursNotificationService
 import com.tabslify.tabs.JsonEditorContent
 import io.github.jan.supabase.storage.storage
 import java.io.File
@@ -76,7 +78,12 @@ class MainActivity : FragmentActivity() {
         if (prvt()) {
             val launcher = registerForActivityResult(
                 ActivityResultContracts.RequestMultiplePermissions()
-            ) { _ -> }
+            ) { results ->
+                val notificationsGranted = results[Manifest.permission.POST_NOTIFICATIONS] == true
+                if (notificationsGranted) {
+                    QuietHoursNotificationService.startService(this)
+                }
+            }
 
             requestPermission("all", launcher, this)
 
