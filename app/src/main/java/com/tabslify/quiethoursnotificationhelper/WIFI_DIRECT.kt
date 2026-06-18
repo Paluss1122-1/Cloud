@@ -1192,7 +1192,7 @@ fun loadAllAiResponses(context: Context): List<AiResponseEntry> {
         val arr = JSONArray(prefs.getString("all_entries", "[]") ?: "[]")
         (0 until arr.length()).map { i ->
             arr.getJSONObject(i).run {
-                AiResponseEntry(getString("text"), getLong("timestamp"), getString("dateKey"))
+                AiResponseEntry(optString("text", ""), optLong("timestamp", 0L), optString("dateKey", ""))
             }
         }.sortedByDescending { it.timestamp }
     } catch (e: Exception) {
