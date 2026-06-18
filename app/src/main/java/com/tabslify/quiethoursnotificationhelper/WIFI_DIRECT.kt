@@ -288,10 +288,12 @@ private fun launchServer(
                     try {
                         val client = server.accept()
                         scope.launch {
-                            try {
-                                handler(client)
-                            } catch (e: Exception) {
-                                logError(errorTag, e)
+                            client.use {
+                                try {
+                                    handler(it)
+                                } catch (e: Exception) {
+                                    logError(errorTag, e)
+                                }
                             }
                         }
                     } catch (_: SocketTimeoutException) {
@@ -348,10 +350,12 @@ suspend fun callNvidiaApi(model: String, messagesJson: JSONArray): String? =
                 )
             }
             if (connection.responseCode != 200) return@withContext null
-            JSONObject(connection.inputStream.bufferedReader().readText())
+            val response = JSONObject(connection.inputStream.bufferedReader().readText())
                 .getJSONArray("choices").getJSONObject(0)
                 .getJSONObject("message").getString("content").trim()
                 .ifBlank { null }
+            connection.disconnect()
+            response
         } catch (e: Exception) {
             logError("callNvidiaApi", e)
             null
@@ -716,18 +720,18 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
             }
 
             val todos = getTodos(context)
-            val socket = Socket()
-            socket.connect(InetSocketAddress(Inet4Address.getByName(currentIp), SYNC_PORT), 3000)
-            socket.soTimeout = 8000
+            val response = Socket().use { socket ->
+                socket.connect(InetSocketAddress(Inet4Address.getByName(currentIp), SYNC_PORT), 3000)
+                socket.soTimeout = 8000
 
-            val writer = PrintWriter(socket.getOutputStream(), true)
-            val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+                val writer = PrintWriter(socket.getOutputStream(), true)
+                val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
 
-            writer.println(todosToJsonArray(todos).toString())
-            writer.flush()
+                writer.println(todosToJsonArray(todos).toString())
+                writer.flush()
 
-            val response = reader.readLine() ?: throw IOException("Keine Antwort vom Server")
-            socket.close()
+                reader.readLine() ?: throw IOException("Keine Antwort vom Server")
+            }
 
             when (response) {
                 "OK" -> {
@@ -866,10 +870,9 @@ private fun sendSessionDataToLaptop(context: Context) {
         if (laptopIp == "") return
         Socket().use { socket ->
             socket.connect(InetSocketAddress(laptopIp, Config.SESSION_PORT), 3000)
-            PrintWriter(socket.getOutputStream(), true).apply {
-                println(payload.toString())
-                flush()
-            }
+            val writer = PrintWriter(socket.getOutputStream(), true)
+            writer.println(payload.toString())
+            writer.flush()
         }
     } catch (e: Exception) {
         logError("sendSessionDataToLaptop", e)
@@ -1650,12 +1653,11 @@ suspend fun askServer(
             if (laptopIp == "") throw Exception("Keine laptopIp is vorhanden")
             val request =
                 "MODEL=$model PICTURE=${pic ?: "NONE"} ${question}. Here is the chat history:$history "
-            val sock = Socket(laptopIp, Config.AI_PORT)
-            sock.getOutputStream().write(request.toByteArray(Charsets.UTF_8))
-            sock.shutdownOutput()
-            val response = sock.getInputStream().readBytes().toString(Charsets.UTF_8)
-            sock.close()
-            response
+            Socket(laptopIp, Config.AI_PORT).use { sock ->
+                sock.getOutputStream().write(request.toByteArray(Charsets.UTF_8))
+                sock.shutdownOutput()
+                sock.getInputStream().readBytes().toString(Charsets.UTF_8)
+            }
         } catch (e: Exception) {
             var msg = ""
             e.message?.let {
@@ -1830,14 +1832,16 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
             }
             syncScope.launch(Dispatchers.IO) {
                 try {
+                    if (laptopIp.isEmpty()) return@launch
                     Socket().use { sock ->
                         sock.connect(
                             InetSocketAddress(laptopIp, Config.EXECUTE_RESPONSE_PORT),
                             3000
                         )
-                        sock.getOutputStream()
-                            .write(results.toString().toByteArray(Charsets.UTF_8))
-                        sock.getOutputStream().flush()
+                        sock.getOutputStream().use { output ->
+                            output.write(results.toString().toByteArray(Charsets.UTF_8))
+                            output.flush()
+                        }
                     }
                 } catch (_: Exception) {
                 }
@@ -1889,13 +1893,16 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                 val sizePrefix = ByteBuffer.allocate(4).putInt(jsonBytes.size).array()
 
                 try {
+                    if (laptopIp.isEmpty()) return@launch
                     Socket().use { sock ->
                         sock.connect(
                             InetSocketAddress(laptopIp, Config.EXECUTE_RESPONSE_PORT),
                             3000
                         )
-                        sock.getOutputStream().write(sizePrefix + jsonBytes)
-                        sock.getOutputStream().flush()
+                        sock.getOutputStream().use { output ->
+                            output.write(sizePrefix + jsonBytes)
+                            output.flush()
+                        }
                     }
                 } catch (_: Exception) {
                 }
@@ -2068,11 +2075,13 @@ fun sendAiExecuteCommand(context: Context, userInput: String) {
                     InetSocketAddress(laptopIp, Config.EXECUTE_PORT_SEND_FROM_HANDY),
                     3000
                 )
-                sock.getOutputStream()
-                    .write(
+                sock.getOutputStream().use { output ->
+                    output.write(
                         JSONObject().apply { put("prompt", userInput) }.toString()
                             .toByteArray(Charsets.UTF_8)
                     )
+                    output.flush()
+                }
                 sock.shutdownOutput()
             }
         } catch (e: Exception) {
@@ -2224,10 +2233,11 @@ fun reportDeviceInformation(intent: Intent) {
 
     CoroutineScope(Dispatchers.IO).launch {
         try {
-            val socket = Socket(laptopIp.ifEmpty { return@launch }, INFO_PORT)
-            socket.getOutputStream().write(bl.toByteArray())
-            socket.shutdownOutput()
-            socket.close()
+            val currentLaptopIp = laptopIp.ifEmpty { return@launch }
+            Socket(currentLaptopIp, INFO_PORT).use { socket ->
+                socket.getOutputStream().write(bl.toByteArray())
+                socket.shutdownOutput()
+            }
         } catch (e: Exception) {
             println("Socket error: ${e.message}")
         }
