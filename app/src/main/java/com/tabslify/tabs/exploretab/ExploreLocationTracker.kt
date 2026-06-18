@@ -37,11 +37,11 @@ class ExploreGeofenceReceiver : BroadcastReceiver() {
 
         when (event.geofenceTransition) {
             Geofence.GEOFENCE_TRANSITION_ENTER -> {
-                errorInsert("ExploreTracker", "GeofenceReceiver - ENTER: Benutzer ist zuhause → stop()", Instant.now().toString(), "LOG")
+                errorInsert("ExploreTracker", "GeofenceReceiver - ENTER: Benutzer ist zuhause -> stop()", Instant.now().toString(), "LOG")
                 ExploreLocationTracker.stop(context)
             }
             Geofence.GEOFENCE_TRANSITION_EXIT -> {
-                errorInsert("ExploreTracker", "GeofenceReceiver - EXIT: Benutzer verlässt zuhause → start()", Instant.now().toString(), "LOG")
+                errorInsert("ExploreTracker", "GeofenceReceiver - EXIT: Benutzer verlässt zuhause -> start()", Instant.now().toString(), "LOG")
                 ExploreLocationTracker.start(context)
             }
             else -> {
@@ -118,7 +118,7 @@ object ExploreLocationTracker {
         }
         isEnabled = true
 
-        errorInsert("ExploreTracker", "start() - LocationTracker wird gestartet", Instant.now().toString(), "LOG")
+        errorInsert("ExploreTracker", "start() - LocationTracker wird gestartet (pruefe WLAN-Status...)", Instant.now().toString(), "LOG")
         try {
             registerGeofence(appCtx)
         } catch (e: Exception) {
@@ -126,7 +126,7 @@ object ExploreLocationTracker {
         }
 
         getHomeWifiStatus(appCtx, HOME_WIFI_SSID) { isHomeWifi ->
-            errorInsert("ExploreTracker", "start() - WiFi-Callback: isHome=$isHomeWifi", Instant.now().toString(), "LOG")
+            errorInsert("ExploreTracker", "start() - WiFi-Callback erhalten: isHome=$isHomeWifi", Instant.now().toString(), "LOG")
             if (isHomeWifi) {
                 stop(appCtx)
                 return@getHomeWifiStatus
@@ -184,6 +184,7 @@ object ExploreLocationTracker {
                 .addOnFailureListener {}
             locationCallback = callback
             ExploreWorker.schedule(context)
+            errorInsert("ExploreTracker", "startLocationUpdates() - Active GPS-Updates gestartet (Geofence wird aktiv ueberwacht)", Instant.now().toString(), "LOG")
         } catch (e: Exception) {
             errorInsert("ExploreTracker", "startLocationUpdates() - Exception: ${e.message}", Instant.now().toString(), "ERROR")
         }
@@ -203,9 +204,9 @@ object ExploreLocationTracker {
             locationCallback = null
             lastLocation = null
             ExploreWorker.cancel(appCtx)
-            errorInsert("ExploreTracker", "stop() - Worker abgebrochen", Instant.now().toString(), "LOG")
+            errorInsert("ExploreTracker", "stop() - Worker abgebrochen (GPS deaktiviert)", Instant.now().toString(), "LOG")
         } else if (wasEnabled) {
-            errorInsert("ExploreTracker", "stop() - war im Startvorgang, aber wurde gestoppt", Instant.now().toString(), "LOG")
+            errorInsert("ExploreTracker", "stop() - war im Startvorgang, aber wurde gestoppt (Heim-WLAN aktiv)", Instant.now().toString(), "LOG")
         } else {
             errorInsert("ExploreTracker", "stop() - war bereits inaktiv", Instant.now().toString(), "LOG")
         }
