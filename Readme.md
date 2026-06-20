@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > Public Version almost finished...
 >
-> *5:04 AM · 6/01/2026*
+> <sub><sub>5:04 AM · 6/01/2026</sub></sub>
 
 > [!TIP]
 > Tabslify is compatible with Samsung OneUI 8.5  
