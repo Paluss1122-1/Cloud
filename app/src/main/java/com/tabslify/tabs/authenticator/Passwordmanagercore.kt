@@ -49,7 +49,7 @@ data class PasswordEntry(
 @Dao
 interface PasswordDao {
 
-    @Query("SELECT * FROM passwords ORDER BY name ASC")
+    @Query("SELECT * FROM passwords ORDER BY name COLLATE NOCASE ASC")
     suspend fun getAll(): List<PasswordEntry>
 
     @Query(
@@ -103,6 +103,11 @@ abstract class PasswordDatabase : RoomDatabase() {
                     .build()
                     .also { INSTANCE = it }
             }
+        }
+
+        fun closeDatabase() {
+            INSTANCE?.close()
+            INSTANCE = null
         }
     }
 }
@@ -313,7 +318,7 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
                                 n.contains(ln) || ln.contains(n) || (lu.isNotEmpty() && n.split(" ").any { lu.contains(it) })
                             }?.secret
                             PasswordEntrySupabase(name = local.name, url = local.url, username = local.username, encrypted_password = encryptedPw, notes = local.notes, totp_secret = matchedSecret?.let { CloudCrypto.encryptForCloud(it) })
-                        } catch (e: Exception) {
+                        } catch (_: Exception) {
                             null
                         }
                     }
@@ -334,7 +339,6 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
                     "Sync-Exception: ${e.message}",
                     Instant.now().toString(),
                     "ERROR"
-                
             )
             SyncResult(uploaded = 0, downloaded = 0, total = 0, error = e.message)
         }
