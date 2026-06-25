@@ -151,6 +151,22 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
             return
         }
         Config.masterPassword = masterPw!!
+
+        val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
+        var hasCoords by remember { mutableStateOf(prefs.getBoolean("has_coordinates", false)) }
+        if (!hasCoords) {
+            CoordinatesSetupScreen { lat, lon ->
+                prefs.edit {
+                    putFloat("lat_key", lat.toFloat())
+                    putFloat("lon_key", lon.toFloat())
+                    putBoolean("has_coordinates", true)
+                }
+                Config.LAT = lat
+                Config.LON = lon
+                hasCoords = true
+            }
+            return
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -382,6 +398,72 @@ fun MasterPasswordSetupScreen(onPasswordSaved: (String) -> Unit) {
 
             Button(
                 onClick = { onPasswordSaved(input) },
+                enabled = isValid,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Speichern & Starten") }
+        }
+    }
+}
+
+@Composable
+fun CoordinatesSetupScreen(onCoordinatesSaved: (Double, Double) -> Unit) {
+    var latInput by remember { mutableStateOf("") }
+    var lonInput by remember { mutableStateOf("") }
+    val latDouble = latInput.toDoubleOrNull()
+    val lonDouble = lonInput.toDoubleOrNull()
+    val isValid = latDouble != null && lonDouble != null
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xFF17171C)), contentAlignment = Alignment.Center
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                "📍 Koordinaten einrichten",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                "Bitte gib deine Standard-Koordinaten (Latitude und Longitude) ein.",
+                color = Color(0xFF8A8A9F),
+                fontSize = 13.sp
+            )
+
+            OutlinedTextField(
+                value = latInput,
+                onValueChange = { latInput = it },
+                label = { Text("Breitengrad (Latitude)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = lonInput,
+                onValueChange = { lonInput = it },
+                label = { Text("Längengrad (Longitude)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            if (latInput.isNotEmpty() && latDouble == null)
+                Text(
+                    "Ungültiger Breitengrad",
+                    color = Color(0xFFE74C3C),
+                    fontSize = 12.sp
+                )
+            if (lonInput.isNotEmpty() && lonDouble == null)
+                Text(
+                    "Ungültiger Längengrad",
+                    color = Color(0xFFE74C3C),
+                    fontSize = 12.sp
+                )
+
+            Button(
+                onClick = { onCoordinatesSaved(latDouble!!, lonDouble!!) },
                 enabled = isValid,
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Speichern & Starten") }
