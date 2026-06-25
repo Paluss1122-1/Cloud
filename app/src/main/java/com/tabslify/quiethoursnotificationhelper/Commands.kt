@@ -53,6 +53,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.tabslify.core.activities.Tabslify.Companion.appScope
+import com.tabslify.core.activities.fetchAndRun
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.SHOWCOMMANDS
@@ -120,6 +121,13 @@ fun getHomeWifiStatus(
     onResult: (isHome: Boolean) -> Unit
 ) {
     val cm = context.getSystemService(ConnectivityManager::class.java)
+    val activeNetwork = cm.activeNetwork
+    val caps = cm.getNetworkCapabilities(activeNetwork)
+    val hasWifi = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+    if (!hasWifi) {
+        onResult(false)
+        return
+    }
 
     val request = NetworkRequest.Builder()
         .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
@@ -142,11 +150,9 @@ fun getHomeWifiStatus(
                 ?.removeSuffix("\"")
                 ?.takeIf { it != "<unknown ssid>" }
 
-            if (ssid != null) {
-                hasFired = true
-                onResult(ssid.equals(homeSsid, ignoreCase = true))
-                cm.unregisterNetworkCallback(this)
-            }
+            hasFired = true
+            onResult(ssid != null && ssid.equals(homeSsid, ignoreCase = true))
+            cm.unregisterNetworkCallback(this)
         }
 
         override fun onUnavailable() {
