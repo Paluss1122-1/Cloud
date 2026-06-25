@@ -10,6 +10,7 @@ firebaseAi = "17.12.1"
 firebaseAnalytics = "23.2.0"
 firebaseBom = "34.14.0"
 firebaseConfig = "23.1.0"
+firebaseMessaging = "25.1.0"
 firebasePlayintegrity = "19.1.0"
 foundation = "1.11.2"
 gson = "2.14.0"
@@ -32,6 +33,7 @@ multiplatformMarkdownRendererM3 = "0.41.0"
 osmdroidAndroid = "6.1.20"
 postgrestKt = "3.6.0"
 realtimeKt = "3.6.0"
+rhino = "1.9.1"
 roomRuntime = "2.8.4"
 storageKt = "3.6.0"
 functionsKt = "3.6.0"
@@ -50,6 +52,7 @@ foundationLayout = "1.11.2"
 uiGraphics = "1.11.2"
 runtimeVersion = "1.11.2"
 ui = "1.11.2"
+firebaseMessagingKtx = "25.1.0"
 
 [libraries]
 androidx-autofill = { module = "androidx.autofill:autofill", version.ref = "autofill" }
@@ -72,6 +75,7 @@ firebase-appcheck-debug = { module = "com.google.firebase:firebase-appcheck-debu
 firebase-appcheck-playintegrity = { module = "com.google.firebase:firebase-appcheck-playintegrity", version.ref = "firebasePlayintegrity" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-config = { module = "com.google.firebase:firebase-config", version.ref = "firebaseConfig" }
+firebase-messaging = { module = "com.google.firebase:firebase-messaging", version.ref = "firebaseMessaging" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
@@ -93,6 +97,7 @@ androidx-compose-foundation = { group = "androidx.compose.foundation", name = "f
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
 realtime-kt = { module = "io.github.jan-tennert.supabase:realtime-kt", version.ref = "realtimeKt" }
+rhino = { module = "org.mozilla:rhino", version.ref = "rhino" }
 storage-kt = { module = "io.github.jan-tennert.supabase:storage-kt", version.ref = "storageKt" }
 functions-kt = { module = "io.github.jan-tennert.supabase:functions-kt", version.ref = "functionsKt" }
 supabase-kt = { module = "io.github.jan-tennert.supabase:supabase-kt", version.ref = "supabaseKt" }
