@@ -21,6 +21,9 @@ import com.tabslify.quiethoursnotificationhelper.getHomeWifiStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.Instant
 
@@ -51,6 +54,9 @@ class ExploreGeofenceReceiver : BroadcastReceiver() {
 }
 
 object ExploreLocationTracker {
+
+    private val _trackerStatus = MutableStateFlow("Inaktiv")
+    val trackerStatus: StateFlow<String> = _trackerStatus.asStateFlow()
 
     val HOME_LAT = Config.LAT
     val HOME_LNG = Config.LON
@@ -108,6 +114,7 @@ object ExploreLocationTracker {
     fun start(context: Context) {
         val appCtx = context.applicationContext
         if (isNightTime()) {
+            _trackerStatus.value = "Pausiert (Nacht)"
             errorInsert("ExploreTracker", "start() - Night time (0-5 Uhr), wird nicht gestartet", Instant.now().toString(), "LOG")
             ExploreNightRestartWorker.schedule(appCtx)
             return
@@ -117,6 +124,7 @@ object ExploreLocationTracker {
             return
         }
         isEnabled = true
+        _trackerStatus.value = "Startet..."
 
         errorInsert("ExploreTracker", "start() - LocationTracker wird gestartet (pruefe WLAN-Status...)", Instant.now().toString(), "LOG")
         try {
@@ -128,6 +136,7 @@ object ExploreLocationTracker {
         getHomeWifiStatus(appCtx, HOME_WIFI_SSID) { isHomeWifi ->
             errorInsert("ExploreTracker", "start() - WiFi-Callback erhalten: isHome=$isHomeWifi", Instant.now().toString(), "LOG")
             if (isHomeWifi) {
+                _trackerStatus.value = "Gestoppt (Zuhause)"
                 stop(appCtx)
                 return@getHomeWifiStatus
             }
@@ -183,9 +192,11 @@ object ExploreLocationTracker {
                 .addOnSuccessListener {}
                 .addOnFailureListener {}
             locationCallback = callback
+            _trackerStatus.value = "Läuft aktiv"
             ExploreWorker.schedule(context)
             errorInsert("ExploreTracker", "startLocationUpdates() - Active GPS-Updates gestartet (Geofence wird aktiv ueberwacht)", Instant.now().toString(), "LOG")
         } catch (e: Exception) {
+            _trackerStatus.value = "Fehler: ${e.message}"
             errorInsert("ExploreTracker", "startLocationUpdates() - Exception: ${e.message}", Instant.now().toString(), "ERROR")
         }
     }
@@ -212,7 +223,10 @@ object ExploreLocationTracker {
         }
         
         if (isNightTime()) {
+            _trackerStatus.value = "Pausiert (Nacht)"
             ExploreNightRestartWorker.schedule(appCtx)
+        } else if (_trackerStatus.value != "Gestoppt (Zuhause)") {
+            _trackerStatus.value = "Inaktiv"
         }
     }
 }
