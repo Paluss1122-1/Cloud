@@ -104,14 +104,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
 
-private val Surface1 = Color(0xFF17171C)
-private val Surface2 = Color(0xFF1F1F27)
-private val Surface3 = Color(0xFF2A2A35)
-private val AccentBlue = Color(0xFF4A90E2)
+val Surface1 = Color(0xFF17171C)
+val Surface2 = Color(0xFF1F1F27)
+val Surface3 = Color(0xFF2A2A35)
+val AccentBlue = Color(0xFF4A90E2)
 private val AccentRed = Color(0xFFE74C3C)
-private val TextP = Color(0xFFEEEEF5)
-private val TextS = Color(0xFF8A8A9F)
+val TextP = Color(0xFFEEEEF5)
+val TextS = Color(0xFF8A8A9F)
 private val TextT = Color(0xFF55556A)
 
 @Composable
@@ -537,7 +538,7 @@ private fun PasswordDetailSheet(
             val now = System.currentTimeMillis()
             totpCode = TotpGenerator.generateTOTP(matchedTwoFa!!.secret, now)
             totpSecondsLeft = (30 - (now / 1000) % 30).toInt()
-            delay(1000)
+            delay(1000.milliseconds)
         }
     }
 
@@ -856,7 +857,7 @@ fun AddEditPasswordDialog(
     }
 
     val strength = remember(password) { PasswordGenerator.strength(password) }
-    val isValid = name.isNotBlank() && password.isNotBlank()
+    val isValid = name.isNotBlank()
 
     if (showScanner) {
         SilentCaptureScreen(
