@@ -1,28 +1,45 @@
 package com.tabslify.tabs.authenticator
 
+import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
+import android.provider.Settings
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
+import android.view.View
+import android.view.WindowManager
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,18 +52,31 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
+import androidx.core.net.toUri
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.google.zxing.ResultPoint
+import com.journeyapps.barcodescanner.BarcodeCallback
+import com.journeyapps.barcodescanner.BarcodeResult
+import com.journeyapps.barcodescanner.DecoratedBarcodeView
 import com.tabslify.core.functions.errorInsert
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.URLDecoder
 import java.security.KeyStore
 import java.time.Instant
 import javax.crypto.Cipher
@@ -54,14 +84,8 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import kotlin.time.Duration.Companion.milliseconds
 
-private enum class AuthTab(val label: String, val icon: String) {
-    PASSWORDS("Passwörter", "🔑"),
-    TWOFACTOR("2FA Codes", "🛡️"),
-    SETTINGS("Einstellungen", "⚙️")
-}
-
 object BiometricKeyHelper {
-    private const val KEY_NAME = "tabslify_auth_key" // er soll den "tabslify_auth_key" löschen und jz immer "tabslify_auth_key" nutzen
+    private const val KEY_NAME = "tabslify_auth_key"
 
     fun getOrCreateKey(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").also { it.load(null) }
@@ -93,7 +117,7 @@ object BiometricKeyHelper {
 
 
 @Composable
-fun AuthenticatorTab(paddingButtom: Dp) {
+fun AuthenticatorTab() {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -146,9 +170,6 @@ fun AuthenticatorTab(paddingButtom: Dp) {
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     var shouldShowPrompt by remember { mutableStateOf(false) }
-    var selectedTab by remember { mutableStateOf(AuthTab.PASSWORDS) }
-
-    val coroutineScope = rememberCoroutineScope()
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -194,7 +215,7 @@ fun AuthenticatorTab(paddingButtom: Dp) {
     Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
         when {
             !lockEnabled || isAuthenticated -> {
-                AuthenticatedContent(context = context, paddingButtom = paddingButtom)
+                AuthenticatedContent(context = context)
             }
 
             showError -> {
@@ -214,7 +235,7 @@ fun AuthenticatorTab(paddingButtom: Dp) {
 
 
 @Composable
-private fun AuthenticatedContent(context: Context, paddingButtom: Dp) {
+private fun AuthenticatedContent(context: Context) {
     val passwordDb = remember { PasswordDatabase.getDatabase(context) }
     val twoFaDb = remember { TwoFADatabase.getDatabase(context) }
     var showSettings by remember { mutableStateOf(false) }
@@ -407,5 +428,353 @@ private fun showBiometricPrompt(
         return
     } catch (e: Exception) {
         onError("Fehler beim Starten: ${e.message}", true)
+    }
+}
+
+object ScreenshotProtectionManager {
+    fun setScreenshotProtection(activity: Activity?, enabled: Boolean) {
+        activity?.window?.let { window ->
+            if (enabled) {
+                window.setFlags(
+                    WindowManager.LayoutParams.FLAG_SECURE,
+                    WindowManager.LayoutParams.FLAG_SECURE
+                )
+            } else {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsScreenWithScreenshotProtection() {
+    val context = LocalContext.current
+    val activity = LocalActivity.current
+    val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+
+    var lockEnabled by remember { mutableStateOf(prefs.getBoolean("lockEnabled", false)) }
+    var screenshotProtectionEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                "screenshotProtectionEnabled",
+                true
+            )
+        )
+    }
+    var showBiometricInfoDialog by remember { mutableStateOf(false) }
+    var biometricErrorMsg by remember { mutableStateOf("") }
+
+    val bm = BiometricManager.from(context)
+    val canAuth = bm.canAuthenticate(Authenticators.BIOMETRIC_STRONG)
+    val isBiometricAvailable = canAuth == BiometricManager.BIOMETRIC_SUCCESS
+
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .background(Color.Transparent)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 16.dp)
+        ) {
+            Text("⚙️ Einstellungen", color = TextP, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(24.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Surface1)
+                    .border(1.dp, Surface3, RoundedCornerShape(16.dp))
+                    .padding(16.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "App-Sperre",
+                                color = TextP,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text("Biometrische Authentifizierung", color = TextS, fontSize = 12.sp)
+                        }
+                        Switch(
+                            checked = lockEnabled,
+                            onCheckedChange = { enabled ->
+                                if (isBiometricAvailable || !enabled) {
+                                    lockEnabled = enabled
+                                    prefs.edit(commit = true) {
+                                        putBoolean("lockEnabled", enabled)
+                                        putBoolean("authenticated", !enabled)
+                                    }
+                                } else {
+                                    biometricErrorMsg = when (canAuth) {
+                                        BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED ->
+                                            "Keine Authentifizierung eingerichtet. Bitte richte einen Fingerabdruck oder PIN ein."
+                                        BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE ->
+                                            "Biometrische Hardware nicht verfügbar"
+                                        BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE ->
+                                            "Hardware temporär nicht verfügbar"
+                                        else ->
+                                            "Authentifizierung nicht verfügbar"
+                                    }
+                                    showBiometricInfoDialog = true
+                                }
+                            },
+                            enabled = isBiometricAvailable || lockEnabled,
+                            colors = SwitchDefaults.colors(checkedTrackColor = AccentBlue)
+                        )
+                    }
+
+                    HorizontalDivider(color = Surface3)
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Screenshot-Schutz",
+                                color = TextP,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                "Screenshots und Screen-Recording blockieren",
+                                color = TextS,
+                                fontSize = 12.sp
+                            )
+                        }
+                        Switch(
+                            checked = screenshotProtectionEnabled,
+                            onCheckedChange = { enabled ->
+                                screenshotProtectionEnabled = enabled
+                                prefs.edit(commit = true) {
+                                    putBoolean(
+                                        "screenshotProtectionEnabled",
+                                        enabled
+                                    )
+                                }
+                                ScreenshotProtectionManager.setScreenshotProtection(
+                                    activity,
+                                    enabled
+                                )
+                                Toast.makeText(
+                                    context,
+                                    if (enabled) "Screenshots gesperrt" else "Screenshots erlaubt",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            colors = SwitchDefaults.colors(checkedTrackColor = AccentBlue)
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Button(
+                onClick = {
+                    val intent = Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE).apply {
+                        data = "package:${context.packageName}".toUri()
+                    }
+                    context.startActivity(intent)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Surface2),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("🔑 Autofill aktivieren", color = TextP)
+            }
+        }
+
+        if (showBiometricInfoDialog) {
+            AlertDialog(
+                onDismissRequest = { showBiometricInfoDialog = false },
+                containerColor = Surface1,
+                title = { Text("Biometrie nicht verfügbar", color = TextP) },
+                text = { Text(biometricErrorMsg, color = TextS) },
+                confirmButton = {
+                    TextButton(onClick = { showBiometricInfoDialog = false }) {
+                        Text("OK", color = AccentBlue)
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun SilentCaptureScreen(
+    onDismiss: () -> Unit,
+    onSecretScanned: ((secret: String) -> Unit)? = null
+) {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    var isProcessing by remember { mutableStateOf(false) }
+
+    BackHandler {
+        onDismiss()
+    }
+
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .background(Color.Black)) {
+        AndroidView(
+            factory = { ctx ->
+                DecoratedBarcodeView(ctx).apply {
+                    viewFinder.visibility = View.GONE
+                    setStatusText("")
+                    decodeContinuous(object : BarcodeCallback {
+                        override fun barcodeResult(result: BarcodeResult?) {
+                            if (!isProcessing && result?.text != null) {
+                                isProcessing = true
+                                pause()
+                                scope.launch {
+                                    try {
+                                        val decodedText = withContext(Dispatchers.IO) {
+                                            URLDecoder.decode(result.text, "UTF-8")
+                                        }
+                                        val uri = decodedText.toUri()
+
+                                        if (uri.scheme != "otpauth") {
+                                            withContext(Dispatchers.Main) {
+                                                Toast.makeText(
+                                                    context,
+                                                    "❌ Ungültiges Format!",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                                errorInsert(
+                                                    "Capture Activity",
+                                                    "❌ Ungültiges Format! ($uri)",
+                                                    Instant.now().toString(),
+                                                    "ERROR"
+
+                                                )
+                                                isProcessing = false; onDismiss()
+                                            }
+                                            return@launch
+                                        }
+
+                                        val label = uri.path?.removePrefix("/") ?: "Unbekannt"
+                                        val secretParam = uri.getQueryParameter("secret")
+                                        val issuerParam = uri.getQueryParameter("issuer")
+                                        val displayName =
+                                            issuerParam?.let { "$it ($label)" } ?: label
+
+                                        if (secretParam.isNullOrBlank()) {
+                                            Toast.makeText(
+                                                context,
+                                                "❌ Kein Secret gefunden!",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                            errorInsert(
+                                                "Capture Activity",
+                                                "❌ Kein Secret! ($uri)",
+                                                Instant.now().toString(),
+                                                "ERROR"
+
+                                            )
+                                            isProcessing = false; onDismiss()
+                                            return@launch
+                                        }
+
+                                        // NEU: wenn Callback gesetzt → nur Secret zurückgeben, nicht speichern
+                                        if (onSecretScanned != null) {
+                                            withContext(Dispatchers.Main) {
+                                                onSecretScanned(secretParam)
+                                                // onDismiss wird vom Aufrufer durch den Callback ausgelöst
+                                            }
+                                            return@launch
+                                        }
+
+                                        // Altverhalten: direkt in DB speichern
+                                        val db = TwoFADatabase.getDatabase(context)
+                                        val existing = db.twoFADao().getAll()
+                                        if (existing.any {
+                                                it.secret == secretParam || it.name.equals(
+                                                    displayName,
+                                                    ignoreCase = true
+                                                )
+                                            }) {
+                                            Toast.makeText(
+                                                context,
+                                                "⚠️ Eintrag existiert bereits!",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                            isProcessing = false; onDismiss()
+                                            return@launch
+                                        }
+
+                                        val newEntry =
+                                            TwoFAEntry(name = displayName, secret = secretParam)
+                                        val inserted = db.twoFADao().insertOrIgnore(newEntry)
+                                        if (inserted == -1L) {
+                                            Toast.makeText(
+                                                context,
+                                                "⚠️ Eintrag existiert bereits!",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                            isProcessing = false; onDismiss()
+                                            return@launch
+                                        }
+
+                                        val ok = saveTwoFaEntryToSupabase(newEntry, db)
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(
+                                                context,
+                                                if (ok) "✅ $displayName hinzugefügt (lokal & Cloud)!" else "✅ $displayName hinzugefügt (Cloud fehlgeschlagen)",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                            isProcessing = false; onDismiss()
+                                        }
+                                    } catch (e: Exception) {
+                                        Toast.makeText(
+                                            context,
+                                            "❌ Fehler: ${e.message}",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                        errorInsert(
+                                            "Capture Activity",
+                                            "❌ ${e.message}",
+                                            Instant.now().toString(),
+                                            "ERROR"
+
+                                        )
+                                        isProcessing = false; onDismiss()
+                                    }
+                                }
+                            }
+                        }
+
+                        override fun possibleResultPoints(resultPoints: MutableList<ResultPoint>?) {}
+                    })
+                    resume()
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(250.dp)
+                    .border(3.dp, AccentBlue, RoundedCornerShape(16.dp))
+                    .background(Color.Transparent)
+            )
+            Spacer(Modifier.height(40.dp))
+            Text(
+                "Halte den QR-Code in den Rahmen",
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
     }
 }

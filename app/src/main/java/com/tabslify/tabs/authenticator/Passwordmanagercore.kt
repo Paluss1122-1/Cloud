@@ -105,10 +105,6 @@ abstract class PasswordDatabase : RoomDatabase() {
             }
         }
 
-        fun closeDatabase() {
-            INSTANCE?.close()
-            INSTANCE = null
-        }
     }
 }
 
@@ -278,36 +274,62 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
             }
 
             val cloudNames = mutableSetOf<String>()
-            var downloaded = 0
+
             cloudEntries.forEach { cloud ->
                 cloudNames.add(cloud.name.trim().lowercase())
-                val decryptedPw = CloudCrypto.decryptFromCloud(cloud.encrypted_password) ?: run {
-                    return@forEach
-                }
-                val existing = localPasswords.find { it.name == cloud.name && it.username == cloud.username }
+                val cloudUser = cloud.username ?: ""
+                val existing = localPasswords.find { it.name == cloud.name && it.username == cloudUser }
+                
                 if (existing == null) {
-                    passwordDb.passwordDao().insert(PasswordEntry(
-                        name = cloud.name,
-                        url = cloud.url ?: "",
-                        username = cloud.username ?: "",
-                        password = decryptedPw,
-                        totpSecret = cloud.totp_secret
-                    ))
-                    downloaded++
-
-                    cloud.totp_secret?.let { encryptedTotp ->
-                        val decryptedTotp = CloudCrypto.decryptFromCloud(encryptedTotp)
-                        if (!decryptedTotp.isNullOrEmpty()) {
-                            val existingTwoFa = localTwoFa.find { it.secret == decryptedTotp }
-                            if (existingTwoFa == null) {
-                                twoFaDb.twoFADao().insertOrIgnore(TwoFAEntry(name = cloud.name, secret = decryptedTotp))
+                    // Lokal gelöscht -> auf Cloud löschen
+                    try {
+                        cloud.id?.let { id ->
+                            Config.client.postgrest.from("password_entries").delete {
+                                filter { eq("id", id) }
                             }
+                        }
+                    } catch (e: Exception) {
+                        errorInsert("PasswordRepository", "Cloud-Delete fehlgeschlagen: ${e.message}", Instant.now().toString(), "ERROR")
+                    }
+                } else {
+                    // Existiert lokal, überprüfe auf Änderungen
+                    val decryptedPw = CloudCrypto.decryptFromCloud(cloud.encrypted_password)
+                    val matchedSecret = localTwoFa.firstOrNull { fa ->
+                        val n = fa.name.lowercase(); val ln = existing.name.lowercase(); val lu = existing.url.lowercase()
+                        n.contains(ln) || ln.contains(n) || (lu.isNotEmpty() && n.split(" ").any { lu.contains(it) })
+                    }?.secret
+                    
+                    val encryptedLocalPw = CloudCrypto.encryptForCloud(existing.password)
+                    val encryptedLocalTotp = matchedSecret?.let { CloudCrypto.encryptForCloud(it) }
+
+                    val cloudTotpDecrypted = cloud.totp_secret?.let { CloudCrypto.decryptFromCloud(it) }
+
+                    if (decryptedPw != existing.password || cloud.url != existing.url || cloud.notes != existing.notes || cloudTotpDecrypted != matchedSecret) {
+                        try {
+                            cloud.id?.let { id ->
+                                Config.client.postgrest.from("password_entries").update(
+                                    PasswordEntrySupabase(
+                                        name = existing.name,
+                                        url = existing.url,
+                                        username = existing.username,
+                                        encrypted_password = encryptedLocalPw,
+                                        notes = existing.notes,
+                                        totp_secret = encryptedLocalTotp
+                                    )
+                                ) {
+                                    filter { eq("id", id) }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            errorInsert("PasswordRepository", "Cloud-Update fehlgeschlagen: ${e.message}", Instant.now().toString(), "ERROR")
                         }
                     }
                 }
             }
 
-            val missingInCloud = localPasswords.filter { it.name.trim().lowercase() !in cloudNames }
+            val cloudPairs = cloudEntries.map { it.name to (it.username ?: "") }.toSet()
+            val missingInCloud = localPasswords.filter { (it.name to it.username) !in cloudPairs }
+            
             val toUpload = coroutineScope {
                 missingInCloud.map { local ->
                     async {
@@ -317,7 +339,14 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
                                 val n = fa.name.lowercase(); val ln = local.name.lowercase(); val lu = local.url.lowercase()
                                 n.contains(ln) || ln.contains(n) || (lu.isNotEmpty() && n.split(" ").any { lu.contains(it) })
                             }?.secret
-                            PasswordEntrySupabase(name = local.name, url = local.url, username = local.username, encrypted_password = encryptedPw, notes = local.notes, totp_secret = matchedSecret?.let { CloudCrypto.encryptForCloud(it) })
+                            PasswordEntrySupabase(
+                                name = local.name, 
+                                url = local.url, 
+                                username = local.username, 
+                                encrypted_password = encryptedPw, 
+                                notes = local.notes, 
+                                totp_secret = matchedSecret?.let { CloudCrypto.encryptForCloud(it) }
+                            )
                         } catch (_: Exception) {
                             null
                         }
