@@ -93,6 +93,8 @@ import com.tabslify.tabs.mediaplayer.ListenSession
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.getSessions
 import com.tabslify.tabs.school.Vokabel
+import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -105,6 +107,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -221,20 +225,13 @@ private fun logError(service: String, e: Exception) {
 }
 
 fun ensureReadyForConnect(context: Context) {
-    // 1. syncInProgress zurücksetzen (könnte von abgebrochenem Versuch stuck sein)
     syncInProgress.set(false)
     pendingSyncJob?.cancel()
     pendingSyncJob = null
-
-    // 2. triggerJob force-restart — egal ob isActive oder nicht
     triggerJob?.cancel()
     triggerJob = null
     startTriggerListener(context)
-
-    // 3. networkCallback neu registrieren (bei WiFi-Toggle kann er verloren gehen)
     registerWifiReconnectReceiver(context)
-
-    // 4. frische laptopIp holen
     syncScope.launch {
         val ip = fetchIpFromSupabase()
         if (!ip.isNullOrEmpty()) {
@@ -277,11 +274,10 @@ private fun launchServer(
                     }
                 }
 
-                server = ServerSocket().apply {
-                    reuseAddress = true
-                    bind(InetSocketAddress(port))
-                    soTimeout = 100 // Add timeout to allow clean shutdown
-                }
+                server = ServerSocket()
+                server.reuseAddress = true
+                server.bind(InetSocketAddress(port))
+                server.soTimeout = 100
                 synchronized(activeServers) { activeServers.add(server) }
 
                 while (isActive) {
@@ -303,6 +299,7 @@ private fun launchServer(
                     }
                 }
             } catch (_: BindException) {
+                delay(2000.milliseconds)
                 continue
             } catch (e: Exception) {
                 logError(errorTag, e)
@@ -1072,49 +1069,29 @@ private fun parseTodosFromJson(jsonData: String): List<TodoItem> =
     }
 
 fun startAiResponseListener(context: Context) {
-    aiResponseJob?.cancel()
-    aiResponseServerSocket?.close()
+    if (aiResponseJob?.isActive == true) return
 
     syncScope.launch {
         val existing = loadTodayOrYesterdayEntry(context)
         if (existing != null) aiResponseFlow.emit(existing)
     }
 
-    aiResponseJob = syncScope.launch(Dispatchers.IO) {
-        try {
-            aiResponseServerSocket = ServerSocket().apply {
-                reuseAddress = true
-                bind(InetSocketAddress(Config.AI_RECEIVE_PORT))
-            }
-            while (isActive) {
-                try {
-                    val client = aiResponseServerSocket?.accept() ?: break
-                    val text = client.inputStream.readBytes().toString(Charsets.UTF_8)
-                    client.close()
-
-                    saveAiResponse(context, text)
-                    aiResponseFlow.emit(
-                        AiResponseEntry(
-                            text = text,
-                            timestamp = System.currentTimeMillis(),
-                            dateKey = getTodayKey()
-                        )
-                    )
-                    showSimpleNotificationExtern(
-                        "🤖 AI Antwort",
-                        text.take(100),
-                        30.seconds,
-                        context
-                    )
-                } catch (_: SocketException) {
-                    break
-                } catch (e: Exception) {
-                    logError("startAiResponseListener", e)
-                }
-            }
-        } catch (e: Exception) {
-            logError("startAiResponseListener", e)
-        }
+    aiResponseJob = launchServer(syncScope, Config.AI_RECEIVE_PORT, "startAiResponseListener") { client ->
+        val text = client.inputStream.readBytes().toString(Charsets.UTF_8)
+        saveAiResponse(context, text)
+        aiResponseFlow.emit(
+            AiResponseEntry(
+                text = text,
+                timestamp = System.currentTimeMillis(),
+                dateKey = getTodayKey()
+            )
+        )
+        showSimpleNotificationExtern(
+            "🤖 AI Antwort",
+            text.take(100),
+            30.seconds,
+            context
+        )
     }
 }
 
@@ -2092,39 +2069,23 @@ fun sendAiExecuteCommand(context: Context, userInput: String) {
 
 private suspend fun fetchIpFromSupabase(mobile: Boolean = false): String? =
     withContext(Dispatchers.IO) {
+        val column = if (!mobile) "laptop" else "handy"
         repeat(3) { attempt ->
-            var connection: HttpURLConnection? = null
             try {
-                val column = if (!mobile) "laptop" else "handy"
-                val url = "${Config.SUPABASE_URL}/rest/v1/device_ips" +
-                        "?device_id=eq.$column&select=ip_address"
-
-                connection = URL(url).openConnection() as HttpURLConnection
-                connection.requestMethod = "GET"
-                connection.connectTimeout = 5_000
-                connection.readTimeout = 5_000
-                connection.useCaches = false
-                connection.setRequestProperty("Cache-Control", "no-cache, no-store")
-                connection.setRequestProperty("Pragma", "no-cache")
-                connection.setRequestProperty("apikey", Config.SUPABASE_PUBLISHABLE_KEY)
-                connection.setRequestProperty(
-                    "Authorization",
-                    "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}"
-                )
-
-                val code = connection.responseCode
-
-                if (code == 200) {
-                    val jsonArray = JSONArray(connection.inputStream.bufferedReader().readText())
-                    if (jsonArray.length() > 0) {
-                        val ip = jsonArray.getJSONObject(0).optString("ip_address", "")
-                        if (ip.isNotEmpty()) return@withContext ip
+                val result = Config.client
+                    .from("device_ips")
+                    .select(columns = Columns.list("ip_address")) {
+                        filter { eq("device_id", column) }
                     }
-                }
+                    .data
+
+                JSONArray(result)
+                    .optJSONObject(0)
+                    ?.optString("ip_address", "")
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { return@withContext it }
             } catch (e: Exception) {
                 if (attempt == 2) logError("SupabaseFetch", e)
-            } finally {
-                connection?.disconnect()
             }
 
             if (attempt < 2) delay((1000L * (attempt + 1)).milliseconds)
@@ -2135,55 +2096,21 @@ private suspend fun fetchIpFromSupabase(mobile: Boolean = false): String? =
 private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
     withContext(Dispatchers.IO) {
         if (!Config.realDevice) return@withContext true
-        var connection: HttpURLConnection? = null
         try {
-            val url = "${Config.SUPABASE_URL}/rest/v1/device_ips"
-
-            connection = URL(url).openConnection() as HttpURLConnection
-            connection.requestMethod = "POST"
-            connection.setRequestProperty("apikey", Config.SUPABASE_PUBLISHABLE_KEY)
-            connection.setRequestProperty(
-                "Authorization",
-                "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}"
-            )
-            connection.setRequestProperty("Cache-Control", "no-cache, no-store")
-            connection.setRequestProperty("Pragma", "no-cache")
-            connection.useCaches = false
-            connection.setRequestProperty("Content-Type", "application/json")
-            connection.setRequestProperty("Prefer", "resolution=merge-duplicates,upsert=true")
-
-            val jsonPayload = JSONObject().apply {
-                put("device_id", "handy")
-                put("ip_address", ipAddress)
-                put("last_seen", Instant.now().toString())
-            }
-
-            connection.outputStream.bufferedWriter().use { writer ->
-                writer.write(jsonPayload.toString())
-                writer.flush()
-            }
-
-            return@withContext if (connection.responseCode in 200..201) {
-                Log.d("CLOUDSA", "Mobile IP successfully inserted: $ipAddress")
-                true
-            } else {
-                val errorBody = if (connection.responseCode >= 400) {
-                    connection.errorStream?.bufferedReader()?.use { it.readText() }
-                        ?: ""
-                } else ""
-
-                Log.e(
-                    "CLOUDSA",
-                    "Failed to insert mobile IP. Code: ${connection.responseCode}, Body: $errorBody"
-                )
-                false
-            }
+            Config.client
+                .from("device_ips")
+                .update(buildJsonObject {
+                    put("ip_address", ipAddress)
+                    put("last_seen", Instant.now().toString())
+                }) {
+                    filter { eq("device_id", "handy") }
+                }
+            Log.d("CLOUDSA", "Mobile IP updated: $ipAddress")
+            true
         } catch (e: Exception) {
-            Log.e("CLOUDSA", "Error inserting mobile IP: ${e.message}", e)
+            Log.e("CLOUDSA", "Error updating mobile IP: ${e.message}", e)
             logError("SupabaseInsert", e)
             false
-        } finally {
-            connection?.disconnect()
         }
     }
 
