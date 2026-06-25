@@ -506,7 +506,7 @@ private fun HomeTab(
 
     val context = LocalContext.current
 
-    context.getSharedPreferences("media_analytics_v2", Context.MODE_PRIVATE)
+    context.getSharedPreferences("media_analytics", Context.MODE_PRIVATE)
     val aiEntry by aiResponseFlow.collectAsState()
     var showAiHistory by remember { mutableStateOf(false) }
 
@@ -2903,7 +2903,7 @@ data class PodcastAnalytics(val path: String, val showId: String)
 
 object MediaAnalyticsManager {
 
-    private const val PREFS_NAME = "media_analytics_v2"
+    private const val PREFS_NAME = "media_analytics"
     const val KEY_SESSIONS = "sessions"
 
     val gson: Gson = GsonBuilder().create()
