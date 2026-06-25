@@ -565,7 +565,7 @@ fun PrivateTabslifyApp(
 
                         MenuItem.MEDIAPLAYERTAB -> MediaTab(onBack = { onMenuClick?.invoke() })
 
-                        MenuItem.AUTHENTICATOR -> AuthenticatorTab(paddingValues.calculateBottomPadding())
+                        MenuItem.AUTHENTICATOR -> AuthenticatorTab()
                         else -> selectedMenuItem.content(setGesturesEnabled)
                     }
                 }
