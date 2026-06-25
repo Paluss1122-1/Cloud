@@ -18,7 +18,7 @@ fun prop(key: String) = "\"${localProps.getProperty(key)}\""
 
 android {
     namespace = "com.tabslify"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.paluss1122.tabslify"
@@ -136,4 +136,6 @@ dependencies {
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.appcheck.playintegrity)
     implementation(libs.firebase.appcheck.debug)
+    implementation(libs.rhino)
+    implementation(libs.firebase.messaging)
 }
