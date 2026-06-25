@@ -404,7 +404,7 @@ class QuietHoursNotificationService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        realDevice = getDeviceName().trim().equals("Samsung SM-S921U1", ignoreCase = true)
+        realDevice = !getDeviceName().trim().equals("sdk_gphone64", ignoreCase = true)
         requestIgnoreBatteryOptimizations(this)
         Config.init(this)
         sharedPreferences = getSharedPreferences("quiet_hours_prefs", MODE_PRIVATE)
