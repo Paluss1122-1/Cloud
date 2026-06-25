@@ -1,6 +1,8 @@
 package com.tabslify.core.activities
 
 import android.app.Application
+import android.content.Context
+import android.widget.Toast
 import coil.Coil
 import coil.ImageLoader
 import coil.disk.DiskCache
@@ -10,6 +12,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.appcheck.appCheck
 import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
+import com.google.firebase.messaging.FirebaseMessaging
 import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.client
@@ -24,7 +27,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
+import org.mozilla.javascript.ScriptableObject
 import java.time.Instant
+import kotlin.toString
+import org.mozilla.javascript.Context as RhinoContext
 
 class Tabslify : Application() {
 
@@ -39,6 +45,15 @@ class Tabslify : Application() {
     }
 
     override fun onCreate() {
+        if (prvt()) {
+            android.os.StrictMode.setVmPolicy(
+                android.os.StrictMode.VmPolicy.Builder()
+                    .detectLeakedClosableObjects()
+                    .penaltyLog()
+                    .penaltyDeath()
+                    .build()
+            )
+        }
         super.onCreate()
 
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
@@ -111,24 +126,63 @@ class Tabslify : Application() {
 data class Script(val code: String)
 
 
-suspend fun fetchAndRun(scriptName: String) {
+suspend fun fetchAndRun(scriptName: String, context: Context) {
     val script = client.from("scripts")
         .select { filter { eq("name", scriptName) } }
         .decodeSingle<Script>()
 
-    val result = executeJs(script.code)
+    val result = executeJs(script.code, context)
     println("Ergebnis: $result")
 }
 
-fun executeJs(code: String): String {
-    TODO("code nachladen experiment")
-//    val cx = Context.enter()
-//    cx.optimizationLevel = -1 // required für Android
-//    return try {
-//        val scope = cx.initStandardObjects()
-//        val result = cx.evaluateString(scope, code, "remote", 1, null)
-//        Context.toString(result)
-//    } finally {
-//        Context.exit()
-//    }
+// 1. Das ist unsere Brücke. Nur die Methoden HIER DRIN darf das JS nutzen.
+class AppBridge(private val androidContext: Context) {
+
+    // Du musst die Methode für Rhino zugänglich machen
+    fun showNotification(title: String, message: String) {
+        // Hier baust du später deinen echten Android Notification-Code ein!
+        // Fürs Erste zeigen wir hier zur Demo einen Toast:
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            Toast.makeText(androidContext, "$title: $message", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    fun logEvent(event: String) {
+        println("JS Event geloggt: $event")
+    }
+}
+
+// 2. Deine angepasste executeJs Funktion (braucht jetzt den App-Context)
+fun executeJs(code: String, appContext: android.content.Context): String {
+    val cx = RhinoContext.enter()
+    cx.optimizationLevel = -1
+
+    // Sandbox aktivieren: Nur unsere Brücke (und Basis-Datentypen) sind erlaubt
+    cx.setClassShutter { className ->
+        className == "com.tabslify.core.activities.AppBridge" ||
+        className == "java.lang.String" ||
+        className == "java.lang.Object" ||
+        className == "java.lang.Boolean" ||
+        className == "java.lang.Number" ||
+        className == "java.lang.Integer" ||
+        className == "java.lang.Double"
+    }
+
+    return try {
+        val scope = cx.initStandardObjects()
+
+        // 3. Brücke initialisieren und ins JS injizieren
+        val bridge = AppBridge(appContext)
+        val wrappedBridge = RhinoContext.javaToJS(bridge, scope)
+        // Wir nennen das Objekt in JavaScript "Tabslify"
+        ScriptableObject.putProperty(scope, "Tabslify", wrappedBridge)
+
+        // Skript ausführen
+        val result = cx.evaluateString(scope, code, "remote", 1, null)
+        RhinoContext.toString(result)
+    } catch (e: Exception) {
+        "JS Execution Error: ${e.message}"
+    } finally {
+        RhinoContext.exit()
+    }
 }
