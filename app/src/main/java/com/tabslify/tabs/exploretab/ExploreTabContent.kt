@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,9 +64,10 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val vm: ExploreViewModel = viewModel()
 
-    val tileCount by vm.tileCount.collectAsState()
-    val exploredPercent by vm.exploredPercent.collectAsState()
-    val tiles by vm.allTiles.collectAsState()
+    val tileCount by vm.tileCount.collectAsStateWithLifecycle()
+    val exploredPercent by vm.exploredPercent.collectAsStateWithLifecycle()
+    val tiles by vm.allTiles.collectAsStateWithLifecycle()
+    val trackerStatus by ExploreLocationTracker.trackerStatus.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var tileToDelete by remember { mutableStateOf<ExploredTile?>(null) }
@@ -130,6 +132,20 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                 )
                 StatCard("🌍 Erkundet", "%.8f%%".format(exploredPercent), Modifier.weight(1f))
                 StatCard("📅 Heute", vm.todayCount.toString(), Modifier.weight(1f))
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                StatCard(
+                    label = "📡 Tracker Status",
+                    value = trackerStatus,
+                    modifier = Modifier.weight(1f)
+                )
             }
 
             Box(
