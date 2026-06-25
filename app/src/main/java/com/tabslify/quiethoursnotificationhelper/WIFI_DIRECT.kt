@@ -86,6 +86,7 @@ import com.tabslify.services.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.tabslify.services.WhatsAppNotificationListener
 import com.tabslify.tabs.aitab.ChatMessage
 import com.tabslify.tabs.authenticator.PasswordDatabase
+import com.tabslify.tabs.authenticator.TotpGenerator
 import com.tabslify.tabs.authenticator.TotpGenerator.generateTOTP
 import com.tabslify.tabs.authenticator.TwoFADatabase
 import com.tabslify.tabs.mediaplayer.AlgorithmicPlaylistRegistry
@@ -558,7 +559,19 @@ fun startTriggerListener(context: Context) {
             when {
                 command.startsWith("CONNECT") -> {
                     laptopIp = command.substringAfter("CONNECT:", "")
-                    showSimpleNotificationExtern("📡 CONNECT", "Starte Sync...", 10.seconds, context)
+                    val prefs = context.getSharedPreferences("registered_pcs", Context.MODE_PRIVATE)
+                    val secretsPrefs = context.getSharedPreferences("pc_secrets", Context.MODE_PRIVATE)
+                    if (!secretsPrefs.contains(laptopIp)) {
+                        val allowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+                        val newSecret = (1..16).map { allowedChars.random() }.joinToString("")
+                        secretsPrefs.edit().putString(laptopIp, newSecret).apply()
+                    }
+                    if (!prefs.contains(laptopIp)) {
+                        prefs.edit().putString(laptopIp, "Registriert am " + SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMANY).format(Date())).apply()
+                        showSimpleNotificationExtern("🆕 Neuer PC", "Verbindung von $laptopIp registriert", 10.seconds, context)
+                    } else {
+                        showSimpleNotificationExtern("📡 CONNECT", "Laptop $laptopIp verbunden", 10.seconds, context)
+                    }
 
                     val syncWl =
                         pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:SyncWakeLock")
@@ -637,6 +650,9 @@ fun stopAllSyncServices(context: Context) {
     mediaCommandJob = null; mediaStateJob = null; aiResponseJob = null
     flashcardResponseJob = null; clipboardJob = null; mailNotifyJob = null; executeJob = null
 
+    val nm = context.getSystemService(NotificationManager::class.java)
+    nm.cancel(99999)
+
     aiResponseServerSocket?.close(); aiResponseServerSocket = null
     flashcardResponseSocket?.close(); flashcardResponseSocket = null
 
@@ -652,7 +668,10 @@ fun stopAllSyncServices(context: Context) {
     }
 
     cpuWakeLock.safeRelease(); cpuWakeLock = null
-    context.unregisterReceiver(akkuReceiver)
+    try {
+        context.unregisterReceiver(akkuReceiver)
+    } catch (_: IllegalArgumentException) {
+    }
     cache = Cache()
 
     isLaptopConnected = false
@@ -724,7 +743,19 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                 val writer = PrintWriter(socket.getOutputStream(), true)
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
 
-                writer.println(todosToJsonArray(todos).toString())
+                val secretsPrefs = context.getSharedPreferences("pc_secrets", Context.MODE_PRIVATE)
+                var totpKey = secretsPrefs.getString(currentIp, null)
+                if (totpKey == null) {
+                    val allowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+                    totpKey = (1..16).map { allowedChars.random() }.joinToString("")
+                    secretsPrefs.edit().putString(currentIp, totpKey).apply()
+                }
+                val payloadObj = JSONObject().apply {
+                    put("todos", todosToJsonArray(todos))
+                    put("totp_key", totpKey)
+                }
+
+                writer.println(payloadObj.toString())
                 writer.flush()
 
                 reader.readLine() ?: throw IOException("Keine Antwort vom Server")
@@ -1729,6 +1760,31 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
     val args = json.optJSONObject("args") ?: JSONObject()
 
     when (tool) {
+        "execute_command" -> {
+            val command = args.optString("command")
+            val totp = args.optString("totp")
+            val secretsPrefs = context.getSharedPreferences("pc_secrets", Context.MODE_PRIVATE)
+            val totpKey = secretsPrefs.getString(laptopIp, null) ?: "COMMANDEXECUTORK"
+            val now = System.currentTimeMillis()
+            val valid = listOf(
+                TotpGenerator.generateTOTP(totpKey, now - 30000),
+                TotpGenerator.generateTOTP(totpKey, now),
+                TotpGenerator.generateTOTP(totpKey, now + 30000)
+            ).contains(totp)
+            if (valid) {
+                syncScope.launch(Dispatchers.Main) {
+                    executeCommand(command, context)
+                }
+            } else {
+                showSimpleNotificationExtern(
+                    "Ungültiger TOTP",
+                    "Falscher TOTP Code",
+                    10.seconds,
+                    context
+                )
+            }
+        }
+
         "show_toast" -> {
             syncScope.launch(Dispatchers.Main) {
                 Toast.makeText(context, args.optString("message", ""), Toast.LENGTH_LONG).show()
