@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import com.tabslify.core.objects.Config
+import com.tabslify.core.objects.prvt
 import com.tabslify.quiethoursnotificationhelper.isLaptopConnected
 import com.tabslify.quiethoursnotificationhelper.isLaptopConnectedFlow
 import com.tabslify.quiethoursnotificationhelper.laptopIp
@@ -106,6 +107,7 @@ class ShareActivity : ComponentActivity() {
     }
 
     private fun sendImagesToLaptop(uris: List<Uri>) {
+        if (!prvt()) return
         setContent {
             MaterialTheme {
                 ProcessingScreen(fileCount = uris.size)
@@ -149,7 +151,7 @@ class ShareActivity : ComponentActivity() {
         fileName: String,
         mimeType: String
     ): Boolean {
-        if (laptopIp.isEmpty()) return false
+        if (laptopIp.isEmpty() || !prvt()) return false
         return try {
             Socket().use { socket ->
                 socket.connect(InetSocketAddress(laptopIp, Config.IMAGE_SHARE_PORT), 3000)
@@ -321,27 +323,29 @@ fun SaveToPrivateStorageScreen(
                     color = Color.Gray
                 )
 
-                if (isLaptopConnected) {
-                    Button(
-                        onClick = onSendToLaptop,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("💻 An Laptop senden", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    }
-                } else {
-                    Button(
-                        onClick = {},
-                        enabled = false,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("💻 Laptop nicht verbunden", fontSize = 16.sp, color = Color.White)
+                if (prvt()) {
+                    if (isLaptopConnected) {
+                        Button(
+                            onClick = onSendToLaptop,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("💻 An Laptop senden", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Button(
+                            onClick = {},
+                            enabled = false,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("💻 Laptop nicht verbunden", fontSize = 16.sp, color = Color.White)
+                        }
                     }
                 }
 
