@@ -2789,40 +2789,45 @@ class MediaPlayerService : MediaSessionService() {
             var episodeTitle = ""
             var showName = ""
 
+            var conn: java.net.HttpURLConnection? = null
             try {
-                val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
                 conn.instanceFollowRedirects = false
                 conn.requestMethod = "HEAD"
                 conn.connect()
                 val location = conn.getHeaderField("Location")
-                conn.disconnect()
                 if (!location.isNullOrBlank()) resolvedUrl = location
             } catch (_: Exception) {
+            } finally {
+                conn?.disconnect()
             }
 
+            val retriever = MediaMetadataRetriever()
             try {
-                val retriever = MediaMetadataRetriever()
                 retriever.setDataSource(resolvedUrl, hashMapOf())
                 episodeTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: ""
                 showName = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: ""
-                retriever.release()
             } catch (_: Exception) {
+            } finally {
+                retriever.release()
             }
 
             Pair(episodeTitle, showName)
         }
 
     private suspend fun resolveRedirect(url: String): String = withContext(Dispatchers.IO) {
+        var conn: java.net.HttpURLConnection? = null
         try {
-            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
             conn.instanceFollowRedirects = false
             conn.requestMethod = "HEAD"
             conn.connect()
             val location = conn.getHeaderField("Location")
-            conn.disconnect()
             location ?: url
         } catch (_: Exception) {
             url
+        } finally {
+            conn?.disconnect()
         }
     }
 

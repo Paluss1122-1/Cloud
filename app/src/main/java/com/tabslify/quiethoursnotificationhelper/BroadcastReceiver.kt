@@ -204,37 +204,38 @@ class FinishedPdDownload : BroadcastReceiver() {
 
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val cursor = dm.query(DownloadManager.Query().setFilterById(downloadId))
-        if (cursor.moveToFirst()) {
-            val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-            if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                val show = PodcastShowManager.getShows()
-                    .find { it.name.equals(showName, ignoreCase = true) }
-                    ?: PodcastShowManager.createShow(showName)
-                PodcastShowManager.assignPattern(safeTitle.lowercase(), show.name)
-                Toast.makeText(context, "✓ Heruntergeladen", Toast.LENGTH_SHORT).show()
-                val openIntent = Intent(context, MediaPlayerService::class.java).apply {
-                    action = ACTION_PODCAST_PLAY_SPECIFIED
-                    putExtra("safeTitle", safeTitle)
+        cursor?.use {
+            if (it.moveToFirst()) {
+                val status = it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                    val show = PodcastShowManager.getShows()
+                        .find { it.name.equals(showName, ignoreCase = true) }
+                        ?: PodcastShowManager.createShow(showName)
+                    PodcastShowManager.assignPattern(safeTitle.lowercase(), show.name)
+                    Toast.makeText(context, "✓ Heruntergeladen", Toast.LENGTH_SHORT).show()
+                    val openIntent = Intent(context, MediaPlayerService::class.java).apply {
+                        action = ACTION_PODCAST_PLAY_SPECIFIED
+                        putExtra("safeTitle", safeTitle)
+                    }
+                    val pendingIntent = PendingIntent.getForegroundService(
+                        context, downloadId.toInt(), openIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+
+                    val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+                        .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                        .setContentTitle("✓ Podcast heruntergeladen")
+                        .setContentText(safeTitle)
+                        .setContentIntent(pendingIntent)
+                        .setAutoCancel(true)
+                        .build()
+
+                    val nm =
+                        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    nm.notify(downloadId.toInt(), notification)
                 }
-                val pendingIntent = PendingIntent.getForegroundService(
-                    context, downloadId.toInt(), openIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-
-                val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-                    .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                    .setContentTitle("✓ Podcast heruntergeladen")
-                    .setContentText(safeTitle)
-                    .setContentIntent(pendingIntent)
-                    .setAutoCancel(true)
-                    .build()
-
-                val nm =
-                    context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                nm.notify(downloadId.toInt(), notification)
             }
         }
-        cursor.close()
     }
 }
 

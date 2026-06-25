@@ -283,16 +283,15 @@ class DownloadRepositoryImpl(
             val projection = arrayOf(MediaStore.MediaColumns._ID)
             val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} = ?"
             val selectionArgs = arrayOf(fileName)
-            val cursor = context.contentResolver.query(
+            context.contentResolver.query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                 projection,
                 selection,
                 selectionArgs,
                 null
-            )
-            val exists = (cursor?.count ?: 0) > 0
-            cursor?.close()
-            exists
+            )?.use { cursor ->
+                cursor.count > 0
+            } ?: false
         } catch (_: Exception) {
             false
         }

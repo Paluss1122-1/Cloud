@@ -118,7 +118,7 @@ class ShareActivity : ComponentActivity() {
             for (uri in uris) {
                 try {
                     val bytes = withContext(Dispatchers.IO) {
-                        contentResolver.openInputStream(uri)?.readBytes()
+                        contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     } ?: continue
 
                     val fileName = getFileNameFromUri(uri)

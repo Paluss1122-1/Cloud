@@ -273,7 +273,7 @@ fun MaterialienScreen(
                     folders = (listOf(selectedSubject!!) + folders).sortedDescending()
                 }
                 try {
-                    val rawBytes = context.contentResolver.openInputStream(uri)?.readBytes()
+                    val rawBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                         ?: throw Exception("Datei nicht lesbar")
                     val (uploadBytes, uploadName) = compressToJpgIfImage(rawBytes, state.fileName)
                     val path = "$selectedSubject/$uploadName"

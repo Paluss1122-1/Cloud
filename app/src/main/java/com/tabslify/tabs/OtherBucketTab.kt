@@ -744,9 +744,7 @@ fun OtherBucketViewer(
 suspend fun saveFileToPrivateStorage(context: Context, uri: Uri) {
     withContext(Dispatchers.IO) {
         try {
-            val inputStream = context.contentResolver.openInputStream(uri)
-            val bytes = inputStream?.readBytes()
-            inputStream?.close()
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
 
             if (bytes != null) {
                 var fileName = "file_${System.currentTimeMillis()}"

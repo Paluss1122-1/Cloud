@@ -709,37 +709,38 @@ fun PrivateTabslifyApp(
                                 val query = DownloadManager.Query().setFilterById(downloadId)
                                 val cursor = dm.query(query)
 
-                                if (cursor.moveToFirst()) {
-                                    val statusCol =
-                                        cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-                                    val status = cursor.getInt(statusCol)
+                                cursor?.use {
+                                    if (it.moveToFirst()) {
+                                        val statusCol =
+                                            it.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                                        val status = it.getInt(statusCol)
 
-                                    if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                                        val src = File(
-                                            Environment.getExternalStoragePublicDirectory(
-                                                Environment.DIRECTORY_DOWNLOADS
-                                            ),
-                                            filename
-                                        )
-                                        val destDir = File(
-                                            Environment.getExternalStoragePublicDirectory(
-                                                Environment.DIRECTORY_DOWNLOADS
-                                            ),
-                                            "tabslify/podcasts"
-                                        )
-                                        destDir.mkdirs()
-                                        val dest = File(destDir, filename)
+                                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                                            val src = File(
+                                                Environment.getExternalStoragePublicDirectory(
+                                                    Environment.DIRECTORY_DOWNLOADS
+                                                ),
+                                                filename
+                                            )
+                                            val destDir = File(
+                                                Environment.getExternalStoragePublicDirectory(
+                                                    Environment.DIRECTORY_DOWNLOADS
+                                                ),
+                                                "tabslify/podcasts"
+                                            )
+                                            destDir.mkdirs()
+                                            val dest = File(destDir, filename)
 
-                                        val moved = src.renameTo(dest)
+                                            val moved = src.renameTo(dest)
 
-                                        Toast.makeText(
-                                            ctx,
-                                            if (moved) "Gespeichert in tabslify/podcasts/" else "Download OK, Verschieben fehlgeschlagen",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                                            Toast.makeText(
+                                                ctx,
+                                                if (moved) "Gespeichert in tabslify/podcasts/" else "Download OK, Verschieben fehlgeschlagen",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
                                     }
                                 }
-                                cursor.close()
                             }
                         }
 

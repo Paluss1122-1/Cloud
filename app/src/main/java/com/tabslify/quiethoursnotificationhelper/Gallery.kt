@@ -97,9 +97,7 @@ fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?, contex
                 imageName
             }
 
-            val inputStream = context.contentResolver.openInputStream(imageUri)
-            val imageBytes = inputStream?.readBytes()
-            inputStream?.close()
+            val imageBytes = context.contentResolver.openInputStream(imageUri)?.use { it.readBytes() }
 
             if (imageBytes == null) {
                 Handler(Looper.getMainLooper()).post {
