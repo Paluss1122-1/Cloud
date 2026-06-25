@@ -8,7 +8,11 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +43,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -57,6 +63,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -155,7 +162,6 @@ fun PloppingButton(
 ) {
     val scale = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
-    val interactionSource = remember { MutableInteractionSource() }
     val containerColor = if (enabled) colors.containerColor else colors.disabledContainerColor
 
     Box(
@@ -167,28 +173,38 @@ fun PloppingButton(
             }
             .clip(shape)
             .background(containerColor)
-            .clickable(
-                indication = null,
-                interactionSource = interactionSource,
-                enabled = enabled
-            ) {
-                scope.launch {
-                    scale.animateTo(
-                        0.82f,
-                        spring(
-                            stiffness = Spring.StiffnessHigh,
-                            dampingRatio = Spring.DampingRatioMediumBouncy
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
+
+                awaitEachGesture {
+                    awaitFirstDown()
+
+                    scope.launch {
+                        scale.animateTo(
+                            0.82f,
+                            spring(
+                                stiffness = Spring.StiffnessHigh,
+                                dampingRatio = Spring.DampingRatioMediumBouncy
+                            )
                         )
-                    )
-                    onClick()
-                    scale.animateTo(
-                        1f,
-                        spring(
-                            stiffness = Spring.StiffnessMedium,
-                            dampingRatio = Spring.DampingRatioLowBouncy
+                    }
+
+                    val up = waitForUpOrCancellation()
+
+                    scope.launch {
+                        scale.animateTo(
+                            1f,
+                            spring(
+                                stiffness = Spring.StiffnessMedium,
+                                dampingRatio = Spring.DampingRatioLowBouncy
+                            )
                         )
-                    )
-                    onFinishedClick()
+                    }
+
+                    if (up != null) {
+                        onClick()
+                        onFinishedClick()
+                    }
                 }
             }
             .padding(contentPadding),
