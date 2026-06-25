@@ -167,6 +167,69 @@ fun getHomeWifiStatus(
 
 private fun getAvailableCommands(context: Context): List<Command> {
     return listOf(
+        /*Command(
+            name = "import",
+            aliases = listOf("migration"),
+            description = "Startet Launcher zum JSON Import"
+        ) {
+            val intent = Intent(context, ImportActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        },
+        Command(
+            name = "export",
+            aliases = listOf("migration"),
+            description = "Exportiert die Einstellungen in eine JSON-Datei"
+        ) {
+            try {
+                val uri = MigrationManager.exportPrefs(context)
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/json"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                val chooser = Intent.createChooser(intent, "Einstellungen exportieren").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(chooser)
+                Toast.makeText(context, "Export erfolgreich", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                showSimpleNotificationExtern(
+                    "❌ Fehler beim Export",
+                    e.message ?: "Unbekannter Fehler",
+                    context = context,
+                    silent = false
+                )
+            }
+        },*/
+        Command(
+            name = "r",
+            aliases = listOf("migration"),
+            description = "Startet Launcher zum JSON Import"
+        ) {
+            appScope.launch {
+                fetchAndRun("hello", context)
+            }
+        },
+        Command(
+            name = "flo",
+            description = "Setup MEDIA folders"
+        ) {
+            val env = Environment.getExternalStorageDirectory()
+
+            listOf(
+                File(env, "Download/Cloud"),
+                File(env, "Podcasts/Cloud"),
+                File(env, "Music/Cloud")
+            ).forEach { it.deleteRecursively() }
+
+            listOf(
+                File(env, "Podcasts/Tabslify"),
+                File(env, "Music/Tabslify")
+            ).forEach { it.mkdirs() }
+        },
         Command(
             name = "whatsapp",
             aliases = listOf("wh", "wa", "messages", "msg", "nachrichten"),
