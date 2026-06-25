@@ -153,6 +153,7 @@ import com.tabslify.privatetabslifyapp.getMimeType
 import com.tabslify.privatetabslifyapp.isImageFile
 import com.tabslify.privatetabslifyapp.isOnline
 import com.tabslify.tabs.BrowserTabContent
+import com.tabslify.tabs.PCManagerTab
 import com.tabslify.tabs.CalendarTabContent
 import com.tabslify.tabs.ContactsRepository
 import com.tabslify.tabs.ContactsTabContent
@@ -179,6 +180,7 @@ import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -187,6 +189,7 @@ import java.io.FileOutputStream
 import java.time.Instant
 import java.time.ZoneId
 import java.util.Calendar
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 
@@ -324,6 +327,11 @@ enum class MenuItem(
         "Podcasts",
         "🎙️",
         { PodcastTab() }
+    ),
+    PC_MANAGER(
+        "PC Manager",
+        "💻",
+        { PCManagerTab() }
     ),
 }
 
@@ -1040,7 +1048,7 @@ fun MainTabslifyScreen(storage: Storage) {
         val alpha = remember { Animatable(0f) }
 
         LaunchedEffect(Unit) {
-            delay(100)
+            delay(100.milliseconds)
             alpha.animateTo(
                 1f, animationSpec = tween(
                     durationMillis = 150,
@@ -1434,7 +1442,7 @@ fun MainTabslifyScreen(storage: Storage) {
                                                                             ).show()
                                                                         } finally {
                                                                             isDownloading = null
-                                                                            delay(500)
+                                                                            delay(500.milliseconds)
                                                                             showDownloadProgress =
                                                                                 false
                                                                         }
@@ -1781,7 +1789,7 @@ fun MainTabslifyScreen(storage: Storage) {
                                                                 ).show()
                                                             } finally {
                                                                 isDownloading = null
-                                                                delay(500)
+                                                                delay(500.milliseconds)
                                                                 showDownloadProgress = false
                                                             }
                                                         }
@@ -1967,7 +1975,7 @@ fun MainTabslifyScreen(storage: Storage) {
                         Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_LONG).show()
                     } finally {
                         isDownloading = null
-                        delay(500)
+                        delay(500.milliseconds)
                         showDownloadProgress = false
                         fullscreenImageDialogData = null
                     }
@@ -2014,7 +2022,7 @@ fun MainTabslifyScreen(storage: Storage) {
                 otherBucketBitmap = captured
 
                 snapshotFlow { otherBucketBitmap }
-                    .filter { it != null }
+                    .filterNotNull()
                     .first()
 
                 showOtherBucket = true
@@ -2029,7 +2037,7 @@ fun MainTabslifyScreen(storage: Storage) {
                 pendingOtherBucket = false
                 shouldshow = true
 
-                delay(80)
+                delay(80.milliseconds)
                 otherBucketAlpha.animateTo(0f, tween(durationMillis = 200))
                 otherBucketScale.snapTo(0f)
                 otherBucketBitmap = null
