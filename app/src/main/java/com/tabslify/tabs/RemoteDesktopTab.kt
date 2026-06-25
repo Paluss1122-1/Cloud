@@ -376,22 +376,19 @@ class RemoteDesktopViewModel : ViewModel() {
                         val byteArray = bytes.toByteArray()
                         Log.d(TAG, "[WS-BIN] Frame empfangen: ${byteArray.size} bytes")
 
-                        // Pipeline: zu viele laufende Decodes → überspringen
-                        if (pendingDecodes.get() > pipelineDepth) {
+                        if (pendingDecodes.get() >= pipelineDepth) {
                             Log.w(TAG, "[FLOW] Übersprungen – $pendingDecodes laufende Decodes")
+                            sendReadySignal(ws)
                             return
                         }
                         pendingDecodes.incrementAndGet()
 
-                        frameDecodeJob?.cancel()
-                        frameDecodeJob = viewModelScope.launch(Dispatchers.Default) {
+                        viewModelScope.launch(Dispatchers.Default) {
                             try {
                                 val decodeStart = System.currentTimeMillis()
 
-                                // RGB_565: halb so viel RAM, ~20% schnelleres Decode
                                 val opts = BitmapFactory.Options().apply {
                                     inPreferredConfig = Bitmap.Config.RGB_565
-                                    // inBitmap wiederverwenden wenn Größe passt
                                     reuseBitmapRef.get()?.let { prev ->
                                         if (!prev.isRecycled) {
                                             inBitmap = prev
@@ -408,7 +405,6 @@ class RemoteDesktopViewModel : ViewModel() {
                                         opts
                                     )
                                 } catch (_: IllegalArgumentException) {
-                                    // inBitmap inkompatibel → ohne Wiederverwendung
                                     BitmapFactory.decodeByteArray(
                                         byteArray, 0, byteArray.size,
                                         BitmapFactory.Options()
@@ -424,8 +420,6 @@ class RemoteDesktopViewModel : ViewModel() {
                                     )
 
                                     reuseBitmapRef.getAndSet(bitmap)
-                                    // Altes Bitmap nicht recyclen – könnte noch im ImageView sein
-                                    // GC übernimmt (RGB_565 ist halb so groß)
 
                                     _currentFrame.value = bitmap
                                     frameCounter++
@@ -453,7 +447,6 @@ class RemoteDesktopViewModel : ViewModel() {
                                 Log.e(TAG, "[DECODE] Fehler", e)
                             } finally {
                                 pendingDecodes.decrementAndGet()
-                                // Ready-Signal → Server darf nächsten Frame senden
                                 activeWebSocket?.let { sendReadySignal(it) }
                             }
                         }
@@ -916,11 +909,23 @@ fun ConnectedScreen(
                                             MotionEvent.ACTION_MOVE -> "move"
                                             else -> return@setOnTouchListener false
                                         }
-                                        viewModel.sendTouchEvent(
-                                            event.x / v.width.toFloat(),
-                                            event.y / v.height.toFloat(),
-                                            action
-                                        )
+                                        val bitmap = viewModel.currentFrame.value
+                                        if (bitmap != null) {
+                                            val bWidth = bitmap.width.toFloat()
+                                            val bHeight = bitmap.height.toFloat()
+                                            val vWidth = v.width.toFloat()
+                                            val vHeight = v.height.toFloat()
+                                            val scale = minOf(vWidth / bWidth, vHeight / bHeight)
+                                            val actualImageWidth = bWidth * scale
+                                            val actualImageHeight = bHeight * scale
+                                            val offsetX = (vWidth - actualImageWidth) / 2f
+                                            val offsetY = (vHeight - actualImageHeight) / 2f
+                                            val normX = ((event.x - offsetX) / actualImageWidth).coerceIn(0f, 1f)
+                                            val normY = ((event.y - offsetY) / actualImageHeight).coerceIn(0f, 1f)
+                                            viewModel.sendTouchEvent(normX, normY, action)
+                                        } else {
+                                            viewModel.sendTouchEvent(event.x / v.width.toFloat(), event.y / v.height.toFloat(), action)
+                                        }
                                         true
                                     }
                                 }
@@ -971,8 +976,6 @@ fun ConnectedScreen(
                     scaleType = ImageView.ScaleType.FIT_CENTER
                     setBackgroundColor(android.graphics.Color.BLACK)
                     setOnTouchListener { v, event ->
-                        viewWidth = v.width.toFloat()
-                        viewHeight = v.height.toFloat()
                         val action = when (event.action) {
                             MotionEvent.ACTION_DOWN -> "down"
                             MotionEvent.ACTION_UP -> {
@@ -982,7 +985,23 @@ fun ConnectedScreen(
                             MotionEvent.ACTION_MOVE -> "move"
                             else -> return@setOnTouchListener false
                         }
-                        viewModel.sendTouchEvent(event.x / viewWidth, event.y / viewHeight, action)
+                        val bitmap = currentFrame
+                        if (bitmap != null) {
+                            val bWidth = bitmap.width.toFloat()
+                            val bHeight = bitmap.height.toFloat()
+                            val vWidth = v.width.toFloat()
+                            val vHeight = v.height.toFloat()
+                            val scale = minOf(vWidth / bWidth, vHeight / bHeight)
+                            val actualImageWidth = bWidth * scale
+                            val actualImageHeight = bHeight * scale
+                            val offsetX = (vWidth - actualImageWidth) / 2f
+                            val offsetY = (vHeight - actualImageHeight) / 2f
+                            val normX = ((event.x - offsetX) / actualImageWidth).coerceIn(0f, 1f)
+                            val normY = ((event.y - offsetY) / actualImageHeight).coerceIn(0f, 1f)
+                            viewModel.sendTouchEvent(normX, normY, action)
+                        } else {
+                            viewModel.sendTouchEvent(event.x / v.width.toFloat(), event.y / v.height.toFloat(), action)
+                        }
                         true
                     }
                 }
