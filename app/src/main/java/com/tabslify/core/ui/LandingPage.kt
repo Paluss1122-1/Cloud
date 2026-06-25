@@ -3,6 +3,7 @@ package com.tabslify.core.ui
 import android.content.Context
 import android.graphics.Paint
 import android.os.Build
+import android.widget.Toast
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -138,7 +139,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
         LazyListState()
     }
     var reloadKey by remember { mutableIntStateOf(0) }
-    realDevice = !getDeviceName().trim().equals("sdk_gphone64", ignoreCase = true)
+    realDevice = !getDeviceName().trim().contains("sdk_gphone64", ignoreCase = true)
     var landingReloadTrigger by remember { mutableIntStateOf(0) }
 
     if (realDevice && prvt()) {
@@ -425,7 +426,9 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
-        Box(modifier = Modifier.height(36.dp).padding(top = 8.dp)) {
+        Box(modifier = Modifier
+            .height(36.dp)
+            .padding(top = 8.dp)) {
             error?.let {
                 val formattedError = when {
                     it.contains("invalid_credentials") -> "Invalid Credentials"
@@ -469,7 +472,7 @@ fun LandingPage(
     }
     val allTabsSorted = remember {
         MenuItem.entries.filter {
-            prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD && it != MenuItem.REMOTEDESKTOP)
+            prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD && it != MenuItem.REMOTEDESKTOP && it != MenuItem.PC_MANAGER)
         }.sortedBy { it.title }
     }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
