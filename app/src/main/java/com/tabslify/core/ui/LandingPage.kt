@@ -138,7 +138,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
         LazyListState()
     }
     var reloadKey by remember { mutableIntStateOf(0) }
-    realDevice = getDeviceName().trim().equals("Samsung SM-S921U1", ignoreCase = true)
+    realDevice = !getDeviceName().trim().equals("sdk_gphone64", ignoreCase = true)
     var landingReloadTrigger by remember { mutableIntStateOf(0) }
 
     if (realDevice && prvt()) {
