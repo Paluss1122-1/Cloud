@@ -1,15 +1,19 @@
 package com.tabslify.tabs
 
+import android.Manifest
 import android.app.Activity
 import android.content.ContentUris
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
+import android.os.Build
 import android.provider.MediaStore
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
@@ -27,9 +31,14 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -99,6 +108,24 @@ fun GalleryTab() {
     var isFullscreenVideo by remember { mutableStateOf(false) }
     val thumbnailCache = remember { mutableStateMapOf<String, Bitmap>() }
 
+    val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+    } else {
+        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+
+    fun hasAllPermissions() = requiredPermissions.all {
+        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+    }
+
+    var hasPermission by remember { mutableStateOf(hasAllPermissions()) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        hasPermission = grants.values.all { it }
+    }
+
     val deleteLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
@@ -110,7 +137,8 @@ fun GalleryTab() {
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(hasPermission) {
+        if (!hasPermission) return@LaunchedEffect
         withContext(Dispatchers.IO) {
             val images = loadImagesFromMediaStore(context)
             val videos = loadVideosFromMediaStore(context)
@@ -119,6 +147,29 @@ fun GalleryTab() {
     }
 
     val gridState = rememberLazyGridState()
+
+    if (!hasPermission) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Transparent),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    "Zugriff auf Medien benötigt",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(onClick = { permissionLauncher.launch(requiredPermissions) }) {
+                    Text("Berechtigung erteilen")
+                }
+            }
+        }
+        return
+    }
 
     SharedTransitionLayout {
         AnimatedContent(
