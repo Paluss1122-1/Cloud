@@ -32,14 +32,8 @@ android {
         buildConfigField("String", "BWMP", prop("BWMP"))
         buildConfigField("String", "DBKEY", prop("DBKEY"))
         buildConfigField("String", "DBKEY1", prop("DBKEY1"))
-        buildConfigField("String", "NVIDIA", prop("NVIDIA"))
-        buildConfigField("String", "WEATHERAPI_KEY", prop("WEATHERAPI_KEY"))
-        buildConfigField("String", "RAPID_API_KEY", prop("RAPID_API_KEY"))
-        buildConfigField("String", "PODCASTINDEX_API_KEY", prop("PODCASTINDEX_API_KEY"))
-        buildConfigField("String", "PODCASTINDEX_API_SECRET", prop("PODCASTINDEX_API_SECRET"))
-        buildConfigField("String", "TMDB_API_KEY", prop("TMDB_API_KEY"))
-        buildConfigField("Double", "LAT", localProps.getProperty("LAT"))
-        buildConfigField("Double", "LON", localProps.getProperty("LON"))
+        buildConfigField("String", "DEBUG_SHA256", prop("DEBUG_SHA256"))
+        buildConfigField("String", "RELEASE_SHA256", prop("RELEASE_SHA256"))
     }
 
     signingConfigs {
@@ -57,6 +51,12 @@ android {
         }
         release {
             signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
     compileOptions {
