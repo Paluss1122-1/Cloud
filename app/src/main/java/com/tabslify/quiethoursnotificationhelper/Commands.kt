@@ -168,15 +168,6 @@ fun getHomeWifiStatus(
 private fun getAvailableCommands(context: Context): List<Command> {
     return listOf(
         Command(
-            name = "r",
-            aliases = listOf("migration"),
-            description = "Startet Launcher zum JSON Import"
-        ) {
-            appScope.launch {
-                fetchAndRun("hello", context)
-            }
-        },
-        Command(
             name = "flo",
             description = "Setup MEDIA folders"
         ) {
