@@ -243,7 +243,7 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun send(ctx: Context, txt: String, pic: String?, audio: String?, onToken: (String) -> Unit): String {
         if (!isOnline(ctx)) return "Kein Netzwerk"
         return when (currentMode) {
-            "Nvidia" -> sendNvidiaChatMessageAITab(history, txt, selectedModel.realname, pic, onToken = onToken) ?: "Fehler"
+            "Nvidia" -> sendNvidiaChatMessageAITab(ctx, history, txt, selectedModel.realname, pic, onToken = onToken) ?: "Fehler"
             "Server" -> askServer(history, txt, selectedModel.realname, pic)
             "Gemini" -> sendGeminiRequest(history, txt, pic, audioUri = selectedAudioUri,
                 ctx = ctx, model = selectedModel.realname, onToken = onToken) ?: "Fehler"
