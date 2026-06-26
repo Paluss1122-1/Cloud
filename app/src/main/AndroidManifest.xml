@@ -296,12 +296,5 @@
                 <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
             </intent-filter>
         </receiver>
-
-        <!--
-        <activity
-            android:name=".quiethoursnotificationhelper.ImportActivity"
-            android:exported="false"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-            -->
     </application>
 </manifest>
