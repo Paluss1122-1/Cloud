@@ -218,7 +218,8 @@ class ShareActivity : ComponentActivity() {
                             withContext(Dispatchers.IO) {
                                 try {
                                     contentResolver.delete(uri, null, null)
-                                } catch (_: Exception) { }
+                                } catch (_: Exception) {
+                                }
                             }
                         } else {
                             failCount++
@@ -333,7 +334,11 @@ fun SaveToPrivateStorageScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Text("💻 An Laptop senden", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                "💻 An Laptop senden",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     } else {
                         Button(
