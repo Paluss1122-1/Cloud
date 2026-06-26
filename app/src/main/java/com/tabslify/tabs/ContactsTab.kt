@@ -2,8 +2,10 @@
 
 package com.tabslify.tabs
 
+import android.Manifest
 import android.content.ContentProviderOperation
 import android.content.Context
+import android.content.pm.PackageManager
 import android.provider.ContactsContract
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -41,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -51,6 +54,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
+import kotlin.time.Duration.Companion.milliseconds
 
 data class Contact(
     val id: String,
@@ -73,14 +77,19 @@ fun ContactsTabContent(
     onDeleteContact: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    if (context.checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+            Text("Keine Berechtigung auf Kontakte", color = Color.Gray, fontSize = 16.sp)
+        }
+    }
     var selectedContact by remember { mutableStateOf<Contact?>(null) }
     var showDialog by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
     val alpha = remember { Animatable(0f) }
 
     LaunchedEffect(Unit) {
-        delay(100)
+        delay(100.milliseconds)
         alpha.animateTo(
             1f, animationSpec = tween(
                 durationMillis = 150,
