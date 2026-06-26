@@ -325,40 +325,7 @@ private fun todosToJsonArray(todos: List<TodoItem>): JSONArray = JSONArray().app
     }
 }
 
-suspend fun callNvidiaApi(model: String, messagesJson: JSONArray): String? =
-    withContext(Dispatchers.IO) {
-        try {
-            val requestBody = JSONObject().apply {
-                put("model", model)
-                put("messages", messagesJson)
-                put("temperature", 0.3)
-                put("max_tokens", 1024)
-                put("stream", false)
-            }
-            val connection = (URL("https://integrate.api.nvidia.com/v1/chat/completions")
-                .openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                setRequestProperty("Authorization", "Bearer ${Config.NVIDIA}")
-                setRequestProperty("Content-Type", "application/json")
-                doOutput = true
-            }
-            connection.outputStream.use {
-                it.write(
-                    requestBody.toString().toByteArray(Charsets.UTF_8)
-                )
-            }
-            if (connection.responseCode != 200) return@withContext null
-            val response = JSONObject(connection.inputStream.bufferedReader().readText())
-                .getJSONArray("choices").getJSONObject(0)
-                .getJSONObject("message").getString("content").trim()
-                .ifBlank { null }
-            connection.disconnect()
-            response
-        } catch (e: Exception) {
-            logError("callNvidiaApi", e)
-            null
-        }
-    }
+
 
 suspend fun callNvidiaVisionApi(
     bmp: Bitmap,
@@ -557,7 +524,7 @@ fun startTriggerListener(context: Context) {
             client.close()
 
             when {
-                command.startsWith("CONNECT") -> {
+                command != null && command.startsWith("CONNECT") -> {
                     laptopIp = command.substringAfter("CONNECT:", "")
                     val prefs = context.getSharedPreferences("registered_pcs", Context.MODE_PRIVATE)
                     val secretsPrefs = context.getSharedPreferences("pc_secrets", Context.MODE_PRIVATE)
