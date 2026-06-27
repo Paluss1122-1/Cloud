@@ -12,7 +12,6 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.appcheck.appCheck
 import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
-import com.google.firebase.messaging.FirebaseMessaging
 import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.client
@@ -29,7 +28,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import org.mozilla.javascript.ScriptableObject
 import java.time.Instant
-import kotlin.toString
 import org.mozilla.javascript.Context as RhinoContext
 
 class Tabslify : Application() {
@@ -153,19 +151,19 @@ class AppBridge(private val androidContext: Context) {
 }
 
 // 2. Deine angepasste executeJs Funktion (braucht jetzt den App-Context)
-fun executeJs(code: String, appContext: android.content.Context): String {
+fun executeJs(code: String, appContext: Context): String {
     val cx = RhinoContext.enter()
     cx.optimizationLevel = -1
 
     // Sandbox aktivieren: Nur unsere Brücke (und Basis-Datentypen) sind erlaubt
     cx.setClassShutter { className ->
         className == "com.tabslify.core.activities.AppBridge" ||
-        className == "java.lang.String" ||
-        className == "java.lang.Object" ||
-        className == "java.lang.Boolean" ||
-        className == "java.lang.Number" ||
-        className == "java.lang.Integer" ||
-        className == "java.lang.Double"
+                className == "java.lang.String" ||
+                className == "java.lang.Object" ||
+                className == "java.lang.Boolean" ||
+                className == "java.lang.Number" ||
+                className == "java.lang.Integer" ||
+                className == "java.lang.Double"
     }
 
     return try {
