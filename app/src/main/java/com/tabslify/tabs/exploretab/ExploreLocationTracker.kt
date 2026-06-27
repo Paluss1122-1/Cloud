@@ -32,21 +32,38 @@ class ExploreGeofenceReceiver : BroadcastReceiver() {
         val event = GeofencingEvent.fromIntent(intent) ?: run {
             return
         }
-        
+
         if (event.hasError()) {
-            errorInsert("ExploreTracker", "GeofenceReceiver - GeofencingEvent hat Fehler: ${event.errorCode}", Instant.now().toString(), "ERROR")
+            errorInsert(
+                "ExploreTracker",
+                "GeofenceReceiver - GeofencingEvent hat Fehler: ${event.errorCode}",
+                Instant.now().toString(),
+                "ERROR"
+            )
             return
         }
 
         when (event.geofenceTransition) {
             Geofence.GEOFENCE_TRANSITION_ENTER -> {
-                errorInsert("ExploreTracker", "GeofenceReceiver - ENTER: Benutzer ist zuhause -> stop()", Instant.now().toString(), "LOG")
+                errorInsert(
+                    "ExploreTracker",
+                    "GeofenceReceiver - ENTER: Benutzer ist zuhause -> stop()",
+                    Instant.now().toString(),
+                    "LOG"
+                )
                 ExploreLocationTracker.stop(context)
             }
+
             Geofence.GEOFENCE_TRANSITION_EXIT -> {
-                errorInsert("ExploreTracker", "GeofenceReceiver - EXIT: Benutzer verlässt zuhause -> start()", Instant.now().toString(), "LOG")
+                errorInsert(
+                    "ExploreTracker",
+                    "GeofenceReceiver - EXIT: Benutzer verlässt zuhause -> start()",
+                    Instant.now().toString(),
+                    "LOG"
+                )
                 ExploreLocationTracker.start(context)
             }
+
             else -> {
             }
         }
@@ -72,13 +89,14 @@ object ExploreLocationTracker {
 
     @Volatile
     private var isEnabled = false
-    
+
     private fun isNightTime(): Boolean {
         val hour = Instant.now().atZone(java.time.ZoneId.systemDefault()).hour
         return hour in NIGHT_START_HOUR until NIGHT_END_HOUR
     }
 
-    private fun getClient(context: Context) = LocationServices.getFusedLocationProviderClient(context.applicationContext)
+    private fun getClient(context: Context) =
+        LocationServices.getFusedLocationProviderClient(context.applicationContext)
 
     private fun geofencePendingIntent(context: Context): PendingIntent {
         val intent = Intent(context, ExploreGeofenceReceiver::class.java)
@@ -115,7 +133,12 @@ object ExploreLocationTracker {
         val appCtx = context.applicationContext
         if (isNightTime()) {
             _trackerStatus.value = "Pausiert (Nacht)"
-            errorInsert("ExploreTracker", "start() - Night time (0-5 Uhr), wird nicht gestartet", Instant.now().toString(), "LOG")
+            errorInsert(
+                "ExploreTracker",
+                "start() - Night time (0-5 Uhr), wird nicht gestartet",
+                Instant.now().toString(),
+                "LOG"
+            )
             ExploreNightRestartWorker.schedule(appCtx)
             return
         }
@@ -126,15 +149,30 @@ object ExploreLocationTracker {
         isEnabled = true
         _trackerStatus.value = "Startet..."
 
-        errorInsert("ExploreTracker", "start() - LocationTracker wird gestartet (pruefe WLAN-Status...)", Instant.now().toString(), "LOG")
+        errorInsert(
+            "ExploreTracker",
+            "start() - LocationTracker wird gestartet (pruefe WLAN-Status...)",
+            Instant.now().toString(),
+            "LOG"
+        )
         try {
             registerGeofence(appCtx)
         } catch (e: Exception) {
-            errorInsert("ExploreTracker", "start() - Geofence Registrierung failed: ${e.message}", Instant.now().toString(), "ERROR")
+            errorInsert(
+                "ExploreTracker",
+                "start() - Geofence Registrierung failed: ${e.message}",
+                Instant.now().toString(),
+                "ERROR"
+            )
         }
 
         getHomeWifiStatus(appCtx, HOME_WIFI_SSID) { isHomeWifi ->
-            errorInsert("ExploreTracker", "start() - WiFi-Callback erhalten: isHome=$isHomeWifi", Instant.now().toString(), "LOG")
+            errorInsert(
+                "ExploreTracker",
+                "start() - WiFi-Callback erhalten: isHome=$isHomeWifi",
+                Instant.now().toString(),
+                "LOG"
+            )
             if (isHomeWifi) {
                 _trackerStatus.value = "Gestoppt (Zuhause)"
                 stop(appCtx)
@@ -149,10 +187,15 @@ object ExploreLocationTracker {
     @SuppressLint("MissingPermission")
     private fun startLocationUpdates(context: Context) {
         if (locationCallback != null) {
-            errorInsert("ExploreTracker", "startLocationUpdates() - locationCallback existiert bereits, breche ab", Instant.now().toString(), "LOG")
+            errorInsert(
+                "ExploreTracker",
+                "startLocationUpdates() - locationCallback existiert bereits, breche ab",
+                Instant.now().toString(),
+                "LOG"
+            )
             return
         }
-        
+
         val repo = ExploreRepository(context)
         val client = getClient(context)
 
@@ -170,18 +213,23 @@ object ExploreLocationTracker {
                 val loc = result.lastLocation ?: run {
                     return
                 }
-                
+
                 val distance = lastLocation?.distanceTo(loc) ?: Float.MAX_VALUE
                 if (distance < 50f) {
                     return
                 }
-                
+
                 lastLocation = loc
                 scope.launch {
                     try {
                         repo.recordLocation(loc.latitude, loc.longitude)
                     } catch (e: Exception) {
-                        errorInsert("ExploreTracker", "onLocationResult() - Fehler beim Speichern: ${e.message}", Instant.now().toString(), "ERROR")
+                        errorInsert(
+                            "ExploreTracker",
+                            "onLocationResult() - Fehler beim Speichern: ${e.message}",
+                            Instant.now().toString(),
+                            "ERROR"
+                        )
                     }
                 }
             }
@@ -194,10 +242,20 @@ object ExploreLocationTracker {
             locationCallback = callback
             _trackerStatus.value = "Läuft aktiv"
             ExploreWorker.schedule(context)
-            errorInsert("ExploreTracker", "startLocationUpdates() - Active GPS-Updates gestartet (Geofence wird aktiv ueberwacht)", Instant.now().toString(), "LOG")
+            errorInsert(
+                "ExploreTracker",
+                "startLocationUpdates() - Active GPS-Updates gestartet (Geofence wird aktiv ueberwacht)",
+                Instant.now().toString(),
+                "LOG"
+            )
         } catch (e: Exception) {
             _trackerStatus.value = "Fehler: ${e.message}"
-            errorInsert("ExploreTracker", "startLocationUpdates() - Exception: ${e.message}", Instant.now().toString(), "ERROR")
+            errorInsert(
+                "ExploreTracker",
+                "startLocationUpdates() - Exception: ${e.message}",
+                Instant.now().toString(),
+                "ERROR"
+            )
         }
     }
 
@@ -206,7 +264,12 @@ object ExploreLocationTracker {
         val wasEnabled = isEnabled
         isEnabled = false
 
-        errorInsert("ExploreTracker", "stop() - wird aufgerufen (wasEnabled=$wasEnabled)", Instant.now().toString(), "LOG")
+        errorInsert(
+            "ExploreTracker",
+            "stop() - wird aufgerufen (wasEnabled=$wasEnabled)",
+            Instant.now().toString(),
+            "LOG"
+        )
 
         if (locationCallback != null) {
             getClient(appCtx).removeLocationUpdates(locationCallback!!)
@@ -215,13 +278,28 @@ object ExploreLocationTracker {
             locationCallback = null
             lastLocation = null
             ExploreWorker.cancel(appCtx)
-            errorInsert("ExploreTracker", "stop() - Worker abgebrochen (GPS deaktiviert)", Instant.now().toString(), "LOG")
+            errorInsert(
+                "ExploreTracker",
+                "stop() - Worker abgebrochen (GPS deaktiviert)",
+                Instant.now().toString(),
+                "LOG"
+            )
         } else if (wasEnabled) {
-            errorInsert("ExploreTracker", "stop() - war im Startvorgang, aber wurde gestoppt (Heim-WLAN aktiv)", Instant.now().toString(), "LOG")
+            errorInsert(
+                "ExploreTracker",
+                "stop() - war im Startvorgang, aber wurde gestoppt (Heim-WLAN aktiv)",
+                Instant.now().toString(),
+                "LOG"
+            )
         } else {
-            errorInsert("ExploreTracker", "stop() - war bereits inaktiv", Instant.now().toString(), "LOG")
+            errorInsert(
+                "ExploreTracker",
+                "stop() - war bereits inaktiv",
+                Instant.now().toString(),
+                "LOG"
+            )
         }
-        
+
         if (isNightTime()) {
             _trackerStatus.value = "Pausiert (Nacht)"
             ExploreNightRestartWorker.schedule(appCtx)

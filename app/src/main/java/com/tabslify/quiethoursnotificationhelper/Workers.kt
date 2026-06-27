@@ -27,7 +27,7 @@ class CleanupWorker(
     context: Context,
     params: WorkerParameters,
 
-) : Worker(context, params) {
+    ) : Worker(context, params) {
     private fun cleanupReadMessages() {
         val cutoffTime = System.currentTimeMillis() - (24 * 60 * 60 * 1000)
 

@@ -77,7 +77,11 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
             }
         } else {
             val file = createAudioFile(getApplication<Application>().applicationContext)
-            startAudioService(getApplication<Application>().applicationContext, file.absolutePath, isMediaRecorderMode)
+            startAudioService(
+                getApplication<Application>().applicationContext,
+                file.absolutePath,
+                isMediaRecorderMode
+            )
             isRecording = true
         }
     }
@@ -159,13 +163,13 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
             },
             onError = {
                 isProcessing = false
-                    errorInsert(
-                            "AudioRecorderContent.shareDialog.onError",
-                            it,
-                            Instant.now().toString(),
-                            "ERROR"
-                        
-                    )
+                errorInsert(
+                    "AudioRecorderContent.shareDialog.onError",
+                    it,
+                    Instant.now().toString(),
+                    "ERROR"
+
+                )
             }
         )
     }

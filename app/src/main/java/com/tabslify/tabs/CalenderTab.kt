@@ -107,17 +107,17 @@ import java.util.UUID
 // ─────────────────────────────────────────────
 // DESIGN TOKENS  (matching MediaTab palette)
 // ─────────────────────────────────────────────
-private val BgDeep      = Color(0xFF121212)
-private val BgSurface   = Color(0xFF1E1E1E)
-private val BgCard      = Color(0xFF2A2A2A)
-private val AccentViolet    = Color(0xFF7C4DFF)
+private val BgDeep = Color(0xFF121212)
+private val BgSurface = Color(0xFF1E1E1E)
+private val BgCard = Color(0xFF2A2A2A)
+private val AccentViolet = Color(0xFF7C4DFF)
 private val AccentVioletDim = Color(0xFF4A148C)
-private val TextPrimary  = Color(0xFFFFFFFF)
+private val TextPrimary = Color(0xFFFFFFFF)
 private val TextSecondary = Color(0xFFB0B0B0)
-private val TextTertiary  = Color(0xFF757575)
+private val TextTertiary = Color(0xFF757575)
 private val NeonGreen = Color(0xFF39FF14)
-private val NeonBlue  = Color(0xFF00CFFF)
-private val NeonPink  = Color(0xFFFF2D78)
+private val NeonBlue = Color(0xFF00CFFF)
+private val NeonPink = Color(0xFFFF2D78)
 
 // ─────────────────────────────────────────────
 // DATA MODELS
@@ -152,7 +152,7 @@ sealed class CalendarEvent {
 object CalendarRepository {
 
     private const val PREFS = "calendar_entries"
-    private const val KEY   = "entries_json"
+    private const val KEY = "entries_json"
     private val gson = GsonBuilder().create()
 
     private val _entries = MutableStateFlow<List<CalendarEntry>>(emptyList())
@@ -200,7 +200,7 @@ object CalendarRepository {
 
     private fun save(context: Context, list: List<CalendarEntry>) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit {putString(KEY, gson.toJson(list))}
+            .edit { putString(KEY, gson.toJson(list)) }
     }
 
     private fun load(context: Context): List<CalendarEntry> {
@@ -209,7 +209,9 @@ object CalendarRepository {
         return try {
             val type = object : com.google.gson.reflect.TypeToken<List<CalendarEntry>>() {}.type
             gson.fromJson(raw, type) ?: emptyList()
-        } catch (_: Exception) { emptyList() }
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 }
 
@@ -404,7 +406,9 @@ private fun MonthGrid(
 
     val entryDates = entries.map { it.date }.toSet()
 
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+    Column(modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 8.dp)) {
         // Weekday labels
         Row(modifier = Modifier.fillMaxWidth()) {
             listOf("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So").forEach { label ->
@@ -461,13 +465,13 @@ private fun DayCell(
 ) {
     val bgColor = when {
         isSelected -> AccentViolet
-        isToday    -> AccentVioletDim.copy(alpha = 0.5f)
-        else       -> Color.Transparent
+        isToday -> AccentVioletDim.copy(alpha = 0.5f)
+        else -> Color.Transparent
     }
     val textColor = when {
         isSelected -> TextPrimary
-        isToday    -> NeonGreen
-        else       -> TextSecondary
+        isToday -> NeonGreen
+        else -> TextSecondary
     }
 
     Box(
@@ -587,8 +591,9 @@ private fun DayTimeline(
                         val oldMinH = 2f * oldScale
                         val newMinH = 2f * newScale
                         // Scroll so anpassen, dass der Inhalt unter centroid.y stabil bleibt
-                        val newScroll = ((scrollState.value + centroid.y) * (newMinH / oldMinH) - centroid.y)
-                            .toInt().coerceAtLeast(0)
+                        val newScroll =
+                            ((scrollState.value + centroid.y) * (newMinH / oldMinH) - centroid.y)
+                                .toInt().coerceAtLeast(0)
                         zoomScale = newScale
                         coroutineScope.launch { scrollState.scrollTo(newScroll) }
                     }
@@ -689,7 +694,7 @@ private fun EntryBlock(
     minuteHeightDp: Dp,
     onClick: () -> Unit
 ) {
-    val topDp    = minuteHeightDp * entry.startMinute
+    val topDp = minuteHeightDp * entry.startMinute
     val heightDp = if (entry.endMinute != null)
         minuteHeightDp * (entry.endMinute - entry.startMinute).coerceAtLeast(1)
     else
@@ -704,7 +709,12 @@ private fun EntryBlock(
             .padding(horizontal = 4.dp, vertical = 1.dp)
             .clip(RoundedCornerShape(4.dp))
             .background(
-                Brush.horizontalGradient(listOf(color.copy(alpha = 0.85f), color.copy(alpha = 0.4f)))
+                Brush.horizontalGradient(
+                    listOf(
+                        color.copy(alpha = 0.85f),
+                        color.copy(alpha = 0.4f)
+                    )
+                )
             )
             .border(
                 width = 1.dp,
@@ -767,9 +777,9 @@ private fun EntryDialog(
     val fmt = DateTimeFormatter.ofPattern("EEEE, d. MMMM", Locale.GERMAN)
 
     var colorscheme = MaterialTheme.colorScheme.copy(
-        primary          = selectedColor,
+        primary = selectedColor,
         primaryContainer = selectedColor.copy(alpha = 0.2f),
-        onPrimary        = TextPrimary
+        onPrimary = TextPrimary
     )
     LaunchedEffect(selectedColor) {
         colorscheme = colorscheme.copy(primary = selectedColor)
@@ -961,7 +971,12 @@ private fun EntryDialog(
             onDismissRequest = { showDeleteConfirm = false },
             containerColor = BgSurface,
             title = { Text("Eintrag löschen?", color = TextPrimary, fontWeight = FontWeight.Bold) },
-            text = { Text("\"${existingEntry?.title}\" wird unwiderruflich gelöscht.", color = TextSecondary) },
+            text = {
+                Text(
+                    "\"${existingEntry?.title}\" wird unwiderruflich gelöscht.",
+                    color = TextSecondary
+                )
+            },
             confirmButton = {
                 TextButton(onClick = { onDelete?.invoke(); showDeleteConfirm = false }) {
                     Text("Löschen", color = NeonPink)

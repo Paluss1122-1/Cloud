@@ -234,7 +234,8 @@ fun BatteryChartScreen(onDismiss: () -> Unit) {
                         scope.launch {
                             loading = true
                             val minutes = predictChargingTime(context)
-                            result = minutes?.let { "~$it min bis 85%" } ?: "Keine Schätzung möglich"
+                            result =
+                                minutes?.let { "~$it min bis 85%" } ?: "Keine Schätzung möglich"
                             loading = false
                         }
                     },

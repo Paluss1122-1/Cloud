@@ -105,9 +105,11 @@ private fun ImagePickerScreen(images: List<String>, onImageSelected: (String) ->
         return
     }
 
-    LazyColumn(Modifier
-        .fillMaxSize()
-        .padding(8.dp)) {
+    LazyColumn(
+        Modifier
+            .fillMaxSize()
+            .padding(8.dp)
+    ) {
         items(images) { url ->
             Card(
                 modifier = Modifier

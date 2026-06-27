@@ -569,10 +569,12 @@ fun RemoteDesktopTabContent() {
         alpha.animateTo(1f, animationSpec = tween(300, easing = FastOutSlowInEasing))
     }
 
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .background(Color.Transparent)
-        .alpha(alpha.value)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Transparent)
+            .alpha(alpha.value)
+    ) {
         when (val s = state) {
             is RemoteDesktopState.ModeSelection -> ModeSelectionScreen(
                 onConnect = { viewModel.selectConnectMode(); viewModel.startDiscovery(context) },
@@ -730,9 +732,11 @@ fun HostListScreen(
     var pin by remember { mutableStateOf("") }
     var showDialog by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .padding(16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -892,9 +896,11 @@ fun ConnectedScreen(
                         )
                 setContent {
                     val frame by viewModel.currentFrame.collectAsState()
-                    Box(modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black)
+                    ) {
                         AndroidView(
                             factory = { ctx ->
                                 TouchableImageView(ctx).apply {
@@ -906,6 +912,7 @@ fun ConnectedScreen(
                                                 v.performClick()
                                                 "up"
                                             }
+
                                             MotionEvent.ACTION_MOVE -> "move"
                                             else -> return@setOnTouchListener false
                                         }
@@ -920,11 +927,23 @@ fun ConnectedScreen(
                                             val actualImageHeight = bHeight * scale
                                             val offsetX = (vWidth - actualImageWidth) / 2f
                                             val offsetY = (vHeight - actualImageHeight) / 2f
-                                            val normX = ((event.x - offsetX) / actualImageWidth).coerceIn(0f, 1f)
-                                            val normY = ((event.y - offsetY) / actualImageHeight).coerceIn(0f, 1f)
+                                            val normX =
+                                                ((event.x - offsetX) / actualImageWidth).coerceIn(
+                                                    0f,
+                                                    1f
+                                                )
+                                            val normY =
+                                                ((event.y - offsetY) / actualImageHeight).coerceIn(
+                                                    0f,
+                                                    1f
+                                                )
                                             viewModel.sendTouchEvent(normX, normY, action)
                                         } else {
-                                            viewModel.sendTouchEvent(event.x / v.width.toFloat(), event.y / v.height.toFloat(), action)
+                                            viewModel.sendTouchEvent(
+                                                event.x / v.width.toFloat(),
+                                                event.y / v.height.toFloat(),
+                                                action
+                                            )
                                         }
                                         true
                                     }
@@ -982,6 +1001,7 @@ fun ConnectedScreen(
                                 v.performClick()
                                 "up"
                             }
+
                             MotionEvent.ACTION_MOVE -> "move"
                             else -> return@setOnTouchListener false
                         }
@@ -1000,7 +1020,11 @@ fun ConnectedScreen(
                             val normY = ((event.y - offsetY) / actualImageHeight).coerceIn(0f, 1f)
                             viewModel.sendTouchEvent(normX, normY, action)
                         } else {
-                            viewModel.sendTouchEvent(event.x / v.width.toFloat(), event.y / v.height.toFloat(), action)
+                            viewModel.sendTouchEvent(
+                                event.x / v.width.toFloat(),
+                                event.y / v.height.toFloat(),
+                                action
+                            )
                         }
                         true
                     }
@@ -1010,9 +1034,11 @@ fun ConnectedScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        Column(modifier = Modifier
-            .align(Alignment.TopStart)
-            .padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(16.dp)
+        ) {
             Card(colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.6f))) {
                 Row(
                     modifier = Modifier.padding(8.dp),

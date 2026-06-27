@@ -46,7 +46,10 @@ class TabslifyAutofillService : AutofillService() {
         }
 
         val domain = extractRequestDomain(structure)
-        Log.d(TAG, "AutoFill request – domain: $domain  pkg: ${structure.activityComponent.packageName}")
+        Log.d(
+            TAG,
+            "AutoFill request – domain: $domain  pkg: ${structure.activityComponent.packageName}"
+        )
 
         val inlineRequest = request.inlineSuggestionsRequest
         val responseBuilder = FillResponse.Builder()
@@ -96,10 +99,17 @@ class TabslifyAutofillService : AutofillService() {
                 val code = TotpGenerator.generateTOTP(entry.secret)
                 val field = Field.Builder()
                     .setValue(AutofillValue.forText(code))
-                    .setPresentations(buildPresentations(
-                        PasswordEntry(name = entry.name, username = code, password = "", totpSecret = null),
-                        index, inlineRequest
-                    ))
+                    .setPresentations(
+                        buildPresentations(
+                            PasswordEntry(
+                                name = entry.name,
+                                username = code,
+                                password = "",
+                                totpSecret = null
+                            ),
+                            index, inlineRequest
+                        )
+                    )
                     .build()
                 val ds = Dataset.Builder().setField(otpFieldId, field)
                 responseBuilder.addDataset(ds.build())
@@ -107,7 +117,9 @@ class TabslifyAutofillService : AutofillService() {
             }
         }
 
-        if (!hasDataset) { callback.onSuccess(null); return }
+        if (!hasDataset) {
+            callback.onSuccess(null); return
+        }
         callback.onSuccess(responseBuilder.build())
     }
 
@@ -133,34 +145,60 @@ class TabslifyAutofillService : AutofillService() {
             val idEntry = node.idEntry?.lowercase() ?: ""
 
             val isPassword = (
-                    hints?.any { h -> h.contains("password", true) || h == "current-password" || h == "new-password" } == true
+                    hints?.any { h ->
+                        h.contains(
+                            "password",
+                            true
+                        ) || h == "current-password" || h == "new-password"
+                    } == true
                             || (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_PASSWORD
                             || (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
                             || (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
-                            || hint.contains("passwort") || hint.contains("password") || hint.contains("pin")
-                            || idEntry.contains("password") || idEntry.contains("passwd") || idEntry.contains("pwd")
+                            || hint.contains("passwort") || hint.contains("password") || hint.contains(
+                        "pin"
+                    )
+                            || idEntry.contains("password") || idEntry.contains("passwd") || idEntry.contains(
+                        "pwd"
+                    )
                     )
 
             if (isPassword && node.autofillId != null) passwordId = node.autofillId
 
             val isOtp = (
-                    hints?.any { h -> h.contains("one-time-code", true) || h.contains("otp", true) } == true
-                            || hint.contains("otp") || hint.contains("einmal") || hint.contains("token") || hint.contains("authenticator")
-                            || idEntry.contains("otp") || idEntry.contains("totp") || idEntry.contains("token") || idEntry.contains("mfa") || idEntry.contains("tfa")
+                    hints?.any { h ->
+                        h.contains("one-time-code", true) || h.contains(
+                            "otp",
+                            true
+                        )
+                    } == true
+                            || hint.contains("otp") || hint.contains("einmal") || hint.contains("token") || hint.contains(
+                        "authenticator"
+                    )
+                            || idEntry.contains("otp") || idEntry.contains("totp") || idEntry.contains(
+                        "token"
+                    ) || idEntry.contains("mfa") || idEntry.contains("tfa")
                     )
 
             if (isOtp && !isPassword && node.autofillId != null) otpId = node.autofillId
 
             val isUsername = (
-                    hints?.any { h -> h.contains("username", true) || h.contains("email", true) || h == "username" || h == "email" } == true
+                    hints?.any { h ->
+                        h.contains("username", true) || h.contains(
+                            "email",
+                            true
+                        ) || h == "username" || h == "email"
+                    } == true
                             || hint.contains("user") || hint.contains("email") || hint.contains("benutzername")
                             || hint.contains("login") || hint.contains("e-mail")
-                            || idEntry.contains("user") || idEntry.contains("email") || idEntry.contains("login")
+                            || idEntry.contains("user") || idEntry.contains("email") || idEntry.contains(
+                        "login"
+                    )
                             || (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
                             || (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS
                     )
 
-            if (isUsername && !isPassword && !isOtp && node.autofillId != null) usernameId = node.autofillId
+            if (isUsername && !isPassword && !isOtp && node.autofillId != null) usernameId =
+                node.autofillId
 
             for (i in 0 until node.childCount) searchNode(node.getChildAt(i))
         }
@@ -222,7 +260,10 @@ class TabslifyAutofillService : AutofillService() {
     }
 
     @SuppressLint("RestrictedApi")
-    private fun createInlineChip(spec: InlinePresentationSpec, entry: PasswordEntry): InlinePresentation? {
+    private fun createInlineChip(
+        spec: InlinePresentationSpec,
+        entry: PasswordEntry
+    ): InlinePresentation? {
         return try {
             val pendingIntent = PendingIntent.getActivity(
                 this, 0,
@@ -252,7 +293,11 @@ class TabslifyAutofillService : AutofillService() {
         }
         val builder = Presentations.Builder().setMenuPresentation(remoteView)
         inlineRequest?.let {
-            createInlinePresentation(it, index, entry)?.let { ip -> builder.setInlinePresentation(ip) }
+            createInlinePresentation(
+                it,
+                index,
+                entry
+            )?.let { ip -> builder.setInlinePresentation(ip) }
         }
         return builder.build()
     }

@@ -210,11 +210,18 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
                 val effectivePic = if (selectedModel.vision && selectedImageUri != null) {
                     selectedImageUri?.let { encodeImage(ctx, it) }
                 } else null
-                val effectiveAudio = if (currentMode != "Gemini" && selectedModel.audio && selectedAudioUri != null) {
-                    selectedAudioUri?.let { encodeAudio(ctx, it) }
-                } else null
+                val effectiveAudio =
+                    if (currentMode != "Gemini" && selectedModel.audio && selectedAudioUri != null) {
+                        selectedAudioUri?.let { encodeAudio(ctx, it) }
+                    } else null
                 val response = withContext(Dispatchers.IO) {
-                    send(ctx, userText.ifEmpty { "Beschreibe das Bild" }, effectivePic, effectiveAudio, onToken)
+                    send(
+                        ctx,
+                        userText.ifEmpty { "Beschreibe das Bild" },
+                        effectivePic,
+                        effectiveAudio,
+                        onToken
+                    )
                 }
                 selectedImageUri = null
                 selectedAudioUri = null
@@ -240,13 +247,30 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun send(ctx: Context, txt: String, pic: String?, audio: String?, onToken: (String) -> Unit): String {
+    private suspend fun send(
+        ctx: Context,
+        txt: String,
+        pic: String?,
+        audio: String?,
+        onToken: (String) -> Unit
+    ): String {
         if (!isOnline(ctx)) return "Kein Netzwerk"
         return when (currentMode) {
-            "Nvidia" -> sendNvidiaChatMessageAITab(ctx, history, txt, selectedModel.realname, pic, onToken = onToken) ?: "Fehler"
+            "Nvidia" -> sendNvidiaChatMessageAITab(
+                ctx,
+                history,
+                txt,
+                selectedModel.realname,
+                pic,
+                onToken = onToken
+            ) ?: "Fehler"
+
             "Server" -> askServer(history, txt, selectedModel.realname, pic)
-            "Gemini" -> sendGeminiRequest(history, txt, pic, audioUri = selectedAudioUri,
-                ctx = ctx, model = selectedModel.realname, onToken = onToken) ?: "Fehler"
+            "Gemini" -> sendGeminiRequest(
+                history, txt, pic, audioUri = selectedAudioUri,
+                ctx = ctx, model = selectedModel.realname, onToken = onToken
+            ) ?: "Fehler"
+
             else -> "Wähle einen Modus"
         }
     }
@@ -275,7 +299,7 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun encodeAudio(ctx: Context, uri: Uri): String? = try {
         ctx.contentResolver.openInputStream(uri)?.use { input ->
-            val output = java.io.ByteArrayOutputStream()
+            val output = ByteArrayOutputStream()
             android.util.Base64OutputStream(output, Base64.NO_WRAP).use { base64Out ->
                 val buffer = ByteArray(8192)
                 var bytesRead: Int
@@ -285,7 +309,9 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
             }
             output.toString("UTF-8")
         }
-    } catch (_: Exception) { null }
+    } catch (_: Exception) {
+        null
+    }
 
     suspend fun animateAlpha(alpha: Animatable<Float, AnimationVector1D>) {
         delay(100)

@@ -133,11 +133,11 @@ fun AuthenticatorTab() {
     if (activity == null) {
         LaunchedEffect(Unit) {
             errorInsert(
-                    "AuthenticatorTab",
-                    "❌ FragmentActivity fehlt",
-                    Instant.now().toString(),
-                    "ERROR"
-                
+                "AuthenticatorTab",
+                "❌ FragmentActivity fehlt",
+                Instant.now().toString(),
+                "ERROR"
+
             )
         }
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -197,13 +197,13 @@ fun AuthenticatorTab() {
                         showError = true
                         shouldShowPrompt = false
                         isAuthenticated = false
-                            errorInsert(
-                                    "AuthenticatorTab",
-                                    "❌ AUTH: $error",
-                                    Instant.now().toString(),
-                                    "ERROR"
-                                
-                            )
+                        errorInsert(
+                            "AuthenticatorTab",
+                            "❌ AUTH: $error",
+                            Instant.now().toString(),
+                            "ERROR"
+
+                        )
                     } else {
                         shouldShowPrompt = false
                     }
@@ -244,7 +244,10 @@ private fun AuthenticatedContent(context: Context) {
         if (showSettings) {
             SettingsScreenWithScreenshotProtection()
         } else {
-            PasswordManagerScreen(db = passwordDb, twoFaDb = twoFaDb, onSettingsClick = { showSettings = true })
+            PasswordManagerScreen(
+                db = passwordDb,
+                twoFaDb = twoFaDb,
+                onSettingsClick = { showSettings = true })
         }
     }
 }
@@ -468,9 +471,11 @@ fun SettingsScreenWithScreenshotProtection() {
     val canAuth = bm.canAuthenticate(Authenticators.BIOMETRIC_STRONG)
     val isBiometricAvailable = canAuth == BiometricManager.BIOMETRIC_SUCCESS
 
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .background(Color.Transparent)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Transparent)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -514,10 +519,13 @@ fun SettingsScreenWithScreenshotProtection() {
                                     biometricErrorMsg = when (canAuth) {
                                         BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED ->
                                             "Keine Authentifizierung eingerichtet. Bitte richte einen Fingerabdruck oder PIN ein."
+
                                         BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE ->
                                             "Biometrische Hardware nicht verfügbar"
+
                                         BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE ->
                                             "Hardware temporär nicht verfügbar"
+
                                         else ->
                                             "Authentifizierung nicht verfügbar"
                                     }
@@ -620,9 +628,11 @@ fun SilentCaptureScreen(
         onDismiss()
     }
 
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .background(Color.Black)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
         AndroidView(
             factory = { ctx ->
                 DecoratedBarcodeView(ctx).apply {

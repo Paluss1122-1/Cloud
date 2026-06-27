@@ -19,7 +19,9 @@ private fun encodeAudio(ctx: Context, uri: Uri): String? = try {
         }
         output.toString("UTF-8")
     }
-} catch (_: Exception) { null }
+} catch (_: Exception) {
+    null
+}
 
 suspend fun generateAndSaveHashtags(
     ctx: Context,

@@ -118,7 +118,6 @@ import java.io.InputStreamReader
 import java.io.PrintWriter
 import java.net.BindException
 import java.net.ConnectException
-import java.net.HttpURLConnection
 import java.net.Inet4Address
 import java.net.InetSocketAddress
 import java.net.NetworkInterface
@@ -126,7 +125,6 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
 import java.net.SocketTimeoutException
-import java.net.URL
 import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.time.Instant
@@ -324,7 +322,6 @@ private fun todosToJsonArray(todos: List<TodoItem>): JSONArray = JSONArray().app
         })
     }
 }
-
 
 
 suspend fun callNvidiaVisionApi(
@@ -526,18 +523,35 @@ fun startTriggerListener(context: Context) {
             when {
                 command != null && command.startsWith("CONNECT") -> {
                     laptopIp = command.substringAfter("CONNECT:", "")
-                    val prefs = context.getSharedPreferences("registered_pcs", Context.MODE_PRIVATE)
-                    val secretsPrefs = context.getSharedPreferences("pc_secrets", Context.MODE_PRIVATE)
+                    val prefs = context.getSharedPreferences("registered_pcs", MODE_PRIVATE)
+                    val secretsPrefs =
+                        context.getSharedPreferences("pc_secrets", MODE_PRIVATE)
                     if (!secretsPrefs.contains(laptopIp)) {
                         val allowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
                         val newSecret = (1..16).map { allowedChars.random() }.joinToString("")
                         secretsPrefs.edit().putString(laptopIp, newSecret).apply()
                     }
                     if (!prefs.contains(laptopIp)) {
-                        prefs.edit().putString(laptopIp, "Registriert am " + SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMANY).format(Date())).apply()
-                        showSimpleNotificationExtern("🆕 Neuer PC", "Verbindung von $laptopIp registriert", 10.seconds, context)
+                        prefs.edit().putString(
+                            laptopIp,
+                            "Registriert am " + SimpleDateFormat(
+                                "dd.MM.yyyy HH:mm",
+                                Locale.GERMANY
+                            ).format(Date())
+                        ).apply()
+                        showSimpleNotificationExtern(
+                            "🆕 Neuer PC",
+                            "Verbindung von $laptopIp registriert",
+                            10.seconds,
+                            context
+                        )
                     } else {
-                        showSimpleNotificationExtern("📡 CONNECT", "Laptop $laptopIp verbunden", 10.seconds, context)
+                        showSimpleNotificationExtern(
+                            "📡 CONNECT",
+                            "Laptop $laptopIp verbunden",
+                            10.seconds,
+                            context
+                        )
                     }
 
                     val syncWl =
@@ -704,13 +718,16 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
 
             val todos = getTodos(context)
             val response = Socket().use { socket ->
-                socket.connect(InetSocketAddress(Inet4Address.getByName(currentIp), SYNC_PORT), 3000)
+                socket.connect(
+                    InetSocketAddress(Inet4Address.getByName(currentIp), SYNC_PORT),
+                    3000
+                )
                 socket.soTimeout = 8000
 
                 val writer = PrintWriter(socket.getOutputStream(), true)
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
 
-                val secretsPrefs = context.getSharedPreferences("pc_secrets", Context.MODE_PRIVATE)
+                val secretsPrefs = context.getSharedPreferences("pc_secrets", MODE_PRIVATE)
                 var totpKey = secretsPrefs.getString(currentIp, null)
                 if (totpKey == null) {
                     val allowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
@@ -1074,23 +1091,24 @@ fun startAiResponseListener(context: Context) {
         if (existing != null) aiResponseFlow.emit(existing)
     }
 
-    aiResponseJob = launchServer(syncScope, Config.AI_RECEIVE_PORT, "startAiResponseListener") { client ->
-        val text = client.inputStream.readBytes().toString(Charsets.UTF_8)
-        saveAiResponse(context, text)
-        aiResponseFlow.emit(
-            AiResponseEntry(
-                text = text,
-                timestamp = System.currentTimeMillis(),
-                dateKey = getTodayKey()
+    aiResponseJob =
+        launchServer(syncScope, Config.AI_RECEIVE_PORT, "startAiResponseListener") { client ->
+            val text = client.inputStream.readBytes().toString(Charsets.UTF_8)
+            saveAiResponse(context, text)
+            aiResponseFlow.emit(
+                AiResponseEntry(
+                    text = text,
+                    timestamp = System.currentTimeMillis(),
+                    dateKey = getTodayKey()
+                )
             )
-        )
-        showSimpleNotificationExtern(
-            "🤖 AI Antwort",
-            text.take(100),
-            30.seconds,
-            context
-        )
-    }
+            showSimpleNotificationExtern(
+                "🤖 AI Antwort",
+                text.take(100),
+                30.seconds,
+                context
+            )
+        }
 }
 
 fun saveAiResponse(context: Context, text: String) {
@@ -1167,7 +1185,11 @@ fun loadAllAiResponses(context: Context): List<AiResponseEntry> {
         val arr = JSONArray(prefs.getString("all_entries", "[]") ?: "[]")
         (0 until arr.length()).map { i ->
             arr.getJSONObject(i).run {
-                AiResponseEntry(optString("text", ""), optLong("timestamp", 0L), optString("dateKey", ""))
+                AiResponseEntry(
+                    optString("text", ""),
+                    optLong("timestamp", 0L),
+                    optString("dateKey", "")
+                )
             }
         }.sortedByDescending { it.timestamp }
     } catch (e: Exception) {
@@ -1730,13 +1752,13 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
         "execute_command" -> {
             val command = args.optString("command")
             val totp = args.optString("totp")
-            val secretsPrefs = context.getSharedPreferences("pc_secrets", Context.MODE_PRIVATE)
+            val secretsPrefs = context.getSharedPreferences("pc_secrets", MODE_PRIVATE)
             val totpKey = secretsPrefs.getString(laptopIp, null) ?: "COMMANDEXECUTORK"
             val now = System.currentTimeMillis()
             val valid = listOf(
-                TotpGenerator.generateTOTP(totpKey, now - 30000),
-                TotpGenerator.generateTOTP(totpKey, now),
-                TotpGenerator.generateTOTP(totpKey, now + 30000)
+                generateTOTP(totpKey, now - 30000),
+                generateTOTP(totpKey, now),
+                generateTOTP(totpKey, now + 30000)
             ).contains(totp)
             if (valid) {
                 syncScope.launch(Dispatchers.Main) {

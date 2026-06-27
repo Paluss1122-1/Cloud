@@ -14,7 +14,12 @@ import java.util.concurrent.TimeUnit
 class ExploreNightRestartWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
     override fun doWork(): Result {
         val ctx = applicationContext
-        errorInsert("ExploreTracker", "NightRestartWorker - Starting tracker", Instant.now().toString(), "LOG")
+        errorInsert(
+            "ExploreTracker",
+            "NightRestartWorker - Starting tracker",
+            Instant.now().toString(),
+            "LOG"
+        )
         ExploreLocationTracker.start(ctx)
         return Result.success()
     }
@@ -28,16 +33,22 @@ class ExploreNightRestartWorker(ctx: Context, params: WorkerParameters) : Worker
             if (now.isAfter(next5AM)) {
                 next5AM = next5AM.plusDays(1)
             }
-            val delay = next5AM.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() - System.currentTimeMillis()
-            
+            val delay = next5AM.atZone(ZoneId.systemDefault()).toInstant()
+                .toEpochMilli() - System.currentTimeMillis()
+
             val req = OneTimeWorkRequestBuilder<ExploreNightRestartWorker>()
                 .setInitialDelay(delay, TimeUnit.MILLISECONDS)
                 .build()
-            
+
             WorkManager.getInstance(context)
                 .enqueueUniqueWork(TAG, androidx.work.ExistingWorkPolicy.REPLACE, req)
-            
-            errorInsert("ExploreTracker", "NightRestartWorker - Scheduled for $next5AM", Instant.now().toString(), "LOG")
+
+            errorInsert(
+                "ExploreTracker",
+                "NightRestartWorker - Scheduled for $next5AM",
+                Instant.now().toString(),
+                "LOG"
+            )
         }
 
         fun cancel(context: Context) {

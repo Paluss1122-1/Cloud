@@ -15,5 +15,6 @@ sealed class DownloadState {
         val fileName: String,
         val fileUri: Uri
     ) : DownloadState()
+
     data class Error(val message: String) : DownloadState()
 }

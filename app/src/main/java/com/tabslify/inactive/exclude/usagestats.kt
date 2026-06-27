@@ -37,7 +37,8 @@ fun getAppUsageStats(context: Context, days: Int = 7): List<AppUsageInfo>? {
     calendar.add(Calendar.DAY_OF_YEAR, -days)
     val startTime = calendar.timeInMillis
 
-    val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+    val usageStatsManager =
+        context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
 
     val usageStatsList: List<UsageStats> = usageStatsManager.queryUsageStats(
         UsageStatsManager.INTERVAL_DAILY,
@@ -73,7 +74,8 @@ fun getAppUsageStats(context: Context, days: Int = 7): List<AppUsageInfo>? {
 }
 
 fun getForegroundTimePerApp(context: Context, days: Int = 7): Map<String, Long> {
-    val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+    val usageStatsManager =
+        context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
 
     val endTime = System.currentTimeMillis()
     val startTime = Calendar.getInstance().apply {
@@ -94,7 +96,8 @@ fun getForegroundTimePerApp(context: Context, days: Int = 7): Map<String, Long> 
  * Prüft, ob die PACKAGE_USAGE_STATS Berechtigung erteilt wurde.
  */
 fun hasUsageStatsPermission(context: Context): Boolean {
-    val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+    val usageStatsManager =
+        context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
     val now = System.currentTimeMillis()
     val stats = usageStatsManager.queryUsageStats(
         UsageStatsManager.INTERVAL_DAILY,

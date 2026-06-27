@@ -43,11 +43,11 @@ suspend fun saveTwoFaEntryToSupabase(entry: TwoFAEntry, db: TwoFADatabase? = nul
             true
         } catch (e: Exception) {
             errorInsert(
-                    "TwoFARepository",
-                    "❌ Supabase Fehler: ${e.message}",
-                    Instant.now().toString(),
-                    "ERROR"
-                
+                "TwoFARepository",
+                "❌ Supabase Fehler: ${e.message}",
+                Instant.now().toString(),
+                "ERROR"
+
             )
             false
         }

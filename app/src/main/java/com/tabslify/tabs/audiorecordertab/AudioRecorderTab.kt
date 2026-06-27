@@ -67,8 +67,8 @@ private fun MicPermissionDialog(
         onDismiss = onDismiss,
         title = "Mikrofonzugriff benötigt",
         text = "Dieser Tab benötigt Zugriff auf das Mikrofon, um Aufnahmen erstellen zu können.\n\n" +
-                        "Bitte erlaube den Zugriff in den App-Einstellungen:\n" +
-                        "Berechtigungen → Mikrofon → Option 1 oder 2.",
+                "Bitte erlaube den Zugriff in den App-Einstellungen:\n" +
+                "Berechtigungen → Mikrofon → Option 1 oder 2.",
         confirmText = "Zu den Einstellungen",
         onConfirm = onConfirm
     )
@@ -102,7 +102,8 @@ fun AudioRecorderTab(
             if (!canAskDirectly || ActivityCompat.checkSelfPermission(
                     context,
                     Manifest.permission.RECORD_AUDIO
-                ) != PackageManager.PERMISSION_GRANTED) {
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
                 showPermissionDialog = true
             }
         }
@@ -139,7 +140,10 @@ fun AudioRecorderTab(
                     hasPermission = true
                     restartKey++
                 } else {
-                    toast(context, "Dieser Tab benötigt die nicht vorhandene Mikrofon-Berechtigung.")
+                    toast(
+                        context,
+                        "Dieser Tab benötigt die nicht vorhandene Mikrofon-Berechtigung."
+                    )
                 }
             }
         }
@@ -152,8 +156,17 @@ fun AudioRecorderTab(
             AudioRecorderTabContent(modifier = modifier, vm = vm)
         }
     } else {
-        Box(Modifier.fillMaxSize().padding(40.dp), contentAlignment = Alignment.Center) {
-            Text("Dieser Tab benötigt die nicht vorhandene Mikrofon Berechtigung!", color = Color.LightGray, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, fontSize = 30.sp, lineHeight = 40.sp)
+        Box(Modifier
+            .fillMaxSize()
+            .padding(40.dp), contentAlignment = Alignment.Center) {
+            Text(
+                "Dieser Tab benötigt die nicht vorhandene Mikrofon Berechtigung!",
+                color = Color.LightGray,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+                fontSize = 30.sp,
+                lineHeight = 40.sp
+            )
         }
     }
 }

@@ -222,7 +222,12 @@ fun VocabTab(paddingValues: PaddingValues) {
             }
             if (valid.size != parsed.size) {
                 rawRecentMaterials = valid.map(::serializeRecentMaterial)
-                prefs.edit { putString("recent_materials", rawRecentMaterials.joinToString("\u001e")) }
+                prefs.edit {
+                    putString(
+                        "recent_materials",
+                        rawRecentMaterials.joinToString("\u001e")
+                    )
+                }
             }
         } catch (_: Exception) {
         } finally {
@@ -375,7 +380,8 @@ fun VocabTab(paddingValues: PaddingValues) {
                                 val bytes = ByteArrayOutputStream().also {
                                     bmp.compress(Bitmap.CompressFormat.JPEG, 90, it)
                                 }.toByteArray()
-                                val sent = if (!Config.realDevice) false else trySendImageToLaptop(bytes)
+                                val sent =
+                                    if (!Config.realDevice) false else trySendImageToLaptop(bytes)
                                 if (sent) {
                                     val result = flashcardVokabelnFlow.first { it != null }
                                     vokabeln = result ?: emptyList()
@@ -530,7 +536,11 @@ fun SchoolDashboard(
                         .padding(horizontal = 20.dp, vertical = 18.dp)
                         .weight(1f)
                 ) {
-                    Icon(Icons.Default.Style, contentDescription = "", tint = LocalContentColor.current.copy(0.4f))
+                    Icon(
+                        Icons.Default.Style,
+                        contentDescription = "",
+                        tint = LocalContentColor.current.copy(0.4f)
+                    )
                     Text(
                         "Vokabeln",
                         color = TextPrimary,
@@ -550,7 +560,11 @@ fun SchoolDashboard(
                             .padding(horizontal = 20.dp, vertical = 18.dp)
                             .weight(1f)
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.StickyNote2, contentDescription = "", tint = LocalContentColor.current.copy(0.4f))
+                        Icon(
+                            Icons.AutoMirrored.Filled.StickyNote2,
+                            contentDescription = "",
+                            tint = LocalContentColor.current.copy(0.4f)
+                        )
                         Text(
                             "Materialien",
                             color = TextPrimary,
@@ -956,9 +970,11 @@ fun UploadScreen(
         onBack()
     }
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .padding(paddingValues)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+    ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 4.dp)
@@ -1187,9 +1203,11 @@ fun ReviewScreen(
         if (isExtracting) showCancelDialog = true else onBack()
     }
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .padding(paddingValues)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+    ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = 4.dp, top = 8.dp, end = 16.dp)
@@ -1219,7 +1237,9 @@ fun ReviewScreen(
                     )
                     .clickable(enabled = currentVokabeln.isNotEmpty() && !isExtracting) {
                         if (changes > 0) onVokabelnChanged(currentVokabeln)
-                        else { onVokabelnChanged(currentVokabeln); onSave() }
+                        else {
+                            onVokabelnChanged(currentVokabeln); onSave()
+                        }
                     }
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {

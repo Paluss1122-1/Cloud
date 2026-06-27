@@ -126,7 +126,12 @@ object CloudCrypto {
         return try {
             decryptWithKey(ciphertext, cachedKey)
         } catch (e: Exception) {
-                errorInsert("CloudCrypto", "Decrypt fehlgeschlagen: ${e.message}", Instant.now().toString(), "ERROR")
+            errorInsert(
+                "CloudCrypto",
+                "Decrypt fehlgeschlagen: ${e.message}",
+                Instant.now().toString(),
+                "ERROR"
+            )
             null
         }
     }
@@ -248,7 +253,11 @@ data class PasswordEntrySupabase(
     val totp_secret: String? = null
 )
 
-suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: TwoFADatabase, context: Context): SyncResult {
+suspend fun syncPasswordEntriesWithCloud(
+    passwordDb: PasswordDatabase,
+    twoFaDb: TwoFADatabase,
+    context: Context
+): SyncResult {
     if (!prvt()) {
         return SyncResult(uploaded = 0, downloaded = 0, total = 0)
     }
@@ -264,13 +273,18 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
                     .select().decodeList<PasswordEntrySupabase>()
             } catch (e: Exception) {
                 errorInsert(
-                        "PasswordRepository",
-                        "Cloud-Laden fehlgeschlagen: ${e.message}",
-                        Instant.now().toString(),
-                        "ERROR"
-                    
+                    "PasswordRepository",
+                    "Cloud-Laden fehlgeschlagen: ${e.message}",
+                    Instant.now().toString(),
+                    "ERROR"
+
                 )
-                return@withContext SyncResult(uploaded = 0, downloaded = 0, total = 0, error = e.message)
+                return@withContext SyncResult(
+                    uploaded = 0,
+                    downloaded = 0,
+                    total = 0,
+                    error = e.message
+                )
             }
 
             val cloudNames = mutableSetOf<String>()
@@ -278,8 +292,9 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
             cloudEntries.forEach { cloud ->
                 cloudNames.add(cloud.name.trim().lowercase())
                 val cloudUser = cloud.username ?: ""
-                val existing = localPasswords.find { it.name == cloud.name && it.username == cloudUser }
-                
+                val existing =
+                    localPasswords.find { it.name == cloud.name && it.username == cloudUser }
+
                 if (existing == null) {
                     // Lokal gelöscht -> auf Cloud löschen
                     try {
@@ -289,20 +304,29 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
                             }
                         }
                     } catch (e: Exception) {
-                        errorInsert("PasswordRepository", "Cloud-Delete fehlgeschlagen: ${e.message}", Instant.now().toString(), "ERROR")
+                        errorInsert(
+                            "PasswordRepository",
+                            "Cloud-Delete fehlgeschlagen: ${e.message}",
+                            Instant.now().toString(),
+                            "ERROR"
+                        )
                     }
                 } else {
                     // Existiert lokal, überprüfe auf Änderungen
                     val decryptedPw = CloudCrypto.decryptFromCloud(cloud.encrypted_password)
                     val matchedSecret = localTwoFa.firstOrNull { fa ->
-                        val n = fa.name.lowercase(); val ln = existing.name.lowercase(); val lu = existing.url.lowercase()
-                        n.contains(ln) || ln.contains(n) || (lu.isNotEmpty() && n.split(" ").any { lu.contains(it) })
+                        val n = fa.name.lowercase()
+                        val ln = existing.name.lowercase()
+                        val lu = existing.url.lowercase()
+                        n.contains(ln) || ln.contains(n) || (lu.isNotEmpty() && n.split(" ")
+                            .any { lu.contains(it) })
                     }?.secret
-                    
+
                     val encryptedLocalPw = CloudCrypto.encryptForCloud(existing.password)
                     val encryptedLocalTotp = matchedSecret?.let { CloudCrypto.encryptForCloud(it) }
 
-                    val cloudTotpDecrypted = cloud.totp_secret?.let { CloudCrypto.decryptFromCloud(it) }
+                    val cloudTotpDecrypted =
+                        cloud.totp_secret?.let { CloudCrypto.decryptFromCloud(it) }
 
                     if (decryptedPw != existing.password || cloud.url != existing.url || cloud.notes != existing.notes || cloudTotpDecrypted != matchedSecret) {
                         try {
@@ -321,7 +345,12 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
                                 }
                             }
                         } catch (e: Exception) {
-                            errorInsert("PasswordRepository", "Cloud-Update fehlgeschlagen: ${e.message}", Instant.now().toString(), "ERROR")
+                            errorInsert(
+                                "PasswordRepository",
+                                "Cloud-Update fehlgeschlagen: ${e.message}",
+                                Instant.now().toString(),
+                                "ERROR"
+                            )
                         }
                     }
                 }
@@ -329,22 +358,25 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
 
             val cloudPairs = cloudEntries.map { it.name to (it.username ?: "") }.toSet()
             val missingInCloud = localPasswords.filter { (it.name to it.username) !in cloudPairs }
-            
+
             val toUpload = coroutineScope {
                 missingInCloud.map { local ->
                     async {
                         try {
                             val encryptedPw = CloudCrypto.encryptForCloud(local.password)
                             val matchedSecret = localTwoFa.firstOrNull { fa ->
-                                val n = fa.name.lowercase(); val ln = local.name.lowercase(); val lu = local.url.lowercase()
-                                n.contains(ln) || ln.contains(n) || (lu.isNotEmpty() && n.split(" ").any { lu.contains(it) })
+                                val n = fa.name.lowercase()
+                                val ln = local.name.lowercase()
+                                val lu = local.url.lowercase()
+                                n.contains(ln) || ln.contains(n) || (lu.isNotEmpty() && n.split(" ")
+                                    .any { lu.contains(it) })
                             }?.secret
                             PasswordEntrySupabase(
-                                name = local.name, 
-                                url = local.url, 
-                                username = local.username, 
-                                encrypted_password = encryptedPw, 
-                                notes = local.notes, 
+                                name = local.name,
+                                url = local.url,
+                                username = local.username,
+                                encrypted_password = encryptedPw,
+                                notes = local.notes,
                                 totp_secret = matchedSecret?.let { CloudCrypto.encryptForCloud(it) }
                             )
                         } catch (_: Exception) {
@@ -358,16 +390,21 @@ suspend fun syncPasswordEntriesWithCloud(passwordDb: PasswordDatabase, twoFaDb: 
                 try {
                     Config.client.postgrest.from("password_entries").insert(toUpload)
                 } catch (e: Exception) {
-                    errorInsert("PasswordRepository", "Batch-Upload fehlgeschlagen: ${e.message}", Instant.now().toString(), "ERROR")
+                    errorInsert(
+                        "PasswordRepository",
+                        "Batch-Upload fehlgeschlagen: ${e.message}",
+                        Instant.now().toString(),
+                        "ERROR"
+                    )
                 }
             }
             SyncResult(uploaded = missingInCloud.size, downloaded = 0, total = localPasswords.size)
         } catch (e: Exception) {
             errorInsert(
-                    "PasswordRepository",
-                    "Sync-Exception: ${e.message}",
-                    Instant.now().toString(),
-                    "ERROR"
+                "PasswordRepository",
+                "Sync-Exception: ${e.message}",
+                Instant.now().toString(),
+                "ERROR"
             )
             SyncResult(uploaded = 0, downloaded = 0, total = 0, error = e.message)
         }

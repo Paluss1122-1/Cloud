@@ -191,7 +191,9 @@ fun SchoolHeader(
 
                     items(combined) { (item, isSet) ->
                         if (isSet) QuickSetCard(item as VokabelSet, onClick = { onOpenSet(item) })
-                        else QuickMaterialCard(item as RecentMaterial, onClick = { onOpenMaterial(item) })
+                        else QuickMaterialCard(
+                            item as RecentMaterial,
+                            onClick = { onOpenMaterial(item) })
                     }
                 }
             }
@@ -242,9 +244,14 @@ private fun QuickMaterialCard(
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    Icon(Icons.AutoMirrored.Filled.StickyNote2, contentDescription = "", tint = Color(
-                        0xFF1A32F8
-                    ), modifier = Modifier.fillMaxSize(0.8f))
+                    Icon(
+                        Icons.AutoMirrored.Filled.StickyNote2,
+                        contentDescription = "",
+                        tint = Color(
+                            0xFF1A32F8
+                        ),
+                        modifier = Modifier.fillMaxSize(0.8f)
+                    )
                 }
             }
             Column(
@@ -262,7 +269,10 @@ private fun QuickMaterialCard(
                 )
                 if (material.lastUsed > 0L) {
                     Text(
-                        text = SimpleDateFormat("dd.MM.yyyy", LocalLocale.current.platformLocale).format(Date(material.lastUsed)),
+                        text = SimpleDateFormat(
+                            "dd.MM.yyyy",
+                            LocalLocale.current.platformLocale
+                        ).format(Date(material.lastUsed)),
                         color = TextTertiary,
                         fontSize = 10.sp,
                         maxLines = 1
@@ -308,9 +318,11 @@ private fun QuickSetCard(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Style, contentDescription = "", tint = Color(
-                    0xFF1A32F8
-                ), modifier = Modifier.fillMaxSize(0.8f))
+                Icon(
+                    Icons.Default.Style, contentDescription = "", tint = Color(
+                        0xFF1A32F8
+                    ), modifier = Modifier.fillMaxSize(0.8f)
+                )
             }
             Column(
                 modifier = Modifier

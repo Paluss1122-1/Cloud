@@ -93,7 +93,8 @@ fun parseBitwardenExport(json: String): Triple<List<PasswordEntry>, List<TwoFAEn
                 username = username,
                 password = password,
                 notes = notes.takeIf { it != "null" } ?: "",
-                totpSecret = if (totp.isNotBlank()) totp.trim().replace(" ", "").uppercase() else null
+                totpSecret = if (totp.isNotBlank()) totp.trim().replace(" ", "")
+                    .uppercase() else null
             )
         )
     }

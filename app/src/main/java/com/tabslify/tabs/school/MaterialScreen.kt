@@ -169,7 +169,11 @@ fun MaterialienScreen(
 
     fun persistRecentMaterial(subject: String, fileName: String? = null) {
         if (fileName == null) return
-        val newItem = RecentMaterial(subject = subject, fileName = fileName, lastUsed = System.currentTimeMillis())
+        val newItem = RecentMaterial(
+            subject = subject,
+            fileName = fileName,
+            lastUsed = System.currentTimeMillis()
+        )
         val existing = rawRecentMaterials.mapNotNull(::parseRecentMaterial)
             .filter { it.subject != subject || it.fileName != fileName }
         val normalized = (listOf(newItem) + existing).take(3)
@@ -273,8 +277,9 @@ fun MaterialienScreen(
                     folders = (listOf(selectedSubject!!) + folders).sortedDescending()
                 }
                 try {
-                    val rawBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                        ?: throw Exception("Datei nicht lesbar")
+                    val rawBytes =
+                        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                            ?: throw Exception("Datei nicht lesbar")
                     val (uploadBytes, uploadName) = compressToJpgIfImage(rawBytes, state.fileName)
                     val path = "$selectedSubject/$uploadName"
                     Config.client.storage.from("school").upload(path, uploadBytes) { upsert = true }
@@ -305,14 +310,19 @@ fun MaterialienScreen(
     ) {
         val cacheKeyBase = "cache_${subject}_${fileName}"
 
-        aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(loading = true, analysisStarted = true))
+        aiSummaryStates =
+            aiSummaryStates + (fileKey to AiSummaryState(loading = true, analysisStarted = true))
 
         if (!forceRefresh) {
             val cachedOcr = prefs.getString("${cacheKeyBase}_ocr", null)
             val cachedSummary = prefs.getString("${cacheKeyBase}_summary", null)
 
             if (cachedOcr != null && cachedSummary != null) {
-                aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(summary = cachedSummary, loading = false, analysisStarted = true))
+                aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(
+                    summary = cachedSummary,
+                    loading = false,
+                    analysisStarted = true
+                ))
                 return
             }
         }
@@ -394,7 +404,11 @@ fun MaterialienScreen(
                 """.trimIndent()
             ) ?: throw Exception("Summary fehlgeschlagen")
 
-            aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(summary = summary, loading = false, analysisStarted = true))
+            aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(
+                summary = summary,
+                loading = false,
+                analysisStarted = true
+            ))
 
             prefs.edit {
                 putString("${cacheKeyBase}_ocr", rawText)
@@ -402,14 +416,27 @@ fun MaterialienScreen(
             }
         } catch (e: Exception) {
             errorMsg = e.localizedMessage
-            aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(summary = null, loading = false, analysisStarted = true))
+            aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(
+                summary = null,
+                loading = false,
+                analysisStarted = true
+            ))
         }
     }
 
     if (showAiSummaryToRefresh) {
         AlertDialogTabslify(
-            onConfirm = { scope.launch { runOcrAndSummary("${selectedSubject}_${selectedFile}", selectedSubject!!, selectedFile!!, forceRefresh = true) }},
-            onDismiss = {showAiSummaryToRefresh = false},
+            onConfirm = {
+                scope.launch {
+                    runOcrAndSummary(
+                        "${selectedSubject}_${selectedFile}",
+                        selectedSubject!!,
+                        selectedFile!!,
+                        forceRefresh = true
+                    )
+                }
+            },
+            onDismiss = { showAiSummaryToRefresh = false },
             title = "Möchtest du wirklich deine AI Zusammenfassung neu generieren?",
             text = "Die jetzige geht dabei verloren"
         )
@@ -674,7 +701,12 @@ fun MaterialienScreen(
                                         .background(BgSurface)
                                         .clickable {
                                             selectedFile = fileName
-                                            selectedSubject?.let { persistRecentMaterial(it, fileName) }
+                                            selectedSubject?.let {
+                                                persistRecentMaterial(
+                                                    it,
+                                                    fileName
+                                                )
+                                            }
                                         }
                                 ) {
                                     AsyncImage(
@@ -782,14 +814,14 @@ fun MaterialienScreen(
             }
         }
     }
-    
+
     if (selectedFile != null && selectedSubject != null) {
         val fileKey = remember(selectedFile, selectedSubject) {
             "${selectedSubject}_${selectedFile}"
         }
 
         var fileUrl by remember(fileKey) { mutableStateOf<String?>(null) }
-        
+
         val currentState = aiSummaryStates[fileKey] ?: AiSummaryState()
         val aiSummary = currentState.summary
         val summaryLoading = currentState.loading
@@ -810,7 +842,12 @@ fun MaterialienScreen(
 
             if (!analysisStarted && isImageFile(selectedFile!!)) {
                 scope.launch {
-                    runOcrAndSummary(fileKey, selectedSubject!!, selectedFile!!, forceRefresh = false)
+                    runOcrAndSummary(
+                        fileKey,
+                        selectedSubject!!,
+                        selectedFile!!,
+                        forceRefresh = false
+                    )
                 }
             }
         }
@@ -820,7 +857,9 @@ fun MaterialienScreen(
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.97f))
         ) {
-            Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            Column(modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(
@@ -900,8 +939,16 @@ fun MaterialienScreen(
                     // Synchronized Header Fade out / Shrink when expanded
                     AnimatedVisibility(
                         visible = !sheetExpanded,
-                        enter = fadeIn(animationSpec = tween(400)) + expandVertically(animationSpec = tween(400)),
-                        exit = fadeOut(animationSpec = tween(400)) + shrinkVertically(animationSpec = tween(400))
+                        enter = fadeIn(animationSpec = tween(400)) + expandVertically(
+                            animationSpec = tween(
+                                400
+                            )
+                        ),
+                        exit = fadeOut(animationSpec = tween(400)) + shrinkVertically(
+                            animationSpec = tween(
+                                400
+                            )
+                        )
                     ) {
                         Row(
                             modifier = Modifier
@@ -933,8 +980,16 @@ fun MaterialienScreen(
                     // Synchronized Content Fade in / Expand when expanded
                     AnimatedVisibility(
                         visible = sheetExpanded,
-                        enter = fadeIn(animationSpec = tween(400)) + expandVertically(animationSpec = tween(400)),
-                        exit = fadeOut(animationSpec = tween(400)) + shrinkVertically(animationSpec = tween(400))
+                        enter = fadeIn(animationSpec = tween(400)) + expandVertically(
+                            animationSpec = tween(
+                                400
+                            )
+                        ),
+                        exit = fadeOut(animationSpec = tween(400)) + shrinkVertically(
+                            animationSpec = tween(
+                                400
+                            )
+                        )
                     ) {
                         Column(
                             modifier = Modifier

@@ -76,9 +76,11 @@ fun rememberAppColor(): Color {
                     targetColor = c()
                     context.registerReceiver(receiver, IntentFilter(Intent.ACTION_TIME_TICK))
                 }
+
                 Lifecycle.Event.ON_PAUSE -> {
                     context.unregisterReceiver(receiver)
                 }
+
                 else -> {}
             }
         }
