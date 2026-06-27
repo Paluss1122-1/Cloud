@@ -192,6 +192,11 @@
         </provider>
 
         <activity
+            android:name=".core.functions.NotificationPermissionActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <activity
             android:name=".core.activities.ShareActivity"
             android:excludeFromRecents="true"
             android:exported="true"
