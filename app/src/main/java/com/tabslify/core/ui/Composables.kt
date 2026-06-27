@@ -11,8 +11,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,8 +41,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -140,7 +136,7 @@ fun calloutAwareMarkdownComponents() = markdownComponents(
     blockQuote = {
         val (calloutType, remainingContent) = parseCalloutType(it.content)
         if (calloutType != null) {
-            Callout(type = calloutType, content= {
+            Callout(type = calloutType, content = {
                 Markdown(content = remainingContent)
             })
         } else {
@@ -227,7 +223,7 @@ fun NeonBox(
     content: @Composable () -> Unit
 ) {
     require(neonColors.size >= 2) { "neonColors must contain at least 2 colors" }
-    
+
     val gradientBrush = Brush.linearGradient(
         colors = neonColors.take(2).map { it.copy(alpha = backgroundAlpha) }
     )
@@ -239,10 +235,30 @@ fun NeonBox(
                     addRoundRect(
                         RoundRect(
                             rect = Rect(0f, 0f, size.width, size.height),
-                            topLeft = CornerRadius(cornerRadius.topStart.toPx(size, this@drawBehind)),
-                            topRight = CornerRadius(cornerRadius.topEnd.toPx(size, this@drawBehind)),
-                            bottomRight = CornerRadius(cornerRadius.bottomEnd.toPx(size, this@drawBehind)),
-                            bottomLeft = CornerRadius(cornerRadius.bottomStart.toPx(size, this@drawBehind))
+                            topLeft = CornerRadius(
+                                cornerRadius.topStart.toPx(
+                                    size,
+                                    this@drawBehind
+                                )
+                            ),
+                            topRight = CornerRadius(
+                                cornerRadius.topEnd.toPx(
+                                    size,
+                                    this@drawBehind
+                                )
+                            ),
+                            bottomRight = CornerRadius(
+                                cornerRadius.bottomEnd.toPx(
+                                    size,
+                                    this@drawBehind
+                                )
+                            ),
+                            bottomLeft = CornerRadius(
+                                cornerRadius.bottomStart.toPx(
+                                    size,
+                                    this@drawBehind
+                                )
+                            )
                         )
                     )
                 }
@@ -254,7 +270,10 @@ fun NeonBox(
                             Paint().apply {
                                 color = neonColors.last().copy(alpha = 0.55f).toArgb()
                                 isAntiAlias = true
-                                maskFilter = android.graphics.BlurMaskFilter(glowBlur1, android.graphics.BlurMaskFilter.Blur.OUTER)
+                                maskFilter = android.graphics.BlurMaskFilter(
+                                    glowBlur1,
+                                    android.graphics.BlurMaskFilter.Blur.OUTER
+                                )
                             }
                         )
                         drawPath(
@@ -262,7 +281,10 @@ fun NeonBox(
                             Paint().apply {
                                 color = neonColors.first().copy(alpha = 0.65f).toArgb()
                                 isAntiAlias = true
-                                maskFilter = android.graphics.BlurMaskFilter(glowBlur2, android.graphics.BlurMaskFilter.Blur.OUTER)
+                                maskFilter = android.graphics.BlurMaskFilter(
+                                    glowBlur2,
+                                    android.graphics.BlurMaskFilter.Blur.OUTER
+                                )
                             }
                         )
                     }
@@ -468,7 +490,7 @@ fun AlertDialogTabslify(
         },
         modifier = modifier,
         dismissButton = {
-            if(!oneButton) {
+            if (!oneButton) {
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
@@ -479,8 +501,22 @@ fun AlertDialogTabslify(
             }
         },
         icon = icon,
-        title = { Text(title, color = TextSecondary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-        text = { Text(text, color = TextSecondary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+        title = {
+            Text(
+                title,
+                color = TextSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        text = {
+            Text(
+                text,
+                color = TextSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
         shape = shape,
         containerColor = BgSurface,
         iconContentColor = iconContentColor,
