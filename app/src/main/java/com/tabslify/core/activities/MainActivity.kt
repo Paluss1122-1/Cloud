@@ -115,7 +115,7 @@ class MainActivity : FragmentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = appColor
                 ) {
-                    if (showJsonEditor && jsonFilePath != null) {
+                    if (showJsonEditor && jsonFilePath != null && prvt()) {
                         JsonEditorContent(
                             filePath = jsonFilePath!!,
                             fileUri = jsonFileUri,
