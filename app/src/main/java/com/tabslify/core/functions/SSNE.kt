@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.tabslify.core.objects.Config.cms
+import com.tabslify.core.objects.tNotify
 import com.tabslify.services.MediaPlayerService
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -51,7 +52,7 @@ fun showSimpleNotificationExtern(
     if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
         == PackageManager.PERMISSION_GRANTED
     ) {
-        notificationManager.notify(id, notification.build())
+        tNotify(context, id, notification)
 
         if (duration > Duration.ZERO) {
             Handler(Looper.getMainLooper()).postDelayed(
