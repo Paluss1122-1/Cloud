@@ -1,5 +1,6 @@
 package com.tabslify.quiethoursnotificationhelper
 
+import android.content.Context
 import android.graphics.BitmapFactory
 import android.util.Base64
 import com.google.firebase.Firebase
@@ -47,12 +48,13 @@ private fun buildSystemPrompt(target: String = ""): String {
     return str
 }
 
+
 suspend fun sendGeminiRequest(
     history: List<ChatMessage> = emptyList(),
     userMessage: String,
     pic: String? = null,
     audioUri: android.net.Uri? = null,
-    ctx: android.content.Context? = null,
+    ctx: Context? = null,
     anlytic: Boolean = false,
     model: String = DEF_GEMINI,
     onToken: ((String) -> Unit)? = null,
@@ -165,6 +167,7 @@ private fun buildNvidiaAITabMessages(
 }
 
 suspend fun sendNvidiaChatMessageAITab(
+    ctx: Context,
     history: List<ChatMessage>,
     userMessage: String,
     model: String,
@@ -172,35 +175,48 @@ suspend fun sendNvidiaChatMessageAITab(
     onToken: ((String) -> Unit)? = null
 ): String? {
     val messages = buildNvidiaAITabMessages(history, userMessage, pic)
-    return if (onToken != null) {
-        withContext(Dispatchers.IO) {
-            val sb = StringBuilder()
-            var connection: HttpURLConnection? = null
-            try {
-                val requestBody = JSONObject().apply {
-                    put("model", model)
-                    put("messages", messages)
-                    put("temperature", 0.3)
-                    put("max_tokens", 1024)
-                    put("stream", true)
-                }
-                connection = (URL("https://integrate.api.nvidia.com/v1/chat/completions")
-                    .openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    setRequestProperty("Authorization", "Bearer ${Config.NVIDIA}")
-                    setRequestProperty("Content-Type", "application/json")
-                    connectTimeout = 15_000
-                    readTimeout = 60_000
-                    doOutput = true
-                }
-                connection.outputStream.use {
-                    it.write(
-                        requestBody.toString().toByteArray(Charsets.UTF_8)
-                    )
-                }
+    val sha256 = Config.getAppSignatureSha256(ctx) ?: return null
 
-                if (connection.responseCode != 200) return@withContext ""
+    val payload = JSONObject().apply {
+        put("model", model)
+        put("messages", messages)
+        put("temperature", 0.3)
+        put("max_tokens", 1024)
+        put("stream", onToken != null)
+    }
 
+    val requestBody = JSONObject().apply {
+        put("action", "nvidia")
+        put("payload", payload)
+    }.toString()
+
+    return withContext(Dispatchers.IO) {
+        var connection: HttpURLConnection? = null
+        try {
+            val url = "${Config.SUPABASE_URL}/functions/v1/api-proxy"
+            connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Authorization", "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}")
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("X-Android-Cert", sha256)
+                connectTimeout = 15_000
+                readTimeout = 60_000
+                doOutput = true
+            }
+            connection.outputStream.use { it.write(requestBody.toByteArray(Charsets.UTF_8)) }
+
+            if (connection.responseCode != 200) {
+                val errorText =
+                    connection.errorStream?.bufferedReader()?.readText() ?: "No error body"
+                android.util.Log.e(
+                    "AI",
+                    "Nvidia proxy failed with code ${connection.responseCode}: $errorText"
+                )
+                return@withContext null
+            }
+
+            if (onToken != null) {
+                val sb = StringBuilder()
                 connection.inputStream.bufferedReader().useLines { lines ->
                     for (line in lines) {
                         if (!line.startsWith("data:")) continue
@@ -220,12 +236,16 @@ suspend fun sendNvidiaChatMessageAITab(
                         }
                     }
                 }
-            } finally {
-                connection?.disconnect()
+                sb.toString()
+            } else {
+                val response = JSONObject(connection.inputStream.bufferedReader().readText())
+                    .getJSONArray("choices").getJSONObject(0)
+                    .getJSONObject("message").getString("content").trim()
+                    .ifBlank { null }
+                response
             }
-            sb.toString()
+        } finally {
+            connection?.disconnect()
         }
-    } else {
-        callNvidiaApi(model, messages)
     }
 }
