@@ -1,5 +1,6 @@
-package com.tabslify.services
+package com.tabslify.inactive
 
+import android.R
 import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -10,16 +11,15 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import androidx.core.content.edit
-import com.tabslify.core.functions.canNotify
 import com.tabslify.core.objects.Config
-import com.tabslify.core.objects.Config.CHAT_SERVICE
-import com.tabslify.core.objects.Config.CHAT_SERVICE_HISTORY
-import com.tabslify.core.objects.Config.cms
+import com.tabslify.core.objects.tNotify
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
@@ -90,9 +90,9 @@ class ChatService : Service() {
                         serviceScope.launch {
                             sendMessage(replyText)
                             withContext(Dispatchers.Main) {
-                                if (notificationId != CHAT_SERVICE && notificationId != -1) {
+                                if (notificationId != Config.CHAT_SERVICE && notificationId != -1) {
                                     val notificationManager =
-                                        getSystemService(NotificationManager::class.java)
+                                        context.getSystemService(NotificationManager::class.java)
                                     notificationManager.cancel(notificationId)
                                     Log.d(
                                         "ChatService",
@@ -130,7 +130,7 @@ class ChatService : Service() {
         registerReceiver(replyReceiver, filter, RECEIVER_NOT_EXPORTED)
 
         startForeground(
-            CHAT_SERVICE,
+            Config.CHAT_SERVICE,
             createServiceNotification(),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
         )
@@ -143,11 +143,10 @@ class ChatService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             "ACTION_NOTIFICATION_DELETED" -> {
-                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                Handler(Looper.getMainLooper()).postDelayed({
                     try {
                         val notification = createServiceNotification()
-                        val notificationManager = getSystemService(NotificationManager::class.java)
-                        notificationManager.notify(CHAT_SERVICE, notification)
+                        tNotify(this, Config.CHAT_SERVICE, notification)
                     } catch (_: Exception) {
                     }
                 }, 100)
@@ -183,19 +182,19 @@ class ChatService : Service() {
             .build()
 
         val replyIntent = Intent(ACTION_REPLY).apply {
-            putExtra(KEY_NOTIFICATION_ID, CHAT_SERVICE)
+            putExtra(KEY_NOTIFICATION_ID, Config.CHAT_SERVICE)
             `package` = packageName
         }
 
         val replyPendingIntent = PendingIntent.getBroadcast(
             this,
-            CHAT_SERVICE,
+            Config.CHAT_SERVICE,
             replyIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
 
         val replyAction = NotificationCompat.Action.Builder(
-            android.R.drawable.ic_menu_send,
+            R.drawable.ic_menu_send,
             "Schreiben",
             replyPendingIntent
         )
@@ -215,7 +214,7 @@ class ChatService : Service() {
         )
 
         val historyAction = NotificationCompat.Action.Builder(
-            android.R.drawable.ic_menu_view,
+            R.drawable.ic_menu_view,
             "Letzte 5",
             historyPendingIntent
         ).build()
@@ -232,7 +231,7 @@ class ChatService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setSmallIcon(R.drawable.ic_dialog_email)
             .setContentTitle("💬 Chat Service")
             .setContentText("Tippe auf 'Schreiben' um eine Nachricht zu senden")
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -249,7 +248,7 @@ class ChatService : Service() {
         try {
             val notificationManager = getSystemService(NotificationManager::class.java)
             val notification = createServiceNotification()
-            notificationManager.notify(CHAT_SERVICE, notification)
+            notificationManager.notify(Config.CHAT_SERVICE, notification)
         } catch (_: Exception) {
         }
     }
@@ -286,7 +285,7 @@ class ChatService : Service() {
             }
 
             val notification = NotificationCompat.Builder(this, "chat_messages")
-                .setSmallIcon(android.R.drawable.ic_dialog_email)
+                .setSmallIcon(R.drawable.ic_dialog_email)
                 .setContentTitle("📜 Letzte Nachrichten")
                 .setContentText("${messageHistory.size} Nachrichten")
                 .setStyle(
@@ -297,11 +296,7 @@ class ChatService : Service() {
                 .setAutoCancel(true)
                 .build()
 
-            val notificationManager = getSystemService(NotificationManager::class.java)
-
-            if (canNotify(this)) {
-                notificationManager.notify(CHAT_SERVICE_HISTORY, notification)
-            }
+            tNotify(this, Config.CHAT_SERVICE_HISTORY, notification)
 
         } catch (_: Exception) {
         }
@@ -314,10 +309,11 @@ class ChatService : Service() {
 
             val setupSuccess = withTimeoutOrNull(REALTIME_SETUP_TIMEOUT_MS) {
                 try {
-                    val initialMessages = supabase.from("messages")
-                        .select()
-                        .decodeList<Message>()
-                        .takeLast(10)
+                    val initialMessages = Config.safeCall {
+                        supabase.from("messages")
+                            .select()
+                            .decodeList<Message>()
+                    }.takeLast(10)
 
                     initialMessages.forEach { msg ->
                         msg.id?.let { seenMessageIds.add(it) }
@@ -390,19 +386,19 @@ class ChatService : Service() {
                 .build()
 
             val replyIntent = Intent(ACTION_REPLY).apply {
-                putExtra(KEY_NOTIFICATION_ID, cms())
+                putExtra(KEY_NOTIFICATION_ID, Config.cms())
                 `package` = packageName
             }
 
             val replyPendingIntent = PendingIntent.getBroadcast(
                 this,
-                cms(),
+                Config.cms(),
                 replyIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
             )
 
             val replyAction = NotificationCompat.Action.Builder(
-                android.R.drawable.ic_menu_send,
+                R.drawable.ic_menu_send,
                 "Antworten",
                 replyPendingIntent
             )
@@ -414,7 +410,7 @@ class ChatService : Service() {
                 .format(Date())
 
             val notification = NotificationCompat.Builder(this, "chat_messages")
-                .setSmallIcon(android.R.drawable.ic_dialog_email)
+                .setSmallIcon(R.drawable.ic_dialog_email)
                 .setContentTitle("💬 ${message.sender_id}")
                 .setContentText(message.content)
                 .setStyle(
@@ -428,11 +424,7 @@ class ChatService : Service() {
                 .addAction(replyAction)
                 .build()
 
-            val notificationManager = getSystemService(NotificationManager::class.java)
-
-            if (canNotify(this)) {
-                notificationManager.notify(cms(), notification)
-            }
+            tNotify(this, Config.cms(), notification)
 
         } catch (_: Exception) {
         }
@@ -447,7 +439,9 @@ class ChatService : Service() {
                 content = content
             )
 
-            supabase.from("messages").insert(message)
+            Config.safeCall {
+                supabase.from("messages").insert(message)
+            }
             Log.d("ChatService", "✅ Message sent: $content")
 
         } catch (e: Exception) {

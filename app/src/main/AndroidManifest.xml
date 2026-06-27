@@ -194,7 +194,7 @@
             android:foregroundServiceType="microphone" />
 
         <service
-            android:name=".services.ChatService"
+            android:name=".inactive.ChatService"
             android:enabled="false"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
