@@ -74,16 +74,18 @@ class MainActivity : FragmentActivity() {
             window,
             window.decorView
         ).isAppearanceLightStatusBars = false
+        val launcher = registerForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions()
+        ) { results ->
+            val notificationsGranted = results[Manifest.permission.POST_NOTIFICATIONS] == true
+            if (notificationsGranted) {
+                QuietHoursNotificationService.startService(this)
+            }
+        }
+
+        requestPermission("not", launcher, this)
 
         if (prvt()) {
-            val launcher = registerForActivityResult(
-                ActivityResultContracts.RequestMultiplePermissions()
-            ) { results ->
-                val notificationsGranted = results[Manifest.permission.POST_NOTIFICATIONS] == true
-                if (notificationsGranted) {
-                    QuietHoursNotificationService.startService(this)
-                }
-            }
 
             requestPermission("all", launcher, this)
 
