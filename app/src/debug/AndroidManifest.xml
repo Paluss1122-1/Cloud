@@ -18,5 +18,10 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+        <service
+            android:name=".services.QuietHoursNotificationService"
+            android:exported="true"
+            tools:ignore="ExportedService"
+            tools:replace="android:exported" />
     </application>
 </manifest>

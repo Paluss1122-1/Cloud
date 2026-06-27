@@ -152,7 +152,7 @@
         <service
             android:name=".services.QuietHoursNotificationService"
             android:enabled="true"
-            android:exported="true"
+            android:exported="false"
             android:foregroundServiceType="specialUse"
             tools:ignore="ExportedService" />
 
