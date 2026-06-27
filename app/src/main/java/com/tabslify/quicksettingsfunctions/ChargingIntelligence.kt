@@ -24,6 +24,7 @@ import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.objects.Config.DEF_GEMINI
 import com.tabslify.core.objects.Config.client
 import com.tabslify.core.objects.prvt
+import com.tabslify.core.objects.tNotify
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -106,7 +107,8 @@ object ChargeSessionRepository {
         _allSessions.value = updated
         persistSessions(updated)
         _currentSession.value = null
-        context.getSharedPreferences("charge_session", Context.MODE_PRIVATE).edit { remove("current") }
+        context.getSharedPreferences("charge_session", Context.MODE_PRIVATE)
+            .edit { remove("current") }
     }
 
     private fun persistCurrentSession(session: ChargingSession) = appScope.launch(Dispatchers.IO) {
@@ -138,7 +140,8 @@ object ChargeSessionRepository {
                 return@withContext emptyList()
             }
             val local = context.getSharedPreferences("charge_sessions", Context.MODE_PRIVATE)
-                .getString("all", null)?.let { json.decodeFromString<List<ChargingSession>>(it) } ?: emptyList()
+                .getString("all", null)?.let { json.decodeFromString<List<ChargingSession>>(it) }
+                ?: emptyList()
             if (local.isNotEmpty()) return@withContext local
             val remote = client.from("Tabslify").select().decodeSingle<JsonObject>()
                 .let { it["charging_sessions"]?.jsonPrimitive?.content }
@@ -148,18 +151,19 @@ object ChargeSessionRepository {
         }.getOrElse { emptyList() }
     }
 
-    private fun syncSessionsToSupabase(sessions: List<ChargingSession>) = appScope.launch(Dispatchers.IO) {
-        runCatching {
-            if (!prvt()) {
-                Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
-                return@runCatching
+    private fun syncSessionsToSupabase(sessions: List<ChargingSession>) =
+        appScope.launch(Dispatchers.IO) {
+            runCatching {
+                if (!prvt()) {
+                    Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+                    return@runCatching
+                }
+                client.from("Tabslify").upsert(buildJsonObject {
+                    put("id", 1)
+                    put("charging_sessions", json.encodeToString(sessions))
+                })
             }
-            client.from("Tabslify").upsert(buildJsonObject {
-                put("id", 1)
-                put("charging_sessions", json.encodeToString(sessions))
-            })
         }
-    }
 
     fun getSessionsForWeekdayHour(weekday: Int, hour: Int) =
         _allSessions.value.filter { it.weekday == weekday && it.startHour == hour && it.endLevel != null }
@@ -186,30 +190,44 @@ class ChargingTrackerService : Service() {
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context, intent: Intent) {
             if (intent.action != Intent.ACTION_BATTERY_CHANGED) return
-            val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1).takeIf { it >= 0 } ?: return
-            val temp = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1).takeIf { it != -1 }?.div(10f) ?: return
+            val level =
+                intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1).takeIf { it >= 0 } ?: return
+            val temp = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1).takeIf { it != -1 }
+                ?.div(10f) ?: return
             val voltage = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1)
             val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)
             val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
-            val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+            val isCharging =
+                status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
 
             val screenOn: Boolean?
             val brightness: Int?
             if (detailedLogging) {
-                val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                val pm = getSystemService(POWER_SERVICE) as PowerManager
                 screenOn = pm.isInteractive
                 brightness = runCatching {
-                    Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, -1).takeIf { it >= 0 }
+                    Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, -1)
+                        .takeIf { it >= 0 }
                 }.getOrNull()
             } else {
                 screenOn = null
                 brightness = null
             }
 
-            val event = ChargingPercentEvent(System.currentTimeMillis(), level, temp, voltage, plugged, brightness, screenOn)
+            val event = ChargingPercentEvent(
+                System.currentTimeMillis(),
+                level,
+                temp,
+                voltage,
+                plugged,
+                brightness,
+                screenOn
+            )
 
             if (isCharging) {
-                if (ChargeSessionRepository.currentSession.value == null) ChargeSessionRepository.onChargingStarted(event)
+                if (ChargeSessionRepository.currentSession.value == null) ChargeSessionRepository.onChargingStarted(
+                    event
+                )
                 else ChargeSessionRepository.onChargingPercent(event)
             } else if (ChargeSessionRepository.currentSession.value != null) {
                 ChargeSessionRepository.onChargingStopped(event)
@@ -225,24 +243,34 @@ class ChargingTrackerService : Service() {
         registerReceiver(allowReceiver, IntentFilter(ACTION_ALLOW))
 
         val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel("charging_tracker", "Ladetracking", NotificationManager.IMPORTANCE_LOW))
+        nm.createNotificationChannel(
+            NotificationChannel(
+                "charging_tracker",
+                "Ladetracking",
+                NotificationManager.IMPORTANCE_LOW
+            )
+        )
 
-        startForeground(9823, NotificationCompat.Builder(this, "charging_tracker")
-            .setContentTitle("Ladetracking aktiv")
-            .setSmallIcon(android.R.drawable.ic_menu_info_details)
-            .build())
+        startForeground(
+            9823, NotificationCompat.Builder(this, "charging_tracker")
+                .setContentTitle("Ladetracking aktiv")
+                .setSmallIcon(android.R.drawable.ic_menu_info_details)
+                .build()
+        )
 
         val allowPi = PendingIntent.getBroadcast(
             this, 0, Intent(ACTION_ALLOW),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        nm.notify(NOTIF_PERMISSION_ID, NotificationCompat.Builder(this, "charging_tracker")
-            .setContentTitle("Detailliertes Laden loggen?")
-            .setContentText("Helligkeit & Bildschirmstatus pro Prozent aufzeichnen")
-            .setSmallIcon(android.R.drawable.ic_menu_info_details)
-            .addAction(0, "Erlauben", allowPi)
-            .setAutoCancel(true)
-            .build())
+        tNotify(
+            this, NOTIF_PERMISSION_ID, NotificationCompat.Builder(this, "charging_tracker")
+                .setContentTitle("Detailliertes Laden loggen?")
+                .setContentText("Helligkeit & Bildschirmstatus pro Prozent aufzeichnen")
+                .setSmallIcon(android.R.drawable.ic_menu_info_details)
+                .addAction(0, "Erlauben", allowPi)
+                .setAutoCancel(true)
+                .build()
+        )
     }
 
     override fun onDestroy() {
@@ -266,6 +294,7 @@ class ChargingPowerReceiver : BroadcastReceiver() {
         when (intent.action) {
             Intent.ACTION_POWER_CONNECTED ->
                 context.startForegroundService(Intent(context, ChargingTrackerService::class.java))
+
             Intent.ACTION_POWER_DISCONNECTED ->
                 context.stopService(Intent(context, ChargingTrackerService::class.java))
         }
@@ -346,7 +375,14 @@ suspend fun predictChargingTime(context: Context): Int? {
         appendLine("1. LIVE last 15 min: ${liveRate?.let { "%.4f%%/min".format(it) } ?: "unavailable"}")
         appendLine("2. Per-% intervals (current session): $perPercentTimes")
         appendLine("3. Historical avg (last 15 sessions): ${avgRate?.let { "%.4f%%/min".format(it) } ?: "unavailable"}")
-        appendLine("4. Context-matched avg (weekday/hour, n=${similarSessions.size}): ${similarAvgRate?.let { "%.4f%%/min".format(it) } ?: "unavailable"}")
+        appendLine(
+            "4. Context-matched avg (weekday/hour, n=${similarSessions.size}): ${
+                similarAvgRate?.let {
+                    "%.4f%%/min".format(
+                        it
+                    )
+                } ?: "unavailable"
+            }")
         appendLine()
         appendLine("## ADJUSTMENT FACTORS")
         appendLine("- Screen ON with high brightness (>150) typically adds 3–8 min")
