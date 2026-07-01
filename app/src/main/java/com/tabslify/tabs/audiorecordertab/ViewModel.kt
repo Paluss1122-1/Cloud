@@ -128,6 +128,11 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
         selectedFile = null
     }
 
+    override fun onCleared() {
+        super.onCleared()
+        onStop()
+    }
+
     fun onSeek(pos: Float) {
         mediaPlayer?.seekTo(pos.toInt())
         currentPosition = pos
