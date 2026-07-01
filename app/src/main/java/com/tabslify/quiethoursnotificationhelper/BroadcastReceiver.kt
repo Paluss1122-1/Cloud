@@ -2,7 +2,6 @@ package com.tabslify.quiethoursnotificationhelper
 
 import android.app.Activity
 import android.app.DownloadManager
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -15,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import androidx.core.content.edit
 import com.tabslify.core.functions.showSimpleNotificationExtern
+import com.tabslify.core.objects.tNotify
 import com.tabslify.services.MediaPlayerService
 import com.tabslify.services.MediaPlayerService.Companion.ACTION_PODCAST_PLAY_SPECIFIED
 import com.tabslify.services.MediaPlayerService.Companion.CHANNEL_ID
@@ -230,9 +230,7 @@ class FinishedPdDownload : BroadcastReceiver() {
                         .setAutoCancel(true)
                         .build()
 
-                    val nm =
-                        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                    nm.notify(downloadId.toInt(), notification)
+                    tNotify(context, downloadId.toInt(), notification)
                 }
             }
         }
