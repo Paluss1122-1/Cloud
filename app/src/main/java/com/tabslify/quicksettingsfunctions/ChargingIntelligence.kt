@@ -238,6 +238,11 @@ class ChargingTrackerService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        if (!prefs.getBoolean("services_master", false) || !prefs.getBoolean("service_charge", false)) {
+            stopSelf()
+            return
+        }
         ChargeSessionRepository.init(this)
         registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         registerReceiver(allowReceiver, IntentFilter(ACTION_ALLOW))
