@@ -30,8 +30,6 @@ android {
         buildConfigField("String", "SUPABASE_URL", prop("SUPABASE_URL"))
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", prop("SUPABASE_PUBLISHABLE_KEY"))
         buildConfigField("String", "BWMP", prop("BWMP"))
-        buildConfigField("String", "DBKEY", prop("DBKEY"))
-        buildConfigField("String", "DBKEY1", prop("DBKEY1"))
         buildConfigField("String", "DEBUG_SHA256", prop("DEBUG_SHA256"))
         buildConfigField("String", "RELEASE_SHA256", prop("RELEASE_SHA256"))
     }
