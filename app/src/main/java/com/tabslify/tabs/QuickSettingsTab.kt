@@ -55,9 +55,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.edit
 import com.tabslify.core.objects.Config.cms
+import com.tabslify.core.objects.tNotify
 import com.tabslify.core.ui.PloppingButton
 import com.tabslify.core.ui.showBatteryInfo
 import com.tabslify.quicksettingsfunctions.BatteryChartScreen
@@ -271,7 +271,7 @@ fun showDisplayInfo(context: Context) {
             Manifest.permission.POST_NOTIFICATIONS
         ) == PackageManager.PERMISSION_GRANTED
     ) {
-        NotificationManagerCompat.from(context).notify(cms(), builder.build())
+        tNotify(context, cms(), builder)
     }
 }
 
@@ -379,7 +379,7 @@ fun showDeviceInfo(context: Context) {
             .setAutoCancel(true)
             .build()
 
-        notificationManager.notify(cms(), notification)
+        tNotify(context, cms(), notification)
     }
 }
 
