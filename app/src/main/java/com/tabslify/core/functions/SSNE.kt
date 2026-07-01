@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import com.tabslify.core.objects.Config.cms
 import com.tabslify.core.objects.tNotify
 import com.tabslify.services.MediaPlayerService
+import com.tabslify.services.QuietHoursNotificationService
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -34,7 +35,16 @@ fun showSimpleNotificationExtern(
         .setGroup("SSN")
         .setSilent(silent)
 
-    if (onClick != null) {
+    if (onClick == "requestIgnoreBatteryOptimizations") {
+        val intent = PendingIntent.getService(
+            context, 70000,
+            Intent(context, QuietHoursNotificationService::class.java).apply {
+                action = "requestIgnoreBatteryOptimizations"
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        notification.setContentIntent(intent)
+    } else if (onClick != null) {
         val intent = PendingIntent.getService(
             context, 70000,
             Intent(context, MediaPlayerService::class.java).apply {
