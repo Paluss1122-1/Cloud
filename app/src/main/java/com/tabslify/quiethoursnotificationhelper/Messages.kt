@@ -16,10 +16,10 @@ import androidx.core.app.Person
 import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
 import com.tabslify.core.activities.Tabslify.Companion.appScope
-import com.tabslify.core.functions.canNotify
 import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config.cms
+import com.tabslify.core.objects.tNotify
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_MARK_PARTS_READ
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_MESSAGE_SENT
 import com.tabslify.services.QuietHoursNotificationService.Companion.EXTRA_MESSAGE_ID
@@ -140,13 +140,13 @@ private fun postChatNotification(key: String, context: Context, sourceLabel: Str
                     }
                 }
             } else {
-            style.addMessage(
-                NotificationCompat.MessagingStyle.Message(
-                    "$text • $timeText",
-                    msg.timestamp,
-                    if (msg.isOwnMessage) mePerson else senderPerson
+                style.addMessage(
+                    NotificationCompat.MessagingStyle.Message(
+                        "$text • $timeText",
+                        msg.timestamp,
+                        if (msg.isOwnMessage) mePerson else senderPerson
+                    )
                 )
-            )
             }
         }
 
@@ -248,11 +248,12 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
                             text = obj.text,
                             ts = obj.timestamp,
                             own = obj.isOwnMessage,
-                            mode = "Gemini"
+                            mode = "AI"
                         )
                     )
                 }
-                val answer = sendGeminiRequest(snapshot, trimmed, target = "notif")
+                val provider = getPreferredAiProvider(context, "chat")
+                val answer = sendPreferredAiRequest(context, "chat", snapshot, trimmed, target = "notif")
                 if (!answer.isNullOrBlank()) {
                     list.add(
                         WhatsAppNotificationListener.Companion.ChatMessage(
@@ -267,7 +268,7 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
                 } else {
                     withContext(Dispatchers.Main) {
                         showSimpleNotificationExtern(
-                            "❌ NVIDIA Chat",
+                            "❌ ${provider.uppercase()} Chat",
                             "Antwort konnte nicht geladen werden.",
                             context = context
                         )
@@ -441,8 +442,5 @@ fun extractLastMessage(context: Context) {
             Log.e("Messages", "extractLastMessage image error: ${e.message}")
         }
     }
-    val nm = context.getSystemService(NotificationManager::class.java)
-    if (canNotify(context)) {
-        nm.notify(cms(), builder.build())
-    }
+    tNotify(context, cms(), builder.build())
 }
