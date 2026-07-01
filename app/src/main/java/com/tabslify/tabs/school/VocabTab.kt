@@ -391,6 +391,7 @@ fun VocabTab(paddingValues: PaddingValues) {
                                     }
                                 } else {
                                     callNvidiaVisionApi(
+                                        context,
                                         bmp,
                                         onError = { msg -> errorMessage = msg },
                                         onVocabChange = { vocab -> vokabeln = vocab },
