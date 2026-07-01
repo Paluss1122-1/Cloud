@@ -11,8 +11,8 @@ import android.net.wifi.WifiManager
 import android.telephony.TelephonyManager
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import com.tabslify.core.objects.Config.cms
+import com.tabslify.core.objects.tNotify
 import com.tabslify.services.QuietHoursNotificationService.Companion.SSN_CHANNEL_ID
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -160,6 +160,6 @@ fun showNetworkNotificationNow(context: Context, content: String, notId: Int) {
             Manifest.permission.POST_NOTIFICATIONS
         ) == PackageManager.PERMISSION_GRANTED
     ) {
-        NotificationManagerCompat.from(context).notify(notId, builder.build())
+        tNotify(context, notId, builder)
     }
 }
