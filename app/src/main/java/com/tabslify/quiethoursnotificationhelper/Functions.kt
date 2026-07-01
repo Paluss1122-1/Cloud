@@ -11,16 +11,17 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.tabslify.core.activities.Tabslify.Companion.serviceScope
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.cms
-import com.tabslify.services.ChatService
+import com.tabslify.core.objects.tNotify
+import com.tabslify.inactive.ChatService
 import com.tabslify.services.QuietHoursNotificationService.Companion.CHANNEL_ID
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -29,7 +30,7 @@ import kotlin.time.Duration.Companion.seconds
 
 @OptIn(DelicateCoroutinesApi::class)
 fun showLastFriendMessages(context: Context) {
-    GlobalScope.launch(Dispatchers.IO) {
+    serviceScope.launch(Dispatchers.IO) {
         try {
             Handler(Looper.getMainLooper()).post {
                 showSimpleNotificationExtern(
@@ -119,7 +120,7 @@ private fun showFriendMessagesNotification(messages: List<ChatService.Message>, 
         if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            notificationManager.notify(cms(), notification)
+            tNotify(context, cms(), notification)
         }
 
     } catch (e: Exception) {
