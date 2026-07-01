@@ -3,6 +3,7 @@ package com.tabslify.tabs.audiorecordertab
 import android.Manifest
 import android.app.Application
 import android.content.Context
+import android.content.Context.MODE_PRIVATE
 import android.content.Intent
 import android.media.MediaCodec
 import android.media.MediaExtractor
@@ -18,6 +19,7 @@ import androidx.core.content.FileProvider
 import androidx.core.content.PermissionChecker
 import androidx.lifecycle.AndroidViewModel
 import com.tabslify.core.functions.errorInsert
+import com.tabslify.services.QuietHoursNotificationService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
