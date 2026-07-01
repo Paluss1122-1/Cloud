@@ -14,10 +14,12 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.tabslify.core.activities.Tabslify.Companion.serviceScope
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.DEL_GAL_CONF
 import com.tabslify.core.objects.Config.GAL
+import com.tabslify.core.objects.tNotify
 import com.tabslify.services.QuietHoursNotificationService
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_CANCEL_DELETE
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_CONFIRM_DELETE_IMAGE
@@ -30,7 +32,6 @@ import com.tabslify.services.QuietHoursNotificationService.Companion.currentGall
 import com.tabslify.services.QuietHoursNotificationService.Companion.galleryImages
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
 import java.net.URL
@@ -48,7 +49,7 @@ data class GalleryImage(
 
 @OptIn(DelicateCoroutinesApi::class)
 fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?, context: Context) {
-    GlobalScope.launch(Dispatchers.IO) {
+    serviceScope.launch(Dispatchers.IO) {
         try {
             if (galleryImages.isEmpty()) {
                 Handler(Looper.getMainLooper()).post {
@@ -97,7 +98,8 @@ fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?, contex
                 imageName
             }
 
-            val imageBytes = context.contentResolver.openInputStream(imageUri)?.use { it.readBytes() }
+            val imageBytes =
+                context.contentResolver.openInputStream(imageUri)?.use { it.readBytes() }
 
             if (imageBytes == null) {
                 Handler(Looper.getMainLooper()).post {
@@ -305,8 +307,14 @@ fun showDeleteConfirmation(imageIndex: Int, context: Context) {
             ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
                 val targetSize = 512 // Für Bestätigung reicht kleiner
                 if (info.size.width > targetSize || info.size.height > targetSize) {
-                    val scale = Math.max(info.size.width.toFloat() / targetSize, info.size.height.toFloat() / targetSize)
-                    decoder.setTargetSize((info.size.width / scale).toInt(), (info.size.height / scale).toInt())
+                    val scale = Math.max(
+                        info.size.width.toFloat() / targetSize,
+                        info.size.height.toFloat() / targetSize
+                    )
+                    decoder.setTargetSize(
+                        (info.size.width / scale).toInt(),
+                        (info.size.height / scale).toInt()
+                    )
                 }
                 decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
             }
@@ -354,11 +362,10 @@ fun showDeleteConfirmation(imageIndex: Int, context: Context) {
                 )
         }
 
-        val notificationManager = context.getSystemService(NotificationManager::class.java)
         if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            notificationManager.notify(DEL_GAL_CONF, builder.build())
+            tNotify(context, DEL_GAL_CONF, builder)
         }
 
     } catch (e: Exception) {
@@ -458,8 +465,14 @@ private fun showGalleryImage(index: Int, context: Context) {
                 // Skaliere das Bild auf eine vernünftige Größe für Benachrichtigungen (z.B. max 1024px)
                 val targetSize = 1024
                 if (info.size.width > targetSize || info.size.height > targetSize) {
-                    val scale = Math.max(info.size.width.toFloat() / targetSize, info.size.height.toFloat() / targetSize)
-                    decoder.setTargetSize((info.size.width / scale).toInt(), (info.size.height / scale).toInt())
+                    val scale = Math.max(
+                        info.size.width.toFloat() / targetSize,
+                        info.size.height.toFloat() / targetSize
+                    )
+                    decoder.setTargetSize(
+                        (info.size.width / scale).toInt(),
+                        (info.size.height / scale).toInt()
+                    )
                 }
                 decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE // Wichtig für Notifications
             }
@@ -535,7 +548,7 @@ private fun showGalleryImage(index: Int, context: Context) {
         if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            notificationManager.notify(GAL, notification)
+            tNotify(context, GAL, notification)
         }
     } catch (e: Exception) {
         Log.e("QuietHoursService", "Error showing gallery image", e)
