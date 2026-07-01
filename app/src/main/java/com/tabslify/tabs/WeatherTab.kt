@@ -81,6 +81,7 @@ import com.tabslify.core.TabNavigationViewModel
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.client
 import com.tabslify.core.objects.Config.cms
+import com.tabslify.core.objects.tNotify
 import com.tabslify.core.objects.toast
 import io.github.jan.supabase.functions.functions
 import io.ktor.client.statement.bodyAsText
@@ -209,9 +210,12 @@ suspend fun fetchWeatherForecast(lat: Double, lon: Double, days: Int = 7): Weath
         WeatherData(
             city = location?.get("name")?.jsonPrimitive?.content ?: "",
             currentTemp = current?.get("temp_c")?.jsonPrimitive?.doubleOrNull ?: Double.NaN,
-            currentFeelsLike = current?.get("feelslike_c")?.jsonPrimitive?.doubleOrNull ?: Double.NaN,
-            currentCondition = current?.get("condition")?.jsonObject?.get("text")?.jsonPrimitive?.content ?: "",
-            currentIcon = current?.get("condition")?.jsonObject?.get("icon")?.jsonPrimitive?.content ?: "",
+            currentFeelsLike = current?.get("feelslike_c")?.jsonPrimitive?.doubleOrNull
+                ?: Double.NaN,
+            currentCondition = current?.get("condition")?.jsonObject?.get("text")?.jsonPrimitive?.content
+                ?: "",
+            currentIcon = current?.get("condition")?.jsonObject?.get("icon")?.jsonPrimitive?.content
+                ?: "",
             days = daysList
         )
     }
@@ -230,7 +234,9 @@ suspend fun fetchCoordsForCity(city: String): Pair<Double, Double>? = withContex
         val lat = obj["lat"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: return@withContext null
         val lon = obj["lon"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: return@withContext null
         Pair(lat, lon)
-    } catch (_: Exception) { null }
+    } catch (_: Exception) {
+        null
+    }
 }
 
 suspend fun getCurrentLocation(context: Context): Location? {
@@ -423,7 +429,10 @@ fun WeatherTabContent(
                 error = "Fehler: ${e.message}"
             } finally {
                 isLoading = false
-                animIconbgColor.animateTo(Color(0xFF001FBB), animationSpec = tween(durationMillis = 500))
+                animIconbgColor.animateTo(
+                    Color(0xFF001FBB),
+                    animationSpec = tween(durationMillis = 500)
+                )
             }
         }
     }
@@ -543,7 +552,11 @@ fun WeatherTabContent(
                             .clip(RoundedCornerShape(8.dp))
                     ) {
                         IconButton(onClick = { manualLoc() }) {
-                            Icon( Icons.Default.LocationOff, contentDescription = null, tint = Color.White)
+                            Icon(
+                                Icons.Default.LocationOff,
+                                contentDescription = null,
+                                tint = Color.White
+                            )
                         }
                     }
                 }
@@ -992,5 +1005,5 @@ private fun createWeatherNotification(context: Context, dayName: String, hourDat
         .setAutoCancel(true)
         .build()
 
-    notificationManager.notify(cms(), notification)
+    tNotify(context, cms(), notification)
 }
