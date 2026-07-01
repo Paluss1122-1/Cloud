@@ -51,8 +51,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.tabslify.core.objects.Config.PODCASTINDEX_API_KEY
-import com.tabslify.core.objects.Config.PODCASTINDEX_API_SECRET
+import com.tabslify.core.objects.Config
 import com.tabslify.core.ui.AlertDialogTabslify
 import com.tabslify.core.ui.FeedCard
 import com.tabslify.services.MediaPlayerService
@@ -68,8 +67,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.json.JSONObject
+import java.net.HttpURLConnection
 import java.net.URL
-import java.security.MessageDigest
 import javax.xml.parsers.DocumentBuilderFactory
 
 data class PodcastFeed(
@@ -88,6 +87,7 @@ data class Episode(
 data class SearchResult(
     val feed: PodcastFeed
 )
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -138,7 +138,7 @@ fun PodcastTab() {
                 val svc = com.tabslify.services.QuietHoursNotificationService()
                 val found = svc.checkPodcastsAndNotify(context, true)
                 newEpisodesState = found
-            } catch (e: Exception) {
+            } catch (_: Exception) {
             }
         }
     }
@@ -158,31 +158,52 @@ fun PodcastTab() {
         error = null
         results = emptyList()
         try {
-            val now = System.currentTimeMillis() / 1000
-            val hash = MessageDigest.getInstance("SHA-1")
-                .digest("$PODCASTINDEX_API_KEY$PODCASTINDEX_API_SECRET$now".toByteArray())
-                .joinToString("") { "%02x".format(it) }
+            val sha256 = Config.getAppSignatureSha256(context) ?: run {
+                error = "App-Signatur konnte nicht validiert werden"
+                return
+            }
+
+            val requestBody = JSONObject().apply {
+                put("action", "podcastindex")
+                put("payload", JSONObject().apply {
+                    put(
+                        "url",
+                        "https://api.podcastindex.org/api/1.0/search/byterm?q=${
+                            java.net.URLEncoder.encode(
+                                q,
+                                "UTF-8"
+                            )
+                        }"
+                    )
+                })
+            }.toString()
 
             val conn = withContext(Dispatchers.IO) {
-                val u = URL(
-                    "https://api.podcastindex.org/api/1.0/search/byterm?q=${
-                        java.net.URLEncoder.encode(
-                            q,
-                            "UTF-8"
-                        )
-                    }"
-                )
-                (u.openConnection() as java.net.HttpURLConnection).apply {
-                    setRequestProperty("X-Auth-Key", PODCASTINDEX_API_KEY)
-                    setRequestProperty("X-Auth-Date", now.toString())
-                    setRequestProperty("Authorization", hash)
-                    setRequestProperty("User-Agent", "TabslifyApp/1.0")
+                (URL("${Config.SUPABASE_URL}/functions/v1/api-proxy").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    setRequestProperty("Authorization", "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}")
+                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("X-Android-Cert", sha256)
+                    doOutput = true
                     connect()
                 }
             }
-            val json = withContext(Dispatchers.IO) {
-                conn.inputStream.bufferedReader().readText()
+            withContext(Dispatchers.IO) {
+                conn.outputStream.use { it.write(requestBody.toByteArray(Charsets.UTF_8)) }
             }
+            val responseCode = withContext(Dispatchers.IO) { conn.responseCode }
+            if (responseCode != 200) {
+                val errorText = withContext(Dispatchers.IO) {
+                    conn.errorStream?.bufferedReader()?.readText() ?: "No error body"
+                }
+                android.util.Log.e(
+                    "PodcastDownloaderTab",
+                    "Podcast Index proxy failed: Code $responseCode, Body: $errorText"
+                )
+                error = "API Fehler: Code $responseCode"
+                return
+            }
+            val json = withContext(Dispatchers.IO) { conn.inputStream.bufferedReader().readText() }
             val arr = JSONObject(json).getJSONArray("feeds")
             val podcastResults = (0 until arr.length()).map { i ->
                 val f = arr.getJSONObject(i)
@@ -208,7 +229,7 @@ fun PodcastTab() {
         loadingEpisodes = feedUrl
         try {
             val doc = withContext(Dispatchers.IO) {
-                val conn = URL(feedUrl).openConnection() as java.net.HttpURLConnection
+                val conn = URL(feedUrl).openConnection() as HttpURLConnection
                 conn.setRequestProperty("Accept-Charset", "UTF-8")
                 DocumentBuilderFactory.newInstance()
                     .newDocumentBuilder()
@@ -360,7 +381,11 @@ fun PodcastTab() {
     ) {
         OutlinedTextField(
             value = query,
-            onValueChange = { query = it },
+            onValueChange = {
+                query = it; if (query.isEmpty()) {
+                results = emptyList(); isSearching = false
+            }
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 12.dp),
