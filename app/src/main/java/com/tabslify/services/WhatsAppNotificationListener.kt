@@ -13,6 +13,7 @@ import com.tabslify.core.objects.Config.BLOCKED_MESSAGES
 import com.tabslify.core.objects.Config.NOTIFICATION_PORT
 import com.tabslify.core.objects.NotificationRepository
 import com.tabslify.core.objects.prvt
+import com.tabslify.core.objects.tNotify
 import com.tabslify.quiethoursnotificationhelper.isLaptopConnected
 import com.tabslify.quiethoursnotificationhelper.laptopIp
 import kotlinx.coroutines.CoroutineScope
@@ -23,6 +24,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import java.lang.ref.WeakReference
+import kotlin.time.Duration.Companion.milliseconds
 
 data class WhatsAppMessage(
     val id: Int = 0,
@@ -109,19 +111,19 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         notifications: Array<StatusBarNotification>,
         packageManager: PackageManager
     ) {
-        if (!isLaptopConnected) return
+        if (!isLaptopConnected || !prvt()) return
         pendingForwardJob?.cancel()
         pendingForwardJob = forwardScope.launch {
             val now = System.currentTimeMillis()
             val timeSinceLast = now - lastForwardTime
             if (timeSinceLast < FORWARD_DEBOUNCE_MS) {
-                delay(FORWARD_DEBOUNCE_MS - timeSinceLast)
+                delay((FORWARD_DEBOUNCE_MS - timeSinceLast).milliseconds)
             }
             lastForwardTime = System.currentTimeMillis()
 
             val jsonArray = org.json.JSONArray()
             notifications
-                .filter { it.packageName != "com.example.tabslify" && it.packageName != "com.android.systemui" }
+                .filter { it.packageName != "com.paluss1122.tabslify" && it.packageName != "com.paluss1122.tabslify.private" && it.packageName != "com.android.systemui" }
                 .sortedByDescending { it.postTime }
                 .forEach { sbn ->
                     val extras = sbn.notification.extras
@@ -169,11 +171,24 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
     override fun onDestroy() {
         serviceJob.cancel()
+        listenerConnected = false
+        if (instance?.get() === this) {
+            instance?.clear()
+            instance = null
+        }
+        pendingForwardJob?.cancel()
+        pendingForwardJob = null
+        replyActions.clear()
+        messagesByContact.clear()
         super.onDestroy()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (!prvt()) return
+        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        if (!prefs.getBoolean("services_master", false) || !prefs.getBoolean("service_wh", false)) {
+            return
+        }
         try {
             super.onNotificationPosted(sbn)
 
@@ -228,6 +243,13 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             // Alte replyActions bereinigen (älter als 24h)
             val cutoff = System.currentTimeMillis() - 24 * 60 * 60 * 1000
             replyActions.entries.removeAll { it.value.timestamp < cutoff }
+            if (replyActions.size > 50) {
+                val oldestKeys = replyActions.entries
+                    .sortedBy { it.value.timestamp }
+                    .take(replyActions.size - 50)
+                    .map { it.key }
+                oldestKeys.forEach { replyActions.remove(it) }
+            }
 
             notification.actions?.forEach { action ->
                 action.remoteInputs?.firstOrNull()?.let { systemRemoteInput ->
@@ -250,9 +272,11 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                 }
             }
 
-            messagesByContact.getOrPut(key) { mutableListOf() }.add(
-                ChatMessage(text, isOwnMessage = false)
-            )
+            val messageList = messagesByContact.getOrPut(key) { mutableListOf() }
+            messageList.add(ChatMessage(text, isOwnMessage = false))
+            while (messageList.size > 50) {
+                messageList.removeAt(0)
+            }
 
             forwardScope.launch {
                 val exists = getAll().any { it.sender == title && it.text == text }
@@ -286,6 +310,10 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         if (!prvt()) return
+        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        if (!prefs.getBoolean("services_master", false) || !prefs.getBoolean("service_wh", false)) {
+            return
+        }
         try {
             super.onNotificationRemoved(sbn)
 
@@ -450,7 +478,7 @@ class BlockedNotificationReceiver : android.content.BroadcastReceiver() {
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .build()
 
-            notificationManager.notify(BLOCKED_MESSAGES + index, notification)
+            tNotify(context, BLOCKED_MESSAGES + index, notification)
         }
 
         prefs.edit().apply {
@@ -482,7 +510,8 @@ class BlockedNotificationReceiver : android.content.BroadcastReceiver() {
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
         )
 
-        val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+        val alarmManager =
+            context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
         if (!alarmManager.canScheduleExactAlarms()) return
         alarmManager.setExactAndAllowWhileIdle(
             android.app.AlarmManager.RTC_WAKEUP,
