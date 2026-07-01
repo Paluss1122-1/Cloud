@@ -5,9 +5,7 @@ plugins {
 
 android {
     namespace = "com.paluss1122.accessibily"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.paluss1122.accessibily"
