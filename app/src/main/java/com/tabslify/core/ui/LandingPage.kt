@@ -1,15 +1,24 @@
 package com.tabslify.core.ui
 
+import android.Manifest
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Paint
 import android.os.Build
-import android.widget.Toast
+import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,16 +33,27 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -42,6 +62,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -72,23 +93,40 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.tabslify.R
+import com.tabslify.core.functions.canNotify
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.client
 import com.tabslify.core.objects.Config.realDevice
 import com.tabslify.core.objects.PasswordStorage
 import com.tabslify.core.objects.prvt
-import com.tabslify.services.ChatService
+import com.tabslify.inactive.ChatService
+import com.tabslify.quicksettingsfunctions.ChargingTrackerService
 import com.tabslify.services.QuietHoursNotificationService
+import com.tabslify.services.WhatsAppNotificationListener
+import com.tabslify.quicksettingsfunctions.startBatteryWorker
+import com.tabslify.quicksettingsfunctions.stopBatteryWorker
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import kotlin.time.Duration.Companion.milliseconds
+
+val inAppNotifications = mutableStateListOf<String>()
+
+fun sendInAppNotification(message: String) {
+    inAppNotifications.add(0, message)
+}
 
 fun saveRecentTab(context: Context, menuItem: MenuItem) {
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -182,8 +220,6 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     }
 
     DisposableEffect(Unit) {
-        QuietHoursNotificationService.startService(context)
-        ChatService.startService(context)
         onDispose { }
     }
 
@@ -293,7 +329,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                 val captured = graphicsLayer.toImageBitmap()
                 previewBitmap = captured
 
-                snapshotFlow { previewBitmap }.filter { it != null }.first()
+                snapshotFlow { previewBitmap }.filterNotNull().first()
 
                 overlayScale.snapTo(0.05f)
                 overlayAlpha.snapTo(1f)
@@ -313,7 +349,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                     hasLoadedApp = true
                 }
 
-                delay(80)
+                delay(80.milliseconds)
                 overlayAlpha.animateTo(0f, tween(durationMillis = 200))
                 previewBitmap = null
                 overlayScale.snapTo(0f)
@@ -508,9 +544,11 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
-        Box(modifier = Modifier
-            .height(36.dp)
-            .padding(top = 8.dp)) {
+        Box(
+            modifier = Modifier
+                .height(36.dp)
+                .padding(top = 8.dp)
+        ) {
             error?.let {
                 val formattedError = when {
                     it.contains("invalid_credentials") -> "Invalid Credentials"
@@ -549,6 +587,7 @@ fun LandingPage(
 ) {
     val context = LocalContext.current
     var recentTabs by remember { mutableStateOf(loadRecentTabs(context)) }
+    var showSettings by remember { mutableStateOf(false) }
     LaunchedEffect(reloadTrigger) {
         recentTabs = loadRecentTabs(context)
     }
@@ -649,12 +688,50 @@ fun LandingPage(
                         modifier = Modifier.align(Alignment.Center),
                         textAlign = TextAlign.Center
                     )
-                    /*IconButton(onClick = {
 
-                    },
-                        modifier = Modifier.align(Alignment.CenterEnd)) {
-                        Icon(Icons.Default.Done, contentDescription = null, tint = Color.Yellow)
-                    }*/
+                    var showNotifications by remember { mutableStateOf(false) }
+
+                    Row(
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { showNotifications = true }) {
+                            Icon(
+                                Icons.Default.Notifications,
+                                contentDescription = "Open notification frame",
+                                tint = Color.White
+                            )
+                        }
+                        IconButton(onClick = { showSettings = true }) {
+                            Icon(
+                                Icons.Default.Settings,
+                                contentDescription = "Open settings frame",
+                                tint = Color.White
+                            )
+                        }
+                    }
+
+                    Box(modifier = Modifier.align(Alignment.CenterEnd)) {
+                        DropdownMenu(
+                            expanded = showNotifications,
+                            onDismissRequest = { showNotifications = false },
+                            containerColor = Color.Black
+                        ) {
+                            if (inAppNotifications.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text("Keine Benachrichtigungen") },
+                                    onClick = { showNotifications = false }
+                                )
+                            } else {
+                                inAppNotifications.forEach { notif ->
+                                    DropdownMenuItem(
+                                        text = { Text(notif) },
+                                        onClick = { showNotifications = false }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 LazyColumn(
@@ -708,6 +785,11 @@ fun LandingPage(
             }
         }
     }
+
+    SettingsFrame(
+        visible = showSettings,
+        onClose = { showSettings = false }
+    )
 }
 
 @Composable
@@ -780,6 +862,435 @@ fun TabCard(
                     text = menuItem.icon,
                     fontSize = 32.sp,
                     modifier = Modifier.padding(end = 16.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsFrame(
+    visible: Boolean,
+    onClose: () -> Unit
+) {
+    val context = LocalContext.current
+    var directedToSettings by remember { mutableStateOf(false) }
+    val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    var masterEnabled by remember { mutableStateOf(prefs.getBoolean("services_master", false)) }
+    var servicesExpanded by remember { mutableStateOf(false) }
+
+    var serviceQhns by remember { mutableStateOf(prefs.getBoolean("service_qhns", true)) }
+    var serviceWh by remember { mutableStateOf(prefs.getBoolean("service_wh", true)) }
+    var serviceCharge by remember { mutableStateOf(prefs.getBoolean("service_charge", true)) }
+    var serviceBattery by remember { mutableStateOf(prefs.getBoolean("service_battery", true)) }
+
+    var aiPrefGlobal by remember { mutableStateOf(prefs.getString("ai_pref_global", "gemini") ?: "gemini") }
+    var aiPrefChat by remember { mutableStateOf(prefs.getString("ai_pref_service_chat", "default") ?: "default") }
+    var aiPrefMusicSummary by remember { mutableStateOf(prefs.getString("ai_pref_service_music_summary", "default") ?: "default") }
+    var aiPrefVision by remember { mutableStateOf(prefs.getString("ai_pref_service_vision", "default") ?: "default") }
+    var aiPrefReplies by remember { mutableStateOf(prefs.getString("ai_pref_service_replies", "default") ?: "default") }
+    var aiSettingsExpanded by remember { mutableStateOf(false) }
+
+    var hasNotificationPermission by remember { mutableStateOf(true) }
+    var intendedToEnableQhns by remember { mutableStateOf(false) }
+
+    fun applyService(cls: Class<*>, enabled: Boolean) {
+        if (cls == WhatsAppNotificationListener::class.java) return
+
+        val intent = Intent(context, cls)
+        val permissionOk = if (cls == QuietHoursNotificationService::class.java) hasNotificationPermission else true
+
+        if (enabled && masterEnabled && permissionOk) {
+            when (cls) {
+                QuietHoursNotificationService::class.java,
+                ChargingTrackerService::class.java -> ContextCompat.startForegroundService(context, intent)
+
+                else -> context.startService(intent)
+            }
+        } else {
+            context.stopService(intent)
+        }
+    }
+
+    fun save() {
+        prefs.edit {
+            putBoolean("services_master", masterEnabled)
+                .putBoolean("service_qhns", serviceQhns)
+                .putBoolean("service_wh", serviceWh)
+                .putBoolean("service_charge", serviceCharge)
+                .putBoolean("service_battery", serviceBattery)
+                .putString("ai_pref_global", aiPrefGlobal)
+                .putString("ai_pref_service_chat", aiPrefChat)
+                .putString("ai_pref_service_music_summary", aiPrefMusicSummary)
+                .putString("ai_pref_service_vision", aiPrefVision)
+                .putString("ai_pref_service_replies", aiPrefReplies)
+        }
+
+        applyService(QuietHoursNotificationService::class.java, serviceQhns)
+        applyService(ChargingTrackerService::class.java, serviceCharge)
+
+        if (masterEnabled && serviceBattery) {
+            startBatteryWorker(context)
+        } else {
+            stopBatteryWorker(context)
+        }
+    }
+
+    fun checkPermissionsAndSyncServices() {
+        val permitted = canNotify(context)
+        hasNotificationPermission = permitted
+
+        masterEnabled = prefs.getBoolean("services_master", false)
+        serviceWh = prefs.getBoolean("service_wh", true)
+        serviceCharge = prefs.getBoolean("service_charge", true)
+        serviceBattery = prefs.getBoolean("service_battery", true)
+
+        if (permitted) {
+            serviceQhns = if (intendedToEnableQhns) true else prefs.getBoolean("service_qhns", true)
+            intendedToEnableQhns = false
+        } else {
+            serviceQhns = false
+            intendedToEnableQhns = false
+        }
+        save()
+    }
+
+    val manualPerm = {
+        if (ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            val intent =
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                }
+
+            context.startActivity(intent)
+            directedToSettings = true
+            intendedToEnableQhns = true
+        }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        var isFirstResume = true
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                println("YEP22")
+                if (isFirstResume) {
+                    println("YEP")
+                    isFirstResume = false
+                    return@LifecycleEventObserver
+                }
+                checkPermissionsAndSyncServices()
+                directedToSettings = false
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(visible) {
+        if (visible) {
+            checkPermissionsAndSyncServices()
+        }
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.92f))
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 40.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Einstellungen",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.background(Color.White.copy(alpha = 0.1f), CircleShape)
+                    ) {
+                        Text("✕", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                NeonBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    neonColors = listOf(Color(0xFF00E5FF), Color(0xFF7C4DFF)),
+                    backgroundAlpha = 0.15f
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Hintergrunddienste", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Alle Hintergrundaktivitäten", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+                            }
+                            Switch(
+                                checked = masterEnabled,
+                                onCheckedChange = { masterEnabled = it; save() },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                    uncheckedThumbColor = Color.Gray,
+                                    uncheckedTrackColor = Color.DarkGray,
+                                    disabledUncheckedTrackColor = Color.DarkGray.copy(alpha = 0.4f)
+                                )
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { servicesExpanded = !servicesExpanded }
+                                .padding(horizontal = 20.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Einzelne Dienste", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Text(if (servicesExpanded) "▲" else "▼", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                        }
+
+                        AnimatedVisibility(visible = servicesExpanded) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color.White.copy(alpha = 0.05f))
+                                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                            ) {
+                                val services = listOfNotNull(
+                                    Triple("QuietHoursNotificationService", "Alles rund um Commands", serviceQhns),
+                                    if (prvt()) Triple("WhatsAppNotificationListener", "Verarbeitet eingehende WhatsApps", serviceWh) else null,
+                                    Triple("ChargingTracker", "Verfolgt Ladevorgänge für Ladedauer-Schätzungen", serviceCharge),
+                                    Triple("BatterySamplingWorker", "Verfolgt Batteriedaten alle 10min", serviceBattery)
+                                )
+
+                                services.forEachIndexed { index, (title, subtitle, checked) ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(title, color = Color.White, fontSize = 14.sp)
+                                            Text(subtitle, color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp)
+                                            if (index == 0 && !hasNotificationPermission) {
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = "⚠️ Keine Benachrichtigungsberechtigung!",
+                                                    color = Color(0xFFFF5252),
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                        Switch(
+                                            checked = checked && masterEnabled,
+                                            onCheckedChange = { v ->
+                                                when (index) {
+                                                    0 -> {
+                                                        if (hasNotificationPermission) {
+                                                            serviceQhns = v
+                                                        } else {
+                                                            manualPerm()
+                                                        }
+                                                    }
+                                                    1 -> if (prvt()) serviceWh = v else serviceCharge = v
+                                                    2 -> if (prvt()) serviceCharge = v else serviceBattery = v
+                                                    3 -> if (prvt()) serviceBattery = v
+                                                    else -> {}
+                                                }
+                                                save()
+                                            },
+                                            enabled = masterEnabled,
+                                            colors = SwitchDefaults.colors(
+                                                checkedThumbColor = Color.White,
+                                                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                                uncheckedThumbColor = Color.Gray,
+                                                uncheckedTrackColor = Color.DarkGray,
+                                                disabledCheckedTrackColor = Color.DarkGray,
+                                                disabledCheckedThumbColor = Color.Gray
+                                            )
+                                        )
+                                    }
+                                    if (index < services.lastIndex) {
+                                        HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                NeonBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    neonColors = listOf(Color(0xFF00E5FF), Color(0xFFE8622A)),
+                    backgroundAlpha = 0.15f
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Bevorzugte AI (Global)", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Standard-Anbieter für alle Dienste", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+                            }
+
+                            var showGlobalDropdown by remember { mutableStateOf(false) }
+                            Box {
+                                Text(
+                                    text = aiPrefGlobal.uppercase(),
+                                    color = Color(0xFF00E5FF),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier
+                                        .clickable { showGlobalDropdown = true }
+                                        .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                                DropdownMenu(
+                                    expanded = showGlobalDropdown,
+                                    onDismissRequest = { showGlobalDropdown = false },
+                                    containerColor = Color.Black
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Gemini", color = Color.White) },
+                                        onClick = { aiPrefGlobal = "gemini"; showGlobalDropdown = false; save() }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("NVIDIA", color = Color.White) },
+                                        onClick = { aiPrefGlobal = "nvidia"; showGlobalDropdown = false; save() }
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { aiSettingsExpanded = !aiSettingsExpanded }
+                                .padding(horizontal = 20.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Einzelne Dienste anpassen", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Text(if (aiSettingsExpanded) "▲" else "▼", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                        }
+
+                        AnimatedVisibility(visible = aiSettingsExpanded) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color.White.copy(alpha = 0.05f))
+                                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                            ) {
+                                val aiServices = listOf(
+                                    Triple("Befehl 'ai' / Chat", aiPrefChat) { v: String -> aiPrefChat = v },
+                                    Triple("Musik-Zusammenfassung", aiPrefMusicSummary) { v: String -> aiPrefMusicSummary = v },
+                                    Triple("Vokabel-Vision", aiPrefVision) { v: String -> aiPrefVision = v },
+                                    Triple("Nachrichten-Antworten", aiPrefReplies) { v: String -> aiPrefReplies = v }
+                                )
+
+                                aiServices.forEachIndexed { index, (title, currentVal, setter) ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(title, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+
+                                        var showServiceDropdown by remember { mutableStateOf(false) }
+                                        Box {
+                                            Text(
+                                                text = when (currentVal) {
+                                                    "default" -> "Standard"
+                                                    "gemini" -> "Gemini"
+                                                    "nvidia" -> "NVIDIA"
+                                                    else -> "Standard"
+                                                },
+                                                color = Color.White.copy(alpha = 0.8f),
+                                                fontSize = 12.sp,
+                                                modifier = Modifier
+                                                    .clickable { showServiceDropdown = true }
+                                                    .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                                            )
+                                            DropdownMenu(
+                                                expanded = showServiceDropdown,
+                                                onDismissRequest = { showServiceDropdown = false },
+                                                containerColor = Color.Black
+                                            ) {
+                                                DropdownMenuItem(
+                                                    text = { Text("Standard (Global)", color = Color.White) },
+                                                    onClick = { setter("default"); showServiceDropdown = false; save() }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Gemini", color = Color.White) },
+                                                    onClick = { setter("gemini"); showServiceDropdown = false; save() }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("NVIDIA", color = Color.White) },
+                                                    onClick = { setter("nvidia"); showServiceDropdown = false; save() }
+                                                )
+                                            }
+                                        }
+                                    }
+                                    if (index < aiServices.lastIndex) {
+                                        HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "Tabslify v1.0.0",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 32.dp),
+                    textAlign = TextAlign.Center,
+                    color = Color.White.copy(alpha = 0.3f),
+                    fontSize = 12.sp
                 )
             }
         }
