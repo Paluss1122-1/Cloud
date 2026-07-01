@@ -54,6 +54,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.net.HttpURLConnection
 import java.net.URL
 
 data class Movie(
@@ -108,7 +109,7 @@ fun MovieDiscoveryTabContent(
         scope.launch {
             isLoading = true
             try {
-                val result = fetchMoviesFromTMDB(selectedGenre)
+                val result = fetchMoviesFromTMDB(context, selectedGenre)
                 movies = result.shuffled().take(20)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -340,31 +341,60 @@ fun MovieCard(
     }
 }
 
-suspend fun fetchMoviesFromTMDB(genreId: Int?): List<Movie> = withContext(Dispatchers.IO) {
-    val apiKey = Config.TMDB_API_KEY
-    val randomPage = (1..5).random()
-    val genreParam = if (genreId != null) "&with_genres=$genreId" else ""
-    val url =
-        "https://api.themoviedb.org/3/discover/movie?api_key=$apiKey${genreParam}&page=$randomPage&language=de-DE&sort_by=popularity.desc"
+suspend fun fetchMoviesFromTMDB(context: Context, genreId: Int?): List<Movie> =
+    withContext(Dispatchers.IO) {
+        val sha256 = Config.getAppSignatureSha256(context) ?: return@withContext emptyList<Movie>()
+        val randomPage = (1..5).random()
+        val genreParam = if (genreId != null) "&with_genres=$genreId" else ""
+        val endpoint =
+            "discover/movie?${genreParam}&page=$randomPage&language=de-DE&sort_by=popularity.desc"
 
-    val response = URL(url).readText()
-    val json = JSONObject(response)
-    val results = json.getJSONArray("results")
+        val requestBody = JSONObject().apply {
+            put("action", "tmdb")
+            put("payload", JSONObject().apply {
+                put("endpoint", endpoint)
+            })
+        }.toString()
 
-    (0 until results.length()).map { i ->
-        val movieJson = results.getJSONObject(i)
-        Movie(
-            id = movieJson.getInt("id"),
-            title = movieJson.getString("title"),
-            overview = movieJson.optString("overview", ""),
-            posterPath = movieJson.optString("poster_path", ""),
-            releaseDate = movieJson.optString("release_date", ""),
-            voteAverage = movieJson.getDouble("vote_average"),
-            genreIds = (0 until movieJson.getJSONArray("genre_ids").length())
-                .map { movieJson.getJSONArray("genre_ids").getInt(it) }
-        )
+        val url = "${Config.SUPABASE_URL}/functions/v1/api-proxy"
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            setRequestProperty("Authorization", "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}")
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("X-Android-Cert", sha256)
+            connectTimeout = 15_000
+            readTimeout = 15_000
+            doOutput = true
+        }
+        connection.outputStream.use { it.write(requestBody.toByteArray(Charsets.UTF_8)) }
+
+        if (connection.responseCode != 200) {
+            val errorText = connection.errorStream?.bufferedReader()?.readText() ?: "No error body"
+            android.util.Log.e(
+                "MovieDiscoveryTab",
+                "TMDB API Error: Code ${connection.responseCode}, Body: $errorText"
+            )
+            return@withContext emptyList<Movie>()
+        }
+
+        val response = connection.inputStream.bufferedReader().readText()
+        val json = JSONObject(response)
+        val results = json.getJSONArray("results")
+
+        (0 until results.length()).map { i ->
+            val movieJson = results.getJSONObject(i)
+            Movie(
+                id = movieJson.getInt("id"),
+                title = movieJson.getString("title"),
+                overview = movieJson.optString("overview", ""),
+                posterPath = movieJson.optString("poster_path", ""),
+                releaseDate = movieJson.optString("release_date", ""),
+                voteAverage = movieJson.getDouble("vote_average"),
+                genreIds = (0 until movieJson.getJSONArray("genre_ids").length())
+                    .map { movieJson.getJSONArray("genre_ids").getInt(it) }
+            )
+        }
     }
-}
 
 fun loadSavedMovies(context: Context): Set<SavedMovie> {
     val prefs = context.getSharedPreferences("tabslify_app_prefs", Context.MODE_PRIVATE)
