@@ -2,14 +2,19 @@
 
 package com.tabslify.tabs.mediaplayer
 
+import android.Manifest
 import android.app.Application
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
@@ -106,6 +111,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -173,6 +179,14 @@ fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
     val state by viewModel.uiState.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
     val context = LocalContext.current
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> viewModel.onPermissionResult(granted) }
+
+    LaunchedEffect(Unit) {
+        viewModel.checkAndRefresh()
+    }
 
     var analyticsTarget by remember { mutableStateOf<Any?>(null) }
 
@@ -280,63 +294,109 @@ fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
                     }
                 }
 
-                Crossfade(
-                    targetState = state.currentTab,
-                    label = "tab_transition",
-                    modifier = Modifier.fillMaxSize()
-                ) { tab ->
-                    when (tab) {
-                        MediaTab.HOME -> HomeTab(
+                if (state.permissionGranted == false) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(bottom = innerPadding.calculateBottomPadding()),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .padding(bottom = innerPadding.calculateBottomPadding()),
-                            state = state,
-                            onSongClick = { song -> playSong(context, song, state.songs) },
-                            onSongLongClick = { analyticsTarget = it },
-                            onEpisodeClick = { ep -> playEpisode(context, ep) },
-                            onRefresh = { viewModel.refresh() }
-                        )
-
-                        MediaTab.SEARCH -> SearchTab(
-                            modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
-                            query = state.searchQuery,
-                            results = searchResults,
-                            onQueryChange = { viewModel.setSearchQuery(it) },
-                            onSongClick = { song -> playSong(context, song, state.songs) },
-                            onSongLongClick = { analyticsTarget = it },
-                            onEpisodeClick = { ep -> playEpisode(context, ep) },
-                            onShowClick = { viewModel.setTab(MediaTab.PODCASTS) }
-                        )
-
-                        MediaTab.PODCASTS -> LibraryTab(
-                            modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
-                            state = state,
-                            onEpisodeClick = { ep -> playEpisode(context, ep) },
-                            onRefresh = { viewModel.refresh() }
-                        )
-
-                        MediaTab.MUSIC -> MusicTab(
-                            modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
-                            state = state,
-                            onSongClick = { song -> playSong(context, song, state.songs) },
-                            onPlaylistCreated = {
-                                viewModel.viewModelScope.launch {
-                                    delay(600)
-                                    viewModel.refresh()
-                                }
-                            },
-                            viewModel = viewModel
-                        )
-
-                        MediaTab.DOWNLOADER -> {
-                            PodcastTab()
-                        }
-
-                        MediaTab.RECORDER -> {
-                            AudioRecorderTab()
+                                .fillMaxWidth()
+                                .padding(horizontal = 32.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(BgCard)
+                                .padding(28.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text("🔒", fontSize = 40.sp)
+                            Text(
+                                "Medienzugriff benötigt",
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
+                            )
+                            Text(
+                                "Um Musik und Podcasts zu laden, braucht Tabslify Zugriff auf deine Audiodateien.",
+                                color = TextSecondary,
+                                fontSize = 14.sp
+                            )
+                            Button(
+                                onClick = {
+                                    val perm =
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                                            Manifest.permission.READ_MEDIA_AUDIO
+                                        else
+                                            Manifest.permission.READ_EXTERNAL_STORAGE
+                                    permissionLauncher.launch(perm)
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Berechtigung erteilen")
+                            }
                         }
                     }
-                }
+                } else {
+                    Crossfade(
+                        targetState = state.currentTab,
+                        label = "tab_transition",
+                        modifier = Modifier.fillMaxSize()
+                    ) { tab ->
+                        when (tab) {
+                            MediaTab.HOME -> HomeTab(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(bottom = innerPadding.calculateBottomPadding()),
+                                state = state,
+                                onSongClick = { song -> playSong(context, song, state.songs) },
+                                onSongLongClick = { analyticsTarget = it },
+                                onEpisodeClick = { ep -> playEpisode(context, ep) },
+                                onRefresh = { viewModel.refresh() }
+                            )
+
+                            MediaTab.SEARCH -> SearchTab(
+                                modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
+                                query = state.searchQuery,
+                                results = searchResults,
+                                onQueryChange = { viewModel.setSearchQuery(it) },
+                                onSongClick = { song -> playSong(context, song, state.songs) },
+                                onSongLongClick = { analyticsTarget = it },
+                                onEpisodeClick = { ep -> playEpisode(context, ep) },
+                                onShowClick = { viewModel.setTab(MediaTab.PODCASTS) }
+                            )
+
+                            MediaTab.PODCASTS -> LibraryTab(
+                                modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
+                                state = state,
+                                onEpisodeClick = { ep -> playEpisode(context, ep) },
+                                onRefresh = { viewModel.refresh() }
+                            )
+
+                            MediaTab.MUSIC -> MusicTab(
+                                modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
+                                state = state,
+                                onSongClick = { song -> playSong(context, song, state.songs) },
+                                onPlaylistCreated = {
+                                    viewModel.viewModelScope.launch {
+                                        delay(600)
+                                        viewModel.refresh()
+                                    }
+                                },
+                                viewModel = viewModel
+                            )
+
+                            MediaTab.DOWNLOADER -> {
+                                PodcastTab()
+                            }
+
+                            MediaTab.RECORDER -> {
+                                AudioRecorderTab()
+                            }
+                        }
+                    }
+                } // end permission check
             }
 
             analyticsTarget?.let { target ->
@@ -2989,7 +3049,8 @@ data class MediaUiState(
     val globalStats: MediaAnalyticsManager.GlobalStats = MediaAnalyticsManager.GlobalStats(),
     val isLoading: Boolean = false,
     val searchQuery: String = "",
-    val currentTab: MediaTab = MediaTab.HOME
+    val currentTab: MediaTab = MediaTab.HOME,
+    val permissionGranted: Boolean? = null // null = noch nicht geprüft
 )
 
 enum class MediaTab { HOME, SEARCH, PODCASTS, MUSIC, DOWNLOADER, RECORDER }
@@ -3024,8 +3085,35 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
         MediaAnalyticsManager.init(app)
         PodcastShowManager.init(app)
         FavoritesPlaylist.setContext(app)
-        refresh()
+        // refresh() wird erst nach Permission-Check aus dem Composable aufgerufen
         startNowPlayingPoller()
+    }
+
+    private fun hasAudioPermission(): Boolean {
+        val ctx = getApplication<Application>()
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            ContextCompat.checkSelfPermission(
+                ctx,
+                Manifest.permission.READ_MEDIA_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+        else
+            ContextCompat.checkSelfPermission(
+                ctx,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    fun onPermissionResult(granted: Boolean) {
+        _uiState.value = _uiState.value.copy(permissionGranted = granted)
+        if (granted) refresh()
+        else _uiState.value = _uiState.value.copy(isLoading = false)
+    }
+
+    fun checkAndRefresh() {
+        val granted = hasAudioPermission()
+        _uiState.value = _uiState.value.copy(permissionGranted = granted)
+        if (granted) refresh()
+        else _uiState.value = _uiState.value.copy(isLoading = false)
     }
 
     fun startNowPlayingPoller() {
@@ -3038,6 +3126,10 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun refresh() {
+        if (!hasAudioPermission()) {
+            _uiState.value = _uiState.value.copy(permissionGranted = false, isLoading = false)
+            return
+        }
         viewModelScope.launch {
             val songs = withContext(Dispatchers.IO) { loadSongsFromMediaStore() }
             val rawEpisodes = withContext(Dispatchers.IO) { loadEpisodesFromMediaStore() }
