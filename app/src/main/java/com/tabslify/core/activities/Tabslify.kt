@@ -52,6 +52,7 @@ class Tabslify : Application() {
                     .build()
             )
         }
+
         super.onCreate()
 
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
@@ -125,9 +126,11 @@ data class Script(val code: String)
 
 
 suspend fun fetchAndRun(scriptName: String, context: Context) {
-    val script = client.from("scripts")
-        .select { filter { eq("name", scriptName) } }
-        .decodeSingle<Script>()
+    val script = Config.safeCall {
+        client.from("scripts")
+            .select { filter { eq("name", scriptName) } }
+            .decodeSingle<Script>()
+    }
 
     val result = executeJs(script.code, context)
     println("Ergebnis: $result")
