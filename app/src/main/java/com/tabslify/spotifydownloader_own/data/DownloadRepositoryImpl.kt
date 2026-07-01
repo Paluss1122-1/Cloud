@@ -4,17 +4,21 @@ import android.content.ContentValues
 import android.content.Context
 import android.os.Environment
 import android.provider.MediaStore
-import com.tabslify.core.objects.Config.RAPID_API_KEY
+import com.tabslify.core.objects.Config
 import com.tabslify.spotifydownloader_own.domain.DownloadRepository
 import com.tabslify.spotifydownloader_own.domain.DownloadState
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.get
 import io.ktor.client.request.headers
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.Dispatchers
@@ -26,9 +30,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import java.io.ByteArrayOutputStream
 import java.net.URL
-import java.net.URLEncoder
 
 class DownloadRepositoryImpl(
     private val httpClient: HttpClient,
@@ -44,24 +48,34 @@ class DownloadRepositoryImpl(
                 send(DownloadState.Error("Ungültige Spotify URL"))
                 return@channelFlow
             }
-            val cleanUrl = "https://open.spotify.com/track/$trackId"
-            val encodedUrl = URLEncoder.encode(cleanUrl, "UTF-8")
-            val apiUrl =
-                "https://spotify-downloader9.p.rapidapi.com/downloadSong?songId=$encodedUrl"
+            val sha256 = Config.getAppSignatureSha256(context) ?: run {
+                send(DownloadState.Error("App-Signatur konnte nicht validiert werden"))
+                return@channelFlow
+            }
 
             send(DownloadState.Downloading(5))
-            val response: HttpResponse = httpClient.get(apiUrl) {
-                timeout {
-                    requestTimeoutMillis = 120_000
-                    connectTimeoutMillis = 60_000
-                    socketTimeoutMillis = 120_000
-                }
 
-                headers {
-                    append("x-rapidapi-key", RAPID_API_KEY)
-                    append("x-rapidapi-host", "spotify-downloader9.p.rapidapi.com")
+            val requestBody = kotlinx.serialization.json.buildJsonObject {
+                put("action", "rapidapi_spotify")
+                put("payload", kotlinx.serialization.json.buildJsonObject {
+                    put("songId", "https://open.spotify.com/track/$trackId")
+                })
+            }.toString()
+
+            val response: HttpResponse =
+                httpClient.post("${Config.SUPABASE_URL}/functions/v1/api-proxy") {
+                    contentType(ContentType.Application.Json)
+                    setBody(requestBody)
+                    timeout {
+                        requestTimeoutMillis = 120_000
+                        connectTimeoutMillis = 60_000
+                        socketTimeoutMillis = 120_000
+                    }
+                    headers {
+                        append("Authorization", "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}")
+                        append("X-Android-Cert", sha256)
+                    }
                 }
-            }
 
             if (response.status != HttpStatusCode.OK) {
                 send(DownloadState.Error("API Fehler: ${response.status}"))
@@ -104,10 +118,24 @@ class DownloadRepositoryImpl(
             val contentLength = audioResponse.contentLength() ?: 0L
 
             val coverBytes: ByteArray? = coverUrl?.let {
-                try { URL(it).readBytes() } catch (_: Exception) { null }
+                try {
+                    URL(it).readBytes()
+                } catch (_: Exception) {
+                    null
+                }
             }
 
-            val fileUri = saveFileFromChannel(fileName, channel, contentLength, "audio/mpeg", trackId, trackTitle, artist, album, coverBytes) { progress ->
+            val fileUri = saveFileFromChannel(
+                fileName,
+                channel,
+                contentLength,
+                "audio/mpeg",
+                trackId,
+                trackTitle,
+                artist,
+                album,
+                coverBytes
+            ) { progress ->
                 send(DownloadState.Downloading(20 + (progress * 0.7).toInt()))
             }
 
@@ -169,9 +197,9 @@ class DownloadRepositoryImpl(
                                 buffer[2] == 0x33.toByte()
                             ) {
                                 val tagSize = ((buffer[6].toInt() and 0x7F) shl 21) or
-                                    ((buffer[7].toInt() and 0x7F) shl 14) or
-                                    ((buffer[8].toInt() and 0x7F) shl 7) or
-                                    (buffer[9].toInt() and 0x7F)
+                                        ((buffer[7].toInt() and 0x7F) shl 14) or
+                                        ((buffer[8].toInt() and 0x7F) shl 7) or
+                                        (buffer[9].toInt() and 0x7F)
                                 id3SkipBytes = 10 + tagSize
                             }
                             if (id3SkipBytes > 0) {
@@ -222,14 +250,17 @@ class DownloadRepositoryImpl(
 
         fun writeFrameHeader(id: String, size: Int) {
             frames.write(id.toByteArray(Charsets.ISO_8859_1))
-            frames.write(byteArrayOf(
-                ((size shr 24) and 0xFF).toByte(),
-                ((size shr 16) and 0xFF).toByte(),
-                ((size shr 8) and 0xFF).toByte(),
-                (size and 0xFF).toByte(),
-                0x00, 0x00
-            ))
+            frames.write(
+                byteArrayOf(
+                    ((size shr 24) and 0xFF).toByte(),
+                    ((size shr 16) and 0xFF).toByte(),
+                    ((size shr 8) and 0xFF).toByte(),
+                    (size and 0xFF).toByte(),
+                    0x00, 0x00
+                )
+            )
         }
+
         fun encodeTextFrame(id: String, text: String) {
             val textBytes = byteArrayOf(0x03) + text.toByteArray(Charsets.UTF_8)
             writeFrameHeader(id, textBytes.size)
@@ -278,22 +309,23 @@ class DownloadRepositoryImpl(
 
     private fun HttpResponse.contentLength(): Long? = headers["Content-Length"]?.toLongOrNull()
 
-    private suspend fun fileExistsInMediaStore(fileName: String): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val projection = arrayOf(MediaStore.MediaColumns._ID)
-            val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} = ?"
-            val selectionArgs = arrayOf(fileName)
-            context.contentResolver.query(
-                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                projection,
-                selection,
-                selectionArgs,
-                null
-            )?.use { cursor ->
-                cursor.count > 0
-            } ?: false
-        } catch (_: Exception) {
-            false
+    private suspend fun fileExistsInMediaStore(fileName: String): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val projection = arrayOf(MediaStore.MediaColumns._ID)
+                val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} = ?"
+                val selectionArgs = arrayOf(fileName)
+                context.contentResolver.query(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    projection,
+                    selection,
+                    selectionArgs,
+                    null
+                )?.use { cursor ->
+                    cursor.count > 0
+                } ?: false
+            } catch (_: Exception) {
+                false
+            }
         }
-    }
 }
