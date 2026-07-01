@@ -143,6 +143,7 @@ import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.cms
 import com.tabslify.core.objects.FavoriteManager
 import com.tabslify.core.objects.prvt
+import com.tabslify.core.objects.tNotify
 import com.tabslify.privatetabslifyapp.FileIcon
 import com.tabslify.privatetabslifyapp.FullscreenImageDialog
 import com.tabslify.privatetabslifyapp.fileExistsInDCIM
@@ -153,7 +154,6 @@ import com.tabslify.privatetabslifyapp.getMimeType
 import com.tabslify.privatetabslifyapp.isImageFile
 import com.tabslify.privatetabslifyapp.isOnline
 import com.tabslify.tabs.BrowserTabContent
-import com.tabslify.tabs.PCManagerTab
 import com.tabslify.tabs.CalendarTabContent
 import com.tabslify.tabs.ContactsRepository
 import com.tabslify.tabs.ContactsTabContent
@@ -164,6 +164,7 @@ import com.tabslify.tabs.GmailTabContent
 import com.tabslify.tabs.MovieDiscoveryTabContent
 import com.tabslify.tabs.NotizenApp
 import com.tabslify.tabs.OtherBucketViewer
+import com.tabslify.tabs.PCManagerTab
 import com.tabslify.tabs.QuickSettingsTabContent
 import com.tabslify.tabs.RemoteDesktopTabContent
 import com.tabslify.tabs.WeatherTabContent
@@ -179,7 +180,6 @@ import com.tabslify.tabs.school.VocabTab
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -648,9 +648,6 @@ fun PrivateTabslifyApp(
                     settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true
-
-                        allowFileAccess = true
-                        allowContentAccess = true
 
                         loadsImagesAutomatically = true
                         blockNetworkLoads = false
@@ -1718,7 +1715,10 @@ fun MainTabslifyScreen(storage: Storage) {
                                                                     }
 
                                                                 val appFolder =
-                                                                    File(targetBaseFolder, "Tabslify")
+                                                                    File(
+                                                                        targetBaseFolder,
+                                                                        "Tabslify"
+                                                                    )
                                                                 if (!appFolder.exists()) {
                                                                     appFolder.mkdirs()
                                                                 }
@@ -2155,7 +2155,7 @@ fun showBatteryInfo(context: Context) {
                 Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED
         ) {
-            notificationManager.notify(cms(), builder.build())
+            tNotify(context, cms(), builder)
         } else {
             Toast.makeText(
                 context,
