@@ -1,11 +1,12 @@
 package com.tabslify.tabs.exploretab
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.view.MotionEvent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,8 +22,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +40,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.tasks.Tasks
@@ -56,8 +56,6 @@ import org.osmdroid.views.overlay.Overlay
 import java.util.concurrent.TimeUnit
 import kotlin.math.floor
 
-
-@SuppressLint("MissingPermission")
 @Composable
 fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
     val ctx = LocalContext.current
@@ -71,21 +69,32 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
     val scope = rememberCoroutineScope()
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var tileToDelete by remember { mutableStateOf<ExploredTile?>(null) }
+    var initialCenterDone by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { setGesturesEnabled(false) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            ExploreLocationTracker.start(ctx)
+            if (!initialCenterDone) {
+                LocationServices.getFusedLocationProviderClient(ctx).lastLocation
+                    .addOnSuccessListener { loc ->
+                        if (loc != null) {
+                            mapView?.controller?.animateTo(GeoPoint(loc.latitude, loc.longitude))
+                            initialCenterDone = true
+                        }
+                    }
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
-        try {
-            LocationServices.getFusedLocationProviderClient(ctx).lastLocation
-                .addOnSuccessListener { loc ->
-                    if (loc != null) mapView?.controller?.animateTo(
-                        GeoPoint(
-                            loc.latitude,
-                            loc.longitude
-                        )
-                    )
-                }
-        } catch (_: Exception) {
+        if (ContextCompat.checkSelfPermission(
+                ctx,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
     }
 
@@ -95,10 +104,16 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                 Lifecycle.Event.ON_PAUSE -> mapView?.onPause()
                 Lifecycle.Event.ON_RESUME -> {
                     mapView?.onResume()
-                    if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                    if (ContextCompat.checkSelfPermission(
+                            ctx,
+                            Manifest.permission.ACCESS_FINE_LOCATION
+                        )
+                        == PackageManager.PERMISSION_GRANTED
+                    ) {
                         ExploreLocationTracker.start(ctx)
                     }
                 }
+
                 else -> {}
             }
         }
@@ -109,7 +124,19 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
         }
     }
 
-    // Box mit fillMaxSize für stabiles Layout
+    LaunchedEffect(Unit) {
+        setGesturesEnabled(false)
+        try {
+            LocationServices.getFusedLocationProviderClient(ctx).lastLocation
+                .addOnSuccessListener { loc ->
+                    if (loc != null) mapView?.controller?.animateTo(
+                        GeoPoint(loc.latitude, loc.longitude)
+                    )
+                }
+        } catch (_: Exception) {
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -156,12 +183,19 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
             ) {
                 AndroidView(
                     factory = { context ->
-                        val loc = try {
-                            Tasks.await(
-                                LocationServices.getFusedLocationProviderClient(context).lastLocation,
-                                1, TimeUnit.SECONDS
-                            )
-                        } catch (_: Exception) { null }
+                        val loc = if (ContextCompat.checkSelfPermission(
+                                context, Manifest.permission.ACCESS_FINE_LOCATION
+                            ) == PackageManager.PERMISSION_GRANTED
+                        ) {
+                            try {
+                                Tasks.await(
+                                    LocationServices.getFusedLocationProviderClient(context).lastLocation,
+                                    1, TimeUnit.SECONDS
+                                )
+                            } catch (_: Exception) {
+                                null
+                            }
+                        } else null
                         val center = if (loc != null) GeoPoint(loc.latitude, loc.longitude)
                         else GeoPoint(Config.LAT, Config.LON)
 
@@ -180,7 +214,9 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                             mv.overlays.filterIsInstance<ExploreOverlay>().toSet()
                         )
                         if (tiles.isNotEmpty()) {
-                            mv.overlays.add(0, ExploreOverlay(tiles) { tile -> tileToDelete = tile })
+                            mv.overlays.add(
+                                0,
+                                ExploreOverlay(tiles) { tile -> tileToDelete = tile })
                             mv.invalidate()
                         }
                     },
