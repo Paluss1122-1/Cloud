@@ -249,3 +249,31 @@ suspend fun sendNvidiaChatMessageAITab(
         }
     }
 }
+
+fun getPreferredAiProvider(context: Context, serviceKey: String): String {
+    val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+    val global = prefs.getString("ai_pref_global", "gemini") ?: "gemini"
+    val specific = prefs.getString("ai_pref_service_$serviceKey", "default") ?: "default"
+    return if (specific == "default") global else specific
+}
+
+suspend fun sendPreferredAiRequest(
+    context: Context,
+    serviceKey: String,
+    history: List<ChatMessage> = emptyList(),
+    userMessage: String,
+    pic: String? = null,
+    audioUri: android.net.Uri? = null,
+    anlytic: Boolean = false,
+    onToken: ((String) -> Unit)? = null,
+    target: String = "AITab"
+): String? {
+    val provider = getPreferredAiProvider(context, serviceKey)
+    return if (provider == "nvidia") {
+        val model = if (pic != null) "meta/llama-3.2-90b-vision-instruct" else "openai/gpt-oss-120b"
+        sendNvidiaChatMessageAITab(context, history, userMessage, model, pic, onToken)
+    } else {
+        sendGeminiRequest(history, userMessage, pic, audioUri, context, anlytic, DEF_GEMINI, onToken, target)
+    }
+}
+
