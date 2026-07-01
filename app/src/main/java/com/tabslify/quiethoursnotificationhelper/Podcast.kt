@@ -16,6 +16,7 @@ import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config.COMPLETED_PODCASTS
 import com.tabslify.core.objects.Config.PD_QUEUE
 import com.tabslify.core.objects.Config.PODCASTS
+import com.tabslify.core.objects.tNotify
 import com.tabslify.services.PodcastPlayerServiceCompat.startService
 import java.io.File
 import java.time.Instant
@@ -165,11 +166,10 @@ fun showPodcastQueue(context: Context) {
                 .setAutoCancel(true)
                 .build()
 
-            val notificationManager = context.getSystemService(NotificationManager::class.java)
             if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                 == PackageManager.PERMISSION_GRANTED
             ) {
-                notificationManager.notify(PD_QUEUE, notification)
+                tNotify(context, PD_QUEUE, notification)
             }
         }, 300)
 
