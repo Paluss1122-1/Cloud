@@ -2,11 +2,13 @@
 
 package com.tabslify.tabs
 
+import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Environment
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -413,7 +415,10 @@ fun OtherBucketViewer(
                         ) {
                             rowFiles.forEach { fileInfo ->
                                 val dateFormat =
-                                    SimpleDateFormat("dd.MM.yyyy HH:mm", LocalLocale.current.platformLocale)
+                                    SimpleDateFormat(
+                                        "dd.MM.yyyy HH:mm",
+                                        LocalLocale.current.platformLocale
+                                    )
                                 val fileDate = dateFormat.format(Date(fileInfo.lastModified))
 
                                 Card(
@@ -627,7 +632,7 @@ fun OtherBucketViewer(
                 FloatingActionButton(
                     onClick = {
                         scope.launch {
-                            val (success, fail) = exportAllFiles(fileList)
+                            val (success, fail) = exportAllFiles(context, fileList)
                             val msg = when {
                                 fail == 0 -> "✅ $success Dateien nach Downloads/Other exportiert"
                                 success == 0 -> "❌ Export fehlgeschlagen"
@@ -784,30 +789,41 @@ suspend fun saveFileToPrivateStorage(context: Context, uri: Uri) {
     }
 }
 
-suspend fun exportAllFiles(fileList: List<LocalFileInfo>): Pair<Int, Int> {
+suspend fun exportAllFiles(context: Context, fileList: List<LocalFileInfo>): Pair<Int, Int> {
     return withContext(Dispatchers.IO) {
-        val targetDir = File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-            "Other"
-        )
-        if (!targetDir.exists()) targetDir.mkdirs()
-
         var success = 0
         var fail = 0
 
         fileList.forEach { fileInfo ->
             try {
-                var targetFile = File(targetDir, fileInfo.fileName)
-                var counter = 1
-                while (targetFile.exists()) {
-                    val nameWithoutExt = fileInfo.fileName.substringBeforeLast(".")
-                    val ext = if (fileInfo.fileName.contains(".")) ".${
-                        fileInfo.fileName.substringAfterLast(".")
-                    }" else ""
-                    targetFile = File(targetDir, "${nameWithoutExt}_$counter$ext")
-                    counter++
+                val uniqueName = buildUniqueDownloadName(context, fileInfo.fileName)
+
+                val values = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, uniqueName)
+                    put(
+                        MediaStore.Downloads.MIME_TYPE,
+                        context.contentResolver.getType(Uri.fromFile(fileInfo.file))
+                            ?: "application/octet-stream"
+                    )
+                    put(MediaStore.Downloads.RELATIVE_PATH, "Download/Other")
+                    put(MediaStore.Downloads.IS_PENDING, 1)
                 }
-                fileInfo.file.copyTo(targetFile)
+
+                val resolver = context.contentResolver
+                val collection = MediaStore.Downloads.getContentUri(
+                    MediaStore.VOLUME_EXTERNAL_PRIMARY
+                )
+                val itemUri = resolver.insert(collection, values)
+                    ?: throw java.io.IOException("MediaStore insert fehlgeschlagen für ${fileInfo.fileName}")
+
+                resolver.openOutputStream(itemUri)?.use { out ->
+                    fileInfo.file.inputStream().use { it.copyTo(out) }
+                }
+
+                values.clear()
+                values.put(MediaStore.Downloads.IS_PENDING, 0)
+                resolver.update(itemUri, values, null, null)
+
                 success++
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -816,6 +832,31 @@ suspend fun exportAllFiles(fileList: List<LocalFileInfo>): Pair<Int, Int> {
         }
 
         Pair(success, fail)
+    }
+}
+
+private fun buildUniqueDownloadName(context: Context, fileName: String): String {
+    val resolver = context.contentResolver
+    val nameWithoutExt = fileName.substringBeforeLast(".")
+    val ext = if (fileName.contains(".")) ".${fileName.substringAfterLast(".")}" else ""
+
+    var candidate = fileName
+    var counter = 1
+
+    while (true) {
+        val cursor = resolver.query(
+            MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+            arrayOf(MediaStore.Downloads._ID),
+            "${MediaStore.Downloads.RELATIVE_PATH} = ? AND ${MediaStore.Downloads.DISPLAY_NAME} = ?",
+            arrayOf("Download/Other/", candidate),
+            null
+        )
+        val exists = (cursor?.count ?: 0) > 0
+        cursor?.close()
+
+        if (!exists) return candidate
+        candidate = "${nameWithoutExt}_$counter$ext"
+        counter++
     }
 }
 
