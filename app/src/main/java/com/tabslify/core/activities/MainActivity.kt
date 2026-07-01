@@ -34,6 +34,8 @@ import com.tabslify.core.ui.Typography
 import com.tabslify.core.ui.rememberAppColor
 import com.tabslify.services.QuietHoursNotificationService
 import com.tabslify.tabs.JsonEditorContent
+import com.tabslify.inactive.ChatService
+import com.tabslify.quicksettingsfunctions.startBatteryWorker
 import io.github.jan.supabase.storage.storage
 import java.io.File
 
@@ -83,18 +85,33 @@ class MainActivity : FragmentActivity() {
             }
         }
 
-        requestPermission("not", launcher, this)
+        if (prvt()) {
+            requestPermission("all", launcher, this)
+        } else {
+            requestPermission("not", launcher, this)
+        }
 
         if (prvt()) {
-
-            requestPermission("all", launcher, this)
-
             val musicPrefs = getSharedPreferences("music_player_prefs", MODE_PRIVATE)
             val wasPlayingMusic = musicPrefs.getBoolean("was_playing_music", false)
             val wasPlayingPodcast = musicPrefs.getBoolean("was_playing_podcast", false)
 
             if (wasPlayingMusic || wasPlayingPodcast) {
                 com.tabslify.services.MediaPlayerService.startMusicService(this)
+            }
+
+            val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+            val masterEnabled = prefs.getBoolean("services_master", true)
+            if (masterEnabled) {
+                ChatService.startService(this)
+                
+                if (prefs.getBoolean("service_qhns", true)) {
+                    QuietHoursNotificationService.startService(this)
+                }
+                
+                if (prefs.getBoolean("service_battery", true)) {
+                    startBatteryWorker(this)
+                }
             }
         }
 
