@@ -16,7 +16,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.prvt
-import com.tabslify.services.ChatService
+import com.tabslify.inactive.ChatService
 import com.tabslify.services.QuietHoursNotificationService
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_CHANGE_END
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_CONTENT_INTENT
