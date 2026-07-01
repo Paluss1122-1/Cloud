@@ -2,6 +2,7 @@ package com.tabslify.quiethoursnotificationhelper
 
 import android.annotation.SuppressLint
 import android.app.NotificationManager
+import android.app.admin.DevicePolicyManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -18,6 +19,7 @@ import android.net.NetworkRequest
 import android.net.wifi.WifiInfo
 import android.os.Environment
 import android.os.Handler
+import android.os.HardwarePropertiesManager
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
@@ -53,11 +55,12 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.tabslify.core.activities.Tabslify.Companion.appScope
-import com.tabslify.core.activities.fetchAndRun
+import com.tabslify.core.activities.Tabslify.Companion.serviceScope
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.SHOWCOMMANDS
 import com.tabslify.core.objects.Config.client
+import com.tabslify.core.objects.Config.fetchBWMP
 import com.tabslify.core.objects.prvt
 import com.tabslify.core.ui.showBatteryInfo
 import com.tabslify.services.MediaPlayerService
@@ -80,13 +83,13 @@ import io.github.jan.supabase.functions.functions
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import java.io.File
 import java.lang.ref.WeakReference
 import java.text.SimpleDateFormat
@@ -100,14 +103,6 @@ data class Command(
     val aliases: List<String> = emptyList(),
     val description: String,
     val action: () -> Unit
-)
-
-@Serializable
-data class BahnRequest(
-    val evaNo: String,
-    val date: String,
-    val hour: String,
-    val targetPlannedArrival: String
 )
 
 private var testOverlayView: ComposeView? = null
@@ -210,9 +205,9 @@ private fun getAvailableCommands(context: Context): List<Command> {
 //            pending.send()
         },
         Command(
-            name = "geminiChat",
-            aliases = listOf("ai", "aichat", "gm"),
-            description = "Erstellt einen neuen Gemini-Chat (geminiChat [name optional])"
+            name = "ai",
+            aliases = listOf("aichat", "aiChat", "geminiChat", "gm", "newai", "newaichat", "na", "gemini"),
+            description = "Erstellt einen neuen AI-Chat (ai [name optional])"
         ) {},
         Command(
             name = "music",
@@ -277,7 +272,7 @@ private fun getAvailableCommands(context: Context): List<Command> {
             aliases = listOf("v", "voicenote", "sprachnachricht", "audio"),
             description = "Spielt Voice Notes von WhatsApp ab"
         ) {
-            playLatestVoiceNote("Manual Command", context)
+            if (prvt()) playLatestVoiceNote("Manual Command", context)
         },
         Command(
             name = "record",
@@ -409,7 +404,10 @@ private fun getAvailableCommands(context: Context): List<Command> {
             description = "Bw MP!"
         ) {
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clip = ClipData.newPlainText("BWMP", Config.BWMP)
+            val clip = ClipData.newPlainText("BWMP", "Config.BWMP")
+            serviceScope.launch {
+                fetchBWMP(context)
+            }
             clipboard.setPrimaryClip(clip)
         },
         Command(
@@ -823,6 +821,11 @@ private fun getAvailableCommands(context: Context): List<Command> {
 
 @OptIn(DelicateCoroutinesApi::class)
 fun executeCommand(commandText: String, context: Context) {
+    val prefs = context.getSharedPreferences("app_prefs", MODE_PRIVATE)
+    if (!prefs.getBoolean("services_master", false) || !prefs.getBoolean("service_qhns", false)) {
+        showSimpleNotificationExtern("Hintergrund Aktivität deaktiviert", "Du hast die Hintergrundaktivität deaktviert", context = context)
+        return
+    }
     if (commandText != "^" && commandText != "^^") {
         commandHistory.add(commandText)
         if (commandHistory.size > 10) {
@@ -836,25 +839,14 @@ fun executeCommand(commandText: String, context: Context) {
     val argument = if (parts.size > 1) parts[1] else null
 
     when (commandInput) {
-        "geminiChat", "ai", "aichat", "gm" -> {
+        "geminichat", "ai", "aichat", "gm", "newai", "newaichat", "na", "gemini" -> {
             val name = if (parts.size > 1) {
                 commandText.substringAfter(" ", "").trim().ifEmpty { null }
             } else {
                 null
             }
-
-            createGeminiChat(name, context, false)
-            return
-        }
-
-        "newai", "newaichat", "na", "gemini" -> {
-            val name = if (parts.size > 1) {
-                commandText.substringAfter(" ", "").trim().ifEmpty { null }
-            } else {
-                null
-            }
-
-            createGeminiChat(name, context, true)
+            val isNew = commandInput in listOf("newai", "newaichat", "na")
+            createGeminiChat(name, context, isNew)
             return
         }
 
@@ -862,15 +854,25 @@ fun executeCommand(commandText: String, context: Context) {
             if (argument != null) {
                 when (argument.lowercase()) {
                     "start" -> {
-                        val file = File(context.getExternalFilesDir(null), "audio_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.m4a")
+                        val file = File(
+                            context.getExternalFilesDir(null),
+                            "audio_${
+                                SimpleDateFormat(
+                                    "yyyyMMdd_HHmmss",
+                                    Locale.getDefault()
+                                ).format(Date())
+                            }.m4a"
+                        )
                         val intent = Intent(context, AudioForegroundService::class.java).apply {
                             putExtra("filePath", file.absolutePath)
                         }
                         ContextCompat.startForegroundService(context, intent)
                     }
+
                     "stop" -> {
                         context.stopService(Intent(context, AudioForegroundService::class.java))
                     }
+
                     else -> showSimpleNotificationExtern(
                         "❌ Fehler",
                         "Syntax: record start | record stop",
@@ -906,7 +908,7 @@ fun executeCommand(commandText: String, context: Context) {
 
                     if (day != null && dayNum in 0..2) {
                         Handler(Looper.getMainLooper()).post {
-                            GlobalScope.launch {
+                            serviceScope.launch {
                                 try {
                                     val loc =
                                         getLastKnownLocation(context)
@@ -1298,7 +1300,7 @@ fun executeCommand(commandText: String, context: Context) {
                 )
             } else {
                 Handler(Looper.getMainLooper()).post {
-                    GlobalScope.launch {
+                    serviceScope.launch {
                         checkBahnZuege(context, daysAhead)
                     }
                 }
@@ -1775,23 +1777,6 @@ fun executeCommand(commandText: String, context: Context) {
             }
             return
         }
-
-        "spotify", "sp", "spot" -> {
-            if (!prvt()) {
-                Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
-                return
-            }
-            val trackId = argument ?: run {
-                showSimpleNotificationExtern(
-                    "ℹ️ Spotify",
-                    "Syntax: spotify [track-id]",
-                    context = context
-                )
-                return
-            }
-            showSpotifyOverlay(trackId, context)
-            return
-        }
     }
 
     val commands = getAvailableCommands(context).filter { cmd ->
@@ -1947,8 +1932,9 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
     appScope.launch {
         try {
             val stationName = "Geltendorf"
-            val evaNo = "8000120"
-            val targetPlannedArrival = "07:05"
+            val evaNo = "8000119"
+            val targetDepartureTime = "07:05"
+            val targetDestination = "Buchloe"
 
             val cal = Calendar.getInstance()
             cal.add(Calendar.DAY_OF_MONTH, daysAhead)
@@ -1972,12 +1958,13 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
             val response = withContext(Dispatchers.IO) {
                 client.functions.invoke(
                     function = "bahn-api",
-                    body = BahnRequest(
-                        evaNo = evaNo,
-                        date = date,
-                        hour = hour,
-                        targetPlannedArrival = targetPlannedArrival
-                    )
+                    body = buildJsonObject {
+                        put("evaNo", evaNo)
+                        put("date", date)
+                        put("hour", hour)
+                        put("targetDepartureTime", targetDepartureTime)
+                        put("targetDestination", targetDestination)
+                    }
                 )
             }
 
@@ -1998,7 +1985,7 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
                 } else {
                     showSimpleNotificationExtern(
                         "ℹ️ Kein 07:05-Zug",
-                        "In den Plan-Daten wurde kein Zug mit planmäßiger Ankunft 07:05 in $stationName $dayLabel gefunden.",
+                        "In den Plan-Daten wurde kein passender Zug um 07:05 Uhr nach $targetDestination in $stationName $dayLabel gefunden.",
                         20.seconds,
                         context,
                         silent = false
@@ -2009,16 +1996,16 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
 
             val trainType = json["trainType"]?.jsonPrimitive?.content ?: "Zug"
             val trainNumber = json["trainNumber"]?.jsonPrimitive?.content ?: ""
-            val trainDisplay = "$trainType $trainNumber".trim()
+            val lineLabel = json["lineLabel"]?.jsonPrimitive?.content ?: ""
+            val trainDisplay = "$trainType $trainNumber ($lineLabel)".trim()
             val platform = json["platform"]?.jsonPrimitive?.content ?: "?"
-            val fromStation = json["fromStation"]?.jsonPrimitive?.content ?: "Unbekannt"
-            val toStation = json["toStation"]?.jsonPrimitive?.content ?: "Unbekannt"
-            val shownTime = json["shownTime"]?.jsonPrimitive?.content ?: targetPlannedArrival
+            val destination = json["destination"]?.jsonPrimitive?.content ?: targetDestination
+            val departureTime = json["departureTime"]?.jsonPrimitive?.content ?: targetDepartureTime
             val statusText = json["statusText"]?.jsonPrimitive?.content ?: "✅ Pünktlich"
 
             showSimpleNotificationExtern(
                 "🚆 $trainDisplay ($dayLabel)",
-                "📍 $fromStation → $toStation\n⏰ Geltendorf: $shownTime Uhr (Plan $targetPlannedArrival)\n🚪 Gleis: $platform\n$statusText",
+                "📍 $stationName → $destination\n⏰ Abfahrt: $departureTime Uhr (Plan $targetDepartureTime)\n🚪 Gleis: $platform\n$statusText",
                 context = context,
                 silent = false
             )
@@ -2035,93 +2022,8 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
     }
 }
 
-private fun formatDbPlanTime(timeString: String): String {
-    if (timeString.length >= 10) {
-        val hours = timeString.substring(6, 8)
-        val minutes = timeString.substring(8, 10)
-        return "$hours:$minutes"
-    }
-    return timeString
-}
-
-private fun calculateDbDelayMinutes(plannedTime: String, changedTime: String): Int {
-    if (plannedTime.length >= 10 && changedTime.length >= 10) {
-        val pHours = plannedTime.substring(6, 8).toIntOrNull() ?: 0
-        val pMinutes = plannedTime.substring(8, 10).toIntOrNull() ?: 0
-        val cHours = changedTime.substring(6, 8).toIntOrNull() ?: 0
-        val cMinutes = changedTime.substring(8, 10).toIntOrNull() ?: 0
-        val plannedTotal = pHours * 60 + pMinutes
-        val changedTotal = cHours * 60 + cMinutes
-        return (changedTotal - plannedTotal).coerceAtLeast(0)
-    }
-    return 0
-}
-
 fun formatMs(ms: Long): String {
     val h = ms / 3_600_000
     val m = (ms % 3_600_000) / 60_000
     return if (h > 0) "${h}h ${m}min" else "${m}min"
-}
-
-private var spotifyOverlayView: WeakReference<WebView>? = null
-
-@SuppressLint("SetJavaScriptEnabled")
-private fun showSpotifyOverlay(trackId: String, context: Context) {
-    if (!Settings.canDrawOverlays(context)) {
-        showSimpleNotificationExtern("Fehler", "Overlay-Berechtigung fehlt!", context = context)
-        return
-    }
-
-    val file = File(context.filesDir, "spotify_embed.html")
-    file.writeText("""
-    <html><body style="margin:0;background:#000;">
-        <iframe
-            data-testid="embed-iframe"
-            style="border-radius:12px"
-            src="https://open.spotify.com/embed/track/$trackId?utm_source=generator"
-            width="100%" height="352" frameBorder="0" allowfullscreen=""
-            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-            loading="lazy">
-        </iframe>
-    </body></html>
-""".trimIndent())
-
-    spotifyOverlayView?.get()?.let {
-        (context.getSystemService(WINDOW_SERVICE) as WindowManager).removeView(it)
-        spotifyOverlayView = null
-    }
-
-    val html = """
-        <html><body style="margin:0;background:#000;">
-        <iframe
-            style="border-radius:12px"
-            src="https://open.spotify.com/embed/track/$trackId?utm_source=generator"
-            width="100%" height="352" frameBorder="0" allowfullscreen=""
-            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-            loading="lazy">
-        </iframe>
-        </body></html>
-    """.trimIndent()
-
-    val webView = WebView(context).apply {
-        settings.javaScriptEnabled = true
-        settings.mediaPlaybackRequiresUserGesture = false
-        loadDataWithBaseURL("https://open.spotify.com", html, "text/html", "utf-8", null)
-    }
-
-
-    webView.loadUrl("file://${file.absolutePath}")
-
-    val wm = context.getSystemService(WINDOW_SERVICE) as WindowManager
-    val params = WindowManager.LayoutParams(
-        WindowManager.LayoutParams.MATCH_PARENT,
-        420,
-        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-        PixelFormat.TRANSLUCENT
-    ).apply { gravity = Gravity.BOTTOM }
-
-    spotifyOverlayView = WeakReference(webView)
-    Handler(Looper.getMainLooper()).post { wm.addView(webView, params) }
 }
