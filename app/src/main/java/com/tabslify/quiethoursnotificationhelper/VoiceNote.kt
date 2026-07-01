@@ -12,6 +12,8 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config.VOICE_NOTE
+import com.tabslify.core.objects.prvt
+import com.tabslify.core.objects.tNotify
 import com.tabslify.services.QuietHoursNotificationService
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_NEXT_VOICE_NOTE
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_PLAY_VOICE_NOTE
@@ -32,6 +34,7 @@ import java.util.Date
 import java.util.Locale
 
 fun playLatestVoiceNote(sender: String, context: Context) {
+    if (!prvt()) return
     try {
         currentSenderForVoiceNote = sender
         workerHandler.post {
@@ -74,6 +77,7 @@ fun playLatestVoiceNote(sender: String, context: Context) {
 
 
 fun playVoiceNoteAtIndex(index: Int, context: Context) {
+    if (!prvt()) return
     try {
         if (index < 0 || index >= voiceNoteFiles.size) {
             showSimpleNotificationExtern("Fehler", "Ungültiger Index", context = context)
@@ -146,6 +150,7 @@ fun getVoiceNoteFiles(): List<File> {
 }
 
 fun playNextVoiceNote(context: Context) {
+    if (!prvt()) return
     if (voiceNoteFiles.isEmpty()) return
 
     currentVoiceNoteIndex = (currentVoiceNoteIndex + 1) % voiceNoteFiles.size
@@ -157,6 +162,7 @@ fun playNextVoiceNote(context: Context) {
 }
 
 fun playPreviousVoiceNote(context: Context) {
+    if (!prvt()) return
     if (voiceNoteFiles.isEmpty()) return
 
     currentVoiceNoteIndex = if (currentVoiceNoteIndex - 1 < 0) {
@@ -171,6 +177,7 @@ fun playPreviousVoiceNote(context: Context) {
 }
 
 fun stopVoiceNote(context: Context) {
+    if (!prvt()) return
     try {
         voiceNotePlayer?.apply {
             if (isPlaying) stop()
@@ -187,6 +194,7 @@ fun stopVoiceNote(context: Context) {
 
 
 private fun showVoiceNotePlayerNotification(file: File, isPlaying: Boolean, context: Context) {
+    if (!prvt()) return
     try {
         val fileName = file.name
         val fileDate = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
@@ -240,11 +248,10 @@ private fun showVoiceNotePlayerNotification(file: File, isPlaying: Boolean, cont
             .addAction(android.R.drawable.ic_media_next, "Weiter", nextPendingIntent)
             .build()
 
-        val notificationManager = context.getSystemService(NotificationManager::class.java)
         if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            notificationManager.notify(VOICE_NOTE, notification)
+            tNotify(context, VOICE_NOTE, notification)
         }
 
     } catch (e: Exception) {
