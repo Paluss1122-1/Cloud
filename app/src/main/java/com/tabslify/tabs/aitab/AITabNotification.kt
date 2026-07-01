@@ -1,7 +1,6 @@
 package com.tabslify.tabs.aitab
 
 import android.R
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -9,6 +8,7 @@ import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.tabslify.core.activities.MainActivity
+import com.tabslify.core.objects.tNotify
 import com.tabslify.core.functions.canNotify
 
 fun isAppInForeground(): Boolean {
@@ -47,10 +47,10 @@ fun sendAITabBackgroundNotification(
         .setAutoCancel(true)
         .build()
 
-    val notificationManager = context.getSystemService(NotificationManager::class.java)
-    notificationManager.notify(
-        "ai_response_notification",
+    tNotify(
+        context,
         System.currentTimeMillis().toInt(),
-        notification
+        notification,
+        "ai_response_notification"
     )
 }
