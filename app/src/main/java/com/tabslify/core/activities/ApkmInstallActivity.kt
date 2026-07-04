@@ -59,10 +59,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotStateMapOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -108,7 +108,7 @@ class ApkmInstallActivity : ComponentActivity() {
     private var failure by mutableStateOf<InstallOutcome.Failure?>(null)
     private var needsInstallPermission by mutableStateOf(false)
     private var signatureAcknowledged by mutableStateOf(false)
-    private val selection = snapshotStateMapOf<String, Boolean>()
+    private val selection = mutableStateMapOf<String, Boolean>()
 
     private val unknownSourcesLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
