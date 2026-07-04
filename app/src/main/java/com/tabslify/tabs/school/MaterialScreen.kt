@@ -102,7 +102,8 @@ import com.tabslify.core.ui.TextPrimary
 import com.tabslify.core.ui.TextSecondary
 import com.tabslify.core.ui.TextTertiary
 import com.tabslify.core.ui.calloutAwareMarkdownComponents
-import com.tabslify.quiethoursnotificationhelper.sendGeminiRequest
+import com.tabslify.quiethoursnotificationhelper.AiProvider
+import com.tabslify.quiethoursnotificationhelper.sendAiRequest
 import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -201,7 +202,40 @@ fun MaterialienScreen(
     LaunchedEffect(Unit) {
         try {
             val files = Config.client.storage.from("school").list()
-            folders = files.map { it.name }.filter { it.isNotBlank() }.sortedDescending()
+            val fetchedFolders = files.map { it.name }.filter { it.isNotBlank() }.sortedDescending()
+            folders = fetchedFolders
+
+            // Cleanup AI summaries/OCR for non-existent files
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val allKeys = prefs.all.keys.filter { it.startsWith("cache_") }
+                    if (allKeys.isNotEmpty()) {
+                        fetchedFolders.forEach { subject ->
+                            val subjectPrefix = "cache_${subject}_"
+                            val keysForSubject = allKeys.filter { it.startsWith(subjectPrefix) }
+                            if (keysForSubject.isNotEmpty()) {
+                                val existingFiles = Config.client.storage.from("school").list(subject).map { it.name }.toSet()
+                                val toRemove = keysForSubject.filter { key ->
+                                    val fileName = key.removePrefix(subjectPrefix).removeSuffix("_ocr").removeSuffix("_summary")
+                                    !existingFiles.contains(fileName)
+                                }
+                                if (toRemove.isNotEmpty()) {
+                                    prefs.edit { toRemove.forEach { remove(it) } }
+                                }
+                            }
+                        }
+
+                        // Also remove keys for subjects that no longer exist
+                        val orphanedKeys = allKeys.filter { key ->
+                            fetchedFolders.none { subject -> key.startsWith("cache_${subject}_") }
+                        }
+                        if (orphanedKeys.isNotEmpty()) {
+                            prefs.edit { orphanedKeys.forEach { remove(it) } }
+                        }
+                    }
+                } catch (_: Exception) {
+                }
+            }
         } catch (e: Exception) {
             val cachedFolders = prefs.all.keys
                 .filter { it.startsWith("files_") }
@@ -344,7 +378,8 @@ fun MaterialienScreen(
                 android.util.Base64.NO_WRAP
             )
 
-            val rawText = sendGeminiRequest(
+            val rawText = sendAiRequest(
+                context = context,
                 history = emptyList(),
                 userMessage = """
                     Du bist ein hochpräzises System zur strukturierten Inhaltsextraktion für nachfolgende LLM-Verarbeitung. Analysiere das bereitgestellte Bild und generiere eine semantisch perfekt aufbereitete Textrekonstruktion. Halte dich strikt an diese Struktur:
@@ -368,10 +403,12 @@ fun MaterialienScreen(
                     Ziel: Ein kompromisslos strukturierter, semantisch reicher Text, den ein anderes KI-Modell ohne das Originalbild fehlerfrei interpretieren und weiterverarbeiten kann.
                 """.trimIndent(),
                 pic = base64,
-                model = MAX_GEMINI
+                model = MAX_GEMINI,
+                provider = AiProvider.GEMINI
             ) ?: throw Exception("OCR fehlgeschlagen")
 
-            val summary = sendGeminiRequest(
+            val summary = sendAiRequest(
+                context = context,
                 history = emptyList(),
                 userMessage = """
                     Du bist ein erfahrener, empathischer Pädagoge und Experte für Didaktik. Deine Aufgabe ist es, den folgenden extrahierten Inhalt eines Lernmaterials so aufzubereiten, dass Schüler oder Studierende das Thema intuitiv, tiefgründig und nachhaltig verstehen. 
@@ -401,7 +438,8 @@ fun MaterialienScreen(
                        - Beende den Text mit 2 kurzen, reflexiven Fragen (ohne direkt die Antwort zu verraten), mit denen die Lernenden selbst prüfen können, ob sie den Kern der Sache verstanden haben.
 
                     Tonfall: Motivierend, klar, verständlich, auf Augenhöhe, fehlerfrei auf Deutsch. Vermeide verschachtelte Sätze und kognitive Überlastung.
-                """.trimIndent()
+                """.trimIndent(),
+                provider = AiProvider.GEMINI
             ) ?: throw Exception("Summary fehlgeschlagen")
 
             aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(
