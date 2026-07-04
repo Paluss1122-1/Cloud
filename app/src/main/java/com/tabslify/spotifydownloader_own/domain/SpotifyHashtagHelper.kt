@@ -3,7 +3,8 @@ package com.tabslify.spotifydownloader_own.domain
 import android.content.Context
 import android.net.Uri
 import android.util.Base64
-import com.tabslify.quiethoursnotificationhelper.sendGeminiRequest
+import com.tabslify.quiethoursnotificationhelper.AiProvider
+import com.tabslify.quiethoursnotificationhelper.sendAiRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -41,11 +42,12 @@ suspend fun generateAndSaveHashtags(
             Gib NUR die Hashtags zurück, ohne zusätzlichen Text. Die Hashtags sollen Genres beschreiben oder den Song beschreiben. Trenne sie mit Leerzeichen.
         """.trimIndent()
 
-        val hashtags = sendGeminiRequest(
+        val hashtags = sendAiRequest(
             userMessage = userMessage,
             audioUri = fileUri,
             ctx = ctx,
             model = "gemini-2.5-flash",
+            provider = AiProvider.GEMINI,
             target = ""
         )?.trim()
 
