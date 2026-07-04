@@ -51,6 +51,7 @@ class ChatService : Service() {
 
         private const val PREFS_NAME = "ChatServicePrefs"
         private const val KEY_SEEN_MESSAGES = "seen_message_ids"
+        private const val MAX_SEEN_MESSAGES = 500
 
         private const val REALTIME_SETUP_TIMEOUT_MS = 5000L
 
@@ -75,7 +76,7 @@ class ChatService : Service() {
     private val friendUserId = "friend"
 
     private lateinit var sharedPreferences: SharedPreferences
-    private val seenMessageIds = mutableSetOf<String>()
+    private val seenMessageIds = LinkedHashSet<String>()
     private val messageHistory = mutableListOf<Message>()
 
     private val replyReceiver = object : BroadcastReceiver() {
@@ -163,12 +164,21 @@ class ChatService : Service() {
         try {
             val ids = Json.decodeFromString<List<String>>(json ?: "[]")
             seenMessageIds.addAll(ids)
+            trimSeenMessageIds()
             Log.d("ChatService", "✅ Loaded ${seenMessageIds.size} seen messages")
         } catch (_: Exception) {
         }
     }
 
+    private fun trimSeenMessageIds() {
+        while (seenMessageIds.size > MAX_SEEN_MESSAGES) {
+            val oldest = seenMessageIds.firstOrNull() ?: break
+            seenMessageIds.remove(oldest)
+        }
+    }
+
     private fun saveSeenMessageIds() {
+        trimSeenMessageIds()
         try {
             val json = Json.encodeToString(seenMessageIds.toList())
             sharedPreferences.edit { putString(KEY_SEEN_MESSAGES, json) }
