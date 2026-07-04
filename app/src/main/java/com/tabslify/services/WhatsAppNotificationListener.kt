@@ -86,6 +86,23 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             }
         }
 
+        fun cancelExternalNotification(notificationId: Int): Boolean {
+            val svc = instance?.get() ?: return false
+            if (!svc.listenerConnected) return false
+            try {
+                val activeNotifs = svc.activeNotifications ?: return false
+                val targetSbn = activeNotifs.find { it.id == notificationId }
+                if (targetSbn != null) {
+                    svc.cancelNotification(targetSbn.key)
+                    Log.d("MessageListener", "Successfully cancelled notification with ID: $notificationId (key: ${targetSbn.key})")
+                    return true
+                }
+            } catch (e: Exception) {
+                Log.w("MessageListener", "Failed to cancel notification with ID $notificationId: ${e.message}")
+            }
+            return false
+        }
+
         fun keyFor(packageName: String, title: String): String = "$packageName|$title"
 
         fun isSupportedApp(packageName: String): Boolean {
