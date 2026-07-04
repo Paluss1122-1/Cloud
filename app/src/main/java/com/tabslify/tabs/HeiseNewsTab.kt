@@ -1,0 +1,1459 @@
+package com.tabslify.tabs
+
+import android.content.Context
+import android.content.Intent
+import android.graphics.Paint
+import android.text.Html
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.edit
+import androidx.core.net.toUri
+import coil.compose.AsyncImage
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownColor
+import com.mikepenz.markdown.m3.markdownTypography
+import com.tabslify.quiethoursnotificationhelper.AiProvider
+import com.tabslify.quiethoursnotificationhelper.sendAiRequest
+import com.tabslify.tabs.aitab.ChatMessage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import org.xmlpull.v1.XmlPullParser
+import org.xmlpull.v1.XmlPullParserFactory
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+private const val HEISE_DEVELOPER_FEED_URL = "https://www.heise.de/developer/feed.xml"
+private const val HEISE_IT_FEED_URL = "https://www.heise.de/rss/heise-Rubrik-IT-atom.xml"
+private const val ARTICLE_TEXT_LIMIT_FOR_AI = 18_000
+private const val PARAGRAPH_BREAK_MARKER = "@@HEISE_PARA_BREAK@@"
+
+private data class MdLink(val range: IntRange, val url: String)
+
+private fun parseInlineMarkdown(line: String): Pair<androidx.compose.ui.text.AnnotatedString, List<MdLink>> {
+    val builder = androidx.compose.ui.text.AnnotatedString.Builder()
+    val links = mutableListOf<MdLink>()
+    var i = 0
+    while (i < line.length) {
+        val c = line[i]
+        when {
+            line.startsWith("**", i) -> {
+                val end = line.indexOf("**", i + 2)
+                if (end == -1) { builder.append(c); i++ } else {
+                    builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
+                    builder.append(line.substring(i + 2, end))
+                    builder.pop()
+                    i = end + 2
+                }
+            }
+            c == '*' -> {
+                val end = line.indexOf('*', i + 1)
+                if (end == -1) { builder.append(c); i++ } else {
+                    builder.pushStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic))
+                    builder.append(line.substring(i + 1, end))
+                    builder.pop()
+                    i = end + 1
+                }
+            }
+            c == '[' -> {
+                val closeBracket = line.indexOf(']', i + 1)
+                if (closeBracket == -1 || closeBracket + 1 >= line.length || line[closeBracket + 1] != '(') {
+                    builder.append(c); i++
+                } else {
+                    val closeParen = line.indexOf(')', closeBracket + 2)
+                    if (closeParen == -1) { builder.append(c); i++ } else {
+                        val label = line.substring(i + 1, closeBracket)
+                        val url = line.substring(closeBracket + 2, closeParen)
+                        val start = builder.length
+                        builder.pushStyle(
+                            SpanStyle(
+                                color = Color(0xFF64B5F6),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        )
+                        builder.append(label)
+                        builder.pop()
+                        links.add(MdLink(start until (start + label.length), url))
+                        i = closeParen + 1
+                    }
+                }
+            }
+            else -> { builder.append(c); i++ }
+        }
+    }
+    return builder.toAnnotatedString() to links
+}
+
+@Composable
+private fun DottedMarkdownText(
+    content: String,
+    textColor: Color,
+    onLinkClick: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    fontSize: androidx.compose.ui.unit.TextUnit = 14.sp,
+    lineHeight: androidx.compose.ui.unit.TextUnit = 19.sp
+) {
+    Column(modifier) {
+        content.split("\n").forEach { rawLine ->
+            if (rawLine.isBlank()) {
+                Spacer(Modifier.height(6.dp))
+                return@forEach
+            }
+            val isBullet = rawLine.trimStart().startsWith("* ") || rawLine.trimStart().startsWith("- ")
+            val lineText = if (isBullet) {
+                rawLine.trimStart().removePrefix("* ").removePrefix("- ")
+            } else rawLine
+
+            val (annotated, links) = parseInlineMarkdown(lineText)
+
+            var layoutResult by remember(annotated) {
+                mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
+                if (isBullet) {
+                    Text(
+                        text = "•  ",
+                        color = textColor,
+                        fontSize = fontSize,
+                        lineHeight = lineHeight
+                    )
+                }
+                Text(
+                    text = annotated,
+                    color = textColor,
+                    fontSize = fontSize,
+                    lineHeight = lineHeight,
+                    onTextLayout = { layoutResult = it },
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .then(
+                            if (links.isNotEmpty()) {
+                                Modifier
+                                    .drawWithContent {
+                                        drawContent()
+                                        val lr = layoutResult ?: return@drawWithContent
+                                        val strokeWidth = 2.8.dp.toPx()
+                                        val dashWidth = 0.3.dp.toPx()
+                                        val gapWidth = 7.dp.toPx()
+                                        val paint = Paint().apply {
+                                            this.color = Color(0xFF64B5F6).toArgb()
+                                            this.strokeWidth = strokeWidth
+                                            this.style = Paint.Style.STROKE
+                                            this.strokeCap = Paint.Cap.ROUND
+                                            this.pathEffect = android.graphics.DashPathEffect(
+                                                floatArrayOf(dashWidth, gapWidth), 0f
+                                            )
+                                            this.isAntiAlias = true
+                                        }
+                                        drawIntoCanvas { canvas ->
+                                            links.forEach { link ->
+                                                val startOffset = link.range.first
+                                                val endOffset = link.range.last + 1
+                                                if (startOffset >= lr.layoutInput.text.length) return@forEach
+                                                val startLine = lr.getLineForOffset(startOffset)
+                                                val endLine = lr.getLineForOffset(endOffset.coerceAtMost(lr.layoutInput.text.length))
+                                                for (line in startLine..endLine) {
+                                                    val lineStart = if (line == startLine) lr.getHorizontalPosition(startOffset, true) else lr.getLineLeft(line)
+                                                    val lineEnd = if (line == endLine) lr.getHorizontalPosition(endOffset, true) else lr.getLineRight(line)
+                                                    val y = lr.getLineBottom(line) + 2.dp.toPx()
+                                                    canvas.nativeCanvas.drawLine(lineStart, y, lineEnd, y, paint)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    .then(
+                                        Modifier.pointerInput(links, lineText) {
+                                            detectTapGestures { pos ->
+                                                val lr = layoutResult ?: return@detectTapGestures
+                                                val offset = lr.getOffsetForPosition(pos)
+                                                links.firstOrNull { offset in it.range }?.let { onLinkClick(it.url) }
+                                            }
+                                        }
+                                    )
+                            } else Modifier
+                        )
+                )
+            }
+        }
+    }
+}
+
+private data class HeiseNewsItem(
+    val id: String,
+    val title: String,
+    val summary: String,
+    val link: String,
+    val imageUrl: String?,
+    val publishedAt: String,
+    val rawTimestamp: Long
+)
+
+private data class HeiseChatMessage(
+    val text: String,
+    val own: Boolean
+)
+
+private data class HeiseTermQuestion(
+    val term: String,
+    val question: String
+)
+
+/**
+ * Der Prompt lässt die KI wichtige Begriffe als `[[Begriff::Frage]]` markieren.
+ * Diese Funktion wandelt das in normale Markdown-Links (`[Begriff](ask://<index>)`) um,
+ * damit der bestehende Markdown-Renderer sie klickbar darstellt, ohne dass die KI die
+ * Frage selbst URL-kodieren müsste. Die eigentlichen Fragen werden separat zurückgegeben.
+ */
+private val SUMMARY_TERM_MARKUP_REGEX = Regex("\\[\\[(.+?)::(.+?)]]")
+
+private const val HEISE_PREFS_NAME = "news_prefs"
+private const val HEISE_SUMMARY_PREFIX = "summary_"
+private const val HEISE_CHAT_PREFIX = "chat_"
+
+private fun saveSummaryToPrefs(context: Context, articleLink: String, summary: String) {
+    val prefs = context.getSharedPreferences(HEISE_PREFS_NAME, Context.MODE_PRIVATE)
+    prefs.edit {putString(HEISE_SUMMARY_PREFIX + articleLink, summary)}
+}
+
+private fun loadSummaryFromPrefs(context: Context, articleLink: String): String? {
+    val prefs = context.getSharedPreferences(HEISE_PREFS_NAME, Context.MODE_PRIVATE)
+    return prefs.getString(HEISE_SUMMARY_PREFIX + articleLink, null)
+}
+
+private fun saveChatToPrefs(context: Context, articleLink: String, chatMessages: List<HeiseChatMessage>) {
+    val prefs = context.getSharedPreferences(HEISE_PREFS_NAME, Context.MODE_PRIVATE)
+    val jsonArray = JSONArray()
+    for (msg in chatMessages) {
+        val jsonObj = JSONObject().apply {
+            put("text", msg.text)
+            put("own", msg.own)
+        }
+        jsonArray.put(jsonObj)
+    }
+    prefs.edit { putString(HEISE_CHAT_PREFIX + articleLink, jsonArray.toString()) }
+}
+
+private fun loadChatFromPrefs(context: Context, articleLink: String): List<HeiseChatMessage> {
+    val prefs = context.getSharedPreferences(HEISE_PREFS_NAME, Context.MODE_PRIVATE)
+    val jsonStr = prefs.getString(HEISE_CHAT_PREFIX + articleLink, null) ?: return emptyList()
+    return try {
+        val jsonArray = JSONArray(jsonStr)
+        val list = mutableListOf<HeiseChatMessage>()
+        for (i in 0 until jsonArray.length()) {
+            val jsonObj = jsonArray.getJSONObject(i)
+            val text = jsonObj.optString("text").orEmpty()
+            val own = jsonObj.optBoolean("own", false)
+            list.add(HeiseChatMessage(text, own))
+        }
+        list
+    } catch (e: Exception) {
+        e.printStackTrace()
+        emptyList()
+    }
+}
+
+private fun preprocessSummaryMarkup(raw: String): Pair<String, List<HeiseTermQuestion>> {
+    val questions = mutableListOf<HeiseTermQuestion>()
+    val transformed = SUMMARY_TERM_MARKUP_REGEX.replace(raw) { match ->
+        val term = match.groupValues[1].trim()
+        val question = match.groupValues[2].trim()
+        val index = questions.size
+        questions.add(HeiseTermQuestion(term, question))
+        "[$term](ask://$index)"
+    }
+    return transformed to questions
+}
+
+@Composable
+fun HeiseNewsTabContent(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val articleTextCache = remember { mutableStateMapOf<String, String>() }
+    val summaryCache = remember { mutableStateMapOf<String, String>() }
+
+    var articles by remember { mutableStateOf<List<HeiseNewsItem>>(emptyList()) }
+    var selectedArticle by remember { mutableStateOf<HeiseNewsItem?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var loadingArticleLink by remember { mutableStateOf<String?>(null) }
+    var articleError by remember { mutableStateOf<String?>(null) }
+    var summarizingArticleLink by remember { mutableStateOf<String?>(null) }
+    var summaryError by remember { mutableStateOf<String?>(null) }
+    val chatCache = remember { mutableStateMapOf<String, SnapshotStateList<HeiseChatMessage>>() }
+    var askingArticleLink by remember { mutableStateOf<String?>(null) }
+    var chatError by remember { mutableStateOf<String?>(null) }
+
+    fun loadNews() {
+        scope.launch {
+            isLoading = true
+            errorMessage = null
+            try {
+                articles = fetchHeiseNews()
+            } catch (e: Exception) {
+                errorMessage = e.message ?: "Unbekannter Fehler"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    fun loadFullArticle(article: HeiseNewsItem) {
+        if (articleTextCache.containsKey(article.link) || loadingArticleLink == article.link) return
+        scope.launch {
+            loadingArticleLink = article.link
+            articleError = null
+            try {
+                articleTextCache[article.link] = fetchFullArticleText(article.link)
+            } catch (e: Exception) {
+                articleError = e.message ?: "Artikeltext konnte nicht geladen werden"
+            } finally {
+                loadingArticleLink = null
+            }
+        }
+    }
+
+    fun summarizeArticle(article: HeiseNewsItem) {
+        val articleText = articleTextCache[article.link]
+        if (articleText.isNullOrBlank() || summarizingArticleLink == article.link) return
+        scope.launch {
+            summarizingArticleLink = article.link
+            summaryError = null
+            try {
+                val prompt = buildString {
+                    appendLine("Du bekommst den Volltext eines heise-Artikels. Erstelle daraus eine knackige, gut lesbare deutsche Zusammenfassung.")
+                    appendLine()
+                    appendLine("Format der Zusammenfassung:")
+                    appendLine("- 4 bis 6 kurze Bulletpoints mit den wichtigsten Fakten, Zahlen, Produkt-/Versionsnamen und Auswirkungen.")
+                    appendLine("- Bleib strikt beim Inhalt des Textes, erfinde nichts.")
+                    appendLine("- Schließe mit einer kurzen Einschätzung in maximal einem Satz ab.")
+                    appendLine()
+                    appendLine("Zusätzlich: Markiere 4 bis 8 zentrale Fachbegriffe, Produktnamen, Firmen, Personen oder Abkürzungen aus der Zusammenfassung, zu denen eine Rückfrage sinnvoll wäre. Nutze dafür GENAU diese Syntax, sonst nichts:")
+                    appendLine("[[Begriff::Frage]]")
+                    appendLine("- \"Begriff\" ist das kurze Wort/die kurze Wortgruppe (max. 3 Wörter) exakt wie im Fließtext.")
+                    appendLine("- \"Frage\" ist eine knappe, konkrete Rückfrage, die automatisch gestellt wird, wenn der Nutzer auf den Begriff tippt, z. B. \"Was ist Kubernetes und wofür wird es hier eingesetzt?\" oder \"Wer ist Person X und welche Rolle spielt sie hier?\".")
+                    appendLine("- Kein \"[[\" oder \"::\" oder \"]]\" innerhalb von Begriff oder Frage verwenden.")
+                    appendLine("- Verwende diese Markierung nur inline in den Bulletpoints, nicht im Einschätzungssatz, und nutze sonst kein Markdown-Link-Format.")
+                    appendLine("- Beispiel: \"- [[Kubernetes::Was ist Kubernetes und wofür wird es hier eingesetzt?]] erhält in Version 1.30 ein neues Feature ...\"")
+                    appendLine()
+                    appendLine("Titel: ${article.title}")
+                    appendLine("Quelle: ${article.link}")
+                    appendLine()
+                    appendLine("Note: Der Nutzer sieht deine ganze antwort, also beginne **NICHT** beisielshaft mit 'alles klar hier ist deine Zusammenfassung', sondern beginne direkt")
+                    append(articleText.take(ARTICLE_TEXT_LIMIT_FOR_AI))
+                }
+                val response = sendAiRequest(
+                    context = context,
+                    serviceKey = "heise_news_summary",
+                    userMessage = prompt,
+                    target = "",
+                    provider = AiProvider.NVIDIA
+                )
+                val summaryResult = response?.ifBlank { null } ?: "Keine Zusammenfassung erhalten."
+                summaryCache[article.link] = summaryResult
+                saveSummaryToPrefs(context, article.link, summaryResult)
+            } catch (e: Exception) {
+                summaryError = e.message ?: "Zusammenfassung fehlgeschlagen"
+            } finally {
+                summarizingArticleLink = null
+            }
+        }
+    }
+
+    fun summarizeArticleTest(article: HeiseNewsItem) {
+        val testSummary = buildString {
+            appendLine("- [[Testmodus::Was bedeutet Testmodus hier?]] zeigt einen Beispieltext ohne API-Call.")
+            appendLine("- Zweiter Bulletpoint mit Beispieldaten zur Layout-Kontrolle.")
+            appendLine("- Dritter Punkt: [[Gemini::Was ist Gemini?]] wird hier nicht befragt.")
+            appendLine("- Vierter Punkt zum Testen von Zeilenumbrüchen und Formatierung.")
+            append("Fazit: Rein zu Testzwecken, keine echte KI-Antwort.")
+        }
+        summaryCache[article.link] = testSummary
+        saveSummaryToPrefs(context, article.link, testSummary)
+    }
+
+    fun askAboutArticle(article: HeiseNewsItem, question: String) {
+        val trimmedQuestion = question.trim()
+        val articleText = articleTextCache[article.link]
+        if (trimmedQuestion.isEmpty() || articleText.isNullOrBlank()) return
+        if (summarizingArticleLink == article.link || askingArticleLink == article.link) return
+
+        val messages = chatCache.getOrPut(article.link) { mutableStateListOf() }
+        val priorHistory = messages.map { ChatMessage(text = it.text, ts = 0L, own = it.own) }
+        messages.add(HeiseChatMessage(text = trimmedQuestion, own = true))
+        saveChatToPrefs(context, article.link, messages)
+        val answerIndex = messages.size
+        messages.add(HeiseChatMessage(text = "", own = false))
+
+        scope.launch {
+            askingArticleLink = article.link
+            chatError = null
+            try {
+                val prompt = buildString {
+                    appendLine("Beantworte die folgende Frage eines Nutzers zu einem heise-Artikel kurz, präzise und auf Deutsch (2-5 Sätze, bei Bedarf mit Stichpunkten).")
+                    appendLine("Nutze primär den Artikeltext als Quelle. Ergänze offensichtliches Allgemeinwissen nur wenn nötig und sag klar, wenn etwas nicht im Artikel steht.")
+                    appendLine()
+                    appendLine("Titel: ${article.title}")
+                    appendLine("Artikeltext:")
+                    appendLine(articleText.take(ARTICLE_TEXT_LIMIT_FOR_AI))
+                    appendLine()
+                    append("Frage: $trimmedQuestion")
+                }
+                val response = sendAiRequest(
+                    context = context,
+                    serviceKey = "heise_news_summary",
+                    history = priorHistory,
+                    userMessage = prompt,
+                    target = "",
+                    onToken = { delta ->
+                        val current = messages[answerIndex]
+                        messages[answerIndex] = current.copy(text = current.text + delta)
+                    }
+                )
+                if (messages[answerIndex].text.isBlank()) {
+                    messages[answerIndex] = messages[answerIndex].copy(
+                        text = response?.ifBlank { null } ?: "Keine Antwort erhalten."
+                    )
+                }
+                saveChatToPrefs(context, article.link, messages)
+            } catch (e: Exception) {
+                messages[answerIndex] = messages[answerIndex].copy(
+                    text = "Fehler: ${e.message ?: "Antwort fehlgeschlagen"}"
+                )
+                saveChatToPrefs(context, article.link, messages)
+            } finally {
+                askingArticleLink = null
+            }
+        }
+    }
+
+    fun onTermQuestionClick(article: HeiseNewsItem, question: String) {
+        if (summarizingArticleLink == article.link || askingArticleLink == article.link) {
+            Toast.makeText(context, "Bitte warten, bis die Antwort fertig ist …", Toast.LENGTH_SHORT).show()
+            return
+        }
+        askAboutArticle(article, question)
+    }
+
+    LaunchedEffect(Unit) {
+        loadNews()
+    }
+
+    selectedArticle?.let { article ->
+        BackHandler { selectedArticle = null }
+        LaunchedEffect(article.link) {
+            loadFullArticle(article)
+            if (!summaryCache.containsKey(article.link)) {
+                val savedSummary = loadSummaryFromPrefs(context, article.link)
+                if (savedSummary != null) {
+                    summaryCache[article.link] = savedSummary
+                }
+            }
+            if (!chatCache.containsKey(article.link)) {
+                val savedChat = loadChatFromPrefs(context, article.link)
+                if (savedChat.isNotEmpty()) {
+                    val list = mutableStateListOf<HeiseChatMessage>()
+                    list.addAll(savedChat)
+                    chatCache[article.link] = list
+                }
+            }
+        }
+        HeiseArticleDetail(
+            article = article,
+            articleText = articleTextCache[article.link],
+            summary = summaryCache[article.link],
+            isLoadingArticle = loadingArticleLink == article.link,
+            isSummarizing = summarizingArticleLink == article.link,
+            articleError = articleError,
+            summaryError = summaryError,
+            chatMessages = chatCache[article.link] ?: emptyList(),
+            isAsking = askingArticleLink == article.link,
+            chatError = chatError,
+            onBack = { selectedArticle = null },
+            onRetryArticle = { loadFullArticle(article) },
+            onSummarize = { summarizeArticle(article) },
+            onSummarizeTest = { summarizeArticleTest(article) },
+            onSendChat = { question -> askAboutArticle(article, question) },
+            onTermQuestionClick = { question -> onTermQuestionClick(article, question) },
+            onOpenOriginal = {
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, article.link.toUri()))
+                }.onFailure {
+                    Toast.makeText(context, "Artikel konnte nicht geöffnet werden", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = modifier
+        )
+        return
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Transparent)
+            .padding(horizontal = 12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "heise developer News",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = if (articles.isEmpty()) "Aktuelle News per Atom-Feed" else "${articles.size} Meldungen geladen",
+                    color = Color.White.copy(alpha = 0.65f),
+                    fontSize = 12.sp
+                )
+            }
+            IconButton(onClick = { loadNews() }, enabled = !isLoading) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "News aktualisieren",
+                        tint = Color.White
+                    )
+                }
+            }
+        }
+
+        when {
+            isLoading && articles.isEmpty() -> LoadingNewsState()
+            errorMessage != null && articles.isEmpty() -> ErrorNewsState(errorMessage!!) { loadNews() }
+            articles.isEmpty() -> EmptyNewsState { loadNews() }
+            else -> LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(articles, key = { it.id }) { article ->
+                    HeiseNewsCard(
+                        article = article,
+                        onClick = { selectedArticle = article }
+                    )
+                }
+                item { Spacer(Modifier.height(8.dp)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeiseNewsCard(
+    article: HeiseNewsItem,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C22).copy(alpha = 0.92f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            if (!article.imageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = article.imageUrl,
+                    contentDescription = article.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+
+            Text(
+                text = article.title,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 17.sp,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = article.summary,
+                color = Color.White.copy(alpha = 0.78f),
+                fontSize = 14.sp,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = article.publishedAt,
+                color = Color.White.copy(alpha = 0.52f),
+                fontSize = 12.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun HeiseArticleDetail(
+    article: HeiseNewsItem,
+    articleText: String?,
+    summary: String?,
+    isLoadingArticle: Boolean,
+    isSummarizing: Boolean,
+    articleError: String?,
+    summaryError: String?,
+    chatMessages: List<HeiseChatMessage>,
+    isAsking: Boolean,
+    chatError: String?,
+    onBack: () -> Unit,
+    onRetryArticle: () -> Unit,
+    onSummarize: () -> Unit,
+    onSummarizeTest: () -> Unit,
+    onSendChat: (String) -> Unit,
+    onTermQuestionClick: (String) -> Unit,
+    onOpenOriginal: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isAiBusy = isSummarizing || isAsking
+    val realUriHandler = LocalUriHandler.current
+    val (displaySummary, termQuestions) = remember(summary) {
+        summary?.let { preprocessSummaryMarkup(it) } ?: ("" to emptyList())
+    }
+    val summaryUriHandler = remember(termQuestions, onTermQuestionClick) {
+        object : UriHandler {
+            override fun openUri(uri: String) {
+                val askIndex = uri.removePrefix("ask://").toIntOrNull()
+                if (uri.startsWith("ask://") && askIndex != null) {
+                    termQuestions.getOrNull(askIndex)?.let { onTermQuestionClick(it.question) }
+                } else {
+                    realUriHandler.openUri(uri)
+                }
+            }
+        }
+    }
+    var chatInput by remember(article.id) { mutableStateOf("") }
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Transparent)
+            .padding(horizontal = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(onClick = onBack) { Text("Zurück") }
+                TextButton(onClick = onOpenOriginal) { Text("Original öffnen") }
+            }
+        }
+
+        item {
+            Text(
+                text = article.title,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp,
+                lineHeight = 26.sp
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = article.publishedAt,
+                color = Color.White.copy(alpha = 0.55f),
+                fontSize = 12.sp
+            )
+        }
+
+        if (!article.imageUrl.isNullOrBlank()) {
+            item {
+                AsyncImage(
+                    model = article.imageUrl,
+                    contentDescription = article.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(190.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                )
+            }
+        }
+
+        item {
+            Card(
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C22).copy(alpha = 0.92f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Text(
+                        text = "AI Summary",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    when {
+                        isSummarizing -> Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "  Zusammenfassung wird erstellt...",
+                                color = Color.White.copy(alpha = 0.75f)
+                            )
+                        }
+
+                        summary != null -> DottedMarkdownText(
+                            content = displaySummary,
+                            textColor = Color.White.copy(alpha = 0.86f),
+                            onLinkClick = { summaryUriHandler.openUri(it) }
+                        )
+
+                        articleText.isNullOrBlank() -> Text(
+                            text = "Lade zuerst den vollständigen Artikeltext.",
+                            color = Color.White.copy(alpha = 0.65f),
+                            fontSize = 14.sp
+                        )
+
+                        else -> Row(verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(onClick = onSummarize) {
+                                Text("AI-Zusammenfassung erstellen")
+                            }
+                            TextButton(onClick = onSummarizeTest) {
+                                Text("Test", color = Color.White.copy(alpha = 0.55f))
+                            }
+                        }
+                    }
+
+                    if (!summaryError.isNullOrBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(summaryError, color = Color(0xFFFF8A80), fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C22).copy(alpha = 0.92f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Text(
+                        text = "Fragen zum Artikel",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Tippe auf einen markierten Begriff in der Zusammenfassung oder stelle unten eine eigene Frage.",
+                        color = Color.White.copy(alpha = 0.55f),
+                        fontSize = 12.sp
+                    )
+
+                    if (chatMessages.isNotEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        chatMessages.forEachIndexed { index, message ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = if (message.own) Arrangement.End else Arrangement.Start
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .widthIn(max = 280.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(
+                                            if (message.own) Color(0xFF3B4CCA).copy(alpha = 0.85f)
+                                            else Color(0xFF2A2A32)
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    if (!message.own && message.text.isBlank() && isAsking && index == chatMessages.lastIndex) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(14.dp),
+                                                strokeWidth = 2.dp,
+                                                color = Color.White
+                                            )
+                                            Text(
+                                                text = "  denkt nach...",
+                                                color = Color.White.copy(alpha = 0.75f),
+                                                fontSize = 13.sp
+                                            )
+                                        }
+                                    } else if (message.own) {
+                                        Text(message.text, color = Color.White, fontSize = 14.sp, lineHeight = 19.sp)
+                                    } else {
+                                        Markdown(
+                                            content = message.text,
+                                            colors = markdownColor(text = Color.White.copy(alpha = 0.9f)),
+                                            typography = markdownTypography(
+                                                text = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 19.sp)
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
+                    }
+
+                    if (!chatError.isNullOrBlank()) {
+                        Text(chatError, color = Color(0xFFFF8A80), fontSize = 12.sp)
+                        Spacer(Modifier.height(8.dp))
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextField(
+                            value = chatInput,
+                            onValueChange = { chatInput = it },
+                            modifier = Modifier.weight(1f),
+                            enabled = !isAiBusy && !articleText.isNullOrBlank(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(24.dp),
+                            placeholder = {
+                                Text(
+                                    if (isAiBusy) "Bitte warten..." else "Frage zum Artikel stellen...",
+                                    color = Color(0xFF888888)
+                                )
+                            },
+                            colors = TextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                disabledTextColor = Color.White.copy(alpha = 0.5f),
+                                cursorColor = Color.White,
+                                focusedContainerColor = Color(0xFF2A2A2A),
+                                unfocusedContainerColor = Color(0xFF2A2A2A),
+                                disabledContainerColor = Color(0xFF232328),
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent
+                            ),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                            keyboardActions = KeyboardActions(onSend = {
+                                if (chatInput.isNotBlank() && !isAiBusy) {
+                                    onSendChat(chatInput)
+                                    chatInput = ""
+                                }
+                            })
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(Color(0xFF333333))
+                                .size(44.dp)
+                                .clickable(enabled = !isAiBusy && chatInput.isNotBlank()) {
+                                    onSendChat(chatInput)
+                                    chatInput = ""
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "Frage senden",
+                                tint = if (!isAiBusy && chatInput.isNotBlank()) Color.White else Color.White.copy(alpha = 0.4f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C22).copy(alpha = 0.92f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Text(
+                        text = "Artikeltext",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    when {
+                        isLoadingArticle -> Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                            Text("  Artikel wird geladen...", color = Color.White.copy(alpha = 0.75f))
+                        }
+
+                        !articleError.isNullOrBlank() -> {
+                            Text(articleError, color = Color(0xFFFF8A80), fontSize = 13.sp)
+                            Spacer(Modifier.height(8.dp))
+                            TextButton(onClick = onRetryArticle) { Text("Erneut laden") }
+                        }
+
+                        articleText.isNullOrBlank() -> Text(
+                            text = "Kein Artikeltext gefunden.",
+                            color = Color.White.copy(alpha = 0.65f)
+                        )
+
+                        else -> Text(
+                            text = articleText,
+                            color = Color.White.copy(alpha = 0.82f),
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        item { Spacer(Modifier.height(8.dp)) }
+    }
+}
+
+@Composable
+private fun LoadingNewsState() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(color = Color.White)
+    }
+}
+
+@Composable
+private fun ErrorNewsState(message: String, onRetry: () -> Unit) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "Feed konnte nicht geladen werden",
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = message,
+                color = Color.White.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(Modifier.height(12.dp))
+            TextButton(onClick = onRetry) {
+                Text("Erneut versuchen")
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyNewsState(onRetry: () -> Unit) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Keine News gefunden", color = Color.White)
+            Spacer(Modifier.height(12.dp))
+            TextButton(onClick = onRetry) {
+                Text("Aktualisieren")
+            }
+        }
+    }
+}
+
+private suspend fun fetchHeiseNews(): List<HeiseNewsItem> = withContext(Dispatchers.IO) {
+    val urls = listOf(HEISE_DEVELOPER_FEED_URL, HEISE_IT_FEED_URL)
+    val allItems = mutableListOf<HeiseNewsItem>()
+
+    for (feedUrl in urls) {
+        val connection = (URL(feedUrl).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 12_000
+            readTimeout = 12_000
+            requestMethod = "GET"
+            setRequestProperty("Accept", "application/atom+xml, application/xml, text/xml")
+            setRequestProperty("User-Agent", "Tabslify/1.0")
+        }
+
+        try {
+            if (connection.responseCode in 200..299) {
+                connection.inputStream.use { allItems += parseHeiseAtomFeed(it) }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    allItems.distinctBy { it.id }.sortedByDescending { it.rawTimestamp }
+}
+
+private suspend fun fetchFullArticleText(articleUrl: String): String = withContext(Dispatchers.IO) {
+    val connection = (URL(articleUrl).openConnection() as HttpURLConnection).apply {
+        connectTimeout = 12_000
+        readTimeout = 20_000
+        requestMethod = "GET"
+        setRequestProperty("Accept", "text/html,application/xhtml+xml")
+        setRequestProperty("Accept-Language", "de-DE,de;q=0.9,en;q=0.7")
+        setRequestProperty(
+            "User-Agent",
+            "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36"
+        )
+    }
+
+    try {
+        if (connection.responseCode !in 200..299) {
+            throw IllegalStateException("HTTP ${connection.responseCode}")
+        }
+        val html = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        extractArticleText(html).ifBlank {
+            throw IllegalStateException("Kein Volltext im HTML gefunden")
+        }
+    } finally {
+        connection.disconnect()
+    }
+}
+
+private fun parseHeiseAtomFeed(inputStream: InputStream): List<HeiseNewsItem> {
+    val parser = XmlPullParserFactory.newInstance().apply {
+        isNamespaceAware = true
+    }.newPullParser()
+    parser.setInput(inputStream, null)
+
+    val items = mutableListOf<HeiseNewsItem>()
+    var inEntry = false
+    var id = ""
+    var title = ""
+    var summary = ""
+    var link = ""
+    var content = ""
+    var published = ""
+    var updated = ""
+
+    var eventType = parser.eventType
+    while (eventType != XmlPullParser.END_DOCUMENT) {
+        when (eventType) {
+            XmlPullParser.START_TAG -> when (parser.name) {
+                "entry" -> {
+                    inEntry = true
+                    id = ""
+                    title = ""
+                    summary = ""
+                    link = ""
+                    content = ""
+                    published = ""
+                    updated = ""
+                }
+
+                "id" -> if (inEntry) id = parser.nextText().orEmpty()
+                "title" -> if (inEntry) title = parser.nextText().orEmpty()
+                "summary" -> if (inEntry) summary = parser.nextText().orEmpty()
+                "content" -> if (inEntry) content = parser.nextText().orEmpty()
+                "published" -> if (inEntry) published = parser.nextText().orEmpty()
+                "updated" -> if (inEntry) updated = parser.nextText().orEmpty()
+                "link" -> if (inEntry && link.isBlank()) {
+                    link = parser.getAttributeValue(null, "href").orEmpty()
+                }
+            }
+
+            XmlPullParser.END_TAG -> if (parser.name == "entry" && inEntry) {
+                val cleanedTitle = cleanHtml(title)
+                val cleanedSummary = cleanHtml(summary).ifBlank { cleanHtml(content) }
+                if (cleanedTitle.isNotBlank() && link.isNotBlank()) {
+                    val rawDate = published.ifBlank { updated }
+                    items += HeiseNewsItem(
+                        id = id.ifBlank { link },
+                        title = cleanedTitle,
+                        summary = cleanedSummary,
+                        link = link,
+                        imageUrl = extractImageUrl(content),
+                        publishedAt = formatFeedDate(rawDate),
+                        rawTimestamp = parseRawTimestamp(rawDate)
+                    )
+                }
+                inEntry = false
+            }
+        }
+        eventType = parser.next()
+    }
+
+    return items
+}
+
+private fun extractDivByClass(html: String, className: String): String? {
+    val openTagRegex = Regex(
+        """<div\b[^>]*class=["'][^"']*\b${Regex.escape(className)}\b[^"']*["'][^>]*>""",
+        RegexOption.IGNORE_CASE
+    )
+    val openMatch = openTagRegex.find(html) ?: return null
+    val contentStart = openMatch.range.last + 1
+
+    val tagRegex = Regex("""<div\b[^>]*>|</div\s*>""", RegexOption.IGNORE_CASE)
+    var depth = 1
+    var searchFrom = contentStart
+    var tagsScanned = 0
+    while (depth > 0) {
+        val nextTag = tagRegex.find(html, searchFrom) ?: return html.substring(contentStart)
+        tagsScanned++
+        if (nextTag.value.startsWith("</")) {
+            depth--
+            if (depth == 0) {
+                val result = html.substring(contentStart, nextTag.range.first)
+                return result
+            }
+        } else {
+            depth++
+        }
+        searchFrom = nextTag.range.last + 1
+    }
+    return null
+}
+
+private fun extractArticleText(html: String): String {
+    val jsonLdBody = extractArticleBodyFromJsonLd(html)
+    if (jsonLdBody != null) {
+        if (isUsableArticleText(jsonLdBody)) {
+            return jsonLdBody
+        }
+    }
+
+    val articleContentDiv = extractDivByClass(html, "article-content")
+    if (articleContentDiv != null) {
+        val converted = htmlCandidateToArticleText(articleContentDiv)
+        if (isUsableArticleText(converted)) {
+            return converted
+        }
+    }
+
+    val candidateHtmlBlocks = buildList {
+        val articleMatches = Regex(
+            """<article\b[^>]*>(.*?)</article>""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        ).findAll(html).toList()
+        articleMatches.forEachIndexed { _, match ->
+            add(match.groupValues[1])
+        }
+
+        val mainMatches = Regex(
+            """<main\b[^>]*>(.*?)</main>""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        ).findAll(html).toList()
+        mainMatches.forEachIndexed { _, match ->
+            add(match.groupValues[1])
+        }
+
+        val genericMatches = Regex(
+            """<(?:div|section)\b[^>]*(?:class|id)=["'][^"']*(?:article|meldung|content|text|post)[^"']*["'][^>]*>(.*?)</(?:div|section)>""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        ).findAll(html).toList()
+        genericMatches.forEachIndexed { _, match ->
+            add(match.groupValues[1])
+        }
+
+        add(html)
+    }
+
+    val scoredCandidates = candidateHtmlBlocks
+        .asSequence()
+        .map(::htmlCandidateToArticleText)
+        .filter { candidate ->
+            val usable = isUsableArticleText(candidate)
+            usable
+        }
+        .map { candidate -> candidate to articleTextScore(candidate) }
+        .toList()
+
+    val best = scoredCandidates.maxByOrNull { it.second }
+    if (best == null) {
+        return ""
+    }
+
+    return best.first
+}
+
+private fun htmlCandidateToArticleText(articleHtml: String): String {
+    val afterScriptStyleStrip = articleHtml.replace(
+        Regex(
+            """<(script|style|noscript|svg|nav|aside|footer|form|template)\b[^>]*>.*?</\1>""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        ),
+        " "
+    )
+
+    val afterTocStrip = afterScriptStyleStrip.replace(
+        Regex(
+            """<a-collapse\b[^>]*>.*?</a-collapse>""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        ),
+        " "
+    )
+
+    val afterNoticeStrip = afterTocStrip.replace(
+        Regex(
+            """<details\b[^>]*class=["'][^"']*notice-banner[^"']*["'][^>]*>.*?</details>""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        ),
+        " "
+    )
+
+    val afterStrip = afterNoticeStrip.replace(
+        Regex(
+            """<div\b[^>]*data-component=["']RecommendationBox["'][^>]*>.*?</section>""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        ),
+        " "
+    )
+
+    val afterNewlines = afterStrip
+        .replace(Regex("""<(br|p|div|section|h[1-6]|li)\b[^>]*>""", RegexOption.IGNORE_CASE), PARAGRAPH_BREAK_MARKER)
+        .replace(Regex("""</(p|div|section|h[1-6]|li)>""", RegexOption.IGNORE_CASE), PARAGRAPH_BREAK_MARKER)
+
+    val afterHtmlDecode = cleanHtml(afterNewlines)
+
+    val plainText = afterHtmlDecode.replace(PARAGRAPH_BREAK_MARKER, "\n")
+
+    val allLines = plainText.lines().map { it.trim() }
+    val keptLines = allLines.filter(::isArticleTextLine)
+
+    val result = keptLines
+        .distinct()
+        .joinToString("\n\n")
+        .trim()
+
+    return result
+}
+
+private fun isArticleTextLine(line: String): Boolean {
+    if (line.length <= 25) return false
+    if (isTemplatePlaceholderText(line)) return false
+
+    return !line.equals("Anzeige", ignoreCase = true) &&
+            !line.equals("OBJ", ignoreCase = true) &&
+            !line.contains("heise online", ignoreCase = true) &&
+            !line.contains("JavaScript", ignoreCase = true) &&
+            !line.contains("Cookie", ignoreCase = true) &&
+            !line.contains("Weiterlesen nach der Anzeige", ignoreCase = true) &&
+            !line.contains("Kommentare lesen", ignoreCase = true) &&
+            !line.contains("Videos by heise", ignoreCase = true) &&
+            !line.contains("Newsletter", ignoreCase = true)
+}
+
+private fun isUsableArticleText(text: String): Boolean {
+    val cleaned = text.trim()
+    if (cleaned.length < 300) {
+        return false
+    }
+    if (isTemplatePlaceholderText(cleaned)) {
+        return false
+    }
+
+    val letterCount = cleaned.count { it.isLetter() }
+    val usable = letterCount > cleaned.length * 0.55
+    return usable
+}
+
+private fun isTemplatePlaceholderText(text: String): Boolean {
+    val compact = text
+        .lowercase(Locale.ROOT)
+        .filterNot { it.isWhitespace() }
+
+    if (
+        compact.contains("{intro}") ||
+        compact.contains("{body}") ||
+        compact.contains("{title}") ||
+        compact.contains("{lead}") ||
+        compact.contains("{article") ||
+        compact.contains($$"${intro}") ||
+        compact.contains($$"${body}") ||
+        compact.contains($$"${title}") ||
+        compact.contains($$"${lead}")
+    ) {
+        return true
+    }
+
+    var placeholderCount = 0
+    var searchFrom = 0
+    while (searchFrom < compact.length) {
+        val openBrace = compact.indexOf('{', startIndex = searchFrom)
+        if (openBrace == -1) break
+
+        val closeBrace = compact.indexOf('}', startIndex = openBrace + 1)
+        if (closeBrace == -1) break
+
+        val nameStart = if (openBrace > 0 && compact[openBrace - 1] == '$') openBrace - 1 else openBrace
+        val placeholder = compact.substring(nameStart, closeBrace + 1)
+        val inner = compact.substring(openBrace + 1, closeBrace)
+        if (
+            inner.isNotBlank() &&
+            inner.all { it.isLetterOrDigit() || it == '_' || it == '.' || it == '-' } &&
+            placeholder.length <= 48
+        ) {
+            placeholderCount++
+            if (placeholderCount >= 2) return true
+        }
+
+        searchFrom = closeBrace + 1
+    }
+
+    return false
+}
+
+private fun articleTextScore(text: String): Int {
+    val paragraphCount = text.lines().count { it.length > 80 }
+    return text.length + paragraphCount * 250
+}
+
+private fun extractArticleBodyFromJsonLd(html: String): String? {
+    val scripts = Regex(
+        """<script[^>]+type=["']application/ld\+json["'][^>]*>(.*?)</script>""",
+        setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+    ).findAll(html).map { it.groupValues[1].trim() }.toList()
+
+    scripts.forEachIndexed { _, script ->
+        val decoded = Html.fromHtml(script, Html.FROM_HTML_MODE_LEGACY).toString().trim()
+        val body = findArticleBodyInJson(decoded) ?: return@forEachIndexed
+        val clean = cleanHtml(body)
+        if (isUsableArticleText(clean)) {
+            return clean
+        }
+    }
+    return null
+}
+
+private fun findArticleBodyInJson(json: String): String? = runCatching {
+    when {
+        json.startsWith("[") -> findArticleBody(JSONArray(json))
+        json.startsWith("{") -> findArticleBody(JSONObject(json))
+        else -> null
+    }
+}.getOrNull()
+
+private fun findArticleBody(value: Any?): String? {
+    return when (value) {
+        is JSONObject -> {
+            value.optString("articleBody").takeIf { it.isNotBlank() }
+                ?: value.optString("text").takeIf { it.length > 300 }
+                ?: value.keys().asSequence()
+                    .firstNotNullOfOrNull { key -> findArticleBody(value.opt(key)) }
+        }
+
+        is JSONArray -> (0 until value.length())
+            .firstNotNullOfOrNull { index -> findArticleBody(value.opt(index)) }
+
+        else -> null
+    }
+}
+
+private fun cleanHtml(value: String): String = Html.fromHtml(value, Html.FROM_HTML_MODE_LEGACY)
+    .toString()
+    .replace(Regex("""[ \t\u000B\u000C\r]+"""), " ")
+    .replace(Regex("\n{3,}"), "\n\n")
+    .trim()
+
+private fun extractImageUrl(content: String): String? = Regex(
+    """<img[^>]+src=["']([^"']+)["']""",
+    RegexOption.IGNORE_CASE
+).find(content)
+    ?.groupValues
+    ?.getOrNull(1)
+    ?.replace("&amp;", "&")
+
+private fun formatFeedDate(value: String): String {
+    if (value.isBlank()) return ""
+    return runCatching {
+        val formatter = DateTimeFormatter
+            .ofPattern("dd. MMM yyyy, HH:mm", Locale.GERMANY)
+            .withZone(ZoneId.systemDefault())
+        formatter.format(Instant.parse(value))
+    }.getOrDefault(value)
+}
+
+private fun parseRawTimestamp(value: String): Long {
+    if (value.isBlank()) return 0L
+    return runCatching { Instant.parse(value).toEpochMilli() }.getOrDefault(0L)
+}

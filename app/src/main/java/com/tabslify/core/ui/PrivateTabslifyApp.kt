@@ -161,6 +161,7 @@ import com.tabslify.tabs.ContactsViewModel
 import com.tabslify.tabs.DateCalculatorContent
 import com.tabslify.tabs.GalleryTab
 import com.tabslify.tabs.GmailTabContent
+import com.tabslify.tabs.HeiseNewsTabContent
 import com.tabslify.tabs.MovieDiscoveryTabContent
 import com.tabslify.tabs.NotizenApp
 import com.tabslify.tabs.OtherBucketViewer
@@ -327,6 +328,11 @@ enum class MenuItem(
         "Podcasts",
         "🎙️",
         { PodcastTab() }
+    ),
+    HEISE_NEWS(
+        "Heise News",
+        "📰",
+        { HeiseNewsTabContent() }
     ),
     PC_MANAGER(
         "PC Manager",
@@ -930,6 +936,9 @@ fun MainTabslifyScreen(storage: Storage) {
                 }
 
             fileList = groupedFiles
+            // Favoriten, die auf inzwischen gelöschte Dateien zeigen, aufräumen,
+            // damit "favorites" nicht unbegrenzt mit toten Verweisen wächst.
+            favoriteFiles = FavoriteManager.pruneMissing(context, groupedFiles.map { it.name })
         } catch (e: Exception) {
             e.printStackTrace()
             withContext(Dispatchers.Main) {
@@ -945,6 +954,8 @@ fun MainTabslifyScreen(storage: Storage) {
             withContext(Dispatchers.IO) {
                 storage.from(Config.SUPABASE_BUCKET).delete(fileName)
             }
+            FavoriteManager.remove(context, fileName)
+            favoriteFiles = favoriteFiles - fileName
             withContext(Dispatchers.Main) {
                 Toast.makeText(context, "🗑️ '$fileName' gelöscht!", Toast.LENGTH_SHORT).show()
             }
@@ -2186,15 +2197,37 @@ fun loadLastUrl(context: Context): String {
 }
 
 object WebViewCookieBackup {
+    private const val PREFS_NAME = "webview_cookies"
+    private const val KEY_ORDER = "cookie_key_order"
+    private const val MAX_ENTRIES = 150
 
     fun saveCookies(context: Context, url: String) {
         val cookies = CookieManager.getInstance().getCookie(url) ?: return
-        context.getSharedPreferences("webview_cookies", Context.MODE_PRIVATE)
-            .edit { putString("cookies_${url.hashCode()}", cookies) }
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val key = "cookies_${url.hashCode()}"
+
+        // LRU-Reihenfolge der zuletzt gespeicherten Cookie-Keys, damit alte
+        // Einträge entfernt werden können, statt die Prefs-Datei unbegrenzt
+        // mit Cookies längst nicht mehr besuchter Seiten wachsen zu lassen.
+        val order = prefs.getString(KEY_ORDER, "")
+            ?.split(",")
+            ?.filter { it.isNotBlank() }
+            ?.toMutableList() ?: mutableListOf()
+        order.remove(key)
+        order.add(key)
+
+        prefs.edit {
+            putString(key, cookies)
+            while (order.size > MAX_ENTRIES) {
+                val stale = order.removeAt(0)
+                remove(stale)
+            }
+            putString(KEY_ORDER, order.joinToString(","))
+        }
     }
 
     fun restoreCookies(context: Context, url: String) {
-        val cookies = context.getSharedPreferences("webview_cookies", Context.MODE_PRIVATE)
+        val cookies = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getString("cookies_${url.hashCode()}", null) ?: return
         val cm = CookieManager.getInstance()
         cookies.split(";").forEach { cookie ->
