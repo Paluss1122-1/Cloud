@@ -136,4 +136,6 @@ dependencies {
     implementation(libs.firebase.appcheck.debug)
     implementation(libs.rhino)
     implementation(libs.firebase.messaging)
+    implementation(libs.haze)
+    implementation(libs.haze.materials)
 }
