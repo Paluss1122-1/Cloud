@@ -187,8 +187,7 @@ class ApkmInstaller(private val context: Context) {
             val versionName = baseInfo.versionName
             @Suppress("DEPRECATION")
             val versionCode =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) baseInfo.longVersionCode
-                else baseInfo.versionCode.toLong()
+                baseInfo.longVersionCode
             val minSdk = baseInfo.applicationInfo?.minSdkVersion
             val targetSdk = baseInfo.applicationInfo?.targetSdkVersion
 
@@ -238,7 +237,7 @@ class ApkmInstaller(private val context: Context) {
             }.getOrNull()
             @Suppress("DEPRECATION")
             val installedCode = installed?.let {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) it.longVersionCode else it.versionCode.toLong()
+                it.longVersionCode
             }
 
             log("Paket: $packageName v$versionName ($versionCode)")
@@ -386,7 +385,7 @@ class ApkmInstaller(private val context: Context) {
                     PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                         log("Warte auf Bestätigung im System-Dialog…")
                         @Suppress("DEPRECATION")
-                        val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+                        val confirm = intent?.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
                         if (confirm != null) {
                             confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             onNeedUserAction(confirm)
@@ -404,7 +403,7 @@ class ApkmInstaller(private val context: Context) {
                             (message?.contains("INSTALL_FAILED_UPDATE_INCOMPATIBLE", true) == true) ||
                             (message?.contains("INCONSISTENT_CERTIFICATES", true) == true)
                         log("❌ Installation fehlgeschlagen (Status $status): ${message ?: "unbekannt"}")
-                        if (sessionId >= 0) runCatching { installer.abandon(sessionId) }
+                        if (sessionId >= 0) runCatching { installer.openSession(sessionId).abandon() }
                         log("↩ Session verworfen – keine Teilinstallation zurückgeblieben (Rollback).")
                         finish(InstallOutcome.Failure(status, message, signatureConflict))
                     }
@@ -456,13 +455,13 @@ class ApkmInstaller(private val context: Context) {
             }
         } catch (e: Exception) {
             log("❌ Fehler beim Schreiben der Session: ${e.message}")
-            if (sessionId >= 0) runCatching { installer.abandon(sessionId) }
+            if (sessionId >= 0) runCatching { installer.openSession(sessionId) }
             log("↩ Session verworfen (Rollback).")
             finish(InstallOutcome.Failure(Int.MIN_VALUE, e.message, false))
         }
 
         cont.invokeOnCancellation {
-            if (sessionId >= 0) runCatching { installer.abandon(sessionId) }
+            if (sessionId >= 0) runCatching { installer.openSession(sessionId) }
             runCatching { context.unregisterReceiver(receiver) }
         }
     }
