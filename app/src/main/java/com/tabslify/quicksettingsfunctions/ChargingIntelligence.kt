@@ -23,6 +23,7 @@ import com.google.firebase.ai.type.GenerativeBackend
 import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.objects.Config.DEF_GEMINI
 import com.tabslify.core.objects.Config.client
+import com.tabslify.core.objects.PrefsCleanup
 import com.tabslify.core.objects.prvt
 import com.tabslify.core.objects.tNotify
 import io.github.jan.supabase.postgrest.from
@@ -65,6 +66,8 @@ data class ChargingSession(
 
 @SuppressLint("StaticFieldLeak")
 object ChargeSessionRepository {
+    private const val MAX_SESSIONS = 200
+
     private lateinit var context: Context
     private val json = Json { ignoreUnknownKeys = true }
     internal val _currentSession = MutableStateFlow<ChargingSession?>(null)
@@ -74,7 +77,10 @@ object ChargeSessionRepository {
     fun init(ctx: Context) {
         context = ctx.applicationContext
         appScope.launch {
-            _allSessions.value = loadSessions()
+            val loaded = loadSessions()
+            val capped = PrefsCleanup.capToLast(loaded, MAX_SESSIONS)
+            _allSessions.value = capped
+            if (capped.size != loaded.size) persistSessions(capped)
             _currentSession.value = loadCurrentSession()
         }
     }
@@ -103,7 +109,7 @@ object ChargeSessionRepository {
     fun onChargingStopped(event: ChargingPercentEvent) {
         val session = _currentSession.value ?: return
         val completed = session.copy(endTimestamp = event.timestamp, endLevel = event.level)
-        val updated = _allSessions.value + completed
+        val updated = PrefsCleanup.capToLast(_allSessions.value + completed, MAX_SESSIONS)
         _allSessions.value = updated
         persistSessions(updated)
         _currentSession.value = null
