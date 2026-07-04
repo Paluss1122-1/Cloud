@@ -14,6 +14,7 @@ firebaseMessaging = "25.1.0"
 firebasePlayintegrity = "19.2.0"
 foundation = "1.11.3"
 gson = "2.14.0"
+haze = "1.7.2"
 kotlin = "2.4.0"
 coreKtx = "1.19.0"
 junit = "4.13.2"
@@ -76,6 +77,8 @@ firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "fir
 firebase-config = { module = "com.google.firebase:firebase-config", version.ref = "firebaseConfig" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging", version.ref = "firebaseMessaging" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
+haze-materials = { module = "dev.chrisbanes.haze:haze-materials", version.ref = "haze" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
