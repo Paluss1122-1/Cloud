@@ -885,15 +885,15 @@ fun SelectedHourView(hour: HourData) {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    WeatherDetailBox("🌡️", "Gefühlt", "${hour.feelsLike.toInt()}°C")
-                    WeatherDetailBox("💧", "Luftfeuchtigkeit", "${hour.humidity}%")
+                    WeatherDetailBox("Gefühlt", "${hour.feelsLike.toInt()}°C")
+                    WeatherDetailBox("Luftfeuchtigkeit", "${hour.humidity}%")
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    WeatherDetailBox("💨", "Wind", "${hour.wind.toInt()} km/h")
-                    WeatherDetailBox("🔽", "Luftdruck", "${hour.pressure} hPa")
+                    WeatherDetailBox("Wind", "${hour.wind.toInt()} km/h")
+                    WeatherDetailBox("Luftdruck", "${hour.pressure} hPa")
                 }
             }
         }
@@ -901,7 +901,7 @@ fun SelectedHourView(hour: HourData) {
 }
 
 @Composable
-fun WeatherDetailBox(icon: String, label: String, value: String) {
+fun WeatherDetailBox(label: String, value: String) {
     Card(
         modifier = Modifier
             .width(160.dp)

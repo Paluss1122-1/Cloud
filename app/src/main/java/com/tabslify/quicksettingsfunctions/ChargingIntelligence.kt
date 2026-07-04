@@ -64,6 +64,7 @@ data class ChargingSession(
     val startHour: Int
 )
 
+@Suppress("ObjectPropertyName")
 @SuppressLint("StaticFieldLeak")
 object ChargeSessionRepository {
     private const val MAX_SESSIONS = 200

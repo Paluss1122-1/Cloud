@@ -1,5 +1,3 @@
-@file:Suppress("AssignedValueIsNeverRead")
-
 package com.tabslify.tabs
 
 import android.content.ContentValues
@@ -7,7 +5,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
-import android.os.Environment
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.widget.Toast
@@ -108,6 +105,7 @@ import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import kotlin.math.abs
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.ExperimentalTime
 
 data class LocalFileInfo(
@@ -264,7 +262,7 @@ fun OtherBucketViewer(
                             saveFileToPrivateStorage(context, uri)
                             successCount++
                             uploadProgress = Pair(index + 1, uris.size)
-                            delay(100)
+                            delay(100.milliseconds)
                         } catch (e: Exception) {
                             failCount++
                             e.printStackTrace()
@@ -302,7 +300,7 @@ fun OtherBucketViewer(
                 Toast.makeText(context, "✅ Datei gelöscht", Toast.LENGTH_SHORT).show()
             }
 
-            delay(300)
+            delay(300.milliseconds)
             loadFilesFromPrivateStorage()
         } catch (e: Exception) {
             withContext(Dispatchers.Main) {
@@ -768,7 +766,14 @@ suspend fun saveFileToPrivateStorage(context: Context, uri: Uri) {
                     privateDir.mkdirs()
                 }
 
-                var targetFile = File(privateDir, fileName)
+                val sanitizedFileName = fileName
+                    .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                    .replace("..", "_")
+                    .trim()
+                    .ifEmpty { "file_${System.currentTimeMillis()}" }
+
+                var targetFile = File(privateDir, sanitizedFileName)
+
                 var counter = 1
                 while (targetFile.exists()) {
                     val nameWithoutExt = fileName.substringBeforeLast(".")

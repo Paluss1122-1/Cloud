@@ -1,5 +1,3 @@
-@file:Suppress("AssignedValueIsNeverRead")
-
 package com.tabslify.tabs.authenticator
 
 import android.content.ClipData
@@ -529,7 +527,8 @@ private fun PasswordDetailSheet(
             n.contains(entryName) || entryName.contains(n) ||
                     (entryUrl.isNotEmpty() && n.split(" ").any { entryUrl.contains(it) })
         } ?: entry.totpSecret?.let { secret ->
-            TwoFAEntry(name = entry.name, secret = secret)
+            val extracted = extractTotpSecret(secret)
+            TwoFAEntry(name = entry.name, secret = extracted)
         }
     }
 
@@ -1001,7 +1000,7 @@ fun AddEditPasswordDialog(
                     BasicTextField(
                         value = twoFaSecret,
                         onValueChange = {
-                            val v = it.trim().uppercase()
+                            val v = extractTotpSecret(it)
                             twoFaSecret = if (v == "NULL") "" else v
                         },
                         singleLine = true,

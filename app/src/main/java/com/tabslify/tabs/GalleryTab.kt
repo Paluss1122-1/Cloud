@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
-import android.os.Build
 import android.provider.MediaStore
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -77,6 +76,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import kotlin.math.abs
+import kotlin.time.Duration.Companion.milliseconds
 import androidx.media3.common.MediaItem as ExoMediaItem
 
 data class GalleryMediaItem(
@@ -304,7 +304,7 @@ fun SharedTransitionScope.ImageFullscreen(
     var showButton by remember { mutableStateOf(false) }
 
     LaunchedEffect(animatedVisibilityScope) {
-        delay(600)
+        delay(600.milliseconds)
         showButton = true
     }
 

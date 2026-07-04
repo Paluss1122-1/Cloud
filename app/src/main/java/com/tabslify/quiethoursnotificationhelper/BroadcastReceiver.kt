@@ -204,9 +204,9 @@ class FinishedPdDownload : BroadcastReceiver() {
 
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val cursor = dm.query(DownloadManager.Query().setFilterById(downloadId))
-        cursor?.use {
-            if (it.moveToFirst()) {
-                val status = it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+        cursor?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
                 if (status == DownloadManager.STATUS_SUCCESSFUL) {
                     val show = PodcastShowManager.getShows()
                         .find { it.name.equals(showName, ignoreCase = true) }

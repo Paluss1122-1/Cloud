@@ -2,7 +2,6 @@ package com.tabslify.quiethoursnotificationhelper
 
 import android.annotation.SuppressLint
 import android.app.NotificationManager
-import android.app.admin.DevicePolicyManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -17,17 +16,14 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.wifi.WifiInfo
-import android.os.Build
 import android.os.Environment
 import android.os.Handler
-import android.os.HardwarePropertiesManager
 import android.os.Looper
 import android.os.PersistableBundle
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
-import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
@@ -59,7 +55,6 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.activities.Tabslify.Companion.serviceScope
 import com.tabslify.core.functions.showSimpleNotificationExtern
-import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.SHOWCOMMANDS
 import com.tabslify.core.objects.Config.client
 import com.tabslify.core.objects.Config.fetchBWMP
@@ -94,7 +89,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.io.File
-import java.lang.ref.WeakReference
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -1446,11 +1440,10 @@ fun executeCommand(commandText: String, context: Context) {
                 if (args.size >= 2) {
                     val pattern = args[0]
                     val showName = args[1]
-                    val success = PodcastShowManager.assignPattern(pattern, showName)
+                    PodcastShowManager.assignPattern(pattern, showName)
                     showSimpleNotificationExtern(
-                        if (success) "✓ Pattern zugewiesen" else "❌ Fehler",
-                        if (success) "\"$pattern\" → \"$showName\"\nAlle Folgen mit diesem Pattern werden dieser Show zugeordnet."
-                        else "Zuweisung fehlgeschlagen",
+                        "✓ Pattern zugewiesen",
+                        "\"$pattern\" → \"$showName\"\nAlle Folgen mit diesem Pattern werden dieser Show zugeordnet.",
                         context = context,
                         silent = false
                     )

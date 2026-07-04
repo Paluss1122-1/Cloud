@@ -137,6 +137,7 @@ suspend fun fetchAndRun(scriptName: String, context: Context) {
 }
 
 // 1. Das ist unsere Brücke. Nur die Methoden HIER DRIN darf das JS nutzen.
+@Suppress("unused")
 class AppBridge(private val androidContext: Context) {
 
     // Du musst die Methode für Rhino zugänglich machen

@@ -87,7 +87,6 @@ import com.tabslify.services.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.tabslify.services.WhatsAppNotificationListener
 import com.tabslify.tabs.aitab.ChatMessage
 import com.tabslify.tabs.authenticator.PasswordDatabase
-import com.tabslify.tabs.authenticator.TotpGenerator
 import com.tabslify.tabs.authenticator.TotpGenerator.generateTOTP
 import com.tabslify.tabs.authenticator.TwoFADatabase
 import com.tabslify.tabs.mediaplayer.AlgorithmicPlaylistRegistry
@@ -179,6 +178,7 @@ private var listenerJob: Job? = null
 private var updateServerSocket: ServerSocket? = null
 
 private var triggerJob: Job? = null
+private var triggerWatchdogJob: Job? = null
 
 private var aiResponseJob: Job? = null
 private var aiResponseServerSocket: ServerSocket? = null
@@ -266,6 +266,7 @@ fun unregisterWifiReconnectReceiver(context: Context) {
 
 fun shutdownAllWifiDirectServices(context: Context) {
     triggerJob?.cancel(); triggerJob = null
+    triggerWatchdogJob?.cancel(); triggerWatchdogJob = null
     pendingSyncJob?.cancel(); pendingSyncJob = null
     listenerJob?.cancel(); listenerJob = null
     mediaCommandJob?.cancel(); mediaCommandJob = null
@@ -323,6 +324,7 @@ private fun launchServer(
                 server.soTimeout = 100
                 synchronized(activeServers) { activeServers.add(server) }
                 consecutiveFailures = 0
+                Log.d("CLOUDSA", "$errorTag: Server started on port $port")
 
                 while (isActive) {
                     try {
@@ -332,30 +334,39 @@ private fun launchServer(
                                 try {
                                     handler(it)
                                 } catch (e: Exception) {
+                                    Log.e("CLOUDSA", "$errorTag: Error handling client", e)
                                     logError(errorTag, e)
                                 }
                             }
                         }
                     } catch (_: SocketTimeoutException) {
                         continue
-                    } catch (_: SocketException) {
+                    } catch (e: SocketException) {
+                        Log.w("CLOUDSA", "$errorTag: Socket exception, restarting server", e)
                         break
+                    } catch (e: Exception) {
+                        Log.e("CLOUDSA", "$errorTag: Unexpected error accepting client", e)
+                        logError(errorTag, e)
+                        delay(1000L)
                     }
                 }
             } catch (_: BindException) {
                 consecutiveFailures++
-                delay((2000L * consecutiveFailures.coerceAtMost(15)).milliseconds)
+                Log.w("CLOUDSA", "$errorTag: Port $port already bound, retrying... (failures: $consecutiveFailures)")
+                delay((2000L * consecutiveFailures.coerceAtMost(15)))
                 continue
             } catch (e: Exception) {
                 consecutiveFailures++
+                Log.e("CLOUDSA", "$errorTag: Server error, restarting... (failures: $consecutiveFailures)", e)
                 logError(errorTag, e)
+                delay((2000L * consecutiveFailures.coerceAtMost(15)))
             } finally {
                 server?.let {
                     synchronized(activeServers) { activeServers.remove(it) }
                     runCatching { it.close() }
                 }
             }
-            if (isActive) delay((2000L * consecutiveFailures.coerceAtMost(15)).milliseconds)
+            if (isActive) delay((2000L * consecutiveFailures.coerceAtMost(15)))
         }
     }
 }
@@ -472,14 +483,26 @@ var laptopIp: String = ""
 @Volatile
 var laptopName: String = ""
 
-fun getPcNameByIp(context: Context, ip: String): String? {
-    val prefs = context.getSharedPreferences("registered_pcs", Context.MODE_PRIVATE)
-    for ((name, info) in prefs.all) {
-        if (info.toString().contains(ip)) {
-            return name
-        }
-    }
-    return null
+@Volatile
+private var laptopUuidCache: String? = null
+
+private const val PREFS_ACTIVE_PC = "active_pc"
+private const val KEY_LAPTOP_UUID = "uuid"
+
+// Hardware UUID is the only identifier of the paired PC that never changes
+// (name can be re-registered, IP changes with DHCP) - persisted so it survives
+// process restarts, unlike laptopName/laptopIp above.
+fun getLaptopUuid(context: Context): String {
+    laptopUuidCache?.let { return it }
+    val stored = context.getSharedPreferences(PREFS_ACTIVE_PC, MODE_PRIVATE)
+        .getString(KEY_LAPTOP_UUID, "") ?: ""
+    laptopUuidCache = stored
+    return stored
+}
+
+fun setLaptopUuid(context: Context, uuid: String) {
+    laptopUuidCache = uuid
+    context.getSharedPreferences(PREFS_ACTIVE_PC, MODE_PRIVATE).edit { putString(KEY_LAPTOP_UUID, uuid) }
 }
 
 data class TodoItem(
@@ -595,6 +618,8 @@ fun registerWifiReconnectReceiver(context: Context) {
 fun startTriggerListener(context: Context) {
     if (triggerJob?.isActive == true) return
     appContext = context.applicationContext
+    
+    // Start trigger listener
     triggerJob = launchServer(syncScope, Config.TRIGGER_PORT, "startTriggerListener") { client ->
         val pm = context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
         val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:AcceptWakeLock")
@@ -624,7 +649,7 @@ fun startTriggerListener(context: Context) {
 
                         if (!prefs.contains(pcName)) {
                             val pendingPrefs = context.getSharedPreferences("pending_pcs", MODE_PRIVATE)
-                            pendingPrefs.edit().putString(pcName, "$pcIp|$pcUuid").apply()
+                            pendingPrefs.edit { putString(pcName, "$pcIp|$pcUuid") }
 
                             showSimpleNotificationExtern(
                                 "🆕 Verbindungsanfrage",
@@ -636,8 +661,11 @@ fun startTriggerListener(context: Context) {
                             stopAllSyncServices(context)
                         } else {
                             // REGISTERED PC: Verify Hardware UUID AND TOTP code!
+                            // Secret is keyed by hardware UUID, not name/IP - only the UUID
+                            // is guaranteed stable across re-registrations and DHCP changes.
                             val storedUuid = uuidPrefs.getString(pcName, null)
-                            val secret = secretsPrefs.getString(pcName, "COMMANDEXECUTORK") ?: "COMMANDEXECUTORK"
+                            val secretKey = storedUuid?.takeIf { it != "NO_UUID" } ?: pcUuid
+                            val secret = secretsPrefs.getString(secretKey, "COMMANDEXECUTORK") ?: "COMMANDEXECUTORK"
                             val now = System.currentTimeMillis()
                             val totpValid = listOf(
                                 generateTOTP(secret, now - 30000),
@@ -650,6 +678,7 @@ fun startTriggerListener(context: Context) {
                             if (totpValid && uuidValid) {
                                 laptopIp = pcIp
                                 laptopName = pcName
+                                setLaptopUuid(context, pcUuid)
 
                                 showSimpleNotificationExtern(
                                     "📡 CONNECT",
@@ -672,7 +701,6 @@ fun startTriggerListener(context: Context) {
                             } else {
                                 val reason = when {
                                     !totpValid -> "Ungültiger TOTP-Code"
-                                    !uuidValid -> "Hardware-ID Mismatch (Sicherheitsrisiko!)"
                                     else -> "Unbekannter Auth-Fehler"
                                 }
                                 showSimpleNotificationExtern(
@@ -706,6 +734,28 @@ fun startTriggerListener(context: Context) {
             }
         } finally {
             wl.safeRelease()
+        }
+    }
+    
+    // Start watchdog
+    startTriggerWatchdog(context)
+}
+
+private fun startTriggerWatchdog(context: Context) {
+    triggerWatchdogJob?.cancel()
+    triggerWatchdogJob = syncScope.launch {
+        while (isActive) {
+            delay(5000L) // Check every 5 seconds
+            if (triggerJob == null || triggerJob?.isActive != true) {
+                Log.w("CLOUDSA", "Trigger listener not active, restarting...")
+                showSimpleNotificationExtern(
+                    "⚠️ Trigger Listener",
+                    "Neustart des Trigger Listeners...",
+                    5.seconds,
+                    context
+                )
+                startTriggerListener(context)
+            }
         }
     }
 }
@@ -806,13 +856,20 @@ fun stopAllSyncServices(context: Context) {
 
 fun isTriggerPortOpen(): Boolean {
     return try {
-        java.net.Socket().use { socket ->
-            socket.connect(java.net.InetSocketAddress("127.0.0.1", Config.TRIGGER_PORT), 1000)
+        Socket().use { socket ->
+            socket.connect(InetSocketAddress("127.0.0.1", Config.TRIGGER_PORT), 1000)
             true
         }
     } catch (e: Exception) {
         false
     }
+}
+
+fun getTriggerListenerStatus(): String {
+    val jobActive = triggerJob?.isActive == true
+    val watchdogActive = triggerWatchdogJob?.isActive == true
+    val portOpen = isTriggerPortOpen()
+    return "Job: ${if (jobActive) "aktiv" else "inaktiv"}, Watchdog: ${if (watchdogActive) "aktiv" else "inaktiv"}, Port: ${if (portOpen) "offen" else "geschlossen"}"
 }
 
 fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
@@ -874,12 +931,12 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
 
                 val secretsPrefs = context.getSharedPreferences("pc_secrets", MODE_PRIVATE)
-                val keyToUse = laptopName.ifEmpty { currentIp }
+                val keyToUse = getLaptopUuid(context).ifEmpty { currentIp }
                 var totpKey = secretsPrefs.getString(keyToUse, null)
                 if (totpKey == null) {
                     val allowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
                     totpKey = (1..16).map { allowedChars.random() }.joinToString("")
-                    secretsPrefs.edit().putString(keyToUse, totpKey).apply()
+                    secretsPrefs.edit { putString(keyToUse, totpKey) }
                 }
                 val payloadObj = JSONObject().apply {
                     put("todos", todosToJsonArray(todos))
@@ -1895,6 +1952,7 @@ fun startClipboardListener(context: Context) {
         }
 }
 
+@Suppress("KotlinUnreachableCode")
 fun startMailNotifyListener(context: Context) {
     mailNotifyJob?.cancel()
     return
@@ -1937,7 +1995,7 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
             val command = args.optString("command")
             val totp = args.optString("totp")
             val secretsPrefs = context.getSharedPreferences("pc_secrets", MODE_PRIVATE)
-            val keyToUse = laptopName.ifEmpty { laptopIp }
+            val keyToUse = getLaptopUuid(context).ifEmpty { laptopIp }
             val totpKey = secretsPrefs.getString(keyToUse, null) ?: "COMMANDEXECUTORK"
             val now = System.currentTimeMillis()
             val valid = listOf(

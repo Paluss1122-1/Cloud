@@ -68,8 +68,8 @@ import java.net.Inet4Address
 import java.util.Date
 import java.util.Locale
 import kotlin.math.sqrt
+import kotlin.time.Duration.Companion.milliseconds
 
-@Suppress("AssignedValueIsNeverRead")
 @Composable
 fun QuickSettingsTabContent() {
     val context = LocalContext.current
@@ -92,7 +92,7 @@ fun QuickSettingsTabContent() {
     val alpha = remember { Animatable(0f) }
 
     LaunchedEffect(Unit) {
-        delay(100)
+        delay(100.milliseconds)
         alpha.animateTo(
             1f, animationSpec = tween(
                 durationMillis = 150,

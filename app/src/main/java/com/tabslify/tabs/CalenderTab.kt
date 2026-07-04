@@ -1,5 +1,3 @@
-@file:Suppress("AssignedValueIsNeverRead")
-
 package com.tabslify.tabs
 
 import android.content.Context
@@ -172,10 +170,6 @@ object CalendarRepository {
             !d.isBefore(from) && !d.isAfter(to)
         }
     }
-
-    /** Returns all entries for a single day. */
-    fun queryDay(date: LocalDate): List<CalendarEntry> =
-        query(date, date)
 
     fun add(context: Context, entry: CalendarEntry) {
         val updated = _entries.value + entry

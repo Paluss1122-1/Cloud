@@ -55,41 +55,41 @@ This project is a powerful, multi-functional Android application with **ONE** go
 - Take notes and mark them with a color
 
 ### Quick Access
-- Get informations about Network, Display, Battery and your device
-- Get an Diagram of your battery history
+- Get information about Network, Display, Battery and your device
+- Get a Diagram of your battery history
 
 ### Vocabs
 - **AI OCR:** Upload an Image and get strucutred Vocabs
-- **Learn:** Go trough your Vocabs, choose if you knew it and repeat mistakes
+- **Learn:** Go through your Vocabs, choose if you knew it and repeat mistakes
 
 ### Weather
 - View Weather for your current location
-- **Clean GUI:** Swipe trough the Tab with many animations!
+- **Clean GUI:** Swipe through the Tab with many animations!
 
 ## Pictures
 <table>
     <tr>
         <td style="vertical-align: top; padding-right: 16px;">
             <img src="Preview/AiTab.jpg"
-             style="width:auto; border-radius:12px; max-height: 600px" />
+             style="width:auto; border-radius:12px; max-height: 600px"  alt="Image shows AiTab"/>
         </td>
         <td style="vertical-align: top; padding-right: 16px;">
             <img src="Preview/Authenticator.jpg"
-             style="width:auto; border-radius:12px; max-height: 600px" />
+             style="width:auto; border-radius:12px; max-height: 600px"  alt="Image shows AuthenticatorTab"/>
         </td>
         <td style="vertical-align: top; padding-right: 16px;">
             <img src="Preview/Browser.jpg"
-             style="width:auto; border-radius:12px; max-height: 600px" />
+             style="width:auto; border-radius:12px; max-height: 600px"  alt="Image shows BrowserTab"/>
         </td>
     </tr>
     <tr>
         <td style="vertical-align: top; padding-right: 16px;">
             <img src="Preview/DayCalculator.jpg"
-             style="width:auto; border-radius:12px; max-height: 600px" />
+             style="width:auto; border-radius:12px; max-height: 600px"  alt="Image shows DayCalculatorTab"/>
         </td>
         <td style="vertical-align: top; padding-right: 16px;">
             <img src="Preview/Explore.jpg"
-             style="width:auto; border-radius:12px; max-height: 600px" />
+             style="width:auto; border-radius:12px; max-height: 600px"  alt="Image shows ExploreTab"/>
         </td>
     </tr>
 </table>

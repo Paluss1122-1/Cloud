@@ -93,6 +93,7 @@ data class BatterySample(
 object BatteryDataRepository {
     private lateinit var context: Context
     private val json = Json { ignoreUnknownKeys = true }
+    @Suppress("ObjectPropertyName")
     internal val _samples = MutableStateFlow<List<BatterySample>>(emptyList())
     val samples = _samples.asStateFlow()
 

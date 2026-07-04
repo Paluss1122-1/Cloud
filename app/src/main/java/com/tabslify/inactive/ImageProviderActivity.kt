@@ -1,5 +1,3 @@
-@file:Suppress("AssignedValueIsNeverRead")
-
 package com.tabslify.inactive
 
 import android.content.Intent

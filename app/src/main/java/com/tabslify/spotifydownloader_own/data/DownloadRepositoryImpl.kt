@@ -33,6 +33,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.io.ByteArrayOutputStream
 import java.net.URL
+import kotlin.time.Duration.Companion.milliseconds
 
 class DownloadRepositoryImpl(
     private val httpClient: HttpClient,
@@ -140,7 +141,7 @@ class DownloadRepositoryImpl(
             }
 
             send(DownloadState.Converting)
-            delay(500)
+            delay(500.milliseconds)
             send(DownloadState.Success(trackId, trackTitle, artist, album, fileName, fileUri))
         } catch (e: Exception) {
             send(DownloadState.Error("Download fehlgeschlagen: ${e.localizedMessage}"))

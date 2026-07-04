@@ -1,5 +1,3 @@
-@file:Suppress("AssignedValueIsNeverRead")
-
 package com.tabslify.tabs
 
 import android.annotation.SuppressLint

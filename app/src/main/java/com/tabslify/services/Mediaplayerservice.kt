@@ -1,5 +1,3 @@
-@file:Suppress("AssignedValueIsNeverRead")
-
 package com.tabslify.services
 
 import android.Manifest
@@ -22,8 +20,6 @@ import android.media.AudioManager
 import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -276,7 +272,6 @@ class MediaPlayerService : MediaSessionService() {
                 "podcast_player_prefs",
                 MODE_PRIVATE
             )
-            val nm: NotificationManager? = context.getSystemService(NotificationManager::class.java)
 
             val proj = arrayOf(
                 MediaStore.Audio.Media._ID,
@@ -377,14 +372,13 @@ class MediaPlayerService : MediaSessionService() {
             Intent(context, MediaPlayerService::class.java)
         )
 
-        fun createPlaylist(context: Context, name: String, type: PlaylistType): String {
+        fun createPlaylist(context: Context, name: String, type: PlaylistType) {
             val intent = Intent(context, MediaPlayerService::class.java).apply {
                 action = "CREATE_PLAYLIST"
                 putExtra("PLAYLIST_NAME", name)
                 putExtra("PLAYLIST_TYPE", type.name)
             }
             context.startService(intent)
-            return ""
         }
 
         fun showPlaylists(context: Context, type: PlaylistType? = null) {
@@ -435,11 +429,7 @@ class MediaPlayerService : MediaSessionService() {
             context.startService(intent)
         }
 
-        fun hasAudioPermission(context: Context): Boolean =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                context.checkSelfPermission(Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED
-            else
-                context.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        fun hasAudioPermission(context: Context): Boolean = context.checkSelfPermission(Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED
 
         fun streamRemote(context: Context, url: String) {
             ensureServiceIsRunning(context)
@@ -1797,7 +1787,6 @@ class MediaPlayerService : MediaSessionService() {
     private fun showPodcastSelection() {
         loadPodcasts()
         if (podcasts.isEmpty()) return
-        val nm = getSystemService(NotificationManager::class.java)
         val updated = podcasts.map {
             it.copy(
                 savedPosition = getPodcastSavedPosition(it.path),
@@ -1849,7 +1838,6 @@ class MediaPlayerService : MediaSessionService() {
         if (completed.isEmpty()) {
             showNoCompletedPodcastsNotification(); return
         }
-        val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
         completed.forEachIndexed { i, p ->
             val pi = PendingIntent.getService(
                 this, 70000 + i,
@@ -2502,8 +2490,6 @@ class MediaPlayerService : MediaSessionService() {
             )
             return
         }
-
-        val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
 
         filtered.forEachIndexed { i, pl ->
             val activateIntent = Intent(this, MediaPlayerService::class.java).apply {

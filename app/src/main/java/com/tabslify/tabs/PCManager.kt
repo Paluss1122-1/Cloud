@@ -40,8 +40,10 @@ import androidx.core.content.edit
 import com.tabslify.core.objects.prvt
 import com.tabslify.quiethoursnotificationhelper.laptopIp
 import com.tabslify.quiethoursnotificationhelper.laptopName
+import com.tabslify.quiethoursnotificationhelper.setLaptopUuid
 import com.tabslify.quiethoursnotificationhelper.stopAllSyncServices
 import com.tabslify.quiethoursnotificationhelper.syncTodosWithLaptop
+import com.tabslify.quiethoursnotificationhelper.getTriggerListenerStatus
 import com.tabslify.tabs.authenticator.TotpGenerator
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -52,6 +54,7 @@ import kotlin.time.Duration.Companion.milliseconds
 data class PcDetails(
     val name: String,
     val ip: String,
+    val uuid: String,
     val regInfo: String,
     val secret: String,
     val liveCode: String
@@ -79,16 +82,21 @@ fun PCManagerTab() {
 
     var pcDetailsList by remember { mutableStateOf(emptyList<PcDetails>()) }
     var pendingList by remember { mutableStateOf(emptyList<PendingPc>()) }
+    var triggerStatus by remember { mutableStateOf("") }
 
     // Poll to keep the UI in sync
     LaunchedEffect(Unit) {
         while (true) {
             val allPcs = prefs.all.map { (name, regInfo) ->
-                val secret = secretsPrefs.getString(name, "COMMANDEXECUTORK") ?: "COMMANDEXECUTORK"
+                // pc_secrets is keyed by hardware UUID, not name - UUID is the only
+                // identifier that can't change out from under a registered PC.
+                val uuid = uuidPrefs.getString(name, null) ?: "NO_UUID"
+                val secret = secretsPrefs.getString(uuid, "COMMANDEXECUTORK") ?: "COMMANDEXECUTORK"
                 val liveCode = TotpGenerator.generateTOTP(secret)
                 PcDetails(
                     name = name,
                     ip = "",
+                    uuid = uuid,
                     regInfo = regInfo.toString(),
                     secret = secret,
                     liveCode = liveCode
@@ -105,8 +113,10 @@ fun PCManagerTab() {
                 )
             }
             pendingList = pending
+            
+            triggerStatus = getTriggerListenerStatus()
 
-            delay(1000.milliseconds)
+            delay(1000L)
         }
     }
 
@@ -159,6 +169,14 @@ fun PCManagerTab() {
                         color = Color(0xFFE57373)
                     )
                 }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    text = "Trigger Listener: $triggerStatus",
+                    fontSize = 11.sp,
+                    color = Color.LightGray
+                )
             }
         }
 
@@ -230,15 +248,16 @@ fun PCManagerTab() {
                                         val newSecret = (1..16).map { allowedChars.random() }.joinToString("")
                                         
                                         val nowStr = SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault()).format(Date())
-                                        secretsPrefs.edit().putString(pc.name, newSecret).apply()
+                                        secretsPrefs.edit().putString(pc.uuid, newSecret).apply()
                                         prefs.edit().putString(pc.name, "Registriert am $nowStr").apply()
                                         uuidPrefs.edit().putString(pc.name, pc.uuid).apply()
 
                                         pendingPrefs.edit {remove(pc.name)}
-                                        
+
                                         laptopIp = pc.ip
                                         laptopName = pc.name
-                                        
+                                        setLaptopUuid(context, pc.uuid)
+
                                         syncTodosWithLaptop(context, true)
                                         
                                         Toast.makeText(context, "${pc.name} erfolgreich freigegeben!", Toast.LENGTH_LONG).show()
@@ -300,7 +319,8 @@ fun PCManagerTab() {
                                 Button(
                                     onClick = {
                                         prefs.edit().remove(pc.name).apply()
-                                        secretsPrefs.edit().remove(pc.name).apply()
+                                        secretsPrefs.edit().remove(pc.uuid).apply()
+                                        uuidPrefs.edit().remove(pc.name).apply()
                                         if (pc.name == laptopName) {
                                             stopAllSyncServices(context)
                                         }
@@ -317,6 +337,18 @@ fun PCManagerTab() {
                                 text = pc.regInfo,
                                 fontSize = 12.sp,
                                 color = Color.Gray
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "TOTP Key: ${pc.secret}",
+                                fontSize = 12.sp,
+                                color = Color(0xFFFFB74D),
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Aktueller Code: ${pc.liveCode}",
+                                fontSize = 14.sp,
+                                color = Color.White
                             )
                         }
                     }

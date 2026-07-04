@@ -1,5 +1,3 @@
-@file:Suppress("AssignedValueIsNeverRead")
-
 package com.tabslify.tabs
 
 import android.app.Activity
@@ -67,7 +65,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -116,6 +113,7 @@ import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.time.Duration.Companion.milliseconds
 
 private class TouchableImageView(context: Context) : ImageView(context) {
     override fun performClick(): Boolean {
@@ -203,7 +201,7 @@ class RemoteDesktopViewModel : ViewModel() {
 
     private val perfMonitor = PerformanceMonitor()
 
-    private val MOVE_THROTTLE_MS = 16L
+    private val moveThrottleMs = 16L
 
     private val okHttpClient = OkHttpClient.Builder()
         .pingInterval(15, TimeUnit.SECONDS)
@@ -290,7 +288,7 @@ class RemoteDesktopViewModel : ViewModel() {
                     } catch (e: Exception) {
                         Log.e(TAG, "[DISCOVERY] Broadcast-Fehler", e)
                     }
-                    delay(BROADCAST_INTERVAL_MS)
+                    delay(BROADCAST_INTERVAL_MS.milliseconds)
                 }
 
                 withContext(Dispatchers.Main) {
@@ -502,7 +500,7 @@ class RemoteDesktopViewModel : ViewModel() {
     fun sendTouchEvent(x: Float, y: Float, action: String) {
         if (action == "move") {
             val now = System.currentTimeMillis()
-            if (now - lastMoveSentTime < MOVE_THROTTLE_MS) {
+            if (now - lastMoveSentTime < moveThrottleMs) {
                 Log.v(TAG, "[INPUT] Move-Event gedrosselt")
                 return
             }
@@ -565,7 +563,7 @@ fun RemoteDesktopTabContent() {
 
     val alpha = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        delay(100)
+        delay(100.milliseconds)
         alpha.animateTo(1f, animationSpec = tween(300, easing = FastOutSlowInEasing))
     }
 
@@ -872,8 +870,6 @@ fun ConnectedScreen(
     onDisconnect: () -> Unit
 ) {
     val currentFrame by viewModel.currentFrame.collectAsState()
-    var viewWidth by remember { mutableFloatStateOf(1f) }
-    var viewHeight by remember { mutableFloatStateOf(1f) }
     var isFullscreen by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
@@ -1116,7 +1112,6 @@ fun ConnectedScreen(
     }
 }
 
-@Suppress("unused")
 @Composable
 fun HostingScreen(
     ip: String,

@@ -22,6 +22,7 @@ private val LightColorScheme = lightColorScheme(
     tertiary = Color(0xFFFFFFFF)
 )
 
+@Suppress("unused")
 @Composable
 fun NewSpotifyDownloaderTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),

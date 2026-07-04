@@ -39,6 +39,7 @@ import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.time.Duration.Companion.milliseconds
 
 class ChatService : Service() {
 
@@ -61,6 +62,7 @@ class ChatService : Service() {
         }
     }
 
+    @Suppress("PropertyName")
     @Serializable
     data class Message(
         val id: String? = null,
@@ -317,7 +319,7 @@ class ChatService : Service() {
         try {
             Log.d("ChatService", "Setting up Realtime listener...")
 
-            val setupSuccess = withTimeoutOrNull(REALTIME_SETUP_TIMEOUT_MS) {
+            val setupSuccess = withTimeoutOrNull(REALTIME_SETUP_TIMEOUT_MS.milliseconds) {
                 try {
                     val initialMessages = Config.safeCall {
                         supabase.from("messages")

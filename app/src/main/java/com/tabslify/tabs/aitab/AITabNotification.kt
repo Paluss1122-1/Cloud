@@ -8,8 +8,8 @@ import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.tabslify.core.activities.MainActivity
-import com.tabslify.core.objects.tNotify
 import com.tabslify.core.functions.canNotify
+import com.tabslify.core.objects.tNotify
 
 fun isAppInForeground(): Boolean {
     return ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)

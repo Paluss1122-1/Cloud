@@ -14,7 +14,6 @@ import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import android.widget.Toast
 import org.json.JSONObject
 
 @SuppressLint("AccessibilityPolicy")

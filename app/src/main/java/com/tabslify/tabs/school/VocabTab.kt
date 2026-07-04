@@ -104,6 +104,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import kotlin.time.Duration.Companion.milliseconds
 
 
 data class Vokabel(val latein: String, val deutsch: String, val id: Int)
@@ -351,17 +352,10 @@ fun VocabTab(paddingValues: PaddingValues) {
                 onMergeClick = { showMergeDialog = true },
                 onBack = { screen = VokabelTabScreen.DASHBOARD },
                 paddingValues = paddingValues,
-                recentMaterials = recentMaterialPreviews,
                 onOpenMaterial = {
                     selectedMaterialSubject = it.subject
                     selectedMaterialFile = it.fileName
                     screen = VokabelTabScreen.MATERIALIEN
-                },
-                onLearnDirectly = {
-                    if (savedSets.isNotEmpty()) {
-                        val latest = savedSets.maxBy { it.lastUsed }
-                        openSetAndUpdateLastUsed(latest)
-                    }
                 }
             )
 
@@ -626,9 +620,7 @@ fun VocabTabContent(
     onMergeClick: () -> Unit = {},
     onBack: () -> Unit,
     paddingValues: PaddingValues,
-    recentMaterials: List<RecentMaterial> = emptyList(),
-    onOpenMaterial: (RecentMaterial) -> Unit = {},
-    onLearnDirectly: () -> Unit = {}
+    onOpenMaterial: (RecentMaterial) -> Unit = {}
 ) {
     var setToDelete by remember { mutableStateOf<VokabelSet?>(null) }
     var menuOpenFor by remember { mutableStateOf<Long?>(null) }
@@ -741,7 +733,7 @@ fun VocabTabContent(
 
                         val progressPercentFloat = remember { Animatable(lastWidth) }
                         LaunchedEffect(progressFloat) {
-                            delay(200)
+                            delay(200.milliseconds)
                             progressPercentFloat.animateTo(
                                 progressFloat,
                                 animationSpec = tween(400, easing = EaseInOutCubic)

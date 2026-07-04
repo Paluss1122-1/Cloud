@@ -67,9 +67,6 @@ data class RecentMaterial(
 
     val title: String
         get() = fileName ?: subject
-
-    val subtitle: String
-        get() = if (fileName.isNullOrBlank()) "Fach" else "Material • $subject"
 }
 
 @Composable

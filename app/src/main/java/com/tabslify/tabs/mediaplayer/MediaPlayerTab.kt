@@ -1,5 +1,3 @@
-@file:Suppress("AssignedValueIsNeverRead")
-
 package com.tabslify.tabs.mediaplayer
 
 import android.Manifest
@@ -144,6 +142,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.milliseconds
 
 private val BgDeep = Color(0xFF121212)
 private val BgSurface = Color(0xFF1E1E1E)
@@ -326,10 +325,7 @@ fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
                             Button(
                                 onClick = {
                                     val perm =
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                                            Manifest.permission.READ_MEDIA_AUDIO
-                                        else
-                                            Manifest.permission.READ_EXTERNAL_STORAGE
+                                        Manifest.permission.READ_MEDIA_AUDIO
                                     permissionLauncher.launch(perm)
                                 },
                                 modifier = Modifier.fillMaxWidth()
@@ -350,7 +346,7 @@ fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
                                     .fillMaxSize()
                                     .padding(bottom = innerPadding.calculateBottomPadding()),
                                 state = state,
-                                onSongClick = { song -> playSong(context, song, state.songs) },
+                                onSongClick = { song -> playSong(context, song) },
                                 onSongLongClick = { analyticsTarget = it },
                                 onEpisodeClick = { ep -> playEpisode(context, ep) },
                                 onRefresh = { viewModel.refresh() }
@@ -361,7 +357,7 @@ fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
                                 query = state.searchQuery,
                                 results = searchResults,
                                 onQueryChange = { viewModel.setSearchQuery(it) },
-                                onSongClick = { song -> playSong(context, song, state.songs) },
+                                onSongClick = { song -> playSong(context, song) },
                                 onSongLongClick = { analyticsTarget = it },
                                 onEpisodeClick = { ep -> playEpisode(context, ep) },
                                 onShowClick = { viewModel.setTab(MediaTab.PODCASTS) }
@@ -377,10 +373,10 @@ fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
                             MediaTab.MUSIC -> MusicTab(
                                 modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                                 state = state,
-                                onSongClick = { song -> playSong(context, song, state.songs) },
+                                onSongClick = { song -> playSong(context, song) },
                                 onPlaylistCreated = {
                                     viewModel.viewModelScope.launch {
-                                        delay(600)
+                                        delay(600.milliseconds)
                                         viewModel.refresh()
                                     }
                                 },
@@ -580,7 +576,7 @@ private fun HomeTab(
     // Periodic refresh every second, even if sheets are open
     LaunchedEffect(Unit) {
         while (true) {
-            delay(1000)
+            delay(1000.milliseconds)
             onRefresh()
         }
     }
@@ -771,9 +767,8 @@ private fun HomeTab(
             }
         }
     }
-    // For algorithmic playlist: use cached data if available, otherwise new data
-    (detailPlaylist ?: cachedDetailPlaylistData)?.let { (source, songs) ->
-        // Update cache with current state data for the same source
+
+    (detailPlaylist ?: cachedDetailPlaylistData)?.let { (source, _) ->
         if (detailPlaylist != null) {
             val currentData = state.algorithmicPlaylists.find { it.first.id == source.id }
             if (currentData != null) {
@@ -1512,7 +1507,7 @@ private fun MusicTab(
                 selectedSongs = emptySet()
                 showCreateSheet = false
                 viewModel.viewModelScope.launch {
-                    delay(500)
+                    delay(500.milliseconds)
                     onPlaylistCreated()
                 }
             },
@@ -2384,8 +2379,7 @@ private fun PodcastAnalyticsContent(episode: PodcastEpisode) {
 
 private fun playSong(
     context: Context,
-    song: MediaPlayerService.Song,
-    allSongs: List<MediaPlayerService.Song>
+    song: MediaPlayerService.Song
 ) {
     MediaPlayerService.playFromAllSongs(context, song.path)
 }
@@ -2787,7 +2781,7 @@ private fun MarqueeText(
                 -400f, animationSpec = tween(6000, easing = LinearEasing, delayMillis = 1500)
             )
             scrollX.snapTo(0f)
-            delay(500)
+            delay(500.milliseconds)
         }
     }
     Box(modifier = modifier.fillMaxWidth()) {
@@ -3091,16 +3085,10 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun hasAudioPermission(): Boolean {
         val ctx = getApplication<Application>()
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-            ContextCompat.checkSelfPermission(
-                ctx,
-                Manifest.permission.READ_MEDIA_AUDIO
-            ) == PackageManager.PERMISSION_GRANTED
-        else
-            ContextCompat.checkSelfPermission(
-                ctx,
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            ) == PackageManager.PERMISSION_GRANTED
+        return ContextCompat.checkSelfPermission(
+            ctx,
+            Manifest.permission.READ_MEDIA_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
     }
 
     fun onPermissionResult(granted: Boolean) {
@@ -3120,7 +3108,7 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             while (isActive) {
                 _nowPlaying.value = readNowPlayingFromPrefs()
-                delay(1000)
+                delay(1000.milliseconds)
             }
         }
     }
@@ -3394,7 +3382,12 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
     enum class PlayerAction { PLAY_PAUSE, NEXT, PREVIOUS, REWIND_15, FORWARD_15 }
 }
 
-enum class PlaylistSourceType { ALGORITHMIC, USER_CREATED }
+enum class PlaylistSourceType {
+    ALGORITHMIC,
+
+    @Suppress("unused")
+    USER_CREATED
+}
 
 interface PlaylistSource {
     val id: String
@@ -3659,6 +3652,7 @@ object PodcastShowManager {
         return true
     }
 
+    @Suppress("unused")
     fun deleteShow(id: String): Boolean {
         if (id == "unassigned") return false
         val removed = shows.removeIf { it.id == id }
@@ -3666,7 +3660,7 @@ object PodcastShowManager {
         return removed
     }
 
-    fun assignPattern(pattern: String, showName: String): Boolean {
+    fun assignPattern(pattern: String, showName: String) {
         val show = shows.find { it.name.equals(showName, ignoreCase = true) }
             ?: createShow(showName)
         val pattern = pattern.replace('\u2019', '\'').replace('\u2018', '\'').replace('\u201C', '"')
@@ -3680,9 +3674,9 @@ object PodcastShowManager {
         }
         saveShows()
         savePatternMappings()
-        return true
     }
 
+    @Suppress("unused")
     fun removePattern(pattern: String) {
         extraPatterns.remove(pattern.lowercase())
         shows.forEachIndexed { idx, show ->

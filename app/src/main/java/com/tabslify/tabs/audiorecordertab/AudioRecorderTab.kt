@@ -298,7 +298,7 @@ private fun AudioRecorderTabContent(
             maxDuration = if (vm.shareRange.endInclusive > 0) vm.shareRange.endInclusive else 1f,
             isProcessing = vm.isProcessing,
             onDismiss = { vm.onDismiss() },
-            onShare = { range -> vm.onFinalShare(range, scope) },
+            onShare = { range -> vm.onFinalShare(range) },
             vm = vm
         )
     }

@@ -242,6 +242,7 @@ enum class PasswordStrength(
     EXCELLENT("Ausgezeichnet", 1.00f, Color(0xFF1B5E20))
 }
 
+@Suppress("PropertyName")
 @Serializable
 data class PasswordEntrySupabase(
     val id: String? = null,

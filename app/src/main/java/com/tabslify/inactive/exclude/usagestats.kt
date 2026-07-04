@@ -1,3 +1,5 @@
+@file:Suppress("unused")
+
 package com.tabslify.inactive.exclude
 
 import android.app.usage.UsageStats

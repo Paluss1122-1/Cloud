@@ -374,7 +374,7 @@ suspend fun fetchMoviesFromTMDB(context: Context, genreId: Int?): List<Movie> =
                 "MovieDiscoveryTab",
                 "TMDB API Error: Code ${connection.responseCode}, Body: $errorText"
             )
-            return@withContext emptyList<Movie>()
+            return@withContext emptyList()
         }
 
         val response = connection.inputStream.bufferedReader().readText()

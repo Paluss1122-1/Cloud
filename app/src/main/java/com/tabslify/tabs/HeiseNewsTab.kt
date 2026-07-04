@@ -73,6 +73,7 @@ import coil.compose.AsyncImage
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
+import com.tabslify.core.TabNavigationViewModel
 import com.tabslify.quiethoursnotificationhelper.AiProvider
 import com.tabslify.quiethoursnotificationhelper.sendAiRequest
 import com.tabslify.tabs.aitab.ChatMessage
@@ -107,29 +108,37 @@ private fun parseInlineMarkdown(line: String): Pair<androidx.compose.ui.text.Ann
         when {
             line.startsWith("**", i) -> {
                 val end = line.indexOf("**", i + 2)
-                if (end == -1) { builder.append(c); i++ } else {
+                if (end == -1) {
+                    builder.append(c); i++
+                } else {
                     builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
                     builder.append(line.substring(i + 2, end))
                     builder.pop()
                     i = end + 2
                 }
             }
+
             c == '*' -> {
                 val end = line.indexOf('*', i + 1)
-                if (end == -1) { builder.append(c); i++ } else {
+                if (end == -1) {
+                    builder.append(c); i++
+                } else {
                     builder.pushStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic))
                     builder.append(line.substring(i + 1, end))
                     builder.pop()
                     i = end + 1
                 }
             }
+
             c == '[' -> {
                 val closeBracket = line.indexOf(']', i + 1)
                 if (closeBracket == -1 || closeBracket + 1 >= line.length || line[closeBracket + 1] != '(') {
                     builder.append(c); i++
                 } else {
                     val closeParen = line.indexOf(')', closeBracket + 2)
-                    if (closeParen == -1) { builder.append(c); i++ } else {
+                    if (closeParen == -1) {
+                        builder.append(c); i++
+                    } else {
                         val label = line.substring(i + 1, closeBracket)
                         val url = line.substring(closeBracket + 2, closeParen)
                         val start = builder.length
@@ -146,7 +155,10 @@ private fun parseInlineMarkdown(line: String): Pair<androidx.compose.ui.text.Ann
                     }
                 }
             }
-            else -> { builder.append(c); i++ }
+
+            else -> {
+                builder.append(c); i++
+            }
         }
     }
     return builder.toAnnotatedString() to links
@@ -167,7 +179,8 @@ private fun DottedMarkdownText(
                 Spacer(Modifier.height(6.dp))
                 return@forEach
             }
-            val isBullet = rawLine.trimStart().startsWith("* ") || rawLine.trimStart().startsWith("- ")
+            val isBullet =
+                rawLine.trimStart().startsWith("* ") || rawLine.trimStart().startsWith("- ")
             val lineText = if (isBullet) {
                 rawLine.trimStart().removePrefix("* ").removePrefix("- ")
             } else rawLine
@@ -223,12 +236,27 @@ private fun DottedMarkdownText(
                                                 val endOffset = link.range.last + 1
                                                 if (startOffset >= lr.layoutInput.text.length) return@forEach
                                                 val startLine = lr.getLineForOffset(startOffset)
-                                                val endLine = lr.getLineForOffset(endOffset.coerceAtMost(lr.layoutInput.text.length))
+                                                val endLine =
+                                                    lr.getLineForOffset(endOffset.coerceAtMost(lr.layoutInput.text.length))
                                                 for (line in startLine..endLine) {
-                                                    val lineStart = if (line == startLine) lr.getHorizontalPosition(startOffset, true) else lr.getLineLeft(line)
-                                                    val lineEnd = if (line == endLine) lr.getHorizontalPosition(endOffset, true) else lr.getLineRight(line)
+                                                    val lineStart =
+                                                        if (line == startLine) lr.getHorizontalPosition(
+                                                            startOffset,
+                                                            true
+                                                        ) else lr.getLineLeft(line)
+                                                    val lineEnd =
+                                                        if (line == endLine) lr.getHorizontalPosition(
+                                                            endOffset,
+                                                            true
+                                                        ) else lr.getLineRight(line)
                                                     val y = lr.getLineBottom(line) + 2.dp.toPx()
-                                                    canvas.nativeCanvas.drawLine(lineStart, y, lineEnd, y, paint)
+                                                    canvas.nativeCanvas.drawLine(
+                                                        lineStart,
+                                                        y,
+                                                        lineEnd,
+                                                        y,
+                                                        paint
+                                                    )
                                                 }
                                             }
                                         }
@@ -238,7 +266,8 @@ private fun DottedMarkdownText(
                                             detectTapGestures { pos ->
                                                 val lr = layoutResult ?: return@detectTapGestures
                                                 val offset = lr.getOffsetForPosition(pos)
-                                                links.firstOrNull { offset in it.range }?.let { onLinkClick(it.url) }
+                                                links.firstOrNull { offset in it.range }
+                                                    ?.let { onLinkClick(it.url) }
                                             }
                                         }
                                     )
@@ -287,7 +316,7 @@ private const val CACHE_VALIDITY_MS = 30 * 60 * 1000L
 
 private fun saveSummaryToPrefs(context: Context, articleLink: String, summary: String) {
     val prefs = context.getSharedPreferences(HEISE_PREFS_NAME, Context.MODE_PRIVATE)
-    prefs.edit {putString(HEISE_SUMMARY_PREFIX + articleLink, summary)}
+    prefs.edit { putString(HEISE_SUMMARY_PREFIX + articleLink, summary) }
 }
 
 private fun loadSummaryFromPrefs(context: Context, articleLink: String): String? {
@@ -295,7 +324,11 @@ private fun loadSummaryFromPrefs(context: Context, articleLink: String): String?
     return prefs.getString(HEISE_SUMMARY_PREFIX + articleLink, null)
 }
 
-private fun saveChatToPrefs(context: Context, articleLink: String, chatMessages: List<HeiseChatMessage>) {
+private fun saveChatToPrefs(
+    context: Context,
+    articleLink: String,
+    chatMessages: List<HeiseChatMessage>
+) {
     val prefs = context.getSharedPreferences(HEISE_PREFS_NAME, Context.MODE_PRIVATE)
     val jsonArray = JSONArray()
     for (msg in chatMessages) {
@@ -350,22 +383,25 @@ private fun saveArticlesToPrefs(context: Context, articles: List<HeiseNewsItem>)
 
 private fun loadArticlesFromPrefs(context: Context): Pair<List<HeiseNewsItem>, Long> {
     val prefs = context.getSharedPreferences(HEISE_PREFS_NAME, Context.MODE_PRIVATE)
-    val jsonStr = prefs.getString(HEISE_ARTICLES_KEY, null) ?: return emptyList<HeiseNewsItem>() to 0L
+    val jsonStr =
+        prefs.getString(HEISE_ARTICLES_KEY, null) ?: return emptyList<HeiseNewsItem>() to 0L
     val timestamp = prefs.getLong(HEISE_ARTICLES_TIMESTAMP_KEY, 0L)
     return try {
         val jsonArray = JSONArray(jsonStr)
         val list = mutableListOf<HeiseNewsItem>()
         for (i in 0 until jsonArray.length()) {
             val jsonObj = jsonArray.getJSONObject(i)
-            list.add(HeiseNewsItem(
-                id = jsonObj.getString("id"),
-                title = jsonObj.getString("title"),
-                summary = jsonObj.getString("summary"),
-                link = jsonObj.getString("link"),
-                imageUrl = jsonObj.optString("imageUrl", null),
-                publishedAt = jsonObj.getString("publishedAt"),
-                rawTimestamp = jsonObj.getLong("rawTimestamp")
-            ))
+            list.add(
+                HeiseNewsItem(
+                    id = jsonObj.getString("id"),
+                    title = jsonObj.getString("title"),
+                    summary = jsonObj.getString("summary"),
+                    link = jsonObj.getString("link"),
+                    imageUrl = jsonObj.optString("imageUrl", null),
+                    publishedAt = jsonObj.getString("publishedAt"),
+                    rawTimestamp = jsonObj.getLong("rawTimestamp")
+                )
+            )
         }
         list to timestamp
     } catch (e: Exception) {
@@ -387,7 +423,10 @@ private fun preprocessSummaryMarkup(raw: String): Pair<String, List<HeiseTermQue
 }
 
 @Composable
-fun HeiseNewsTabContent(modifier: Modifier = Modifier) {
+fun HeiseNewsTabContent(
+    modifier: Modifier = Modifier,
+    viewModel: TabNavigationViewModel
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val articleTextCache = remember { mutableStateMapOf<String, String>() }
@@ -405,6 +444,16 @@ fun HeiseNewsTabContent(modifier: Modifier = Modifier) {
     var askingArticleLink by remember { mutableStateOf<String?>(null) }
     var chatError by remember { mutableStateOf<String?>(null) }
 
+    LaunchedEffect(selectedArticle) {
+        val canGoBack = selectedArticle != null
+        viewModel.updateBackState(
+            canNavigateBack = canGoBack,
+            onNavigateBack = {
+                selectedArticle = null
+            }
+        )
+    }
+
     fun loadNews(forceRefresh: Boolean = false) {
         scope.launch {
             isLoading = true
@@ -419,7 +468,7 @@ fun HeiseNewsTabContent(modifier: Modifier = Modifier) {
                         return@launch
                     }
                 }
-                
+
                 val freshArticles = fetchHeiseNews()
                 articles = freshArticles
                 saveArticlesToPrefs(context, freshArticles)
@@ -566,7 +615,11 @@ fun HeiseNewsTabContent(modifier: Modifier = Modifier) {
 
     fun onTermQuestionClick(article: HeiseNewsItem, question: String) {
         if (summarizingArticleLink == article.link || askingArticleLink == article.link) {
-            Toast.makeText(context, "Bitte warten, bis die Antwort fertig ist …", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                context,
+                "Bitte warten, bis die Antwort fertig ist …",
+                Toast.LENGTH_SHORT
+            ).show()
             return
         }
         askAboutArticle(article, question)
@@ -616,7 +669,11 @@ fun HeiseNewsTabContent(modifier: Modifier = Modifier) {
                 runCatching {
                     context.startActivity(Intent(Intent.ACTION_VIEW, article.link.toUri()))
                 }.onFailure {
-                    Toast.makeText(context, "Artikel konnte nicht geöffnet werden", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        context,
+                        "Artikel konnte nicht geöffnet werden",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             },
             modifier = modifier
@@ -936,13 +993,21 @@ private fun HeiseArticleDetail(
                                             )
                                         }
                                     } else if (message.own) {
-                                        Text(message.text, color = Color.White, fontSize = 14.sp, lineHeight = 19.sp)
+                                        Text(
+                                            message.text,
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            lineHeight = 19.sp
+                                        )
                                     } else {
                                         Markdown(
                                             content = message.text,
                                             colors = markdownColor(text = Color.White.copy(alpha = 0.9f)),
                                             typography = markdownTypography(
-                                                text = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 19.sp)
+                                                text = MaterialTheme.typography.bodyMedium.copy(
+                                                    fontSize = 14.sp,
+                                                    lineHeight = 19.sp
+                                                )
                                             )
                                         )
                                     }
@@ -1011,7 +1076,9 @@ private fun HeiseArticleDetail(
                             Icon(
                                 Icons.AutoMirrored.Filled.Send,
                                 contentDescription = "Frage senden",
-                                tint = if (!isAiBusy && chatInput.isNotBlank()) Color.White else Color.White.copy(alpha = 0.4f)
+                                tint = if (!isAiBusy && chatInput.isNotBlank()) Color.White else Color.White.copy(
+                                    alpha = 0.4f
+                                )
                             )
                         }
                     }
@@ -1040,7 +1107,10 @@ private fun HeiseArticleDetail(
                                 strokeWidth = 2.dp,
                                 color = Color.White
                             )
-                            Text("  Artikel wird geladen...", color = Color.White.copy(alpha = 0.75f))
+                            Text(
+                                "  Artikel wird geladen...",
+                                color = Color.White.copy(alpha = 0.75f)
+                            )
                         }
 
                         !articleError.isNullOrBlank() -> {
@@ -1165,6 +1235,39 @@ private suspend fun fetchFullArticleText(articleUrl: String): String = withConte
     }
 }
 
+private fun XmlPullParser.readElementTextSafely(): String {
+    if (eventType != XmlPullParser.START_TAG) return ""
+
+    val builder = StringBuilder()
+    var depth = 1
+    var currentEvent = next()
+
+    while (depth > 0 && currentEvent != XmlPullParser.END_DOCUMENT) {
+        when (currentEvent) {
+            XmlPullParser.START_TAG -> depth++
+            XmlPullParser.END_TAG -> {
+                depth--
+                if (depth == 0) {
+                    return builder.toString().trim()
+                }
+            }
+
+            XmlPullParser.TEXT,
+            XmlPullParser.CDSECT,
+            XmlPullParser.ENTITY_REF -> builder.append(text)
+
+            XmlPullParser.COMMENT,
+            XmlPullParser.IGNORABLE_WHITESPACE,
+            XmlPullParser.PROCESSING_INSTRUCTION,
+            XmlPullParser.DOCDECL -> Unit
+        }
+
+        currentEvent = next()
+    }
+
+    return builder.toString().trim()
+}
+
 private fun parseHeiseAtomFeed(inputStream: InputStream): List<HeiseNewsItem> {
     val parser = XmlPullParserFactory.newInstance().apply {
         isNamespaceAware = true
@@ -1196,12 +1299,16 @@ private fun parseHeiseAtomFeed(inputStream: InputStream): List<HeiseNewsItem> {
                     updated = ""
                 }
 
-                "id" -> if (inEntry) id = parser.nextText().orEmpty()
-                "title" -> if (inEntry) title = parser.nextText().orEmpty()
-                "summary" -> if (inEntry) summary = parser.nextText().orEmpty()
-                "content" -> if (inEntry) content = parser.nextText().orEmpty()
-                "published" -> if (inEntry) published = parser.nextText().orEmpty()
-                "updated" -> if (inEntry) updated = parser.nextText().orEmpty()
+                "id" -> if (inEntry) id = parser.readElementTextSafely()
+                "title" -> if (inEntry) {
+                    title = parser.readElementTextSafely()
+                    if (title.contains("heise-Angebot")) continue
+                }
+
+                "summary" -> if (inEntry) summary = parser.readElementTextSafely()
+                "content" -> if (inEntry) content = parser.readElementTextSafely()
+                "published" -> if (inEntry) published = parser.readElementTextSafely()
+                "updated" -> if (inEntry) updated = parser.readElementTextSafely()
                 "link" -> if (inEntry && link.isBlank()) {
                     link = parser.getAttributeValue(null, "href").orEmpty()
                 }
@@ -1212,7 +1319,8 @@ private fun parseHeiseAtomFeed(inputStream: InputStream): List<HeiseNewsItem> {
                 val cleanedSummary = cleanHtml(summary).ifBlank { cleanHtml(content) }
                 if (cleanedTitle.isNotBlank() && link.isNotBlank()) {
                     val rawDate = published.ifBlank { updated }
-                    items += HeiseNewsItem(
+                    if (title.contains("heise-Angebot")) continue
+                    val item = HeiseNewsItem(
                         id = id.ifBlank { link },
                         title = cleanedTitle,
                         summary = cleanedSummary,
@@ -1221,6 +1329,7 @@ private fun parseHeiseAtomFeed(inputStream: InputStream): List<HeiseNewsItem> {
                         publishedAt = formatFeedDate(rawDate),
                         rawTimestamp = parseRawTimestamp(rawDate)
                     )
+                    items += item
                 }
                 inEntry = false
             }
@@ -1356,8 +1465,14 @@ private fun htmlCandidateToArticleText(articleHtml: String): String {
     )
 
     val afterNewlines = afterStrip
-        .replace(Regex("""<(br|p|div|section|h[1-6]|li)\b[^>]*>""", RegexOption.IGNORE_CASE), PARAGRAPH_BREAK_MARKER)
-        .replace(Regex("""</(p|div|section|h[1-6]|li)>""", RegexOption.IGNORE_CASE), PARAGRAPH_BREAK_MARKER)
+        .replace(
+            Regex("""<(br|p|div|section|h[1-6]|li)\b[^>]*>""", RegexOption.IGNORE_CASE),
+            PARAGRAPH_BREAK_MARKER
+        )
+        .replace(
+            Regex("""</(p|div|section|h[1-6]|li)>""", RegexOption.IGNORE_CASE),
+            PARAGRAPH_BREAK_MARKER
+        )
 
     val afterHtmlDecode = cleanHtml(afterNewlines)
 
@@ -1431,7 +1546,8 @@ private fun isTemplatePlaceholderText(text: String): Boolean {
         val closeBrace = compact.indexOf('}', startIndex = openBrace + 1)
         if (closeBrace == -1) break
 
-        val nameStart = if (openBrace > 0 && compact[openBrace - 1] == '$') openBrace - 1 else openBrace
+        val nameStart =
+            if (openBrace > 0 && compact[openBrace - 1] == '$') openBrace - 1 else openBrace
         val placeholder = compact.substring(nameStart, closeBrace + 1)
         val inner = compact.substring(openBrace + 1, closeBrace)
         if (

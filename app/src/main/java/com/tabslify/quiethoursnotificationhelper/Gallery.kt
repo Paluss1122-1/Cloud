@@ -307,10 +307,8 @@ fun showDeleteConfirmation(imageIndex: Int, context: Context) {
             ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
                 val targetSize = 512 // Für Bestätigung reicht kleiner
                 if (info.size.width > targetSize || info.size.height > targetSize) {
-                    val scale = Math.max(
-                        info.size.width.toFloat() / targetSize,
-                        info.size.height.toFloat() / targetSize
-                    )
+                    val scale =
+                        (info.size.width.toFloat() / targetSize).coerceAtLeast(info.size.height.toFloat() / targetSize)
                     decoder.setTargetSize(
                         (info.size.width / scale).toInt(),
                         (info.size.height / scale).toInt()
@@ -465,10 +463,8 @@ private fun showGalleryImage(index: Int, context: Context) {
                 // Skaliere das Bild auf eine vernünftige Größe für Benachrichtigungen (z.B. max 1024px)
                 val targetSize = 1024
                 if (info.size.width > targetSize || info.size.height > targetSize) {
-                    val scale = Math.max(
-                        info.size.width.toFloat() / targetSize,
-                        info.size.height.toFloat() / targetSize
-                    )
+                    val scale =
+                        (info.size.width.toFloat() / targetSize).coerceAtLeast(info.size.height.toFloat() / targetSize)
                     decoder.setTargetSize(
                         (info.size.width / scale).toInt(),
                         (info.size.height / scale).toInt()
@@ -544,7 +540,6 @@ private fun showGalleryImage(index: Int, context: Context) {
             .addAction(android.R.drawable.ic_media_next, "▶", nextPendingIntent)
             .build()
 
-        val notificationManager = context.getSystemService(NotificationManager::class.java)
         if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             == PackageManager.PERMISSION_GRANTED
         ) {

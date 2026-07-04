@@ -1,7 +1,6 @@
 package com.tabslify.quiethoursnotificationhelper
 
 import android.Manifest
-import android.app.NotificationManager
 import android.content.Context
 import android.content.Context.AUDIO_SERVICE
 import android.content.pm.PackageManager
@@ -116,7 +115,6 @@ private fun showFriendMessagesNotification(messages: List<ChatService.Message>, 
             .setAutoCancel(true)
             .build()
 
-        val notificationManager = context.getSystemService(NotificationManager::class.java)
         if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             == PackageManager.PERMISSION_GRANTED
         ) {

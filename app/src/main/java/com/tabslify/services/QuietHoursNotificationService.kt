@@ -81,7 +81,6 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import com.tabslify.R
 import com.tabslify.core.activities.MainActivity
 import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.functions.errorInsert
@@ -565,6 +564,7 @@ class QuietHoursNotificationService : Service() {
     }
 
     private fun scheduleSchoolDaySummary(context: Context) {
+        if (!prvt()) return
         val alarmManager = context.getSystemService(AlarmManager::class.java)
         val intent = Intent(context, QuietHoursNotificationService::class.java).apply {
             action = ACTION_SCHOOL_DAY_SUMMARY
@@ -837,6 +837,9 @@ class QuietHoursNotificationService : Service() {
                 }
 
                 ACTION_SCHOOL_DAY_SUMMARY -> {
+                    if (!prvt()) return START_STICKY
+                    val dayOfWeek = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
+                    if (dayOfWeek == Calendar.SATURDAY || dayOfWeek == Calendar.SUNDAY) return START_STICKY
                     val nm = getSystemService(NotificationManager::class.java)
                     if (nm.getNotificationChannel(SCHOOL_SUMMARY_CHANNEL_ID) == null) {
                         android.app.NotificationChannel(
@@ -1209,7 +1212,7 @@ class QuietHoursNotificationService : Service() {
 
         val delayMs = if (lastRestart != 0L && sinceLast < 10_000L) 15_000L else 1_000L
 
-        prefs.edit().putLong("last_service_restart_elapsed", now).apply()
+        prefs.edit { putLong("last_service_restart_elapsed", now) }
 
         val restartIntent = Intent(applicationContext, QuietHoursNotificationService::class.java)
         val pendingIntent = PendingIntent.getService(

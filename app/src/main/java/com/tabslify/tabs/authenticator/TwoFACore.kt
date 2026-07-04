@@ -73,6 +73,23 @@ abstract class TwoFADatabase : RoomDatabase() {
     }
 }
 
+fun extractTotpSecret(raw: String): String {
+    val trimmed = raw.trim()
+    if (trimmed.startsWith("otpauth://", ignoreCase = true)) {
+        // Extrahiere secret Parameter aus otpauth URL
+        val urlPart = trimmed.substringAfter("?")
+        val params = urlPart.split("&")
+        for (param in params) {
+            val parts = param.split("=", limit = 2)
+            if (parts.size == 2 && parts[0].equals("secret", ignoreCase = true)) {
+                return parts[1].uppercase()
+            }
+        }
+    }
+    // Wenn keine otpauth URL, dann normales Secret zurückgeben
+    return trimmed.replace(" ", "").uppercase()
+}
+
 object TotpGenerator {
     fun base32Decode(encoded: String): ByteArray {
         val base32Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"

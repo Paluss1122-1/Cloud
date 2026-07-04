@@ -3,7 +3,6 @@ package com.tabslify.tabs.audiorecordertab
 import android.Manifest
 import android.app.Application
 import android.content.Context
-import android.content.Context.MODE_PRIVATE
 import android.content.Intent
 import android.media.MediaCodec
 import android.media.MediaExtractor
@@ -19,7 +18,6 @@ import androidx.core.content.FileProvider
 import androidx.core.content.PermissionChecker
 import androidx.lifecycle.AndroidViewModel
 import com.tabslify.core.functions.errorInsert
-import com.tabslify.services.QuietHoursNotificationService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -29,6 +27,7 @@ import java.text.SimpleDateFormat
 import java.time.Instant
 import java.util.Date
 import java.util.Locale
+import kotlin.time.Duration.Companion.milliseconds
 
 class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(application) {
     var hasPermission by mutableStateOf(
@@ -65,7 +64,7 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
                     currentPosition = it.currentPosition.toFloat()
                 }
             }
-            delay(100)
+            delay(100.milliseconds)
         }
     }
 
@@ -74,7 +73,7 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
             stopAudioService(getApplication<Application>().applicationContext)
             isRecording = false
             scope.launch {
-                delay(500)
+                delay(500.milliseconds)
                 refreshFiles()
             }
         } else {
@@ -156,8 +155,7 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
         showShareDialog = true
     }
 
-    /** Share Dialog*/
-    fun onFinalShare(range: ClosedFloatingPointRange<Float>, scope: CoroutineScope) {
+    fun onFinalShare(range: ClosedFloatingPointRange<Float>) {
         isProcessing = true
         shareAudioToWhatsApp(
             context = getApplication<Application>().applicationContext,

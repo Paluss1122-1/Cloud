@@ -22,8 +22,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tabslify.core.objects.prvt
 import com.tabslify.privatetabslifyapp.isOnline
-import com.tabslify.quiethoursnotificationhelper.askServer
 import com.tabslify.quiethoursnotificationhelper.AiProvider
+import com.tabslify.quiethoursnotificationhelper.askServer
 import com.tabslify.quiethoursnotificationhelper.sendAiRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -33,6 +33,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.ByteArrayOutputStream
 import java.util.Calendar
+import kotlin.time.Duration.Companion.milliseconds
 
 const val DAILY_LIMIT = 30
 private const val USAGE_RESET_MS = 6 * 60 * 60 * 1000L
@@ -219,7 +220,6 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
                         ctx,
                         userText.ifEmpty { "Beschreibe das Bild" },
                         effectivePic,
-                        effectiveAudio,
                         onToken
                     )
                 }
@@ -251,7 +251,6 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
         ctx: Context,
         txt: String,
         pic: String?,
-        audio: String?,
         onToken: (String) -> Unit
     ): String {
         if (!isOnline(ctx)) return "Kein Netzwerk"
@@ -321,7 +320,7 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     suspend fun animateAlpha(alpha: Animatable<Float, AnimationVector1D>) {
-        delay(100)
+        delay(100.milliseconds)
         alpha.animateTo(
             1f,
             animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing)

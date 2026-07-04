@@ -2,27 +2,11 @@ package com.tabslify.spotifydownloader_own.domain
 
 import android.content.Context
 import android.net.Uri
-import android.util.Base64
+import androidx.core.content.edit
 import com.tabslify.quiethoursnotificationhelper.AiProvider
 import com.tabslify.quiethoursnotificationhelper.sendAiRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-
-private fun encodeAudio(ctx: Context, uri: Uri): String? = try {
-    ctx.contentResolver.openInputStream(uri)?.use { input ->
-        val output = java.io.ByteArrayOutputStream()
-        android.util.Base64OutputStream(output, Base64.NO_WRAP).use { base64Out ->
-            val buffer = ByteArray(8192)
-            var bytesRead: Int
-            while (input.read(buffer).also { bytesRead = it } != -1) {
-                base64Out.write(buffer, 0, bytesRead)
-            }
-        }
-        output.toString("UTF-8")
-    }
-} catch (_: Exception) {
-    null
-}
 
 suspend fun generateAndSaveHashtags(
     ctx: Context,
@@ -63,10 +47,5 @@ suspend fun generateAndSaveHashtags(
 
 fun saveHashtags(ctx: Context, trackId: String, hashtags: String) {
     val prefs = ctx.getSharedPreferences("spotify_hashtags", Context.MODE_PRIVATE)
-    prefs.edit().putString(trackId, hashtags).apply()
-}
-
-fun getHashtags(ctx: Context, trackId: String): String? {
-    val prefs = ctx.getSharedPreferences("spotify_hashtags", Context.MODE_PRIVATE)
-    return prefs.getString(trackId, null)
+    prefs.edit { putString(trackId, hashtags) }
 }

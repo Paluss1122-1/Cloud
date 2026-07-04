@@ -8,6 +8,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import java.time.Instant
 
+@Suppress("PropertyName")
 @Serializable
 data class TwoFaEntrySupabase(
     val id: String? = null,

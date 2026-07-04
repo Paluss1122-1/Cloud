@@ -1,5 +1,3 @@
-@file:Suppress("AssignedValueIsNeverRead")
-
 package com.tabslify.core.ui
 
 import android.Manifest
@@ -332,7 +330,7 @@ enum class MenuItem(
     HEISE_NEWS(
         "Heise News",
         "📰",
-        { HeiseNewsTabContent() }
+        {}
     ),
     PC_MANAGER(
         "PC Manager",
@@ -415,6 +413,7 @@ fun PrivateTabslifyApp(
         Box(modifier = Modifier.fillMaxSize()) {
             when (selectedMenuItem) {
                 MenuItem.WEATHER -> WeatherTabContent(viewModel = viewModel)
+                MenuItem.HEISE_NEWS -> HeiseNewsTabContent(viewModel = viewModel)
                 MenuItem.BROWSER -> {
                     BrowserTabContent(
                         url = webViewUrl,
@@ -566,7 +565,8 @@ fun PrivateTabslifyApp(
                         .zIndex(1000000f)
                 ) {
                     when (selectedMenuItem) {
-                        MenuItem.WEATHER -> WeatherTabContent(viewModel = viewModel)
+                        MenuItem.WEATHER -> WeatherTabContent(viewModel)
+                        MenuItem.HEISE_NEWS -> HeiseNewsTabContent(viewModel = viewModel)
                         MenuItem.BROWSER -> BrowserTabContent(
                             url = webViewUrl,
                             onUrlChange = { webViewUrl = it },
@@ -2085,18 +2085,6 @@ fun MainTabslifyScreen(storage: Storage) {
     }
 }
 
-private fun getDirSize(dir: File): Long {
-    var size: Long = 0
-    if (dir.isDirectory) {
-        dir.listFiles()?.forEach { file ->
-            size += if (file.isDirectory) getDirSize(file) else file.length()
-        }
-    } else {
-        size = dir.length()
-    }
-    return size
-}
-
 fun showBatteryInfo(context: Context) {
     val batteryIntent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
 
@@ -2237,6 +2225,7 @@ object WebViewCookieBackup {
     }
 }
 
+@Suppress("unused")
 @Composable
 fun GoodNightScreen(ai: String) {
     val context = LocalContext.current

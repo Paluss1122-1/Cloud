@@ -13,8 +13,10 @@ import kotlinx.coroutines.launch
 
 class DownloadViewModel(
     private val repository: DownloadRepository,
-    private val context: Context
+    context: Context
 ) : ViewModel() {
+
+    private val appContext: Context = context.applicationContext
 
     private val _downloadState = MutableStateFlow<DownloadState>(DownloadState.Idle)
     val downloadState: StateFlow<DownloadState> = _downloadState.asStateFlow()
@@ -25,7 +27,7 @@ class DownloadViewModel(
                 _downloadState.value = state
                 if (state is DownloadState.Success) {
                     generateAndSaveHashtags(
-                        ctx = context,
+                        ctx = appContext,
                         trackId = state.trackId,
                         title = state.title,
                         artist = state.artist,

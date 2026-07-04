@@ -32,10 +32,10 @@ import com.tabslify.core.objects.prvt
 import com.tabslify.core.ui.LandingPageOrApp
 import com.tabslify.core.ui.Typography
 import com.tabslify.core.ui.rememberAppColor
-import com.tabslify.services.QuietHoursNotificationService
-import com.tabslify.tabs.JsonEditorContent
 import com.tabslify.inactive.ChatService
 import com.tabslify.quicksettingsfunctions.startBatteryWorker
+import com.tabslify.services.QuietHoursNotificationService
+import com.tabslify.tabs.JsonEditorContent
 import io.github.jan.supabase.storage.storage
 import java.io.File
 
