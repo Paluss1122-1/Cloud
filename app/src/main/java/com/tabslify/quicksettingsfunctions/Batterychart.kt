@@ -79,6 +79,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.math.absoluteValue
+import kotlin.time.Duration.Companion.milliseconds
 
 @Serializable
 data class BatterySample(
@@ -200,14 +201,26 @@ fun startBatteryWorker(context: Context) {
     )
 }
 
+fun stopBatteryWorker(context: Context) {
+    WorkManager.getInstance(context).cancelUniqueWork("BatterySampling")
+}
+
 @Composable
 fun BatteryChartScreen(onDismiss: () -> Unit) {
     val context = LocalContext.current
-    LaunchedEffect(Unit) { BatteryDataRepository.init(context); startBatteryWorker(context) }
+    LaunchedEffect(Unit) {
+        BatteryDataRepository.init(context)
+        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val masterEnabled = prefs.getBoolean("services_master", true)
+        val batteryEnabled = prefs.getBoolean("service_battery", true)
+        if (masterEnabled && batteryEnabled) {
+            startBatteryWorker(context)
+        }
+    }
     LaunchedEffect(Unit) {
         while (true) {
             readBatterySample(context)?.let { BatteryDataRepository.addSample(it) }; kotlinx.coroutines.delay(
-                10_000L
+                10_000L.milliseconds
             )
         }
     }
