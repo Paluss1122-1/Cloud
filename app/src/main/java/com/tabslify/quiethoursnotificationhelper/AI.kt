@@ -17,6 +17,10 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
+enum class AiProvider {
+    GEMINI, NVIDIA
+}
+
 private fun buildSystemPrompt(target: String = ""): String {
     val aiTab = if (target == "AITab") " in einem Tab namens AITab" else ""
     val aiTabInfo =
@@ -49,7 +53,7 @@ private fun buildSystemPrompt(target: String = ""): String {
 }
 
 
-suspend fun sendGeminiRequest(
+private suspend fun sendGeminiRequest(
     history: List<ChatMessage> = emptyList(),
     userMessage: String,
     pic: String? = null,
@@ -166,7 +170,7 @@ private fun buildNvidiaAITabMessages(
     })
 }
 
-suspend fun sendNvidiaChatMessageAITab(
+private suspend fun sendNvidiaChatMessageAITab(
     ctx: Context,
     history: List<ChatMessage>,
     userMessage: String,
@@ -257,23 +261,27 @@ fun getPreferredAiProvider(context: Context, serviceKey: String): String {
     return if (specific == "default") global else specific
 }
 
-suspend fun sendPreferredAiRequest(
+suspend fun sendAiRequest(
     context: Context,
-    serviceKey: String,
-    history: List<ChatMessage> = emptyList(),
     userMessage: String,
+    history: List<ChatMessage> = emptyList(),
     pic: String? = null,
     audioUri: android.net.Uri? = null,
+    target: String = "AITab",
     anlytic: Boolean = false,
-    onToken: ((String) -> Unit)? = null,
-    target: String = "AITab"
+    provider: AiProvider? = null,
+    serviceKey: String = "default",
+    model: String? = null,
+    onToken: ((String) -> Unit)? = null
 ): String? {
-    val provider = getPreferredAiProvider(context, serviceKey)
-    return if (provider == "nvidia") {
-        val model = if (pic != null) "meta/llama-3.2-90b-vision-instruct" else "openai/gpt-oss-120b"
-        sendNvidiaChatMessageAITab(context, history, userMessage, model, pic, onToken)
+    val resolvedProvider = provider ?: if (getPreferredAiProvider(context, serviceKey) == "nvidia") AiProvider.NVIDIA else AiProvider.GEMINI
+    
+    return if (resolvedProvider == AiProvider.NVIDIA) {
+        val resolvedModel = model ?: if (pic != null) "meta/llama-3.2-90b-vision-instruct" else "openai/gpt-oss-20b"
+        sendNvidiaChatMessageAITab(context, history, userMessage, resolvedModel, pic, onToken)
     } else {
-        sendGeminiRequest(history, userMessage, pic, audioUri, context, anlytic, DEF_GEMINI, onToken, target)
+        val resolvedModel = model ?: DEF_GEMINI
+        sendGeminiRequest(history, userMessage, pic, audioUri, context, anlytic, resolvedModel, onToken, target)
     }
 }
 
