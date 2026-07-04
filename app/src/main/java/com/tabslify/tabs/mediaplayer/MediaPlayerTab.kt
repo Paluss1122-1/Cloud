@@ -3553,6 +3553,18 @@ object FavoritesPlaylist : PlaylistSource {
             prefs?.edit()?.putStringSet("favorite_songs", migrated)?.apply()
             migrated
         }
+
+        if (allSongs.isNotEmpty()) {
+            val validPaths = allSongs.mapTo(HashSet()) { it.path }
+            val pruned = com.tabslify.core.objects.PrefsCleanup.pruneInvalid(favPaths) {
+                validPaths.contains(it)
+            }
+            if (pruned.size != favPaths.size) {
+                prefs?.edit()?.putStringSet("favorite_songs", pruned)?.apply()
+                return allSongs.filter { pruned.contains(it.path) }
+            }
+        }
+
         return allSongs.filter { favPaths.contains(it.path) }
     }
 }
