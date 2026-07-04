@@ -7,14 +7,23 @@ import android.content.pm.PackageManager
 import android.graphics.Paint
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,10 +34,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -37,10 +49,22 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.HazeProgressive
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -72,6 +96,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -79,6 +104,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.nativeCanvas
@@ -87,10 +113,14 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
@@ -106,12 +136,11 @@ import com.tabslify.core.objects.Config.client
 import com.tabslify.core.objects.Config.realDevice
 import com.tabslify.core.objects.PasswordStorage
 import com.tabslify.core.objects.prvt
-import com.tabslify.inactive.ChatService
 import com.tabslify.quicksettingsfunctions.ChargingTrackerService
-import com.tabslify.services.QuietHoursNotificationService
-import com.tabslify.services.WhatsAppNotificationListener
 import com.tabslify.quicksettingsfunctions.startBatteryWorker
 import com.tabslify.quicksettingsfunctions.stopBatteryWorker
+import com.tabslify.services.QuietHoursNotificationService
+import com.tabslify.services.WhatsAppNotificationListener
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.storage.Storage
@@ -177,7 +206,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
         LazyListState()
     }
     var reloadKey by remember { mutableIntStateOf(0) }
-    realDevice = !getDeviceName().trim().contains("sdk_gphone64", ignoreCase = true)
+    realDevice = !getDeviceName().trim().contains("sdk_gphone", ignoreCase = true)
     var landingReloadTrigger by remember { mutableIntStateOf(0) }
 
     if (realDevice && prvt()) {
@@ -877,6 +906,65 @@ fun SettingsFrame(
     var directedToSettings by remember { mutableStateOf(false) }
     val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
     val lifecycleOwner = LocalLifecycleOwner.current
+    var showPermissionInfo by remember { mutableStateOf(false) }
+    var animatePermissionInfo by remember { mutableStateOf(false) }
+
+    BackHandler {
+        if (showPermissionInfo) {
+            showPermissionInfo = false
+        } else {
+            onClose()
+        }
+    }
+
+    var titleDialog by remember { mutableStateOf("") }
+    var usagesDialog by remember { mutableStateOf<List<String>>(emptyList()) }
+    val permissionUsages = mapOf(
+        "READ_MEDIA_AUDIO" to listOf(
+            "MediaPlayerService & Tab: Songs & Podcasts abspielen",
+            "SpotifyDownloader: Speichern von Audiodateien im MediaStore"
+        ),
+        "POST_NOTIFICATIONS" to listOf(
+            "QuietHoursNotificationService: Anzeigen von Quiet-Hours Benachrichtigungen",
+            "MediaPlayerService: Wiedergabenotifikationen",
+            "Status-Updates für laufende Downloads",
+            "ChargingTrackerService: Ladeinformationen",
+            "NetworkInfo: Netzwerkinfos",
+            "BatteryInfo: Batterieinformationen"
+        ),
+        "ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION" to listOf(
+            "Standortbasierte Wettervorhersage im WeatherTab",
+            "ExploreTab & ExploreLocationTracker: Standortverfolgung und Geofencing",
+            "showNetwerkInfo: Anzeige der WLAN-SSID"
+        ),
+        "SYSTEM_ALERT_WINDOW" to listOf(
+            "QuietHoursNotificationService: Test-Overlay für YouTube"
+        ),
+        "FOREGROUND_SERVICE" to listOf(
+            "MediaPlayerService: Medienwiedergabe im Vordergrund",
+            "QuietHoursNotificationService: Dauerhafte Benachrichtigungen",
+            "ChargingTrackerService: Ladeüberwachung",
+            "AudioForegroundService: Audioaufnahmen"
+        ),
+        "READ_MEDIA_IMAGES / READ_MEDIA_VIDEO" to listOf(
+            "GalleryTab: Anzeige von Bildern und Videos aus der Galerie"
+        ),
+        "READ_CONTACTS / WRITE_CONTACTS" to listOf(
+            "ContactsTab: Laden, Speichern und Löschen von Kontakten"
+        ),
+        "RECEIVE_BOOT_COMPLETED" to listOf(
+            "BootReceiver: Starten von QuietHoursNotificationService beim Gerätestart"
+        ),
+        "RECORD_AUDIO" to listOf(
+            "AudioRecorderTab & AudioForegroundService: Audioaufnahmen mit Mikrofon"
+        ),
+        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" to listOf(
+            "QuietHoursNotificationService: Anfrage zum Ignorieren von Batterieoptimierungen für zuverlässige Hintergrunddienste"
+        ),
+        "CAMERA" to listOf(
+            "Authenticator: Scannen von QR Codes für 2FA"
+        )
+    )
 
     var masterEnabled by remember { mutableStateOf(prefs.getBoolean("services_master", false)) }
     var servicesExpanded by remember { mutableStateOf(false) }
@@ -886,11 +974,40 @@ fun SettingsFrame(
     var serviceCharge by remember { mutableStateOf(prefs.getBoolean("service_charge", true)) }
     var serviceBattery by remember { mutableStateOf(prefs.getBoolean("service_battery", true)) }
 
-    var aiPrefGlobal by remember { mutableStateOf(prefs.getString("ai_pref_global", "gemini") ?: "gemini") }
-    var aiPrefChat by remember { mutableStateOf(prefs.getString("ai_pref_service_chat", "default") ?: "default") }
-    var aiPrefMusicSummary by remember { mutableStateOf(prefs.getString("ai_pref_service_music_summary", "default") ?: "default") }
-    var aiPrefVision by remember { mutableStateOf(prefs.getString("ai_pref_service_vision", "default") ?: "default") }
-    var aiPrefReplies by remember { mutableStateOf(prefs.getString("ai_pref_service_replies", "default") ?: "default") }
+    var aiPrefGlobal by remember {
+        mutableStateOf(
+            prefs.getString("ai_pref_global", "gemini") ?: "gemini"
+        )
+    }
+    var aiPrefChat by remember {
+        mutableStateOf(
+            prefs.getString("ai_pref_service_chat", "default") ?: "default"
+        )
+    }
+    var aiPrefMusicSummary by remember {
+        mutableStateOf(
+            prefs.getString(
+                "ai_pref_service_music_summary",
+                "default"
+            ) ?: "default"
+        )
+    }
+    var aiPrefVision by remember {
+        mutableStateOf(
+            prefs.getString(
+                "ai_pref_service_vision",
+                "default"
+            ) ?: "default"
+        )
+    }
+    var aiPrefReplies by remember {
+        mutableStateOf(
+            prefs.getString(
+                "ai_pref_service_replies",
+                "default"
+            ) ?: "default"
+        )
+    }
     var aiSettingsExpanded by remember { mutableStateOf(false) }
 
     var hasNotificationPermission by remember { mutableStateOf(true) }
@@ -900,12 +1017,16 @@ fun SettingsFrame(
         if (cls == WhatsAppNotificationListener::class.java) return
 
         val intent = Intent(context, cls)
-        val permissionOk = if (cls == QuietHoursNotificationService::class.java) hasNotificationPermission else true
+        val permissionOk =
+            if (cls == QuietHoursNotificationService::class.java) hasNotificationPermission else true
 
         if (enabled && masterEnabled && permissionOk) {
             when (cls) {
                 QuietHoursNotificationService::class.java,
-                ChargingTrackerService::class.java -> ContextCompat.startForegroundService(context, intent)
+                ChargingTrackerService::class.java -> ContextCompat.startForegroundService(
+                    context,
+                    intent
+                )
 
                 else -> context.startService(intent)
             }
@@ -1007,13 +1128,13 @@ fun SettingsFrame(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.92f))
+                .windowInsetsPadding(WindowInsets.systemBars)
                 .padding(16.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(top = 40.dp)
+                //.verticalScroll(rememberScrollState())
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1030,7 +1151,11 @@ fun SettingsFrame(
                         onClick = onClose,
                         modifier = Modifier.background(Color.White.copy(alpha = 0.1f), CircleShape)
                     ) {
-                        Text("✕", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = Color.White
+                        )
                     }
                 }
 
@@ -1050,8 +1175,17 @@ fun SettingsFrame(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Hintergrunddienste", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                                Text("Alle Hintergrundaktivitäten", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+                                Text(
+                                    "Hintergrunddienste",
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    "Alle Hintergrundaktivitäten",
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    fontSize = 12.sp
+                                )
                             }
                             Switch(
                                 checked = masterEnabled,
@@ -1074,8 +1208,17 @@ fun SettingsFrame(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Einzelne Dienste", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                            Text(if (servicesExpanded) "▲" else "▼", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                            Text(
+                                "Einzelne Dienste",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                if (servicesExpanded) "▲" else "▼",
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontSize = 12.sp
+                            )
                         }
 
                         AnimatedVisibility(visible = servicesExpanded) {
@@ -1085,11 +1228,27 @@ fun SettingsFrame(
                                     .background(Color.White.copy(alpha = 0.05f))
                                     .padding(horizontal = 20.dp, vertical = 8.dp)
                             ) {
-                                val services = listOfNotNull(
-                                    Triple("QuietHoursNotificationService", "Alles rund um Commands", serviceQhns),
-                                    if (prvt()) Triple("WhatsAppNotificationListener", "Verarbeitet eingehende WhatsApps", serviceWh) else null,
-                                    Triple("ChargingTracker", "Verfolgt Ladevorgänge für Ladedauer-Schätzungen", serviceCharge),
-                                    Triple("BatterySamplingWorker", "Verfolgt Batteriedaten alle 10min", serviceBattery)
+                                val services = if (!prvt()) emptyList() else listOfNotNull(
+                                    Triple(
+                                        "QuietHoursNotificationService",
+                                        "Alles rund um Commands",
+                                        serviceQhns
+                                    ),
+                                    if (prvt()) Triple(
+                                        "WhatsAppNotificationListener",
+                                        "Verarbeitet eingehende WhatsApps",
+                                        serviceWh
+                                    ) else null,
+                                    Triple(
+                                        "ChargingTracker",
+                                        "Verfolgt Ladevorgänge für Ladedauer-Schätzungen",
+                                        serviceCharge
+                                    ),
+                                    Triple(
+                                        "BatterySamplingWorker",
+                                        "Hintergrund-Aufzeichnung der Batteriedaten",
+                                        serviceBattery
+                                    )
                                 )
 
                                 services.forEachIndexed { index, (title, subtitle, checked) ->
@@ -1102,7 +1261,11 @@ fun SettingsFrame(
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(title, color = Color.White, fontSize = 14.sp)
-                                            Text(subtitle, color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp)
+                                            Text(
+                                                subtitle,
+                                                color = Color.White.copy(alpha = 0.5f),
+                                                fontSize = 11.sp
+                                            )
                                             if (index == 0 && !hasNotificationPermission) {
                                                 Spacer(modifier = Modifier.height(4.dp))
                                                 Text(
@@ -1116,18 +1279,23 @@ fun SettingsFrame(
                                         Switch(
                                             checked = checked && masterEnabled,
                                             onCheckedChange = { v ->
-                                                when (index) {
-                                                    0 -> {
+                                                when (title) {
+                                                    "QuietHoursNotificationService" -> {
                                                         if (hasNotificationPermission) {
                                                             serviceQhns = v
                                                         } else {
                                                             manualPerm()
                                                         }
                                                     }
-                                                    1 -> if (prvt()) serviceWh = v else serviceCharge = v
-                                                    2 -> if (prvt()) serviceCharge = v else serviceBattery = v
-                                                    3 -> if (prvt()) serviceBattery = v
-                                                    else -> {}
+                                                    "WhatsAppNotificationListener" -> {
+                                                        serviceWh = v
+                                                    }
+                                                    "ChargingTracker" -> {
+                                                        serviceCharge = v
+                                                    }
+                                                    "BatterySamplingWorker" -> {
+                                                        serviceBattery = v
+                                                    }
                                                 }
                                                 save()
                                             },
@@ -1167,8 +1335,17 @@ fun SettingsFrame(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Bevorzugte AI (Global)", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                                Text("Standard-Anbieter für alle Dienste", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+                                Text(
+                                    "Bevorzugte AI (Global)",
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    "Standard-Anbieter für alle Dienste",
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    fontSize = 12.sp
+                                )
                             }
 
                             var showGlobalDropdown by remember { mutableStateOf(false) }
@@ -1180,7 +1357,11 @@ fun SettingsFrame(
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier
                                         .clickable { showGlobalDropdown = true }
-                                        .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                        .border(
+                                            1.dp,
+                                            Color.White.copy(alpha = 0.2f),
+                                            RoundedCornerShape(4.dp)
+                                        )
                                         .padding(horizontal = 12.dp, vertical = 6.dp)
                                 )
                                 DropdownMenu(
@@ -1190,11 +1371,17 @@ fun SettingsFrame(
                                 ) {
                                     DropdownMenuItem(
                                         text = { Text("Gemini", color = Color.White) },
-                                        onClick = { aiPrefGlobal = "gemini"; showGlobalDropdown = false; save() }
+                                        onClick = {
+                                            aiPrefGlobal = "gemini"; showGlobalDropdown =
+                                            false; save()
+                                        }
                                     )
                                     DropdownMenuItem(
                                         text = { Text("NVIDIA", color = Color.White) },
-                                        onClick = { aiPrefGlobal = "nvidia"; showGlobalDropdown = false; save() }
+                                        onClick = {
+                                            aiPrefGlobal = "nvidia"; showGlobalDropdown =
+                                            false; save()
+                                        }
                                     )
                                 }
                             }
@@ -1208,8 +1395,17 @@ fun SettingsFrame(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Einzelne Dienste anpassen", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                            Text(if (aiSettingsExpanded) "▲" else "▼", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                            Text(
+                                "Einzelne Dienste anpassen",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                if (aiSettingsExpanded) "▲" else "▼",
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontSize = 12.sp
+                            )
                         }
 
                         AnimatedVisibility(visible = aiSettingsExpanded) {
@@ -1220,10 +1416,22 @@ fun SettingsFrame(
                                     .padding(horizontal = 20.dp, vertical = 8.dp)
                             ) {
                                 val aiServices = listOf(
-                                    Triple("Befehl 'ai' / Chat", aiPrefChat) { v: String -> aiPrefChat = v },
-                                    Triple("Musik-Zusammenfassung", aiPrefMusicSummary) { v: String -> aiPrefMusicSummary = v },
-                                    Triple("Vokabel-Vision", aiPrefVision) { v: String -> aiPrefVision = v },
-                                    Triple("Nachrichten-Antworten", aiPrefReplies) { v: String -> aiPrefReplies = v }
+                                    Triple(
+                                        "Befehl 'ai' / Chat",
+                                        aiPrefChat
+                                    ) { v: String -> aiPrefChat = v },
+                                    Triple(
+                                        "Musik-Zusammenfassung",
+                                        aiPrefMusicSummary
+                                    ) { v: String -> aiPrefMusicSummary = v },
+                                    Triple(
+                                        "Vokabel-Vision",
+                                        aiPrefVision
+                                    ) { v: String -> aiPrefVision = v },
+                                    Triple(
+                                        "Nachrichten-Antworten",
+                                        aiPrefReplies
+                                    ) { v: String -> aiPrefReplies = v }
                                 )
 
                                 aiServices.forEachIndexed { index, (title, currentVal, setter) ->
@@ -1234,7 +1442,12 @@ fun SettingsFrame(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(title, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                                        Text(
+                                            title,
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            modifier = Modifier.weight(1f)
+                                        )
 
                                         var showServiceDropdown by remember { mutableStateOf(false) }
                                         Box {
@@ -1249,7 +1462,11 @@ fun SettingsFrame(
                                                 fontSize = 12.sp,
                                                 modifier = Modifier
                                                     .clickable { showServiceDropdown = true }
-                                                    .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                                    .border(
+                                                        1.dp,
+                                                        Color.White.copy(alpha = 0.15f),
+                                                        RoundedCornerShape(4.dp)
+                                                    )
                                                     .padding(horizontal = 10.dp, vertical = 4.dp)
                                             )
                                             DropdownMenu(
@@ -1258,16 +1475,30 @@ fun SettingsFrame(
                                                 containerColor = Color.Black
                                             ) {
                                                 DropdownMenuItem(
-                                                    text = { Text("Standard (Global)", color = Color.White) },
-                                                    onClick = { setter("default"); showServiceDropdown = false; save() }
+                                                    text = {
+                                                        Text(
+                                                            "Standard (Global)",
+                                                            color = Color.White
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        setter("default"); showServiceDropdown =
+                                                        false; save()
+                                                    }
                                                 )
                                                 DropdownMenuItem(
                                                     text = { Text("Gemini", color = Color.White) },
-                                                    onClick = { setter("gemini"); showServiceDropdown = false; save() }
+                                                    onClick = {
+                                                        setter("gemini"); showServiceDropdown =
+                                                        false; save()
+                                                    }
                                                 )
                                                 DropdownMenuItem(
                                                     text = { Text("NVIDIA", color = Color.White) },
-                                                    onClick = { setter("nvidia"); showServiceDropdown = false; save() }
+                                                    onClick = {
+                                                        setter("nvidia"); showServiceDropdown =
+                                                        false; save()
+                                                    }
                                                 )
                                             }
                                         }
@@ -1276,6 +1507,105 @@ fun SettingsFrame(
                                         HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Spacer(
+                        Modifier
+                            .weight(1f)
+                            .padding(horizontal = 5.dp)
+                            .drawBehind {
+                                drawIntoCanvas { canvas ->
+                                    canvas.nativeCanvas.drawRect(
+                                        0f, 0f, size.width, size.height,
+                                        Paint().apply {
+                                            color = Color(0xFFBEBEBE).copy(alpha = 0.5f).toArgb()
+                                            isAntiAlias = true
+                                            maskFilter = android.graphics.BlurMaskFilter(
+                                                25f,
+                                                android.graphics.BlurMaskFilter.Blur.OUTER
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                            .clip(RoundedCornerShape(5.dp))
+                            .height(5.dp)
+                            .background(Color(0xFFBEBEBE))
+                    )
+                    Text(
+                        "Transparenz",
+                        modifier = Modifier.weight(1f),
+                        color = Color(0xFFBEBEBE),
+                        fontSize = 17.sp
+                    )
+                    Spacer(
+                        Modifier
+                            .weight(1f)
+                            .padding(horizontal = 5.dp)
+                            .drawBehind {
+                                drawIntoCanvas { canvas ->
+                                    canvas.nativeCanvas.drawRect(
+                                        0f, 0f, size.width, size.height,
+                                        Paint().apply {
+                                            color = Color(0xFFBEBEBE).copy(alpha = 0.5f).toArgb()
+                                            isAntiAlias = true
+                                            maskFilter = android.graphics.BlurMaskFilter(
+                                                25f,
+                                                android.graphics.BlurMaskFilter.Blur.OUTER
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                            .clip(RoundedCornerShape(5.dp))
+                            .height(5.dp)
+                            .background(Color(0xFFBEBEBE))
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                NeonBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    neonColors = listOf(Color(0xFFE8B92A), Color(0xFFFF0000)),
+                    backgroundAlpha = 0.15f
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showPermissionInfo = true }
+                                .padding(20.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Warum fordere ich so viele Berechtigungen?",
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            Box {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                    contentDescription = "Open information",
+                                    tint = Color.White.copy(alpha = 0.8f),
+                                    modifier = Modifier
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
                             }
                         }
                     }
@@ -1293,6 +1623,239 @@ fun SettingsFrame(
                     fontSize = 12.sp
                 )
             }
+        }
+
+        var selectedPermission by remember { mutableStateOf<String?>(null) }
+
+        AnimatedVisibility(
+            visible = showPermissionInfo && animatePermissionInfo,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            LaunchedEffect(showPermissionInfo) {
+                if (showPermissionInfo) {
+                    delay(50)
+                    animatePermissionInfo = true
+                } else {
+                    animatePermissionInfo = false
+                }
+            }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF0C1017))
+                    .windowInsetsPadding(WindowInsets.systemBars)
+            ) {
+                val hazeState = remember { HazeState() }
+                var headerHeightDp by remember { mutableStateOf(0.dp) }
+                val density = LocalDensity.current
+
+                run {
+                    @Composable
+                    fun PermissionButton(txt: String) {
+                        val shape = RoundedCornerShape(22.dp)
+                        val isSelected = selectedPermission == txt
+
+                        Button(
+                            onClick = {
+                                selectedPermission = txt
+                                titleDialog = txt
+                                usagesDialog = permissionUsages[txt] ?: listOf("Keine Angaben hinterlegt")
+                            },
+                            shape = shape,
+                            colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) APP_COLOR.copy(alpha = 0.3f) else Color.Transparent),
+                            modifier = Modifier
+                                .padding(vertical = 5.dp)
+                                .fillMaxWidth()
+                                .clip(shape)
+                                .background(if (isSelected) APP_COLOR.copy(alpha = 0.3f) else APP_COLOR)
+                                .animateContentSize()
+                                .border(
+                                    BorderStroke(
+                                        1.dp,
+                                        Brush.linearGradient(
+                                            colors = listOf(
+                                                Color(0xFFFF368A),
+                                                Color(0xFF7C4DFF)
+                                            )
+                                        )
+                                    ),
+                                    shape
+                                )
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(txt, modifier = Modifier.weight(1f), fontSize = 16.sp)
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                    contentDescription = "Open information",
+                                    tint = Color.White.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .hazeSource(state = hazeState)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 15.dp)
+                    ) {
+                        // Platzhalter in Höhe des Headers, damit die Liste darunter startet
+                        Spacer(Modifier.height(headerHeightDp))
+
+                        // man soll nur in dieser column scrollen können, Items blurren dabei unter dem Header
+                        PermissionButton("READ_MEDIA_AUDIO")
+                        PermissionButton("POST_NOTIFICATIONS")
+                        PermissionButton("ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION")
+                        PermissionButton("SYSTEM_ALERT_WINDOW")
+                        PermissionButton("FOREGROUND_SERVICE")
+                        PermissionButton("READ_MEDIA_IMAGES / READ_MEDIA_VIDEO")
+                        PermissionButton("READ_CONTACTS / WRITE_CONTACTS")
+                        PermissionButton("CAMERA")
+                        PermissionButton("RECEIVE_BOOT_COMPLETED")
+                        PermissionButton("RECORD_AUDIO")
+                        PermissionButton("REQUEST_IGNORE_BATTERY_OPTIMIZATIONS")
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .hazeEffect(
+                            state = hazeState,
+                            style = HazeStyle(
+                                backgroundColor = Color(0xFF0C1017),
+                                tint = HazeTint(Color(0xFF0C1017).copy(alpha = 0.7f)),
+                                blurRadius = 60.dp,
+                                noiseFactor = 0f
+                            )
+                        ) {
+                            progressive = HazeProgressive.verticalGradient(
+                                startIntensity = 1f,
+                                endIntensity = 0f,
+                                preferPerformance = true
+                            )
+                        }
+                        .onGloballyPositioned {
+                            headerHeightDp = with(density) { it.size.height.toDp() }
+                        }
+                        .padding(horizontal = 15.dp)
+                        .padding(bottom = 16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Tabslify Berechtigungen",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(start = 5.dp),
+                            fontSize = 22.sp
+                        )
+                        IconButton(
+                            onClick = { showPermissionInfo = false },
+                            modifier = Modifier.background(
+                                Color.White.copy(alpha = 0.1f),
+                                CircleShape
+                            )
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = Color.White
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Text(
+                        text = buildAnnotatedString {
+                            append("Tabslify ist ")
+                            withStyle(
+                                SpanStyle(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(
+                                            Color(0xFFFF368A),
+                                            Color(0xFF7C4DFF)
+                                        )
+                                    )
+                                )
+                            ) {
+                                append("nicht nur irgendeine App")
+                            }
+                            append(", sie ist ein ")
+                            withStyle(
+                                SpanStyle(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(
+                                            Color(0xFFFF368A),
+                                            Color(0xFF7C4DFF)
+                                        )
+                                    )
+                                )
+                            ) {
+                                append("Mix aus ganz vielen")
+                            }
+                            append(" Apps, unter anderem für die Schule, zum eigenen Erfolg tracken oder zum Podcast hören. \nDieser Mix aus Funktionen benötigt ")
+                            withStyle(
+                                SpanStyle(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(
+                                            Color(0xFFFF368A),
+                                            Color(0xFF7C4DFF)
+                                        )
+                                    )
+                                )
+                            ) {
+                                append("jeweils viele Berechtigungen")
+                            }
+                            append(" um das Benutzererlebnis ")
+                            withStyle(
+                                SpanStyle(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(
+                                            Color(0xFFFF368A),
+                                            Color(0xFF7C4DFF)
+                                        )
+                                    )
+                                )
+                            ) {
+                                append("möglichst unkompliziert")
+                            }
+                            append(" zu halten.")
+                        },
+                        color = APP_COLOR.copy(
+                            red = APP_COLOR.red + .6f,
+                            green = APP_COLOR.green + .6f,
+                            blue = APP_COLOR.blue + .6f
+                        ),
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        fontFamily = FontFamily.Default
+                    )
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = selectedPermission != null,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut()
+        ) {
+            DialogTabslify(
+                onConfirm = { selectedPermission = null },
+                onDismiss = { selectedPermission = null },
+                title = titleDialog,
+                text = usagesDialog.joinToString("\n\n") { "•  $it" },
+                confirmText = "Schließen",
+                oneButton = true,
+                modifier = Modifier.fillMaxWidth(0.9f)
+            )
         }
     }
 }
