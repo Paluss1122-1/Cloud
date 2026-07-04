@@ -4,6 +4,7 @@ import android.graphics.Paint
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,7 +17,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,10 +41,13 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -526,3 +533,108 @@ fun AlertDialogTabslify(
         properties = properties
     )
 }
+
+@Composable
+fun DialogTabslify(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: @Composable (() -> Unit)? = null,
+    title: String = "",
+    text: String = "",
+    confirmText: String = "Löschen",
+    oneButton: Boolean = false,
+    shape: Shape = RoundedCornerShape(28.dp),
+    iconContentColor: Color = Color.Unspecified,
+    titleContentColor: Color = Color.Unspecified,
+    textContentColor: Color = Color.Unspecified
+) {
+    val scale = remember { Animatable(0.8f) }
+    val alpha = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        scale.animateTo(
+            targetValue = 1f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessLow
+            )
+        )
+        alpha.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 300)
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.32f))
+            .clickable(onClick = onDismiss)
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = modifier
+                .graphicsLayer {
+                    scaleX = scale.value
+                    scaleY = scale.value
+                    this.alpha = alpha.value
+                }
+                .background(BgSurface, shape)
+                .padding(24.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                icon?.let {
+                    CompositionLocalProvider(LocalContentColor provides iconContentColor) {
+                        it()
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                if (title.isNotEmpty()) {
+                    Text(
+                        title,
+                        color = if (titleContentColor != Color.Unspecified) titleContentColor else TextSecondary,
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.padding(bottom = if (text.isNotEmpty()) 16.dp else 24.dp)
+                    )
+                }
+                if (text.isNotEmpty()) {
+                    Text(
+                        text,
+                        color = if (textContentColor != Color.Unspecified) textContentColor else TextSecondary,
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(bottom = 24.dp)
+                    )
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (!oneButton) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(BgCard)
+                                .clickable(onClick = onDismiss)
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) { Text("Abbrechen", color = TextSecondary) }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (!oneButton) Color(0xFFB71C1C) else MaterialTheme.colorScheme.primary)
+                            .clickable(onClick = onConfirm)
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) { Text(confirmText, color = TextPrimary, fontWeight = FontWeight.SemiBold) }
+                }
+            }
+        }
+    }
+}
+
