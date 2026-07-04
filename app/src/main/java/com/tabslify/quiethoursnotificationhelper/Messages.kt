@@ -267,7 +267,7 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
                 } else {
                     withContext(Dispatchers.Main) {
                         showSimpleNotificationExtern(
-                            "❌ ${provider.uppercase()} Chat",
+                            "❌ Chat",
                             "Antwort konnte nicht geladen werden.",
                             context = context
                         )
