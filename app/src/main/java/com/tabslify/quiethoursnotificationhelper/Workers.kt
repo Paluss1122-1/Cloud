@@ -59,3 +59,24 @@ class CleanupWorker(
         }
     }
 }
+
+class SyncTriggerWorker(
+    private val context: Context,
+    params: WorkerParameters
+) : Worker(context, params) {
+    override fun doWork(): Result {
+        return try {
+            val calendar = java.util.Calendar.getInstance()
+            val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+            
+            if (hour in 21..22) {
+                if (!isTriggerPortOpen()) {
+                    syncTodosWithLaptop(context)
+                }
+            }
+            Result.success()
+        } catch (_: Exception) {
+            Result.retry()
+        }
+    }
+}

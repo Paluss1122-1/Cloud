@@ -81,15 +81,17 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.tabslify.R
 import com.tabslify.core.activities.MainActivity
 import com.tabslify.core.activities.Tabslify.Companion.appScope
-import com.tabslify.core.functions.canNotify
 import com.tabslify.core.functions.errorInsert
+import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.DEL_GAL_CONF
 import com.tabslify.core.objects.Config.cms
 import com.tabslify.core.objects.Config.realDevice
 import com.tabslify.core.objects.prvt
+import com.tabslify.core.objects.tNotify
 import com.tabslify.core.ui.getDeviceName
 import com.tabslify.quiethoursnotificationhelper.AiResponseEntry
 import com.tabslify.quiethoursnotificationhelper.CleanupWorker
@@ -116,11 +118,12 @@ import com.tabslify.quiethoursnotificationhelper.playPreviousVoiceNote
 import com.tabslify.quiethoursnotificationhelper.restoreSyncIfNeeded
 import com.tabslify.quiethoursnotificationhelper.saveAiResponse
 import com.tabslify.quiethoursnotificationhelper.scheduleNextCheck
-import com.tabslify.quiethoursnotificationhelper.sendGeminiRequest
+import com.tabslify.quiethoursnotificationhelper.sendAiRequest
 import com.tabslify.quiethoursnotificationhelper.showDeleteConfirmation
 import com.tabslify.quiethoursnotificationhelper.showNextGalleryImage
 import com.tabslify.quiethoursnotificationhelper.showPreviousGalleryImage
 import com.tabslify.quiethoursnotificationhelper.showUnreadMessages
+import com.tabslify.quiethoursnotificationhelper.shutdownAllWifiDirectServices
 import com.tabslify.quiethoursnotificationhelper.startAiResponseListener
 import com.tabslify.quiethoursnotificationhelper.startMailNotifyListener
 import com.tabslify.quiethoursnotificationhelper.startTriggerListenerIfHomeWifi
@@ -165,21 +168,41 @@ class QuietHoursNotificationService : Service() {
         Log.e("QuietHoursService", "Unhandled error in $where", t)
         val stack = t.stackTraceToString()
         val trimmed = if (stack.length > 8000) stack.take(8000) + "\n...[truncated]" else stack
-        errorInsert("QuietHoursNotificationService:$where",
+        errorInsert(
+            "QuietHoursNotificationService:$where",
             trimmed,
             Instant.now().toString(),
-            "ERROR")
+            "ERROR"
+        )
     }
 
     @SuppressLint("BatteryLife")
     fun requestIgnoreBatteryOptimizations(context: Context) {
         val pm = context.getSystemService(POWER_SERVICE) as PowerManager
         if (!pm.isIgnoringBatteryOptimizations(context.packageName)) {
-            context.startActivity(
-                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                    data = "package:${context.packageName}".toUri()
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            val prefs = context.getSharedPreferences("quiet_hours_prefs", MODE_PRIVATE)
+            val alreadyRequested = prefs.getBoolean("battery_optimization_requested", false)
+
+            if (!alreadyRequested) {
+                prefs.edit { putBoolean("battery_optimization_requested", true) }
+                try {
+                    context.startActivity(
+                        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                            data = "package:${context.packageName}".toUri()
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                    )
+                } catch (e: Exception) {
+                    reportServiceError("requestIgnoreBatteryOptimizations", e)
                 }
+            }
+
+            showSimpleNotificationExtern(
+                "⚠️ Eingeschränkte Hintergrundaktivitäten",
+                "Services laufen evtl. verzögert oder gar nicht. Klicke hier um zu beheben",
+                10.seconds,
+                context = this,
+                onClick = "requestIgnoreBatteryOptimizations"
             )
         }
     }
@@ -204,7 +227,7 @@ class QuietHoursNotificationService : Service() {
         const val ACTION_MESSAGE_SENT = "com.tabslify.ACTION_MESSAGE_SENT"
         const val EXTRA_SENDER = "extra_sender"
 
-        private lateinit var sharedPreferences: SharedPreferences
+        private var sharedPreferences: SharedPreferences? = null
         private const val ACTION_OPEN_MUSIC_PLAYER = "com.tabslify.ACTION_OPEN_MUSIC_PLAYER"
         const val ACTION_RESTART_MUSIC_PLAYER =
             "com.tabslify.ACTION_RESTART_MUSIC_PLAYER"
@@ -378,7 +401,9 @@ class QuietHoursNotificationService : Service() {
 
             val pi = PendingIntent.getService(
                 context, 0,
-                Intent(context, QuietHoursNotificationService::class.java).apply { action = ACTION_PODCAST_CHECK },
+                Intent(context, QuietHoursNotificationService::class.java).apply {
+                    action = ACTION_PODCAST_CHECK
+                },
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
@@ -404,7 +429,17 @@ class QuietHoursNotificationService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        realDevice = !getDeviceName().trim().contains("sdk_gphone64", ignoreCase = true)
+        realDevice = !getDeviceName().trim().contains("sdk_gphone", ignoreCase = true)
+        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        if (!prefs.getBoolean("services_master", false) || !prefs.getBoolean("service_qhns", false)) {
+            createNotificationChannel(this)
+            startForeground(
+                NOTIFICATION_ID,
+                createNotification(isCurrentlyQuietHours, this)
+            )
+            stopSelf()
+            return
+        }
         requestIgnoreBatteryOptimizations(this)
         Config.init(this)
         sharedPreferences = getSharedPreferences("quiet_hours_prefs", MODE_PRIVATE)
@@ -418,13 +453,14 @@ class QuietHoursNotificationService : Service() {
         }
 
         try {
-            sharedPreferences.registerOnSharedPreferenceChangeListener(prefChangeListener)
+            sharedPreferences?.registerOnSharedPreferenceChangeListener(prefChangeListener)
         } catch (e: Exception) {
             reportServiceError("onCreate:registerOnSharedPreferenceChangeListener", e)
         }
 
         handler.post(checkRunnable)
         schedulePeriodicCleanup(this)
+        scheduleSyncTriggerWorker(this)
         scheduleSchoolDaySummary(this)
         schedulePodcastCheck(this)
         restoreSyncIfNeeded(this)
@@ -516,6 +552,18 @@ class QuietHoursNotificationService : Service() {
         )
     }
 
+    private fun scheduleSyncTriggerWorker(context: Context) {
+        val work = PeriodicWorkRequestBuilder<com.tabslify.quiethoursnotificationhelper.SyncTriggerWorker>(
+            15, TimeUnit.MINUTES
+        ).build()
+
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            "sync_trigger_check",
+            ExistingPeriodicWorkPolicy.KEEP,
+            work
+        )
+    }
+
     private fun scheduleSchoolDaySummary(context: Context) {
         val alarmManager = context.getSystemService(AlarmManager::class.java)
         val intent = Intent(context, QuietHoursNotificationService::class.java).apply {
@@ -579,8 +627,7 @@ class QuietHoursNotificationService : Service() {
 
                 ACTION_RESTORE_NOTIFICATION -> {
                     val notification = createNotification(isCurrentlyQuietHours, this)
-                    val nm = getSystemService(NotificationManager::class.java)
-                    nm.notify(NOTIFICATION_ID, notification)
+                    tNotify(this, NOTIFICATION_ID, notification)
                     START_STICKY
                 }
 
@@ -625,7 +672,7 @@ class QuietHoursNotificationService : Service() {
 
                 ACTION_PLAY_VOICE_NOTE -> {
                     val sender = intent.getStringExtra(EXTRA_SENDER_FOR_VOICE)
-                    if (sender != null) playLatestVoiceNote(sender, this)
+                    if (prvt() && sender != null) playLatestVoiceNote(sender, this)
                     START_STICKY
                 }
 
@@ -700,7 +747,8 @@ class QuietHoursNotificationService : Service() {
                             if (sessions.isEmpty()) return@launch
 
                             val stats = buildSessionStatsText(sessions)
-                            val result = sendGeminiRequest(emptyList(), stats, anlytic = true) ?: return@launch
+                            val result = sendAiRequest(this@QuietHoursNotificationService, userMessage = stats, anlytic = true, serviceKey = "music_summary")
+                                ?: return@launch
                             val musicMs =
                                 sessions.filter { it.type == "music" }.sumOf { it.listenedMs }
                             val podcastMs =
@@ -824,9 +872,12 @@ class QuietHoursNotificationService : Service() {
                         .setContentIntent(pi)
                         .build()
 
-                    if (canNotify(this) && prvt()) {
-                        nm.notify(SCHOOL_SUMMARY_NOTIF_ID, notification)
-                    }
+                    tNotify(this, SCHOOL_SUMMARY_NOTIF_ID, notification)
+                    START_STICKY
+                }
+
+                "requestIgnoreBatteryOptimizations" -> {
+                    requestIgnoreBatteryOptimizations(this)
                     START_STICKY
                 }
 
@@ -934,9 +985,6 @@ class QuietHoursNotificationService : Service() {
                             javaScriptEnabled = true
                             domStorageEnabled = true
 
-                            allowFileAccess = true
-                            allowContentAccess = true
-
                             loadsImagesAutomatically = true
                             blockNetworkLoads = false
 
@@ -1020,8 +1068,21 @@ class QuietHoursNotificationService : Service() {
                             } catch (e: Exception) {
                                 reportServiceError("showTestOverlay:overlayLifecycle:onDestroy", e)
                             }
-                            webView.stopLoading()
-                            webView.destroy()
+
+                            try {
+                                webView.apply {
+                                    stopLoading()
+                                    clearHistory()
+                                    clearCache(true)
+                                    loadUrl("about:blank")
+                                    onPause()
+                                    removeAllViews()
+                                    destroy()
+                                }
+                            } catch (e: Exception) {
+                                reportServiceError("showTestOverlay:webView:destroy", e)
+                            }
+
                             testOverlayView = null
                             testOverlayLifecycle = null
                         },
@@ -1110,38 +1171,59 @@ class QuietHoursNotificationService : Service() {
         galleryImages = emptyList()
         commandHistory.clear()
 
-        try {
-            unregisterReceiver(messageSentReceiver)
-            unregisterReceiver(notificationDismissReceiver)
-            unregisterReceiver(timeChangeReceiver)
-            unregisterReceiver(commandReceiver)
-            unregisterReceiver(markReadReceiver)
-        } catch (e: Exception) {
-            Log.e("QuietHoursService", "Error unregistering receivers", e)
-        }
+        try { unregisterReceiver(messageSentReceiver) } catch (_: Exception) {}
+        try { unregisterReceiver(notificationDismissReceiver) } catch (_: Exception) {}
+        try { unregisterReceiver(timeChangeReceiver) } catch (_: Exception) {}
+        try { unregisterReceiver(commandReceiver) } catch (_: Exception) {}
+        try { unregisterReceiver(markReadReceiver) } catch (_: Exception) {}
 
         try {
-            sharedPreferences.unregisterOnSharedPreferenceChangeListener(prefChangeListener)
+            sharedPreferences?.unregisterOnSharedPreferenceChangeListener(prefChangeListener)
         } catch (e: Exception) {
             reportServiceError("onDestroy:unregisterOnSharedPreferenceChangeListener", e)
         }
 
+        try {
+            shutdownAllWifiDirectServices(applicationContext)
+        } catch (e: Exception) {
+            reportServiceError("onDestroy:shutdownAllWifiDirectServices", e)
+        }
+        
+        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        val shouldRestart = prefs.getBoolean("services_master", false) &&
+                prefs.getBoolean("service_qhns", false)
+
+        if (shouldRestart) {
+            scheduleRestart(1)
+        }
+
+        errorScope.cancel()
+        exploreTracker.stop(this)
+    }
+    
+    private fun scheduleRestart(requestCode: Int) {
+        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        val now = SystemClock.elapsedRealtime()
+        val lastRestart = prefs.getLong("last_service_restart_elapsed", 0L)
+        val sinceLast = now - lastRestart
+
+        val delayMs = if (lastRestart != 0L && sinceLast < 10_000L) 15_000L else 1_000L
+
+        prefs.edit().putLong("last_service_restart_elapsed", now).apply()
+
         val restartIntent = Intent(applicationContext, QuietHoursNotificationService::class.java)
         val pendingIntent = PendingIntent.getService(
-            applicationContext, 0, restartIntent,
+            applicationContext, requestCode, restartIntent,
             PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
         val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
         if (alarmManager.canScheduleExactAlarms()) {
             alarmManager.setExactAndAllowWhileIdle(
                 AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                SystemClock.elapsedRealtime() + 1000,
+                now + delayMs,
                 pendingIntent
             )
         }
-
-        errorScope.cancel()
-        exploreTracker.stop(this)
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -1149,20 +1231,13 @@ class QuietHoursNotificationService : Service() {
         val notification = createNotification(isCurrentlyQuietHours, this)
         startForeground(NOTIFICATION_ID, notification)
 
-        val restartServiceIntent =
-            Intent(applicationContext, QuietHoursNotificationService::class.java)
-        val restartServicePendingIntent = PendingIntent.getService(
-            applicationContext,
-            1,
-            restartServiceIntent,
-            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
-        alarmManager.set(
-            AlarmManager.ELAPSED_REALTIME,
-            SystemClock.elapsedRealtime() + 1000,
-            restartServicePendingIntent
-        )
+        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        val shouldRestart = prefs.getBoolean("services_master", false) &&
+                prefs.getBoolean("service_qhns", false)
+
+        if (shouldRestart) {
+            scheduleRestart(2)
+        }
     }
 
     private fun openAndroidSettings() {
@@ -1182,127 +1257,135 @@ class QuietHoursNotificationService : Service() {
         try {
             val prefs = context.getSharedPreferences("podcast_favs", MODE_PRIVATE)
             val raw = prefs.getString("favs", null) ?: return found
-                val favsArr = JSONArray(raw)
-                val prefsDl = context.getSharedPreferences("podcast_downloads", MODE_PRIVATE)
+            val favsArr = JSONArray(raw)
+            val prefsDl = context.getSharedPreferences("podcast_downloads", MODE_PRIVATE)
 
-                val threshold = ZonedDateTime.now(ZoneId.systemDefault())
-                    .minusDays(7)
-                    .withHour(15)
-                    .withMinute(30)
-                    .withSecond(0)
-                    .withNano(0)
-                    .toInstant()
+            val threshold = ZonedDateTime.now(ZoneId.systemDefault())
+                .minusDays(7)
+                .withHour(15)
+                .withMinute(30)
+                .withSecond(0)
+                .withNano(0)
+                .toInstant()
 
-            val destDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PODCASTS), "/Tabslify")
+            val destDir = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PODCASTS),
+                "/Tabslify"
+            )
             destDir.mkdirs()
 
             for (i in 0 until favsArr.length()) {
-                    try {
-                        val o = favsArr.getJSONObject(i)
-                        val feedTitle = o.optString("title")
-                        val feedUrl = o.optString("feedUrl")
-                        if (feedUrl.isEmpty()) continue
+                try {
+                    val o = favsArr.getJSONObject(i)
+                    val feedTitle = o.optString("title")
+                    val feedUrl = o.optString("feedUrl")
+                    if (feedUrl.isEmpty()) continue
 
-                        val xml = URL(feedUrl).readText()
-                        val doc = DocumentBuilderFactory.newInstance()
-                            .newDocumentBuilder()
-                            .parse(InputSource(StringReader(xml)))
+                    val xml = URL(feedUrl).readText()
+                    val doc = DocumentBuilderFactory.newInstance()
+                        .newDocumentBuilder()
+                        .parse(InputSource(StringReader(xml)))
 
-                        val items = doc.getElementsByTagName("item")
-                        for (j in 0 until items.length) {
-                            try {
-                                val item = items.item(j)
-                                val children = item.childNodes
-                                var title = ""
-                                var audioUrl = ""
-                                var pubDateTxt = ""
-                                for (k in 0 until children.length) {
-                                    val node = children.item(k)
-                                    when (node.nodeName) {
-                                        "title" -> title = node.textContent.trim()
-                                        "enclosure" -> audioUrl = node.attributes?.getNamedItem("url")?.nodeValue ?: ""
-                                        "pubDate" -> pubDateTxt = node.textContent.trim()
-                                    }
+                    val items = doc.getElementsByTagName("item")
+                    for (j in 0 until items.length) {
+                        try {
+                            val item = items.item(j)
+                            val children = item.childNodes
+                            var title = ""
+                            var audioUrl = ""
+                            var pubDateTxt = ""
+                            for (k in 0 until children.length) {
+                                val node = children.item(k)
+                                when (node.nodeName) {
+                                    "title" -> title = node.textContent.trim()
+                                    "enclosure" -> audioUrl =
+                                        node.attributes?.getNamedItem("url")?.nodeValue ?: ""
+
+                                    "pubDate" -> pubDateTxt = node.textContent.trim()
                                 }
+                            }
 
-                                if (audioUrl.isEmpty()) continue
+                            if (audioUrl.isEmpty()) continue
 
-                                val pubInstant = try {
-                                    ZonedDateTime.parse(pubDateTxt, DateTimeFormatter.RFC_1123_DATE_TIME.withLocale(Locale.ENGLISH)).toInstant()
+                            val pubInstant = try {
+                                ZonedDateTime.parse(
+                                    pubDateTxt,
+                                    DateTimeFormatter.RFC_1123_DATE_TIME.withLocale(Locale.ENGLISH)
+                                ).toInstant()
+                            } catch (_: Exception) {
+                                try {
+                                    Instant.parse(pubDateTxt)
                                 } catch (_: Exception) {
-                                    try {
-                                        Instant.parse(pubDateTxt)
-                                    } catch (_: Exception) {
-                                        null
-                                    }
+                                    null
                                 }
+                            }
 
-                                if (pubInstant == null) continue
-                                if (pubInstant <= threshold) continue
-                                if (prefsDl.getBoolean("dl_$audioUrl", false)) continue
+                            if (pubInstant == null) continue
+                            if (pubInstant <= threshold) continue
+                            if (prefsDl.getBoolean("dl_$audioUrl", false)) continue
 
-                                val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_")
-                                val filename = "$safeTitle.mp3"
-                                if (File(destDir, filename).exists()) continue
+                            val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_")
+                            val filename = "$safeTitle.mp3"
+                            if (File(destDir, filename).exists()) continue
 
-                                found.add(JSONObject().apply {
-                                    put("audioUrl", audioUrl)
-                                    put("title", title)
-                                    put("showName", feedTitle)
-                                })
-                            } catch (_: Exception) { }
+                            found.add(JSONObject().apply {
+                                put("audioUrl", audioUrl)
+                                put("title", title)
+                                put("showName", feedTitle)
+                            })
+                        } catch (_: Exception) {
                         }
-                    } catch (_: Exception) { }
+                    }
+                } catch (_: Exception) {
+                }
             }
 
             if (found.isNotEmpty() && !forGui) {
                 val arr = JSONArray()
                 found.forEach { arr.put(it) }
 
-                    val nm = context.getSystemService(NotificationManager::class.java)
-                    if (nm.getNotificationChannel(PODCAST_CHANNEL_ID) == null) {
-                        android.app.NotificationChannel(
-                            PODCAST_CHANNEL_ID,
-                            "Podcast Check",
-                            NotificationManager.IMPORTANCE_DEFAULT
-                        ).also { nm.createNotificationChannel(it) }
-                    }
-
-                    val pi = PendingIntent.getService(
-                        context,
-                        PODCAST_NOTIFICATION_ID,
-                        Intent(context, QuietHoursNotificationService::class.java).apply {
-                            action = ACTION_PODCAST_DOWNLOAD
-                            putExtra("episodes_json", arr.toString())
-                        },
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
-
-                    val contentText = if (found.size == 1) {
-                        "Neue Folge: ${found[0].optString("title")}" 
-                    } else {
-                        "${found.size} neue Folgen verfügbar"
-                    }
-                    
-                    val bigText = buildString {
-                        found.forEachIndexed { index, episode ->
-                            if (index > 0) append(", ")
-                            append("📻 ${episode.optString("showName")}: ${episode.optString("title")}")
-                        }
-                    }
-
-                    val notification = NotificationCompat.Builder(context, PODCAST_CHANNEL_ID)
-                        .setSmallIcon(android.R.drawable.ic_menu_save)
-                        .setContentTitle("Neue Podcast-Folgen gefunden")
-                        .setContentText(contentText)
-                        .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
-                        .setAutoCancel(true)
-                        .setContentIntent(pi)
-                        .build()
-
-                if (canNotify(context)) {
-                    nm.notify(PODCAST_NOTIFICATION_ID, notification)
+                val nm = context.getSystemService(NotificationManager::class.java)
+                if (nm.getNotificationChannel(PODCAST_CHANNEL_ID) == null) {
+                    android.app.NotificationChannel(
+                        PODCAST_CHANNEL_ID,
+                        "Podcast Check",
+                        NotificationManager.IMPORTANCE_DEFAULT
+                    ).also { nm.createNotificationChannel(it) }
                 }
+
+                val pi = PendingIntent.getService(
+                    context,
+                    PODCAST_NOTIFICATION_ID,
+                    Intent(context, QuietHoursNotificationService::class.java).apply {
+                        action = ACTION_PODCAST_DOWNLOAD
+                        putExtra("episodes_json", arr.toString())
+                    },
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+
+                val contentText = if (found.size == 1) {
+                    "Neue Folge: ${found[0].optString("title")}"
+                } else {
+                    "${found.size} neue Folgen verfügbar"
+                }
+
+                val bigText = buildString {
+                    found.forEachIndexed { index, episode ->
+                        if (index > 0) append(", ")
+                        append("📻 ${episode.optString("showName")}: ${episode.optString("title")}")
+                    }
+                }
+
+                val notification = NotificationCompat.Builder(context, PODCAST_CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.ic_menu_save)
+                    .setContentTitle("Neue Podcast-Folgen gefunden")
+                    .setContentText(contentText)
+                    .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
+                    .setAutoCancel(true)
+                    .setContentIntent(pi)
+                    .build()
+
+                tNotify(context, PODCAST_NOTIFICATION_ID, notification)
             }
         } catch (e: Exception) {
             reportServiceError("checkPodcastsAndNotify", e)
@@ -1310,11 +1393,19 @@ class QuietHoursNotificationService : Service() {
         return found
     }
 
-    private fun startPodcastDownload(audioUrl: String, title: String, showName: String, context: Context) {
+    private fun startPodcastDownload(
+        audioUrl: String,
+        title: String,
+        showName: String,
+        context: Context
+    ) {
         try {
             val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_")
             val filename = "$safeTitle.mp3"
-            val destDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PODCASTS), "/Tabslify")
+            val destDir = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PODCASTS),
+                "/Tabslify"
+            )
             destDir.mkdirs()
 
             val request = DownloadManager.Request(audioUrl.toUri()).apply {
@@ -1360,7 +1451,7 @@ class QuietHoursNotificationService : Service() {
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            notificationManager.notify(cms(), notification)
+            tNotify(this, cms(), notification)
 
             if (duration > Duration.ZERO) {
                 Handler(Looper.getMainLooper()).postDelayed(
@@ -1394,21 +1485,30 @@ class QuietHoursNotificationService : Service() {
 
     private fun checkPermissionsForPrvt() {
         try {
-            val dpm = getSystemService(DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
-            val adminComponent = android.content.ComponentName(this, "com.tabslify.core.activities.MyDeviceAdminReceiver")
+            val dpm =
+                getSystemService(DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+            val adminComponent = android.content.ComponentName(
+                this,
+                "com.tabslify.core.activities.MyDeviceAdminReceiver"
+            )
             if (!dpm.isAdminActive(adminComponent)) {
-                val intent = Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
-                    putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
-                    putExtra(
-                        android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                        "Ermöglicht Sicherheitsfunktionen."
-                    )
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
+                val intent =
+                    Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                        putExtra(
+                            android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN,
+                            adminComponent
+                        )
+                        putExtra(
+                            android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                            "Ermöglicht Sicherheitsfunktionen."
+                        )
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
                 startActivity(intent)
             }
 
-            val listeners = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+            val listeners =
+                Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
             if (listeners == null || !listeners.contains(packageName)) {
                 val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -1450,9 +1550,7 @@ class QuietHoursNotificationService : Service() {
                 .setContentIntent(retryPendingIntent)
                 .build()
 
-            if (canNotify(this)) {
-                nm.notify(PODCAST_NOTIFICATION_ID, notification)
-            }
+            tNotify(this, PODCAST_NOTIFICATION_ID, notification)
         } catch (e: Exception) {
             reportServiceError("showPodcastRetryNotification", e)
         }
