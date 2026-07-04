@@ -17,10 +17,12 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.wifi.WifiInfo
+import android.os.Build
 import android.os.Environment
 import android.os.Handler
 import android.os.HardwarePropertiesManager
 import android.os.Looper
+import android.os.PersistableBundle
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
@@ -83,6 +85,7 @@ import io.github.jan.supabase.functions.functions
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -96,6 +99,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 data class Command(
@@ -404,11 +408,16 @@ private fun getAvailableCommands(context: Context): List<Command> {
             description = "Bw MP!"
         ) {
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clip = ClipData.newPlainText("BWMP", "Config.BWMP")
             serviceScope.launch {
-                fetchBWMP(context)
+                val clip = ClipData.newPlainText("BWMP", fetchBWMP(context)).apply {
+                    description.extras = PersistableBundle().apply {
+                        putBoolean("android.content.extra.IS_SENSITIVE", true)
+                    }
+                }
+                clipboard.setPrimaryClip(clip)
+                delay(30_000.milliseconds)
+                clipboard.clearPrimaryClip()
             }
-            clipboard.setPrimaryClip(clip)
         },
         Command(
             name = "battery",
