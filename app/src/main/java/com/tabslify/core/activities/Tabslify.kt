@@ -158,7 +158,6 @@ fun executeJs(code: String, appContext: Context): String {
     val cx = RhinoContext.enter()
     cx.optimizationLevel = -1
 
-    // Sandbox aktivieren: Nur unsere Brücke (und Basis-Datentypen) sind erlaubt
     cx.setClassShutter { className ->
         className == "com.tabslify.core.activities.AppBridge" ||
                 className == "java.lang.String" ||
