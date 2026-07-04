@@ -22,6 +22,7 @@ import android.media.AudioManager
 import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
@@ -57,13 +58,13 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import com.tabslify.core.activities.MainActivity
 import com.tabslify.core.activities.Tabslify.Companion.appScope
-import com.tabslify.core.functions.canNotify
 import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config.COMPLETED_PODCASTS
 import com.tabslify.core.objects.Config.MEDIA_PLAYER
 import com.tabslify.core.objects.Config.PLALISTS
 import com.tabslify.core.objects.Config.PODCASTS
+import com.tabslify.core.objects.tNotify
 import com.tabslify.quiethoursnotificationhelper.pushMediaStateToLaptop
 import com.tabslify.tabs.mediaplayer.AlgorithmicPlaylistRegistry
 import com.tabslify.tabs.mediaplayer.FavoritesPlaylist
@@ -228,7 +229,9 @@ class MediaPlayerService : MediaSessionService() {
         fun sendPodcastPlayAction(context: Context) {
             ensureServiceIsRunning(context)
             context.startService(
-                Intent(context, MediaPlayerService::class.java).apply { action = ACTION_PODCAST_PLAY }
+                Intent(context, MediaPlayerService::class.java).apply {
+                    action = ACTION_PODCAST_PLAY
+                }
             )
         }
 
@@ -268,6 +271,7 @@ class MediaPlayerService : MediaSessionService() {
 
         @SuppressLint("LaunchActivityFromNotification")
         private fun showCompletedPodcastsWithoutService(context: Context) {
+            if (!hasAudioPermission(context)) return
             val podcastPrefs: SharedPreferences = context.getSharedPreferences(
                 "podcast_player_prefs",
                 MODE_PRIVATE
@@ -344,8 +348,8 @@ class MediaPlayerService : MediaSessionService() {
                         .setContentIntent(deleteIntent)
                         .setGroup("podcast_delete")
                         .build()
-                if (canNotify(context))
-                    nm?.notify(COMPLETED_PODCASTS + i, n)
+
+                tNotify(context, COMPLETED_PODCASTS + i, n)
             }
 
             val summary =
@@ -358,8 +362,8 @@ class MediaPlayerService : MediaSessionService() {
                     .setGroupSummary(true)
                     .setAutoCancel(true)
                     .build()
-            if (canNotify(context))
-                nm?.notify(COMPLETED_PODCASTS + 50, summary)
+
+            tNotify(context, COMPLETED_PODCASTS + 50, summary)
         }
 
         fun setPlaybackSpeed(context: Context, speed: Float) = context.startService(
@@ -431,6 +435,12 @@ class MediaPlayerService : MediaSessionService() {
             context.startService(intent)
         }
 
+        fun hasAudioPermission(context: Context): Boolean =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                context.checkSelfPermission(Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED
+            else
+                context.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+
         fun streamRemote(context: Context, url: String) {
             ensureServiceIsRunning(context)
             context.startService(
@@ -489,7 +499,6 @@ class MediaPlayerService : MediaSessionService() {
     @Volatile
     private var isPlayingPodcast = false
     private var positionSaveRunnable: Runnable? = null
-    private var canPostNotifications = true
 
     private var mediaSession: MediaSession? = null
     private var dummyPlayer: DummyPlayer? = null
@@ -535,6 +544,8 @@ class MediaPlayerService : MediaSessionService() {
         autoPauseRunnable = null
     }
 
+    private fun hasAudioPermission(): Boolean = hasAudioPermission(this)
+
     private fun loadShowNamesFromPrefs() {
         val prefs = getSharedPreferences("show_name_prefs", MODE_PRIVATE)
         val all = prefs.all
@@ -552,13 +563,11 @@ class MediaPlayerService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-
-        val externalRoot = Environment.getExternalStorageDirectory().path
-        val podcastTabslifyDir = File("$externalRoot/Podcasts/Tabslify")
-        if (!podcastTabslifyDir.exists()) podcastTabslifyDir.mkdirs()
-        val musicTabslifyDir = File("$externalRoot/Music/Tabslify")
-        if (!musicTabslifyDir.exists()) musicTabslifyDir.mkdirs()
-
+        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        if (!prefs.getBoolean("services_master", false) || !prefs.getBoolean("service_media", false)) {
+            stopSelf()
+            return
+        }
         isRunning = true
         musicPrefs = getSharedPreferences(MUSIC_PREFS, MODE_PRIVATE)
         podcastPrefs = getSharedPreferences(PODCAST_PREFS, MODE_PRIVATE)
@@ -604,13 +613,11 @@ class MediaPlayerService : MediaSessionService() {
         startPositionSaving()
         registerBluetoothReceiver()
 
-        canPostNotifications = canNotify(this)
-
         val wasPlayingMusic = musicPrefs.getBoolean("was_playing_music", false)
         val wasPlayingPodcast = musicPrefs.getBoolean("was_playing_podcast", false)
 
         Handler(Looper.getMainLooper()).post {
-           if (wasPlayingMusic) {
+            if (wasPlayingMusic) {
                 ensureMusicMode()
                 loadSong(currentSongIndex)
                 val savedPosition = musicPrefs.getLong("music_position_ms", 0L)
@@ -691,6 +698,7 @@ class MediaPlayerService : MediaSessionService() {
 
             ACTION_PODCAST_PLAY_SPECIFIED -> {
                 val target = intent.getStringExtra("safeTitle") ?: return START_STICKY
+                if (!hasAudioPermission()) return START_STICKY
                 ensurePodcastMode()
                 var result: Podcast? = null
                 val proj = arrayOf(
@@ -1144,7 +1152,11 @@ class MediaPlayerService : MediaSessionService() {
                             retriever.setDataSource(applicationContext, uri)
                             val pictureBytes = retriever.embeddedPicture
                             if (pictureBytes != null) {
-                                val bitmap = BitmapFactory.decodeByteArray(pictureBytes, 0, pictureBytes.size)
+                                val bitmap = BitmapFactory.decodeByteArray(
+                                    pictureBytes,
+                                    0,
+                                    pictureBytes.size
+                                )
                                 if (bitmap != null) {
                                     future.set(bitmap)
                                 } else {
@@ -1333,9 +1345,15 @@ class MediaPlayerService : MediaSessionService() {
                         val retriever = MediaMetadataRetriever()
                         try {
                             retriever.setDataSource(applicationContext, song.uri)
-                            val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: song.name
-                            val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: "Unknown Artist"
-                            val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: "Unknown Album"
+                            val title =
+                                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+                                    ?: song.name
+                            val artist =
+                                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                                    ?: "Unknown Artist"
+                            val album =
+                                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+                                    ?: "Unknown Album"
 
                             val mediaMetadata = MediaMetadata.Builder()
                                 .setTitle(title)
@@ -1692,7 +1710,9 @@ class MediaPlayerService : MediaSessionService() {
         if (!isPlayingPodcast) return
         val player = podcastPlayer ?: run { isPlayingPodcast = false; return }
         try {
-            if (!player.isPlaying) { isPlayingPodcast = false; return }
+            if (!player.isPlaying) {
+                isPlayingPodcast = false; return
+            }
             val pos = player.currentPosition.toLong()
             player.pause()
             isPlayingPodcast = false
@@ -1807,7 +1827,7 @@ class MediaPlayerService : MediaSessionService() {
                 .setContentIntent(pi)
                 .setGroup("podcast_selection")
                 .build()
-            if (hasNotificationPermission()) nm?.notify(PODCASTS + i, n)
+            tNotify(this, PODCASTS + i, n)
         }
         val completedCount = updated.count { it.isCompleted }
         val summary = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -1819,7 +1839,7 @@ class MediaPlayerService : MediaSessionService() {
             .setGroupSummary(true)
             .setAutoCancel(true)
             .build()
-        if (hasNotificationPermission()) nm?.notify(PODCASTS + 50, summary)
+        tNotify(this, PODCASTS + 50, summary)
     }
 
     @SuppressLint("LaunchActivityFromNotification")
@@ -1844,8 +1864,7 @@ class MediaPlayerService : MediaSessionService() {
                 .setContentText("Antippen zum Löschen • Fertig angehört")
                 .setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true)
                 .setContentIntent(pi).setGroup("podcast_delete").build()
-            if (hasNotificationPermission())
-                nm?.notify(COMPLETED_PODCASTS + i, n)
+            tNotify(this, COMPLETED_PODCASTS + i, n)
         }
         val summary = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_delete)
@@ -1853,8 +1872,8 @@ class MediaPlayerService : MediaSessionService() {
             .setContentText("${completed.size} Podcasts bereit zum Löschen")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setGroup("podcast_delete").setGroupSummary(true).setAutoCancel(true).build()
-        if (hasNotificationPermission())
-            nm?.notify(COMPLETED_PODCASTS + 50, summary)
+
+        tNotify(this, COMPLETED_PODCASTS + 50, summary)
     }
 
     private fun showNoCompletedPodcastsNotification() {
@@ -1871,8 +1890,14 @@ class MediaPlayerService : MediaSessionService() {
             podcastPlayer?.release(); podcastPlayer = null
             currentPodcast = null; isPlayingPodcast = false
         }
-        val file = File(podcast.path)
-        if (file.exists() && file.delete()) {
+
+        val deleted = try {
+            contentResolver.delete(podcast.uri, null, null) > 0
+        } catch (_: Exception) {
+            false
+        }
+
+        if (deleted) {
             podcastPrefs.edit(commit = true) {
                 remove(KEY_PREFIX_POSITION + podcast.path.hashCode())
                 remove(KEY_PREFIX_COMPLETED + podcast.path.hashCode())
@@ -1981,7 +2006,9 @@ class MediaPlayerService : MediaSessionService() {
         val progress = if (dur > 0) "${formatTime(pos)} / ${formatTime(dur)}" else "Bereit"
         val speedStr: String = try {
             podcastPlayer?.playbackParams?.speed?.toString() ?: ""
-        } catch (_: Exception) { "" }
+        } catch (_: Exception) {
+            ""
+        }
 
         fun pi(reqCode: Int, action: String, extraMs: Int? = null) = PendingIntent.getService(
             this, reqCode,
@@ -2014,6 +2041,9 @@ class MediaPlayerService : MediaSessionService() {
     }
 
     private fun loadPlaylist() {
+        if (!hasAudioPermission()) {
+            playlist = emptyList(); allSongs = emptyList(); return
+        }
         try {
             val songs = mutableListOf<Song>()
             val proj = arrayOf(
@@ -2042,7 +2072,8 @@ class MediaPlayerService : MediaSessionService() {
                     if (inTabslify && !norm.contains("/podcasts/tabslify/") &&
                         !norm.contains("/download/tabslify/podcasts/") &&
                         !norm.contains("/downloads/tabslify/podcasts/") &&
-                        !data.contains("/Podcasts/Tabslify/", ignoreCase = true)) {
+                        !data.contains("/Podcasts/Tabslify/", ignoreCase = true)
+                    ) {
                         val contentUri = Uri.withAppendedPath(
                             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                             id.toString()
@@ -2073,6 +2104,9 @@ class MediaPlayerService : MediaSessionService() {
     }
 
     private fun loadPodcasts() {
+        if (!hasAudioPermission()) {
+            podcasts = emptyList(); return
+        }
         try {
             val list = mutableListOf<Podcast>()
             val proj = arrayOf(
@@ -2259,12 +2293,14 @@ class MediaPlayerService : MediaSessionService() {
                     AudioManager.ACTION_AUDIO_BECOMING_NOISY -> {
                         if (currentMode == MODE_MUSIC) pauseMusic() else pausePodcast()
                     }
+
                     BluetoothDevice.ACTION_ACL_CONNECTED -> seekBackOnOutputChange()
                     Intent.ACTION_HEADSET_PLUG -> {
                         if (intent.getIntExtra("state", 0) == 1) seekBackOnOutputChange()
                     }
                 }
             }
+
             private fun seekBackOnOutputChange() {
                 if (currentMode == MODE_PODCAST && podcastPlayer != null) {
                     val newPos = maxOf(0, (podcastPlayer?.currentPosition ?: 0) - 1000)
@@ -2309,8 +2345,6 @@ class MediaPlayerService : MediaSessionService() {
         val s = TimeUnit.MILLISECONDS.toSeconds(ms) % 60
         return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
     }
-
-    private fun hasNotificationPermission(): Boolean = canPostNotifications
 
     private fun savePlaylists() {
         val json = playlists.joinToString("\n---\n") { pl ->
@@ -2504,8 +2538,7 @@ class MediaPlayerService : MediaSessionService() {
                 .setGroup("playlists")
                 .build()
 
-            if (hasNotificationPermission())
-                nm?.notify(PLALISTS + i, n)
+            tNotify(this, PLALISTS + i, n)
         }
 
         val summary = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -2518,8 +2551,7 @@ class MediaPlayerService : MediaSessionService() {
             .setAutoCancel(true)
             .build()
 
-        if (hasNotificationPermission())
-            nm?.notify(PLALISTS + 50, summary)
+        tNotify(this, PLALISTS + 50, summary)
     }
 
     @UnstableApi
@@ -2533,9 +2565,11 @@ class MediaPlayerService : MediaSessionService() {
         override fun addListener(listener: Player.Listener) {
             listeners.add(listener)
         }
+
         override fun removeListener(listener: Player.Listener) {
             listeners.remove(listener)
         }
+
         override fun setMediaItems(mediaItems: MutableList<MediaItem>) {}
         override fun setMediaItems(mediaItems: MutableList<MediaItem>, resetPosition: Boolean) {}
         override fun setMediaItems(
@@ -2667,6 +2701,7 @@ class MediaPlayerService : MediaSessionService() {
             playbackState = state
             listeners.forEach { it.onPlaybackStateChanged(state) }
         }
+
         override fun getAudioAttributes(): AudioAttributes = AudioAttributes.DEFAULT
         override fun setVolume(volume: Float) {}
         override fun getVolume() = 1f
@@ -2805,8 +2840,10 @@ class MediaPlayerService : MediaSessionService() {
             val retriever = MediaMetadataRetriever()
             try {
                 retriever.setDataSource(resolvedUrl, hashMapOf())
-                episodeTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: ""
-                showName = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: ""
+                episodeTitle =
+                    retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: ""
+                showName =
+                    retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: ""
             } catch (_: Exception) {
             } finally {
                 retriever.release()
@@ -2905,7 +2942,8 @@ class MediaPlayerService : MediaSessionService() {
                             try {
                                 val speed = getSavedPlaybackSpeed()
                                 if (speed != 1.0f) playbackParams = playbackParams.setSpeed(speed)
-                            } catch (_: Exception) {}
+                            } catch (_: Exception) {
+                            }
                             start()
                             isPlayingPodcast = true
                             podcastSessionStartedAt = System.currentTimeMillis()
@@ -2920,7 +2958,12 @@ class MediaPlayerService : MediaSessionService() {
                             onPodcastComplete()
                         }
                         setOnErrorListener { _, what, extra ->
-                            errorInsert("streamFromUrl", "MediaPlayer error $what/$extra", Instant.now().toString(), "ERROR")
+                            errorInsert(
+                                "streamFromUrl",
+                                "MediaPlayer error $what/$extra",
+                                Instant.now().toString(),
+                                "ERROR"
+                            )
                             saveStreamSession()
                             isPlayingPodcast = false
                             updateNotification()
@@ -2943,7 +2986,9 @@ class MediaPlayerService : MediaSessionService() {
     private fun saveStreamSession() {
         if (podcastSessionStartedAt == 0L) return
         val listenedMs = System.currentTimeMillis() - podcastSessionStartedAt
-        if (listenedMs < 3000) { podcastSessionStartedAt = 0L; return }
+        if (listenedMs < 3000) {
+            podcastSessionStartedAt = 0L; return
+        }
         val label = currentStreamShowName.ifEmpty { currentStreamName }
         MediaAnalyticsManager.addSession(
             ListenSession(
