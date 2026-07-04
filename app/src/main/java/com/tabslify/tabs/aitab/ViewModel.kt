@@ -268,7 +268,7 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
 
             "Server" -> askServer(history, txt, selectedModel.realname, pic)
             "Gemini" -> sendAiRequest(
-                ctx = ctx,
+                context = ctx,
                 userMessage = txt,
                 history = history,
                 pic = pic,

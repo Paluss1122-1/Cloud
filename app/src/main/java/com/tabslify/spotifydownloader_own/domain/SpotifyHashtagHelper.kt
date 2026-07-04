@@ -45,7 +45,7 @@ suspend fun generateAndSaveHashtags(
         val hashtags = sendAiRequest(
             userMessage = userMessage,
             audioUri = fileUri,
-            ctx = ctx,
+            context = ctx,
             model = "gemini-2.5-flash",
             provider = AiProvider.GEMINI,
             target = ""
