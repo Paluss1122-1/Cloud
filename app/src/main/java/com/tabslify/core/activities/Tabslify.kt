@@ -156,6 +156,7 @@ class AppBridge(private val androidContext: Context) {
 // 2. Deine angepasste executeJs Funktion (braucht jetzt den App-Context)
 fun executeJs(code: String, appContext: Context): String {
     val cx = RhinoContext.enter()
+    @Suppress("DEPRECATION")
     cx.optimizationLevel = -1
 
     cx.setClassShutter { className ->
