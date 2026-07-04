@@ -98,7 +98,7 @@ fun AudioRecorderTab(
 
     LaunchedEffect(Unit) {
         if (!vm.hasPermission) {
-            val canAskDirectly = Config.requestPermission("mic", launcher, context)
+            val canAskDirectly = Config.requestPermission("mic", launcher)
             if (!canAskDirectly || ActivityCompat.checkSelfPermission(
                     context,
                     Manifest.permission.RECORD_AUDIO
