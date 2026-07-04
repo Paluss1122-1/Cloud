@@ -281,6 +281,9 @@ private val SUMMARY_TERM_MARKUP_REGEX = Regex("\\[\\[(.+?)::(.+?)]]")
 private const val HEISE_PREFS_NAME = "news_prefs"
 private const val HEISE_SUMMARY_PREFIX = "summary_"
 private const val HEISE_CHAT_PREFIX = "chat_"
+private const val HEISE_ARTICLES_KEY = "articles_"
+private const val HEISE_ARTICLES_TIMESTAMP_KEY = "articles_timestamp_"
+private const val CACHE_VALIDITY_MS = 30 * 60 * 1000L
 
 private fun saveSummaryToPrefs(context: Context, articleLink: String, summary: String) {
     val prefs = context.getSharedPreferences(HEISE_PREFS_NAME, Context.MODE_PRIVATE)
@@ -324,6 +327,53 @@ private fun loadChatFromPrefs(context: Context, articleLink: String): List<Heise
     }
 }
 
+private fun saveArticlesToPrefs(context: Context, articles: List<HeiseNewsItem>) {
+    val prefs = context.getSharedPreferences(HEISE_PREFS_NAME, Context.MODE_PRIVATE)
+    val jsonArray = JSONArray()
+    for (article in articles) {
+        val jsonObj = JSONObject().apply {
+            put("id", article.id)
+            put("title", article.title)
+            put("summary", article.summary)
+            put("link", article.link)
+            put("imageUrl", article.imageUrl)
+            put("publishedAt", article.publishedAt)
+            put("rawTimestamp", article.rawTimestamp)
+        }
+        jsonArray.put(jsonObj)
+    }
+    prefs.edit {
+        putString(HEISE_ARTICLES_KEY, jsonArray.toString())
+        putLong(HEISE_ARTICLES_TIMESTAMP_KEY, System.currentTimeMillis())
+    }
+}
+
+private fun loadArticlesFromPrefs(context: Context): Pair<List<HeiseNewsItem>, Long> {
+    val prefs = context.getSharedPreferences(HEISE_PREFS_NAME, Context.MODE_PRIVATE)
+    val jsonStr = prefs.getString(HEISE_ARTICLES_KEY, null) ?: return emptyList<HeiseNewsItem>() to 0L
+    val timestamp = prefs.getLong(HEISE_ARTICLES_TIMESTAMP_KEY, 0L)
+    return try {
+        val jsonArray = JSONArray(jsonStr)
+        val list = mutableListOf<HeiseNewsItem>()
+        for (i in 0 until jsonArray.length()) {
+            val jsonObj = jsonArray.getJSONObject(i)
+            list.add(HeiseNewsItem(
+                id = jsonObj.getString("id"),
+                title = jsonObj.getString("title"),
+                summary = jsonObj.getString("summary"),
+                link = jsonObj.getString("link"),
+                imageUrl = jsonObj.optString("imageUrl", null),
+                publishedAt = jsonObj.getString("publishedAt"),
+                rawTimestamp = jsonObj.getLong("rawTimestamp")
+            ))
+        }
+        list to timestamp
+    } catch (e: Exception) {
+        e.printStackTrace()
+        emptyList<HeiseNewsItem>() to 0L
+    }
+}
+
 private fun preprocessSummaryMarkup(raw: String): Pair<String, List<HeiseTermQuestion>> {
     val questions = mutableListOf<HeiseTermQuestion>()
     val transformed = SUMMARY_TERM_MARKUP_REGEX.replace(raw) { match ->
@@ -355,14 +405,30 @@ fun HeiseNewsTabContent(modifier: Modifier = Modifier) {
     var askingArticleLink by remember { mutableStateOf<String?>(null) }
     var chatError by remember { mutableStateOf<String?>(null) }
 
-    fun loadNews() {
+    fun loadNews(forceRefresh: Boolean = false) {
         scope.launch {
             isLoading = true
             errorMessage = null
             try {
-                articles = fetchHeiseNews()
+                if (!forceRefresh) {
+                    val (cachedArticles, timestamp) = loadArticlesFromPrefs(context)
+                    val isCacheValid = (System.currentTimeMillis() - timestamp) < CACHE_VALIDITY_MS
+                    if (cachedArticles.isNotEmpty() && isCacheValid) {
+                        articles = cachedArticles
+                        isLoading = false
+                        return@launch
+                    }
+                }
+                
+                val freshArticles = fetchHeiseNews()
+                articles = freshArticles
+                saveArticlesToPrefs(context, freshArticles)
             } catch (e: Exception) {
                 errorMessage = e.message ?: "Unbekannter Fehler"
+                val (cachedArticles, _) = loadArticlesFromPrefs(context)
+                if (cachedArticles.isNotEmpty()) {
+                    articles = cachedArticles
+                }
             } finally {
                 isLoading = false
             }
@@ -584,7 +650,7 @@ fun HeiseNewsTabContent(modifier: Modifier = Modifier) {
                     fontSize = 12.sp
                 )
             }
-            IconButton(onClick = { loadNews() }, enabled = !isLoading) {
+            IconButton(onClick = { loadNews(forceRefresh = true) }, enabled = !isLoading) {
                 if (isLoading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(22.dp),
