@@ -133,7 +133,8 @@ data class SessionState(
     val currentIndex: Int,
     val correctIds: List<Int>,
     val wrongIds: List<Int>,
-    val showDeutsch: Boolean
+    val showDeutsch: Boolean,
+    val timestamp: Long
 )
 
 data class WidthState(
@@ -1479,7 +1480,8 @@ fun LearnScreen(
                     currentIndex = currentIndex,
                     correctIds = correctVokabeln.map { it.id },
                     wrongIds = wrongVokabeln.map { it.id },
-                    showDeutsch = showDeutsch
+                    showDeutsch = showDeutsch,
+                    timestamp = System.currentTimeMillis()
                 )
             )
         }
@@ -2295,6 +2297,7 @@ fun saveSessionState(prefs: SharedPreferences, setCreatedAt: Long, state: Sessio
         put("correctIds", JSONArray(state.correctIds))
         put("wrongIds", JSONArray(state.wrongIds))
         put("showDeutsch", state.showDeutsch)
+        put("timestamp", state.timestamp)
     }.toString()
     prefs.edit { putString("session_$setCreatedAt", json) }
 }
@@ -2303,13 +2306,19 @@ fun loadSessionState(prefs: SharedPreferences, setCreatedAt: Long): SessionState
     val raw = prefs.getString("session_$setCreatedAt", null) ?: return null
     return try {
         val obj = JSONObject(raw)
+        val timestamp = if (obj.has("timestamp")) obj.getLong("timestamp") else 0L
+        if (System.currentTimeMillis() - timestamp > 20 * 60 * 1000) {
+            clearSessionState(prefs, setCreatedAt)
+            return null
+        }
         fun JSONArray.toIntList() = (0 until length()).map { getInt(it) }
         SessionState(
             shuffledIds = obj.getJSONArray("shuffledIds").toIntList(),
             currentIndex = obj.getInt("currentIndex"),
             correctIds = obj.getJSONArray("correctIds").toIntList(),
             wrongIds = obj.getJSONArray("wrongIds").toIntList(),
-            showDeutsch = obj.getBoolean("showDeutsch")
+            showDeutsch = obj.getBoolean("showDeutsch"),
+            timestamp = timestamp
         )
     } catch (_: Exception) {
         null
