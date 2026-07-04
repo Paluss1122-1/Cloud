@@ -281,10 +281,18 @@ fun clearPodcastQueue(context: Context) {
 
 fun getPodcastQueueFromService(context: Context): List<String> {
     val prefs = context.getSharedPreferences("podcast_player_prefs", MODE_PRIVATE)
-    return prefs.getString("podcast_queue", "")
+    val queue = prefs.getString("podcast_queue", "")
         ?.takeIf { it.isNotEmpty() }
         ?.split("|||")
         ?: emptyList()
+
+    val existing = queue.filter { File(it).exists() }
+    if (existing.size != queue.size) {
+        prefs.edit(commit = true) {
+            putString("podcast_queue", existing.joinToString("|||"))
+        }
+    }
+    return existing
 }
 
 fun addToQueueViaService(path: String, context: Context) {
