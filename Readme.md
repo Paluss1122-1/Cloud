@@ -111,7 +111,7 @@ This project is a powerful, multi-functional Android application with **ONE** go
     </td>
     <td style="vertical-align: top;">
       <img src="Preview/QuietHourNotification.jpg"
-     style="width:auto; border-radius:12px;" />
+     style="width:auto; border-radius:12px;"  alt=""/>
     </td>
   </tr>
 </table>
