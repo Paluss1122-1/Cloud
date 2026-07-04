@@ -23,8 +23,8 @@ import androidx.lifecycle.viewModelScope
 import com.tabslify.core.objects.prvt
 import com.tabslify.privatetabslifyapp.isOnline
 import com.tabslify.quiethoursnotificationhelper.askServer
-import com.tabslify.quiethoursnotificationhelper.sendGeminiRequest
-import com.tabslify.quiethoursnotificationhelper.sendNvidiaChatMessageAITab
+import com.tabslify.quiethoursnotificationhelper.AiProvider
+import com.tabslify.quiethoursnotificationhelper.sendAiRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -256,19 +256,26 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
     ): String {
         if (!isOnline(ctx)) return "Kein Netzwerk"
         return when (currentMode) {
-            "Nvidia" -> sendNvidiaChatMessageAITab(
+            "Nvidia" -> sendAiRequest(
                 ctx,
-                history,
                 txt,
-                selectedModel.realname,
+                history,
                 pic,
+                model = selectedModel.realname,
+                provider = AiProvider.NVIDIA,
                 onToken = onToken
             ) ?: "Fehler"
 
             "Server" -> askServer(history, txt, selectedModel.realname, pic)
-            "Gemini" -> sendGeminiRequest(
-                history, txt, pic, audioUri = selectedAudioUri,
-                ctx = ctx, model = selectedModel.realname, onToken = onToken
+            "Gemini" -> sendAiRequest(
+                ctx = ctx,
+                userMessage = txt,
+                history = history,
+                pic = pic,
+                audioUri = selectedAudioUri,
+                model = selectedModel.realname,
+                provider = AiProvider.GEMINI,
+                onToken = onToken
             ) ?: "Fehler"
 
             else -> "Wähle einen Modus"
