@@ -18,4 +18,18 @@ object FavoriteManager {
         val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         return prefs.getStringSet(KEY_FAVORITES, emptySet()) ?: emptySet()
     }
+
+    fun pruneMissing(context: Context, existingFileNames: Collection<String>): Set<String> {
+        val current = loadFavorites(context)
+        val existing = existingFileNames.toHashSet()
+        val pruned = PrefsCleanup.pruneInvalid(current) { existing.contains(it) }
+        if (pruned !== current) saveFavorites(context, pruned)
+        return pruned
+    }
+
+    fun remove(context: Context, fileName: String) {
+        val current = loadFavorites(context)
+        if (fileName !in current) return
+        saveFavorites(context, current - fileName)
+    }
 }
