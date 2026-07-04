@@ -78,6 +78,7 @@ import com.tabslify.core.objects.Config.INFO_PORT
 import com.tabslify.core.objects.Config.SYNC_PORT
 import com.tabslify.core.objects.Config.TODOS
 import com.tabslify.core.objects.Config.UPDATE_PORT
+import com.tabslify.core.objects.prvt
 import com.tabslify.core.ui.APP_COLOR
 import com.tabslify.services.MediaPlayerService
 import com.tabslify.services.MediaPlayerService.Companion.ACTION_TOGGLE_REPEAT
@@ -252,6 +253,48 @@ fun ensureReadyForConnect(context: Context) {
     }
 }
 
+fun unregisterWifiReconnectReceiver(context: Context) {
+    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    networkCallback?.let {
+        try {
+            cm.unregisterNetworkCallback(it)
+        } catch (_: Exception) {
+        }
+    }
+    networkCallback = null
+}
+
+fun shutdownAllWifiDirectServices(context: Context) {
+    triggerJob?.cancel(); triggerJob = null
+    pendingSyncJob?.cancel(); pendingSyncJob = null
+    listenerJob?.cancel(); listenerJob = null
+    mediaCommandJob?.cancel(); mediaCommandJob = null
+    mediaStateJob?.cancel(); mediaStateJob = null
+    aiResponseJob?.cancel(); aiResponseJob = null
+    flashcardResponseJob?.cancel(); flashcardResponseJob = null
+    clipboardJob?.cancel(); clipboardJob = null
+    mailNotifyJob?.cancel(); mailNotifyJob = null
+    executeJob?.cancel(); executeJob = null
+    smsJob?.cancel(); smsJob = null
+
+    updateServerSocket?.let { runCatching { it.close() } }
+    updateServerSocket = null
+    aiResponseServerSocket?.let { runCatching { it.close() } }
+    aiResponseServerSocket = null
+    flashcardResponseSocket?.let { runCatching { it.close() } }
+    flashcardResponseSocket = null
+
+    synchronized(activeServers) {
+        activeServers.forEach { runCatching { it.close() } }
+        activeServers.clear()
+    }
+
+    unregisterWifiReconnectReceiver(context)
+    cpuWakeLock.safeRelease(); cpuWakeLock = null
+    syncInProgress.set(false)
+    isLaptopConnected = false
+}
+
 private fun launchServer(
     scope: CoroutineScope,
     port: Int,
@@ -259,6 +302,7 @@ private fun launchServer(
     handler: suspend CoroutineScope.(Socket) -> Unit
 ): Job = scope.launch(Dispatchers.IO) {
     val mutex = getServerMutex(port)
+    var consecutiveFailures = 0
 
     mutex.withLock {
         while (isActive) {
@@ -278,6 +322,7 @@ private fun launchServer(
                 server.bind(InetSocketAddress(port))
                 server.soTimeout = 100
                 synchronized(activeServers) { activeServers.add(server) }
+                consecutiveFailures = 0
 
                 while (isActive) {
                     try {
@@ -298,9 +343,11 @@ private fun launchServer(
                     }
                 }
             } catch (_: BindException) {
-                delay(2000.milliseconds)
+                consecutiveFailures++
+                delay((2000L * consecutiveFailures.coerceAtMost(15)).milliseconds)
                 continue
             } catch (e: Exception) {
+                consecutiveFailures++
                 logError(errorTag, e)
             } finally {
                 server?.let {
@@ -308,7 +355,7 @@ private fun launchServer(
                     runCatching { it.close() }
                 }
             }
-            if (isActive) delay(2000.milliseconds)
+            if (isActive) delay((2000L * consecutiveFailures.coerceAtMost(15)).milliseconds)
         }
     }
 }
@@ -325,6 +372,7 @@ private fun todosToJsonArray(todos: List<TodoItem>): JSONArray = JSONArray().app
 
 
 suspend fun callNvidiaVisionApi(
+    context: Context,
     bmp: Bitmap,
     onError: (String) -> Unit,
     onProgress: (String) -> Unit,
@@ -342,52 +390,76 @@ suspend fun callNvidiaVisionApi(
         Look at this vocabulary list image carefully.
         There are TWO columns: Latin on the LEFT, German on the RIGHT.
         Each row is one vocabulary entry.
-        
+
         Rules:
         - Match each Latin entry with the German entry on the SAME vertical position
         - Latin entries are on the left half of the image
         - German entries are on the right half
         - Ignore page numbers (like "116")
         - Ignore any repeated/duplicate blocks at bottom
-        
+
         Return ONLY a JSON array like this (one object per row):
         [{"latein":"salūtem dīcere (m. Dat.)","deutsch":"(jdn.) grüßen, begrüßen"},{"latein":"gaudium","deutsch":"die Freude"},...]
-        
+
         No markdown, no explanation, ONLY the JSON array.
     """.trimIndent()
 
-    val model = Firebase.ai(backend = GenerativeBackend.googleAI())
-        .generativeModel("gemini-3-flash-preview")
-
+    val provider = getPreferredAiProvider(context, "vision")
     val result = try {
         val sb = StringBuilder()
-        model.generateContentStream(content { image(scaledBmp); text(prompt) })
-            .collect { chunk ->
-                val delta = chunk.text ?: ""
-                if (delta.isNotEmpty()) {
-                    sb.append(delta)
-                    withContext(Dispatchers.Main) { onProgress(sb.toString()) }
-                }
+        if (provider == "nvidia") {
+            val base64Pic = java.io.ByteArrayOutputStream().use { bos ->
+                scaledBmp.compress(Bitmap.CompressFormat.JPEG, 90, bos)
+                android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.NO_WRAP)
             }
-        sb.toString().trim()
+            val ans = sendAiRequest(
+                context = context,
+                history = emptyList(),
+                userMessage = prompt,
+                model = "meta/llama-3.2-90b-vision-instruct",
+                pic = base64Pic,
+                provider = AiProvider.NVIDIA,
+                onToken = { chunk ->
+                    sb.append(chunk)
+                    // Post to main thread so progress updates UI smoothly
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        onProgress(sb.toString())
+                    }
+                }
+            )
+            ans ?: ""
+        } else {
+            val model = Firebase.ai(backend = GenerativeBackend.googleAI())
+                .generativeModel("gemini-3-flash-preview")
+            model.generateContentStream(content { image(scaledBmp); text(prompt) })
+                .collect { chunk ->
+                    val delta = chunk.text ?: ""
+                    if (delta.isNotEmpty()) {
+                        sb.append(delta)
+                        withContext(Dispatchers.Main) { onProgress(sb.toString()) }
+                    }
+                }
+            sb.toString()
+        }
     } catch (_: Exception) {
         onError("API keine Antwort – prüfe Key & Netzwerk")
         return
     }
 
-    if (result.isNotEmpty()) {
+    val finalResult = result.trim()
+    if (finalResult.isNotEmpty()) {
         try {
-            val startIdx = result.indexOf('[')
-            val endIdx = result.lastIndexOf(']')
+            val startIdx = finalResult.indexOf('[')
+            val endIdx = finalResult.lastIndexOf(']')
             if (startIdx != -1 && endIdx > startIdx) {
-                val arr = JSONArray(result.substring(startIdx, endIdx + 1))
+                val arr = JSONArray(finalResult.substring(startIdx, endIdx + 1))
                 onVocabChange((0 until arr.length()).map {
                     val o = arr.getJSONObject(it)
                     Vokabel(o.getString("latein"), o.getString("deutsch"), it)
                 })
             }
         } catch (e: Exception) {
-            onError("Parse-Fehler: ${e.message}\nRaw: ${result.take(300)}")
+            onError("Parse-Fehler: ${e.message}\nRaw: ${finalResult.take(300)}")
         }
     } else {
         onError("API keine Antwort – prüfe Key & Netzwerk")
@@ -396,6 +468,19 @@ suspend fun callNvidiaVisionApi(
 
 @Volatile
 var laptopIp: String = ""
+
+@Volatile
+var laptopName: String = ""
+
+fun getPcNameByIp(context: Context, ip: String): String? {
+    val prefs = context.getSharedPreferences("registered_pcs", Context.MODE_PRIVATE)
+    for ((name, info) in prefs.all) {
+        if (info.toString().contains(ip)) {
+            return name
+        }
+    }
+    return null
+}
 
 data class TodoItem(
     val id: Long,
@@ -510,64 +595,114 @@ fun registerWifiReconnectReceiver(context: Context) {
 fun startTriggerListener(context: Context) {
     if (triggerJob?.isActive == true) return
     appContext = context.applicationContext
-
     triggerJob = launchServer(syncScope, Config.TRIGGER_PORT, "startTriggerListener") { client ->
         val pm = context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
         val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:AcceptWakeLock")
         wl.acquire(30_000L)
 
         try {
-            val command = BufferedReader(InputStreamReader(client.getInputStream())).readLine()
-            client.close()
+            val reader = BufferedReader(InputStreamReader(client.getInputStream()))
+            val command = reader.readLine()
+            val writer = PrintWriter(client.getOutputStream(), true)
 
             when {
                 command != null && command.startsWith("CONNECT") -> {
-                    laptopIp = command.substringAfter("CONNECT:", "")
-                    val prefs = context.getSharedPreferences("registered_pcs", MODE_PRIVATE)
-                    val secretsPrefs =
-                        context.getSharedPreferences("pc_secrets", MODE_PRIVATE)
-                    if (!secretsPrefs.contains(laptopIp)) {
-                        val allowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
-                        val newSecret = (1..16).map { allowedChars.random() }.joinToString("")
-                        secretsPrefs.edit().putString(laptopIp, newSecret).apply()
-                    }
-                    if (!prefs.contains(laptopIp)) {
-                        prefs.edit().putString(
-                            laptopIp,
-                            "Registriert am " + SimpleDateFormat(
-                                "dd.MM.yyyy HH:mm",
-                                Locale.GERMANY
-                            ).format(Date())
-                        ).apply()
-                        showSimpleNotificationExtern(
-                            "🆕 Neuer PC",
-                            "Verbindung von $laptopIp registriert",
-                            10.seconds,
-                            context
-                        )
-                    } else {
-                        showSimpleNotificationExtern(
-                            "📡 CONNECT",
-                            "Laptop $laptopIp verbunden",
-                            10.seconds,
-                            context
-                        )
-                    }
+                    val payload = command.substringAfter("CONNECT:", "")
+                    val parts = payload.split("|")
+                    val pcName = parts.getOrNull(0) ?: ""
+                    val ipv4Regex = Regex("""\d{1,3}(\.\d{1,3}){3}""")
+                    val pcIp = parts.firstOrNull { it.contains(".") && it.matches(ipv4Regex) }
+                        ?: parts.getOrNull(1)
+                        ?: pcName
+                    val totpCode = parts.getOrNull(2) ?: ""
+                    val pcUuid = parts.getOrNull(3) ?: "NO_UUID"
 
-                    val syncWl =
-                        pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:SyncWakeLock")
-                    syncWl.acquire(60_000L)
-                    syncScope.launch {
-                        try {
-                            syncTodosWithLaptop(context, true)
-                        } finally {
-                            syncWl.safeRelease()
+                    if (pcName.isNotEmpty()) {
+                        val prefs = context.getSharedPreferences("registered_pcs", MODE_PRIVATE)
+                        val secretsPrefs = context.getSharedPreferences("pc_secrets", MODE_PRIVATE)
+                        val uuidPrefs = context.getSharedPreferences("pc_uuids", MODE_PRIVATE)
+
+                        if (!prefs.contains(pcName)) {
+                            val pendingPrefs = context.getSharedPreferences("pending_pcs", MODE_PRIVATE)
+                            pendingPrefs.edit().putString(pcName, "$pcIp|$pcUuid").apply()
+
+                            showSimpleNotificationExtern(
+                                "🆕 Verbindungsanfrage",
+                                "PC $pcName möchte sich verbinden. Bitte im PC Manager freigeben.",
+                                10.seconds,
+                                context
+                            )
+                            writer.println("PENDING")
+                            stopAllSyncServices(context)
+                        } else {
+                            // REGISTERED PC: Verify Hardware UUID AND TOTP code!
+                            val storedUuid = uuidPrefs.getString(pcName, null)
+                            val secret = secretsPrefs.getString(pcName, "COMMANDEXECUTORK") ?: "COMMANDEXECUTORK"
+                            val now = System.currentTimeMillis()
+                            val totpValid = listOf(
+                                generateTOTP(secret, now - 30000),
+                                generateTOTP(secret, now),
+                                generateTOTP(secret, now + 30000)
+                            ).contains(totpCode)
+
+                            val uuidValid = storedUuid == null || storedUuid == pcUuid || storedUuid == "NO_UUID"
+
+                            if (totpValid && uuidValid) {
+                                laptopIp = pcIp
+                                laptopName = pcName
+
+                                showSimpleNotificationExtern(
+                                    "📡 CONNECT",
+                                    "PC $pcName verbunden",
+                                    10.seconds,
+                                    context
+                                )
+
+                                val syncWl =
+                                    pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:SyncWakeLock")
+                                syncWl.acquire(60_000L)
+                                syncScope.launch {
+                                    try {
+                                        syncTodosWithLaptop(context, true)
+                                    } finally {
+                                        syncWl.safeRelease()
+                                    }
+                                }
+                                writer.println("ACCEPTED")
+                            } else {
+                                val reason = when {
+                                    !totpValid -> "Ungültiger TOTP-Code"
+                                    !uuidValid -> "Hardware-ID Mismatch (Sicherheitsrisiko!)"
+                                    else -> "Unbekannter Auth-Fehler"
+                                }
+                                showSimpleNotificationExtern(
+                                    "❌ Auth fehlgeschlagen",
+                                    "$reason von $pcName",
+                                    10.seconds,
+                                    context
+                                )
+                                writer.println("REJECTED")
+                                stopAllSyncServices(context)
+                            }
                         }
+                    } else {
+                        writer.println("REJECTED")
+                        stopAllSyncServices(context)
                     }
                 }
 
-                command == "REQUEST_SESSIONS" -> syncScope.launch { sendSessionDataToLaptop(context) }
-                command == "DISCONNECT" -> stopAllSyncServices(context)
+                command == "REQUEST_SESSIONS" -> {
+                    syncScope.launch { sendSessionDataToLaptop(context) }
+                    writer.println("ACCEPTED")
+                }
+                command == "DISCONNECT" -> {
+                    stopAllSyncServices(context)
+                    writer.println("ACCEPTED")
+                }
+                else -> {
+                    writer.println("REJECTED")
+                    stopAllSyncServices(context)
+                }
             }
         } finally {
             wl.safeRelease()
@@ -669,19 +804,26 @@ fun stopAllSyncServices(context: Context) {
     }
 }
 
+fun isTriggerPortOpen(): Boolean {
+    return try {
+        java.net.Socket().use { socket ->
+            socket.connect(java.net.InetSocketAddress("127.0.0.1", Config.TRIGGER_PORT), 1000)
+            true
+        }
+    } catch (e: Exception) {
+        false
+    }
+}
+
 fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
     if (triggerJob?.isActive != true) {
         startTriggerListener(context)
     }
-    if (syncInProgress.getAndSet(true) || !Config.realDevice) {
-        showSimpleNotificationExtern(
-            "syncTodosWithLaptop RETURN",
-            "syncInProgress: ${syncInProgress.get()}, realDevice: ${Config.realDevice}",
-            10.seconds, context
-        )
+    if (syncInProgress.getAndSet(true) || !Config.realDevice || !prvt()) {
         if (!Config.realDevice) syncInProgress.set(false)
         return
     }
+    if (!prvt()) return
 
     syncScope.launch {
         try {
@@ -708,10 +850,14 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                 )
             }
 
-            val currentIp = laptopIp
+            val currentIp = if (laptopIp.contains("|")) {
+                val parts = laptopIp.split("|")
+                parts.firstOrNull { it.matches(Regex("""\d{1,3}(\.\d{1,3}){3}""")) } ?: parts.getOrNull(1) ?: laptopIp
+            } else laptopIp
+
             if (currentIp.isEmpty()) {
                 showSimpleNotificationExtern(
-                    "❌ Keine IP gefunden", "Supabase lieferte keine IP", 10.seconds, context
+                    "❌ Keine IP gefunden", "IP ist leer nach Bereinigung", 10.seconds, context
                 )
                 return@launch
             }
@@ -728,11 +874,12 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
 
                 val secretsPrefs = context.getSharedPreferences("pc_secrets", MODE_PRIVATE)
-                var totpKey = secretsPrefs.getString(currentIp, null)
+                val keyToUse = laptopName.ifEmpty { currentIp }
+                var totpKey = secretsPrefs.getString(keyToUse, null)
                 if (totpKey == null) {
                     val allowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
                     totpKey = (1..16).map { allowedChars.random() }.joinToString("")
-                    secretsPrefs.edit().putString(currentIp, totpKey).apply()
+                    secretsPrefs.edit().putString(keyToUse, totpKey).apply()
                 }
                 val payloadObj = JSONObject().apply {
                     put("todos", todosToJsonArray(todos))
@@ -815,28 +962,32 @@ fun startUpdateListener(context: Context) {
         try {
             updateServerSocket = ServerSocket().apply {
                 reuseAddress = true
+                soTimeout = 100
                 bind(InetSocketAddress(UPDATE_PORT))
             }
 
             while (isActive) {
                 try {
                     val client = updateServerSocket?.accept() ?: break
-                    val reader = BufferedReader(InputStreamReader(client.getInputStream()))
-                    val jsonData = reader.readLine()
-                    client.close()
+                    client.use { c ->
+                        val reader = BufferedReader(InputStreamReader(c.getInputStream()))
+                        val jsonData = reader.readLine()
 
-                    if (!jsonData.isNullOrBlank()) {
-                        val updatedTodos = parseTodosFromJson(jsonData)
-                        saveTodos(context, updatedTodos)
-                        withContext(Dispatchers.Main) {
-                            showSimpleNotificationExtern(
-                                "🔄 To-dos aktualisiert",
-                                "Änderungen vom Laptop empfangen",
-                                10.seconds,
-                                context
-                            )
+                        if (!jsonData.isNullOrBlank()) {
+                            val updatedTodos = parseTodosFromJson(jsonData)
+                            saveTodos(context, updatedTodos)
+                            withContext(Dispatchers.Main) {
+                                showSimpleNotificationExtern(
+                                    "🔄 To-dos aktualisiert",
+                                    "Änderungen vom Laptop empfangen",
+                                    10.seconds,
+                                    context
+                                )
+                            }
                         }
                     }
+                } catch (_: SocketTimeoutException) {
+                    continue
                 } catch (_: SocketException) {
                     break
                 } catch (e: Exception) {
@@ -845,6 +996,9 @@ fun startUpdateListener(context: Context) {
             }
         } catch (e: Exception) {
             logError("startUpdateListener", e)
+        } finally {
+            updateServerSocket?.let { runCatching { it.close() } }
+            updateServerSocket = null
         }
     }
 }
@@ -1111,6 +1265,8 @@ fun startAiResponseListener(context: Context) {
         }
 }
 
+private const val MAX_AI_RESPONSE_ENTRIES = 500
+
 fun saveAiResponse(context: Context, text: String) {
     val prefs = context.getSharedPreferences("ai_responses", MODE_PRIVATE)
     val dateKey = getTodayKey()
@@ -1123,10 +1279,28 @@ fun saveAiResponse(context: Context, text: String) {
         put("dateKey", dateKey)
     })
 
+    // "all_entries" auf eine Maximalgröße kappen, statt es für immer wachsen
+    // zu lassen, und dabei auch die pro-Tag-Keys der verworfenen Einträge
+    // entfernen, damit keine verwaisten entry_/timestamp_-Keys zurückbleiben.
+    val trimmed = JSONArray()
+    val droppedDateKeys = mutableSetOf<String>()
+    val start = maxOf(0, arr.length() - MAX_AI_RESPONSE_ENTRIES)
+    for (i in 0 until arr.length()) {
+        val obj = arr.getJSONObject(i)
+        if (i < start) droppedDateKeys.add(obj.getString("dateKey")) else trimmed.put(obj)
+    }
+    val remainingDateKeys = (0 until trimmed.length())
+        .mapTo(mutableSetOf()) { trimmed.getJSONObject(it).getString("dateKey") }
+    droppedDateKeys.removeAll(remainingDateKeys)
+
     prefs.edit {
-        putString("all_entries", arr.toString())
+        putString("all_entries", trimmed.toString())
         putString("entry_$dateKey", text)
         putLong("timestamp_$dateKey", timestamp)
+        droppedDateKeys.forEach { key ->
+            remove("entry_$key")
+            remove("timestamp_$key")
+        }
     }
 }
 
@@ -1217,19 +1391,23 @@ suspend fun trySendImageToLaptop(imageBytes: ByteArray): Boolean {
             }
 
             flashcardResponseSocket?.close()
-            val serverSocket = ServerSocket().apply {
-                reuseAddress = true
-                soTimeout = 30_000
-                bind(InetSocketAddress(FLASHCARD_RECEIVE_PORT))
+            val serverSocket = try {
+                ServerSocket().apply {
+                    reuseAddress = true
+                    soTimeout = 30_000
+                    bind(InetSocketAddress(FLASHCARD_RECEIVE_PORT))
+                }
+            } catch (e: Exception) {
+                logError("trySendImageToLaptop_bind", e)
+                return@withContext false
             }
             flashcardResponseSocket = serverSocket
             startFlashcardResponseListener(serverSocket)
 
-            Socket().apply {
-                connect(InetSocketAddress(resolvedIp, Config.FLASHCARD_SEND_PORT), 3000)
-                getOutputStream().write(imageBytes)
-                shutdownOutput()
-                close()
+            Socket().use { sock ->
+                sock.connect(InetSocketAddress(resolvedIp, Config.FLASHCARD_SEND_PORT), 3000)
+                sock.getOutputStream().write(imageBytes)
+                sock.shutdownOutput()
             }
             true
         } catch (_: SocketTimeoutException) {
@@ -1374,14 +1552,21 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
             val idValue = extras?.opt("id")
             println("idValue: $idValue")
 
-            val nm = context.getSystemService(NotificationManager::class.java)
             val notificationId = when (idValue) {
                 is Int -> idValue
                 is Long -> idValue.toInt()
                 is String -> idValue.toIntOrNull()
                 else -> null
             }
-            notificationId?.let { nm.cancel(it) }
+            if (notificationId != null) {
+                // First try to dismiss via NotificationListenerService (for external apps like WhatsApp, Telegram, etc.)
+                val dismissed = WhatsAppNotificationListener.cancelExternalNotification(notificationId)
+                if (!dismissed) {
+                    // Fall back to canceling local/Tabslify notifications if it was posted by Tabslify itself
+                    val nm = context.getSystemService(NotificationManager::class.java)
+                    nm.cancel(notificationId)
+                }
+            }
         }
 
         else -> {}
@@ -1576,13 +1761,12 @@ fun pushMediaStateToLaptop(context: Context) {
     syncScope.launch(Dispatchers.IO) {
         try {
             if (laptopIp == "") return@launch
-            Socket().apply {
-                connect(InetSocketAddress(laptopIp, 8901), 2000)
-                getOutputStream().apply {
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress(laptopIp, 8901), 2000)
+                socket.getOutputStream().apply {
                     write(state.toByteArray(Charsets.UTF_8))
                     flush()
                 }
-                close()
             }
         } catch (_: SocketTimeoutException) {
         } catch (_: ConnectException) {
@@ -1753,7 +1937,8 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
             val command = args.optString("command")
             val totp = args.optString("totp")
             val secretsPrefs = context.getSharedPreferences("pc_secrets", MODE_PRIVATE)
-            val totpKey = secretsPrefs.getString(laptopIp, null) ?: "COMMANDEXECUTORK"
+            val keyToUse = laptopName.ifEmpty { laptopIp }
+            val totpKey = secretsPrefs.getString(keyToUse, null) ?: "COMMANDEXECUTORK"
             val now = System.currentTimeMillis()
             val valid = listOf(
                 generateTOTP(totpKey, now - 30000),
@@ -2117,12 +2302,14 @@ private suspend fun fetchIpFromSupabase(mobile: Boolean = false): String? =
         val column = if (!mobile) "laptop" else "handy"
         repeat(3) { attempt ->
             try {
-                val result = Config.client
-                    .from("device_ips")
-                    .select(columns = Columns.list("ip_address")) {
-                        filter { eq("device_id", column) }
-                    }
-                    .data
+                val result = Config.safeCall {
+                    Config.client
+                        .from("device_ips")
+                        .select(columns = Columns.list("ip_address")) {
+                            filter { eq("device_id", column) }
+                        }
+                        .data
+                }
 
                 JSONArray(result)
                     .optJSONObject(0)
@@ -2142,14 +2329,16 @@ private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
     withContext(Dispatchers.IO) {
         if (!Config.realDevice) return@withContext true
         try {
-            Config.client
-                .from("device_ips")
-                .update(buildJsonObject {
-                    put("ip_address", ipAddress)
-                    put("last_seen", Instant.now().toString())
-                }) {
-                    filter { eq("device_id", "handy") }
-                }
+            Config.safeCall {
+                Config.client
+                    .from("device_ips")
+                    .update(buildJsonObject {
+                        put("ip_address", ipAddress)
+                        put("last_seen", Instant.now().toString())
+                    }) {
+                        filter { eq("device_id", "handy") }
+                    }
+            }
             Log.d("CLOUDSA", "Mobile IP updated: $ipAddress")
             true
         } catch (e: Exception) {
