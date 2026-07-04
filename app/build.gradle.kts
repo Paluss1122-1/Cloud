@@ -29,7 +29,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SUPABASE_URL", prop("SUPABASE_URL"))
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", prop("SUPABASE_PUBLISHABLE_KEY"))
-        buildConfigField("String", "BWMP", prop("BWMP"))
+        buildConfigField("String", "LOCAL_DEVICE_NAME", prop("LOCAL_DEVICE_NAME"))
         buildConfigField("String", "DEBUG_SHA256", prop("DEBUG_SHA256"))
         buildConfigField("String", "RELEASE_SHA256", prop("RELEASE_SHA256"))
     }
