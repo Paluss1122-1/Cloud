@@ -414,7 +414,7 @@ fun WeatherTabContent(
             ) {
                 isLoading = false
                 blink()
-                Config.requestPermission("loc", permissionLauncher, ctx)
+                Config.requestPermission("loc", permissionLauncher)
                 return@launch
             }
             val loc = getCurrentLocation(ctx)
