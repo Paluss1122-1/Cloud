@@ -11,6 +11,7 @@
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="AllFilesAccessPolicy,ScopedStorage" />
     <uses-permission android:name="android.permission.ACCESS_SUPERUSER" />
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
 
     <application tools:ignore="MissingApplicationIcon" android:label="@string/app_name_debug" tools:replace="android:label">
         <activity
@@ -68,5 +69,23 @@
             android:exported="true"
             tools:ignore="ExportedService"
             tools:replace="android:exported" />
+
+        <service
+            android:name=".inactive.ChatService"
+            android:enabled="false"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <receiver
+            android:name=".core.activities.MyDeviceAdminReceiver"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin_policies" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
