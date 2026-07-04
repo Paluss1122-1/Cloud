@@ -86,9 +86,9 @@ class MainActivity : FragmentActivity() {
         }
 
         if (prvt()) {
-            requestPermission("all", launcher, this)
+            requestPermission("all", launcher)
         } else {
-            requestPermission("not", launcher, this)
+            requestPermission("not", launcher)
         }
 
         if (prvt()) {
