@@ -163,8 +163,10 @@ import com.tabslify.tabs.HeiseNewsTabContent
 import com.tabslify.tabs.MovieDiscoveryTabContent
 import com.tabslify.tabs.NotizenApp
 import com.tabslify.tabs.OtherBucketViewer
+import com.tabslify.tabs.ApkmInstallerTabContent
 import com.tabslify.tabs.PCManagerTab
 import com.tabslify.tabs.QuickSettingsTabContent
+import com.tabslify.tabs.pendingApkmUri
 import com.tabslify.tabs.RemoteDesktopTabContent
 import com.tabslify.tabs.WeatherTabContent
 import com.tabslify.tabs.aitab.AITabContent
@@ -337,6 +339,11 @@ enum class MenuItem(
         "💻",
         { PCManagerTab() }
     ),
+    APKM_INSTALLER(
+        "APKM Installer",
+        "📦",
+        {}
+    ),
 }
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -428,6 +435,12 @@ fun PrivateTabslifyApp(
 
                 MenuItem.AITAB -> {
                     AITabContent(svm = svm)
+                }
+
+                MenuItem.APKM_INSTALLER -> {
+                    pendingApkmUri?.let { uri ->
+                        ApkmInstallerTabContent(uri = uri, onDone = { pendingApkmUri = null; onMenuClick?.invoke() })
+                    }
                 }
 
                 else -> selectedMenuItem.content(setGesturesEnabled)
@@ -580,6 +593,11 @@ fun PrivateTabslifyApp(
                         MenuItem.MEDIAPLAYERTAB -> MediaTab(onBack = { onMenuClick?.invoke() })
 
                         MenuItem.AUTHENTICATOR -> AuthenticatorTab()
+
+                        MenuItem.APKM_INSTALLER -> pendingApkmUri?.let { uri ->
+                            ApkmInstallerTabContent(uri = uri, onDone = { pendingApkmUri = null; onMenuClick?.invoke() })
+                        }
+
                         else -> selectedMenuItem.content(setGesturesEnabled)
                     }
                 }
