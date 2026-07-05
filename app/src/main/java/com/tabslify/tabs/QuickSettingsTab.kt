@@ -1,7 +1,6 @@
 package com.tabslify.tabs
 
 import android.Manifest
-import android.R
 import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.app.NotificationChannel
@@ -259,7 +258,7 @@ fun showDisplayInfo(context: Context) {
     info.append("🧭 Ausrichtung: $orientationStr\n")
 
     val builder = NotificationCompat.Builder(context, SSN_CHANNEL_ID)
-        .setSmallIcon(R.drawable.ic_menu_gallery)
+        .setSmallIcon(android.R.drawable.ic_menu_gallery)
         .setContentTitle("🖥️ Display-Info")
         .setContentText("Auflösung, Dichte, Größe, Refresh Rate")
         .setStyle(NotificationCompat.BigTextStyle().bigText(info.toString()))
@@ -373,7 +372,7 @@ fun showDeviceInfo(context: Context) {
         val notification = NotificationCompat.Builder(context, channelId)
             .setContentTitle(title)
             .setContentText(content)
-            .setSmallIcon(R.drawable.ic_dialog_info)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setStyle(NotificationCompat.BigTextStyle().bigText(content))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setAutoCancel(true)

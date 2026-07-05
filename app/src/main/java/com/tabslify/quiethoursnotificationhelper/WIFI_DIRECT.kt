@@ -1,7 +1,6 @@
 package com.tabslify.quiethoursnotificationhelper
 
 import android.Manifest
-import android.R
 import android.annotation.SuppressLint
 import android.app.NotificationManager
 import android.content.ClipData
@@ -1126,7 +1125,7 @@ fun showOpenTodos(context: Context) {
     todos.forEachIndexed { index, todoItem ->
         notificationManager.notify(
             TODOS + index, NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_menu_agenda)
+                .setSmallIcon(android.R.drawable.ic_menu_agenda)
                 .setContentTitle(todoItem.text)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(todoItem.text))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -1138,7 +1137,7 @@ fun showOpenTodos(context: Context) {
 
     notificationManager.notify(
         TODOS + 150, NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_menu_info_details)
+            .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("Erledigte Todos")
             .setContentText("${todos.size} Erledigte Todos")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -1243,7 +1242,7 @@ fun showAllTodos(context: Context) {
     chunks.forEachIndexed { index, chunk ->
         notificationManager.notify(
             TODOS + index, NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_menu_agenda)
+                .setSmallIcon(android.R.drawable.ic_menu_agenda)
                 .setContentTitle("📝 To-do Liste (${todos.size})")
                 .setStyle(NotificationCompat.BigTextStyle().bigText(chunk))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -1255,7 +1254,7 @@ fun showAllTodos(context: Context) {
 
     notificationManager.notify(
         TODOS + 50, NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_menu_info_details)
+            .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle("Alle Todos")
             .setContentText("${chunks.size} Todos")
             .setPriority(NotificationCompat.PRIORITY_HIGH)

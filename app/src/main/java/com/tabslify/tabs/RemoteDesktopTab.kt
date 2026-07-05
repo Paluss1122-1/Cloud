@@ -14,6 +14,7 @@ import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.Toast
+import androidx.appcompat.widget.AppCompatImageView
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -115,7 +116,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.milliseconds
 
-private class TouchableImageView(context: Context) : ImageView(context) {
+private class TouchableImageView(context: Context) : AppCompatImageView(context) {
     override fun performClick(): Boolean {
         super.performClick()
         return true

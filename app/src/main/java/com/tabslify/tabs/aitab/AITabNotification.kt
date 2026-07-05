@@ -1,6 +1,5 @@
 package com.tabslify.tabs.aitab
 
-import android.R
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -38,7 +37,7 @@ fun sendAITabBackgroundNotification(
     )
 
     val notification = NotificationCompat.Builder(context, "ai_tab_notification_channel")
-        .setSmallIcon(R.drawable.ic_dialog_info)
+        .setSmallIcon(android.R.drawable.ic_dialog_info)
         .setContentTitle(title)
         .setContentText(message)
         .setStyle(NotificationCompat.BigTextStyle().bigText(message))

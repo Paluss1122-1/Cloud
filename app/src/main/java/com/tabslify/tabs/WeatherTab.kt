@@ -1,7 +1,6 @@
 package com.tabslify.tabs
 
 import android.Manifest
-import android.R
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -984,7 +983,7 @@ private fun createWeatherNotification(context: Context, dayName: String, hourDat
     notificationManager.createNotificationChannel(channel)
 
     val notification = NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(R.drawable.ic_dialog_info)
+        .setSmallIcon(android.R.drawable.ic_dialog_info)
         .setContentTitle("☁️ Wetter für $dayName um ${hourData.time} Uhr")
         .setContentText("${hourData.temp.toInt()}°C - ${hourData.condition}")
         .setStyle(

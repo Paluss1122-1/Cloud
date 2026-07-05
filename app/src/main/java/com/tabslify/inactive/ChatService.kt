@@ -1,6 +1,5 @@
 package com.tabslify.inactive
 
-import android.R
 import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -206,7 +205,7 @@ class ChatService : Service() {
         )
 
         val replyAction = NotificationCompat.Action.Builder(
-            R.drawable.ic_menu_send,
+            android.R.drawable.ic_menu_send,
             "Schreiben",
             replyPendingIntent
         )
@@ -226,7 +225,7 @@ class ChatService : Service() {
         )
 
         val historyAction = NotificationCompat.Action.Builder(
-            R.drawable.ic_menu_view,
+            android.R.drawable.ic_menu_view,
             "Letzte 5",
             historyPendingIntent
         ).build()
@@ -243,7 +242,7 @@ class ChatService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_dialog_email)
+            .setSmallIcon(android.R.drawable.ic_dialog_email)
             .setContentTitle("💬 Chat Service")
             .setContentText("Tippe auf 'Schreiben' um eine Nachricht zu senden")
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -297,7 +296,7 @@ class ChatService : Service() {
             }
 
             val notification = NotificationCompat.Builder(this, "chat_messages")
-                .setSmallIcon(R.drawable.ic_dialog_email)
+                .setSmallIcon(android.R.drawable.ic_dialog_email)
                 .setContentTitle("📜 Letzte Nachrichten")
                 .setContentText("${messageHistory.size} Nachrichten")
                 .setStyle(
@@ -410,7 +409,7 @@ class ChatService : Service() {
             )
 
             val replyAction = NotificationCompat.Action.Builder(
-                R.drawable.ic_menu_send,
+                android.R.drawable.ic_menu_send,
                 "Antworten",
                 replyPendingIntent
             )
@@ -422,7 +421,7 @@ class ChatService : Service() {
                 .format(Date())
 
             val notification = NotificationCompat.Builder(this, "chat_messages")
-                .setSmallIcon(R.drawable.ic_dialog_email)
+                .setSmallIcon(android.R.drawable.ic_dialog_email)
                 .setContentTitle("💬 ${message.sender_id}")
                 .setContentText(message.content)
                 .setStyle(
