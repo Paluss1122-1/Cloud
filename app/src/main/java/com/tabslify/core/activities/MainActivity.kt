@@ -36,6 +36,7 @@ import com.tabslify.inactive.ChatService
 import com.tabslify.quicksettingsfunctions.startBatteryWorker
 import com.tabslify.services.QuietHoursNotificationService
 import com.tabslify.tabs.JsonEditorContent
+import com.tabslify.tabs.pendingApkmUri
 import io.github.jan.supabase.storage.storage
 import java.io.File
 
@@ -117,7 +118,9 @@ class MainActivity : FragmentActivity() {
 
         checkPermissionsAndHandleIntent(intent)
 
-        val startTarget = intent.getStringExtra("target")
+        val apkmUri = resolveApkmUri(intent)
+        if (apkmUri != null) pendingApkmUri = apkmUri
+        val startTarget = if (apkmUri != null) "apkm" else intent.getStringExtra("target")
         this.startTarget = startTarget
         setContent {
             val appColor = rememberAppColor()
@@ -163,11 +166,30 @@ class MainActivity : FragmentActivity() {
             jsonFileUri = null
         }
         checkPermissionsAndHandleIntent(intent)
+
+        val apkmUri = resolveApkmUri(intent)
+        if (apkmUri != null) {
+            pendingApkmUri = apkmUri
+            startTarget = "apkm"
+        }
     }
 
     private fun checkPermissionsAndHandleIntent(intent: Intent) {
+        if (resolveApkmUri(intent) != null) return
         if (intent.action == Intent.ACTION_VIEW || intent.action == Intent.ACTION_EDIT) {
             handleIncomingIntent(intent)
+        }
+    }
+
+    private fun resolveApkmUri(intent: Intent): Uri? {
+        val hasApkmMimeType = intent.type in APKM_MIME_TYPES
+        val hasApkmSuffix = intent.data?.lastPathSegment
+            ?.lowercase()
+            ?.let { name -> APKM_SUFFIXES.any { name.endsWith(it) } } == true
+        if (!hasApkmMimeType && !hasApkmSuffix) return null
+        return when (intent.action) {
+            Intent.ACTION_SEND -> intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+            else -> intent.data
         }
     }
 
@@ -231,5 +253,12 @@ class MainActivity : FragmentActivity() {
         }
 
         return tempFile.absolutePath
+    }
+
+    companion object {
+        private val APKM_MIME_TYPES = setOf(
+            "application/vnd.apkm", "application/vnd.apks", "application/vnd.xapk"
+        )
+        private val APKM_SUFFIXES = listOf(".apkm", ".apks", ".xapk")
     }
 }
