@@ -171,7 +171,7 @@ class ApkmInstaller(private val context: Context) {
                 pm.getPackageArchiveInfo(baseApkFile.absolutePath, flags)
             }.getOrNull()
 
-            if (baseInfo == null || baseInfo.packageName.isNullOrBlank()) {
+            if (baseInfo == null || baseInfo.packageName.isBlank()) {
                 runCatching { baseApkFile.delete() }
                 throw ApkmParseException(
                     ParseError.CORRUPTED,
@@ -219,11 +219,11 @@ class ApkmInstaller(private val context: Context) {
             val hasRecommendedDensity = densitySplits.any { it.recommended }
 
             val finalized = classified.map { info ->
-                when {
-                    info.kind == ApkKind.ARCH && !hasRecommendedArch && info == archSplits.firstOrNull() ->
+                when (info.kind) {
+                    ApkKind.ARCH if !hasRecommendedArch && info == archSplits.firstOrNull() ->
                         info.copy(recommended = true)
 
-                    info.kind == ApkKind.DENSITY && !hasRecommendedDensity && info == nearestDensity(densitySplits, deviceDensity) ->
+                    ApkKind.DENSITY if !hasRecommendedDensity && info == nearestDensity(densitySplits, deviceDensity) ->
                         info.copy(recommended = true)
 
                     else -> info
@@ -237,9 +237,7 @@ class ApkmInstaller(private val context: Context) {
                 pm.getPackageInfo(packageName, 0)
             }.getOrNull()
             @Suppress("DEPRECATION")
-            val installedCode = installed?.let {
-                it.longVersionCode
-            }
+            val installedCode = installed?.longVersionCode
 
             log("Paket: $packageName v$versionName ($versionCode)")
             log("Signatur: $signatureState")
@@ -287,17 +285,15 @@ class ApkmInstaller(private val context: Context) {
             .find(lower)?.groupValues?.getOrNull(1)
 
         if (configValue != null) {
-            return when {
-                configValue in ARCH_VALUES -> ApkEntryInfo(
+            return when (configValue) {
+                in ARCH_VALUES -> ApkEntryInfo(
                     entry.name, fileName, size, ApkKind.ARCH, configValue,
                     recommended = deviceAbis.contains(configValue)
                 )
-
-                configValue in DENSITY_VALUES -> ApkEntryInfo(
+                in DENSITY_VALUES -> ApkEntryInfo(
                     entry.name, fileName, size, ApkKind.DENSITY, configValue,
                     recommended = configValue == deviceBucket || configValue == "nodpi"
                 )
-
                 else -> ApkEntryInfo(
                     // 2-4 stellige Codes → Sprache
                     entry.name, fileName, size, ApkKind.LANGUAGE, configValue,

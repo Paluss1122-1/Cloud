@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--suppress ALL -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
@@ -8,7 +9,6 @@
     -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
-    <!-- Erlaubt Tabslify, .apkm / .apks / .xapk Bundles zu installieren (siehe ApkmInstallActivity) -->
     <uses-permission
         android:name="android.permission.REQUEST_INSTALL_PACKAGES"
         tools:ignore="RequestInstallPackagesPolicy" />
@@ -103,6 +103,45 @@
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
+
+            intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/vnd.apkm" />
+                <data android:mimeType="application/vnd.apks" />
+                <data android:mimeType="application/vnd.xapk" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="*/*" />
+                <data android:pathSuffix=".apkm" />
+                <data android:pathSuffix=".apks" />
+                <data android:pathSuffix=".xapk" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="application/vnd.apkm" />
+                <data android:mimeType="application/vnd.apks" />
+                <data android:mimeType="application/vnd.xapk" />
+            </intent-filter>
         </activity>
 
         <service
@@ -250,64 +289,5 @@
             </intent-filter>
         </receiver>
 
-        <!--
-        APKM/APKS/XAPK Split-Bundle Installer.
-        Erscheint im "Öffnen mit"-Dialog beim Antippen einer .apkm-Datei.
-        -->
-        <activity
-            android:name=".core.activities.ApkmInstallActivity"
-            android:excludeFromRecents="true"
-            android:exported="true"
-            android:label="Tabslify"
-            android:launchMode="singleTop"
-            android:taskAffinity=""
-            android:theme="@style/Theme.Tabslify">
-
-            <!-- Custom MIME-Type (falls ein Provider ihn korrekt meldet) -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data android:scheme="content" />
-                <data android:scheme="file" />
-                <data android:mimeType="application/vnd.apkm" />
-                <data android:mimeType="application/vnd.apks" />
-                <data android:mimeType="application/vnd.xapk" />
-            </intent-filter>
-
-            <!-- Erkennung anhand der Dateiendung (die meisten Dateimanager melden octet-stream) -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data android:scheme="content" />
-                <data android:scheme="file" />
-                <data android:host="*" />
-                <data android:mimeType="application/octet-stream" />
-                <data android:mimeType="application/zip" />
-                <data android:mimeType="*/*" />
-                <data android:pathPattern=".*\\.apkm" />
-                <data android:pathPattern=".*\\..*\\.apkm" />
-                <data android:pathPattern=".*\\.apks" />
-                <data android:pathPattern=".*\\..*\\.apks" />
-                <data android:pathPattern=".*\\.xapk" />
-                <data android:pathPattern=".*\\..*\\.xapk" />
-            </intent-filter>
-
-            <!-- Auch als SEND-Ziel (z. B. aus Browser-Downloads teilen) -->
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-
-                <data android:mimeType="application/vnd.apkm" />
-                <data android:mimeType="application/vnd.apks" />
-                <data android:mimeType="application/vnd.xapk" />
-            </intent-filter>
-        </activity>
     </application>
 </manifest>

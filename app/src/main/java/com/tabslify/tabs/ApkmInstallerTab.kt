@@ -1,13 +1,10 @@
-package com.tabslify.core.activities
+package com.tabslify.tabs
 
 import android.content.Intent
 import android.net.Uri
-import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -22,7 +19,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -31,50 +27,48 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.Image as ImageComposable
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.lifecycleScope
+import androidx.core.net.toUri
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.tabslify.apkm.ApkEntryInfo
 import com.tabslify.apkm.ApkKind
 import com.tabslify.apkm.ApkmInstaller
@@ -85,167 +79,13 @@ import com.tabslify.apkm.InstallOutcome
 import com.tabslify.apkm.ParseError
 import com.tabslify.apkm.SignatureState
 import com.tabslify.core.ui.NeonBox
-import com.tabslify.core.ui.Typography
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.core.net.toUri
 
-/** UI-Phasen des Installers. */
-private enum class Phase { LOADING, ERROR, READY, INSTALLING, SUCCESS, FAILURE }
+var pendingApkmUri: Uri? by mutableStateOf(null)
 
-class ApkmInstallActivity : ComponentActivity() {
-
-    private lateinit var installer: ApkmInstaller
-
-    private var phase by mutableStateOf(Phase.LOADING)
-    private var loadText by mutableStateOf("Bundle wird vorbereitet…")
-    private var loadProgress by mutableStateOf<Float?>(null)
-    private var pkg by mutableStateOf<ApkmPackage?>(null)
-    private var errorType by mutableStateOf<ParseError?>(null)
-    private var errorMessage by mutableStateOf("")
-    private var installStatusText by mutableStateOf("")
-    private var failure by mutableStateOf<InstallOutcome.Failure?>(null)
-    private var needsInstallPermission by mutableStateOf(false)
-    private var signatureAcknowledged by mutableStateOf(false)
-    private val selection = mutableStateMapOf<String, Boolean>()
-
-    private val unknownSourcesLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            recomputePermission()
-        }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        installer = ApkmInstaller(applicationContext)
-
-        val uri = resolveUri(intent)
-        if (uri == null) {
-            Toast.makeText(this, "Keine Datei erhalten.", Toast.LENGTH_LONG).show()
-            finish()
-            return
-        }
-
-        setContent {
-            MaterialTheme(typography = Typography) {
-                ApkmInstallScreen(
-                    installer = installer,
-                    phase = phase,
-                    loadText = loadText,
-                    loadProgress = loadProgress,
-                    pkg = pkg,
-                    errorType = errorType,
-                    errorMessage = errorMessage,
-                    installStatusText = installStatusText,
-                    failure = failure,
-                    needsInstallPermission = needsInstallPermission,
-                    signatureAcknowledged = signatureAcknowledged,
-                    selection = selection,
-                    onToggleApk = { entry, checked -> selection[entry.entryName] = checked },
-                    onAcknowledgeSignature = { signatureAcknowledged = true },
-                    onRequestPermission = ::requestInstallPermission,
-                    onInstall = ::startInstall,
-                    onRetry = { finish() },
-                    onClose = { finish() },
-                    onDone = { finish() }
-                )
-            }
-        }
-
-        loadBundle(uri)
-    }
-
-    override fun onResume() {
-        super.onResume()
-        recomputePermission()
-    }
-
-    private fun resolveUri(intent: Intent?): Uri? {
-        if (intent == null) return null
-        return when (intent.action) {
-            Intent.ACTION_SEND -> intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
-            else -> intent.data
-        }
-    }
-
-    private fun loadBundle(uri: Uri) {
-        val sourceName = uri.lastPathSegment ?: "bundle.apkm"
-        lifecycleScope.launch {
-            try {
-                phase = Phase.LOADING
-                loadText = "Bundle wird kopiert…"
-                val cacheFile = withContext(Dispatchers.IO) {
-                    installer.copyToCache(uri) { copied, total ->
-                        loadProgress = if (total > 0) (copied.toFloat() / total).coerceIn(0f, 1f) else null
-                    }
-                }
-                loadText = "Bundle wird analysiert…"
-                loadProgress = null
-                val parsed = withContext(Dispatchers.IO) { installer.parse(cacheFile, sourceName) }
-                pkg = parsed
-                // Standardauswahl = empfohlene APKs
-                selection.clear()
-                parsed.apks.forEach { selection[it.entryName] = it.recommended || it.kind == ApkKind.BASE }
-                recomputePermission()
-                phase = Phase.READY
-            } catch (e: ApkmParseException) {
-                errorType = e.error
-                errorMessage = e.message ?: "Unbekannter Fehler"
-                installer.log("❌ Parsen fehlgeschlagen: ${e.message}")
-                phase = Phase.ERROR
-            } catch (e: Exception) {
-                errorType = ParseError.UNREADABLE
-                errorMessage = e.message ?: "Unbekannter Fehler"
-                installer.log("❌ Unerwarteter Fehler: ${e.message}")
-                phase = Phase.ERROR
-            }
-        }
-    }
-
-    private fun recomputePermission() {
-        needsInstallPermission = !installer.canRequestInstalls()
-    }
-
-    private fun requestInstallPermission() {
-        val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-            "package:$packageName".toUri())
-        runCatching { unknownSourcesLauncher.launch(intent) }
-            .onFailure {
-                unknownSourcesLauncher.launch(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES))
-            }
-    }
-
-    private fun startInstall() {
-        val current = pkg ?: return
-        val selected = current.apks.filter { selection[it.entryName] == true }
-        if (selected.none { it.kind == ApkKind.BASE }) {
-            Toast.makeText(this, "Basis-APK ist erforderlich.", Toast.LENGTH_LONG).show()
-            return
-        }
-        phase = Phase.INSTALLING
-        installStatusText = "Installation wird vorbereitet…"
-        lifecycleScope.launch {
-            val outcome = withContext(Dispatchers.IO) {
-                installer.install(current, selected) { confirmIntent ->
-                    installStatusText = "Bitte im System-Dialog bestätigen…"
-                    runCatching { startActivity(confirmIntent) }
-                }
-            }
-            when (outcome) {
-                is InstallOutcome.Success -> phase = Phase.SUCCESS
-                is InstallOutcome.Failure -> {
-                    failure = outcome
-                    phase = Phase.FAILURE
-                }
-            }
-        }
-    }
-}
-
-// =================================================================================================
-// UI
-// =================================================================================================
+private enum class ApkmPhase { LOADING, ERROR, READY, INSTALLING, SUCCESS, FAILURE }
 
 private val AccentCyan = Color(0xFF00E5FF)
 private val AccentViolet = Color(0xFF7C4DFF)
@@ -255,78 +95,134 @@ private val AccentRed = Color(0xFFFF5252)
 private val AccentAmber = Color(0xFFFFB300)
 
 @Composable
-private fun ApkmInstallScreen(
-    installer: ApkmInstaller,
-    phase: Phase,
-    loadText: String,
-    loadProgress: Float?,
-    pkg: ApkmPackage?,
-    errorType: ParseError?,
-    errorMessage: String,
-    installStatusText: String,
-    failure: InstallOutcome.Failure?,
-    needsInstallPermission: Boolean,
-    signatureAcknowledged: Boolean,
-    selection: Map<String, Boolean>,
-    onToggleApk: (ApkEntryInfo, Boolean) -> Unit,
-    onAcknowledgeSignature: () -> Unit,
-    onRequestPermission: () -> Unit,
-    onInstall: () -> Unit,
-    onRetry: () -> Unit,
-    onClose: () -> Unit,
-    onDone: () -> Unit
-) {
+fun ApkmInstallerTabContent(uri: Uri, onDone: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val installer = remember(uri) { ApkmInstaller(context.applicationContext) }
+
+    var phase by remember(uri) { mutableStateOf(ApkmPhase.LOADING) }
+    var loadText by remember(uri) { mutableStateOf("Bundle wird vorbereitet…") }
+    var loadProgress by remember(uri) { mutableStateOf<Float?>(null) }
+    var pkg by remember(uri) { mutableStateOf<ApkmPackage?>(null) }
+    var errorType by remember(uri) { mutableStateOf<ParseError?>(null) }
+    var errorMessage by remember(uri) { mutableStateOf("") }
+    var installStatusText by remember(uri) { mutableStateOf("") }
+    var failure by remember(uri) { mutableStateOf<InstallOutcome.Failure?>(null) }
+    var needsInstallPermission by remember(uri) { mutableStateOf(false) }
+    var signatureAcknowledged by remember(uri) { mutableStateOf(false) }
+    val selection = remember(uri) { mutableStateMapOf<String, Boolean>() }
+
+    fun recomputePermission() {
+        needsInstallPermission = !installer.canRequestInstalls()
+    }
+
+    val unknownSourcesLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { recomputePermission() }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) recomputePermission()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(uri) {
+        val sourceName = uri.lastPathSegment ?: "bundle.apkm"
+        try {
+            phase = ApkmPhase.LOADING
+            loadText = "Bundle wird kopiert…"
+            val cacheFile = withContext(Dispatchers.IO) {
+                installer.copyToCache(uri) { copied, total ->
+                    loadProgress = if (total > 0) (copied.toFloat() / total).coerceIn(0f, 1f) else null
+                }
+            }
+            loadText = "Bundle wird analysiert…"
+            loadProgress = null
+            val parsed = withContext(Dispatchers.IO) { installer.parse(cacheFile, sourceName) }
+            pkg = parsed
+            selection.clear()
+            parsed.apks.forEach { selection[it.entryName] = it.recommended || it.kind == ApkKind.BASE }
+            recomputePermission()
+            phase = ApkmPhase.READY
+        } catch (e: ApkmParseException) {
+            errorType = e.error
+            errorMessage = e.message ?: "Unbekannter Fehler"
+            installer.log("❌ Parsen fehlgeschlagen: ${e.message}")
+            phase = ApkmPhase.ERROR
+        } catch (e: Exception) {
+            errorType = ParseError.UNREADABLE
+            errorMessage = e.message ?: "Unbekannter Fehler"
+            installer.log("❌ Unerwarteter Fehler: ${e.message}")
+            phase = ApkmPhase.ERROR
+        }
+    }
+
+    fun requestInstallPermission() {
+        val intent = Intent(
+            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+            "package:${context.packageName}".toUri()
+        )
+        runCatching { unknownSourcesLauncher.launch(intent) }
+            .onFailure {
+                unknownSourcesLauncher.launch(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES))
+            }
+    }
+
+    fun startInstall() {
+        val current = pkg ?: return
+        val selected = current.apks.filter { selection[it.entryName] == true }
+        if (selected.none { it.kind == ApkKind.BASE }) {
+            Toast.makeText(context, "Basis-APK ist erforderlich.", Toast.LENGTH_LONG).show()
+            return
+        }
+        phase = ApkmPhase.INSTALLING
+        installStatusText = "Installation wird vorbereitet…"
+        scope.launch {
+            val outcome = withContext(Dispatchers.IO) {
+                installer.install(current, selected) { confirmIntent ->
+                    installStatusText = "Bitte im System-Dialog bestätigen…"
+                    runCatching { context.startActivity(confirmIntent) }
+                }
+            }
+            when (outcome) {
+                is InstallOutcome.Success -> phase = ApkmPhase.SUCCESS
+                is InstallOutcome.Failure -> {
+                    failure = outcome
+                    phase = ApkmPhase.FAILURE
+                }
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xF20B0B10))
-            .windowInsetsPadding(WindowInsets.systemBars)
             .padding(16.dp)
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Kopfzeile
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        "APKM Installer",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "Split-Bundle Installation",
-                        color = Color.White.copy(alpha = 0.55f),
-                        fontSize = 12.sp
-                    )
-                }
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier.background(Color.White.copy(alpha = 0.1f), CircleShape)
-                ) {
-                    Icon(Icons.Default.Close, contentDescription = "Schließen", tint = Color.White)
-                }
+        when (phase) {
+            ApkmPhase.LOADING -> LoadingContent(loadText, loadProgress)
+            ApkmPhase.ERROR -> ErrorContent(errorType, errorMessage, installer, onRetry = onDone)
+            ApkmPhase.READY -> pkg?.let {
+                ReadyContent(
+                    installer = installer,
+                    pkg = it,
+                    selection = selection,
+                    needsInstallPermission = needsInstallPermission,
+                    signatureAcknowledged = signatureAcknowledged,
+                    onToggleApk = { entry, checked -> selection[entry.entryName] = checked },
+                    onAcknowledgeSignature = { signatureAcknowledged = true },
+                    onRequestPermission = { requestInstallPermission() },
+                    onInstall = { startInstall() }
+                )
             }
 
-            Spacer(Modifier.height(20.dp))
-
-            when (phase) {
-                Phase.LOADING -> LoadingContent(loadText, loadProgress)
-                Phase.ERROR -> ErrorContent(errorType, errorMessage, installer, onRetry)
-                Phase.READY -> if (pkg != null) {
-                    ReadyContent(
-                        installer, pkg, selection, needsInstallPermission, signatureAcknowledged,
-                        onToggleApk, onAcknowledgeSignature, onRequestPermission, onInstall
-                    )
-                }
-
-                Phase.INSTALLING -> InstallingContent(installStatusText, installer)
-                Phase.SUCCESS -> ResultContent(true, pkg, null, installer, onDone)
-                Phase.FAILURE -> ResultContent(false, pkg, failure, installer, onDone)
-            }
+            ApkmPhase.INSTALLING -> InstallingContent(installStatusText, installer)
+            ApkmPhase.SUCCESS -> ResultContent(true, pkg, null, installer, onDone)
+            ApkmPhase.FAILURE -> ResultContent(false, pkg, failure, installer, onDone)
         }
     }
 }
@@ -342,10 +238,9 @@ private fun LoadingContent(text: String, progress: Float?) {
         Spacer(Modifier.height(24.dp))
         Text(text, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
         if (progress != null) {
-            val p = progress
             Spacer(Modifier.height(16.dp))
             LinearProgressIndicator(
-                progress = { p },
+                progress = { progress },
                 modifier = Modifier
                     .fillMaxWidth(0.7f)
                     .clip(RoundedCornerShape(4.dp)),
@@ -413,24 +308,20 @@ private fun ReadyContent(
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
         ) {
-            // --- App-Kopf ---
             AppHeaderCard(pkg, selectedSize, selectedApks.size)
 
             Spacer(Modifier.height(16.dp))
 
-            // --- Signaturwarnung (nur bei Konflikt) ---
             if (mismatch) {
                 SignatureWarningCard(pkg, signatureAcknowledged, onAcknowledgeSignature)
                 Spacer(Modifier.height(16.dp))
             }
 
-            // --- Berechtigung ---
             if (needsInstallPermission) {
                 PermissionCard(onRequestPermission)
                 Spacer(Modifier.height(16.dp))
             }
 
-            // --- Nerd-Sektionen ---
             ExpandableNeonSection(
                 "Enthaltene APKs",
                 "${pkg.apks.size} Dateien · ${selectedApks.size} ausgewählt",
@@ -476,7 +367,6 @@ private fun ReadyContent(
             Spacer(Modifier.height(16.dp))
         }
 
-        // --- Installations-Button ---
         val installEnabled = !needsInstallPermission &&
             selectedApks.any { it.kind == ApkKind.BASE } &&
             (!mismatch || signatureAcknowledged)
@@ -568,7 +458,7 @@ private fun AppIcon(icon: ImageBitmap?, name: String) {
         contentAlignment = Alignment.Center
     ) {
         if (icon != null) {
-            Image(bitmap = icon, contentDescription = name, modifier = Modifier.size(56.dp))
+            ImageComposable(bitmap = icon, contentDescription = name, modifier = Modifier.size(56.dp))
         } else {
             Text(name.take(1).uppercase(), color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         }
@@ -811,8 +701,6 @@ private fun ResultContent(
     }
 }
 
-// --- Wiederverwendbare Bausteine -----------------------------------------------------------------
-
 @Composable
 private fun ExpandableNeonSection(
     title: String,
@@ -992,8 +880,6 @@ private fun GlowButton(
         )
     }
 }
-
-// --- Text-Helfer ---------------------------------------------------------------------------------
 
 private fun kindLabel(kind: ApkKind): String = when (kind) {
     ApkKind.BASE -> "Basis-APK"
