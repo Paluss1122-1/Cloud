@@ -9,9 +9,9 @@ data class Model(
 )
 
 val geminiModels = listOf(
-    Model("gemini-3.1-flash-lite", vision = true, audio = true, weight = 2),
-    Model("gemini-3-flash-preview", vision = true, audio = true, weight = 2),
-    Model("gemini-2.5-flash", vision = true, audio = true, weight = 2),
+    Model("gemini-3.1-flash-lite", vision = true, audio = true, weight = 3),
+    Model("gemini-3-flash-preview", vision = true, audio = true, weight = 3),
+    Model("gemini-2.5-flash", vision = true, audio = true, weight = 3),
     Model("gemini-2.5-flash-lite", vision = true, audio = true, weight = 1)
 )
 
