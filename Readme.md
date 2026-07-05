@@ -4,9 +4,9 @@
 > Media player, browser, password & 2FA manager, notes, weather, movies, gallery, contacts, calendar, vocab trainer, AI chat — bundled into a single, privacy-first Android app.
 
 > [!IMPORTANT]
-> RELASE IN 40min!
+> RELASE IN 1h! (1:00 AM · Jul 6, 26)
 >
-> <sub><sub>11:20 PM · Jul 5, 26</sub></sub>
+> <sub><sub>12:00 AM · Jul 5, 26</sub></sub>
 
 > [!TIP]
 > Tabslify is compatible with Samsung OneUI 8.5  
