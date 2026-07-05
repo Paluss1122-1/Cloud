@@ -16,12 +16,12 @@ val geminiModels = listOf(
 )
 
 val nvidiaModels = listOf(
+    Model("z-ai/glm-5.2", weight = 5),
     Model("openai/gpt-oss-120b", weight = 2),
     Model("openai/gpt-oss-20b", weight = 1),
     Model("nvidia/nemotron-3-nano-30b-a3b", weight = 2),
     Model("meta/llama-3.2-90b-vision-instruct", vision = true, weight = 2),
-    Model("meta/llama-4-maverick-17b-128e-instruct", vision = true, weight = 2),
-    Model("qwen/qwen3.5-397b-a17b", vision = true, weight = 4)
+    Model("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", vision = true, weight = 2)
 )
 
 val serverModels = listOf(
