@@ -221,8 +221,8 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
         if (!hasCoords) {
             CoordinatesSetupScreen { lat, lon ->
                 prefs.edit {
-                    putFloat("lat_key", lat.toFloat())
-                    putFloat("lon_key", lon.toFloat())
+                    putLong("lat_key_d", java.lang.Double.doubleToRawLongBits(lat))
+                    putLong("lon_key_d", java.lang.Double.doubleToRawLongBits(lon))
                     putBoolean("has_coordinates", true)
                 }
                 Config.LAT = lat
@@ -254,9 +254,10 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
             selectedMenuItem = when (startTarget) {
                 "weather" -> MenuItem.WEATHER
                 "aitab" -> MenuItem.AITAB
+                "apkm" -> MenuItem.APKM_INSTALLER
                 else -> null
             }
-            if (selectedMenuItem != null) {
+            if (selectedMenuItem != null && selectedMenuItem != MenuItem.APKM_INSTALLER) {
                 saveRecentTab(context, selectedMenuItem!!)
             }
         }
@@ -293,6 +294,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
             val targetMenuItem = selectedMenuItem ?: startTarget?.let { target ->
                 when (target) {
                     "weather" -> MenuItem.WEATHER
+                    "apkm" -> MenuItem.APKM_INSTALLER
                     else -> null
                 }
             }
@@ -619,7 +621,8 @@ fun LandingPage(
     }
     val allTabsSorted = remember {
         MenuItem.entries.filter {
-            prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD && it != MenuItem.REMOTEDESKTOP && it != MenuItem.PC_MANAGER)
+            it != MenuItem.APKM_INSTALLER &&
+                (prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD && it != MenuItem.REMOTEDESKTOP && it != MenuItem.PC_MANAGER))
         }.sortedBy { it.title }
     }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
@@ -905,9 +908,12 @@ fun SettingsFrame(
     val lifecycleOwner = LocalLifecycleOwner.current
     var showPermissionInfo by remember { mutableStateOf(false) }
     var animatePermissionInfo by remember { mutableStateOf(false) }
+    var showCoordinatesEdit by remember { mutableStateOf(false) }
 
     BackHandler {
-        if (showPermissionInfo) {
+        if (showCoordinatesEdit) {
+            showCoordinatesEdit = false
+        } else if (showPermissionInfo) {
             showPermissionInfo = false
         } else {
             onClose()
@@ -1608,6 +1614,46 @@ fun SettingsFrame(
                     }
                 }
 
+                if (prvt()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    NeonBox(
+                        modifier = Modifier.fillMaxWidth(),
+                        neonColors = listOf(Color(0xFF00FFAA), Color(0xFF00CCFF)),
+                        backgroundAlpha = 0.15f
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showCoordinatesEdit = true }
+                                    .padding(20.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "📍 Zuhause-Koordinaten ändern",
+                                        color = Color.White,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+
+                                Box {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                        contentDescription = "Koordinaten ändern",
+                                        tint = Color.White.copy(alpha = 0.8f),
+                                        modifier = Modifier
+                                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
@@ -1835,6 +1881,149 @@ fun SettingsFrame(
                         lineHeight = 18.sp,
                         fontFamily = FontFamily.Default
                     )
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = showCoordinatesEdit && prvt(),
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            val coordPrefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
+            var latInput by remember {
+                mutableStateOf(
+                    if (coordPrefs.contains("lat_key_d"))
+                        java.lang.Double.longBitsToDouble(coordPrefs.getLong("lat_key_d", 0L)).toString()
+                    else
+                        coordPrefs.getFloat("lat_key", 0f).toString()
+                )
+            }
+            var lonInput by remember {
+                mutableStateOf(
+                    if (coordPrefs.contains("lon_key_d"))
+                        java.lang.Double.longBitsToDouble(coordPrefs.getLong("lon_key_d", 0L)).toString()
+                    else
+                        coordPrefs.getFloat("lon_key", 0f).toString()
+                )
+            }
+            var savedHint by remember { mutableStateOf(false) }
+            val latDouble = latInput.toDoubleOrNull()
+            val lonDouble = lonInput.toDoubleOrNull()
+            val isValid = latDouble != null && lonDouble != null
+
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF0C1017))
+                    .windowInsetsPadding(WindowInsets.systemBars)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 15.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Koordinaten ändern",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(start = 5.dp),
+                            fontSize = 22.sp
+                        )
+                        IconButton(
+                            onClick = { showCoordinatesEdit = false },
+                            modifier = Modifier.background(
+                                Color.White.copy(alpha = 0.1f),
+                                CircleShape
+                            )
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = Color.White
+                            )
+                        }
+                    }
+
+                    Text(
+                        "Diese Koordinaten gelten als \"Zuhause\" für den Explore-Tracker (Geofencing) und als Standard-Standort in der App.",
+                        color = APP_COLOR.copy(
+                            red = APP_COLOR.red + .6f,
+                            green = APP_COLOR.green + .6f,
+                            blue = APP_COLOR.blue + .6f
+                        ),
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 8.dp)
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = latInput,
+                        onValueChange = { latInput = it; savedHint = false },
+                        label = { Text("Breitengrad (Latitude)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = lonInput,
+                        onValueChange = { lonInput = it; savedHint = false },
+                        label = { Text("Längengrad (Longitude)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (latInput.isNotEmpty() && latDouble == null)
+                        Text(
+                            "Ungültiger Breitengrad",
+                            color = Color(0xFFE74C3C),
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    if (lonInput.isNotEmpty() && lonDouble == null)
+                        Text(
+                            "Ungültiger Längengrad",
+                            color = Color(0xFFE74C3C),
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Button(
+                        onClick = {
+                            coordPrefs.edit {
+                                putLong("lat_key_d", java.lang.Double.doubleToRawLongBits(latDouble!!))
+                                putLong("lon_key_d", java.lang.Double.doubleToRawLongBits(lonDouble!!))
+                                putBoolean("has_coordinates", true)
+                            }
+                            Config.LAT = latDouble!!
+                            Config.LON = lonDouble!!
+                            savedHint = true
+                        },
+                        enabled = isValid,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Speichern") }
+
+                    if (savedHint) {
+                        Text(
+                            "Gespeichert.",
+                            color = Color(0xFF00FFAA),
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+
+                    Spacer(Modifier.height(32.dp))
                 }
             }
         }
