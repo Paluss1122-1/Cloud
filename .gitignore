@@ -1,6 +1,8 @@
 *.iml
 .gradle
 /build
+app/build/
+extern_accessibily/build/
 keystore/
 .idea/
 postcommit.py
