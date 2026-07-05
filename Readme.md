@@ -6,7 +6,7 @@
 > [!IMPORTANT]
 > RELASE IN 1h! (1:00 AM · Jul 6, 26)
 >
-> <sub><sub>12:00 AM · Jul 5, 26</sub></sub>
+> <sub><sub>12:00 AM · Jul 6, 26</sub></sub>
 
 > [!TIP]
 > Tabslify is compatible with Samsung OneUI 8.5  
