@@ -211,10 +211,6 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
                 val effectivePic = if (selectedModel.vision && selectedImageUri != null) {
                     selectedImageUri?.let { encodeImage(ctx, it) }
                 } else null
-                val effectiveAudio =
-                    if (currentMode != "Gemini" && selectedModel.audio && selectedAudioUri != null) {
-                        selectedAudioUri?.let { encodeAudio(ctx, it) }
-                    } else null
                 val response = withContext(Dispatchers.IO) {
                     send(
                         ctx,
