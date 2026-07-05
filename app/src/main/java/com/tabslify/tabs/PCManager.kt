@@ -40,7 +40,6 @@ import androidx.core.content.edit
 import com.tabslify.core.objects.prvt
 import com.tabslify.quiethoursnotificationhelper.laptopIp
 import com.tabslify.quiethoursnotificationhelper.laptopName
-import com.tabslify.quiethoursnotificationhelper.setLaptopUuid
 import com.tabslify.quiethoursnotificationhelper.stopAllSyncServices
 import com.tabslify.quiethoursnotificationhelper.syncTodosWithLaptop
 import com.tabslify.quiethoursnotificationhelper.getTriggerListenerStatus
@@ -91,8 +90,8 @@ fun PCManagerTab() {
                 // pc_secrets is keyed by hardware UUID, not name - UUID is the only
                 // identifier that can't change out from under a registered PC.
                 val uuid = uuidPrefs.getString(name, null) ?: "NO_UUID"
-                val secret = secretsPrefs.getString(uuid, "COMMANDEXECUTORK") ?: "COMMANDEXECUTORK"
-                val liveCode = TotpGenerator.generateTOTP(secret)
+                val secret = secretsPrefs.getString(uuid, null) ?: ""
+                val liveCode = if (secret.isNotEmpty()) TotpGenerator.generateTOTP(secret) else "?"
                 PcDetails(
                     name = name,
                     ip = "",
@@ -116,7 +115,7 @@ fun PCManagerTab() {
             
             triggerStatus = getTriggerListenerStatus()
 
-            delay(1000L)
+            delay(1000L.milliseconds)
         }
     }
 
@@ -256,7 +255,6 @@ fun PCManagerTab() {
 
                                         laptopIp = pc.ip
                                         laptopName = pc.name
-                                        setLaptopUuid(context, pc.uuid)
 
                                         syncTodosWithLaptop(context, true)
                                         
