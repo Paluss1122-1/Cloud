@@ -26,6 +26,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipException
 import java.util.zip.ZipFile
 import kotlin.coroutines.resume
+import androidx.core.graphics.createBitmap
 
 /** Art einer im Bundle enthaltenen APK. */
 enum class ApkKind { BASE, ARCH, DENSITY, LANGUAGE, FEATURE, OTHER }
@@ -487,7 +488,7 @@ class ApkmInstaller(private val context: Context) {
             val drawable = baseInfo.applicationInfo?.loadIcon(pm) ?: return null
             val w = drawable.intrinsicWidth.coerceIn(1, 256)
             val h = drawable.intrinsicHeight.coerceIn(1, 256)
-            val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+            val bmp = createBitmap(w, h)
             val canvas = android.graphics.Canvas(bmp)
             drawable.setBounds(0, 0, w, h)
             drawable.draw(canvas)
