@@ -66,6 +66,7 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
     val exploredPercent by vm.exploredPercent.collectAsStateWithLifecycle()
     val tiles by vm.allTiles.collectAsStateWithLifecycle()
     val trackerStatus by ExploreLocationTracker.trackerStatus.collectAsStateWithLifecycle()
+    val trackerInfo by ExploreLocationTracker.trackerInfo.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var tileToDelete by remember { mutableStateOf<ExploredTile?>(null) }
@@ -175,6 +176,14 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                 )
             }
 
+            TrackerDebugInfo(
+                info = trackerInfo,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 12.dp)
+            )
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -275,6 +284,55 @@ private fun StatCard(
                 fontWeight = FontWeight.Bold
             )
         }
+    }
+}
+
+@Composable
+private fun TrackerDebugInfo(info: ExploreTrackerInfo, modifier: Modifier = Modifier) {
+    NeonBox(
+        modifier = modifier,
+        borderWidth = 2.dp,
+        neonColors = listOf(Color(0xFF00FFAA), Color(0xFF00CCFF)),
+        backgroundAlpha = 0.15f,
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp)
+        ) {
+            DebugLine("Zuhause", "%.6f, %.6f".format(info.homeLat, info.homeLng))
+            DebugLine(
+                "Letzte Position",
+                if (info.lastLat != null && info.lastLng != null)
+                    "%.6f, %.6f".format(info.lastLat, info.lastLng)
+                else "—"
+            )
+            DebugLine(
+                "Distanz zuhause",
+                info.distanceToHomeMeters?.let { "%.0f m".format(it) } ?: "—"
+            )
+            DebugLine("Letztes Update", info.lastUpdate ?: "—")
+            DebugLine(
+                "Geofence",
+                if (info.geofenceRegistered) "aktiv"
+                else info.geofenceError?.let { "Fehler: $it" } ?: "nicht registriert"
+            )
+            DebugLine(
+                "Heim-WLAN",
+                info.lastWifiHome?.let { if (it) "verbunden" else "nicht verbunden" } ?: "—"
+            )
+            DebugLine("Nachtmodus", if (info.isNight) "ja" else "nein")
+            DebugLine("Enabled", if (info.isEnabled) "ja" else "nein")
+        }
+    }
+}
+
+@Composable
+private fun DebugLine(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(text = label, color = Color(0xFF9090A0), fontSize = 11.sp)
+        Text(text = value, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
     }
 }
 
