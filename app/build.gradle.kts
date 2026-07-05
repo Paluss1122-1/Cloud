@@ -23,7 +23,7 @@ android {
     defaultConfig {
         applicationId = "com.paluss1122.tabslify"
         minSdk = 35
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "pre-beta 1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
