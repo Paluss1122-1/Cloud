@@ -206,6 +206,18 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     realDevice = !getDeviceName().trim().contains("sdk_gphone", ignoreCase = true)
     var landingReloadTrigger by remember { mutableIntStateOf(0) }
 
+    val appPrefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
+    var showFirstStartPermissionInfo by remember {
+        mutableStateOf(!appPrefs.getBoolean("has_seen_permission_info", false))
+    }
+    if (showFirstStartPermissionInfo) {
+        PermissionInfoScreen(onClose = {
+            appPrefs.edit { putBoolean("has_seen_permission_info", true) }
+            showFirstStartPermissionInfo = false
+        })
+        return
+    }
+
     if (realDevice && prvt()) {
         if (masterPw == null || Config.masterPassword.isEmpty()) {
             MasterPasswordSetupScreen { pw ->
@@ -622,7 +634,7 @@ fun LandingPage(
     val allTabsSorted = remember {
         MenuItem.entries.filter {
             it != MenuItem.APKM_INSTALLER &&
-                (prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD && it != MenuItem.REMOTEDESKTOP && it != MenuItem.PC_MANAGER))
+                    (!prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD && it != MenuItem.REMOTEDESKTOP && it != MenuItem.PC_MANAGER))
         }.sortedBy { it.title }
     }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
@@ -898,6 +910,276 @@ fun TabCard(
 }
 
 @Composable
+fun PermissionInfoScreen(onClose: () -> Unit) {
+    var selectedPermission by remember { mutableStateOf<String?>(null) }
+    var titleDialog by remember { mutableStateOf("") }
+    var usagesDialog by remember { mutableStateOf<List<String>>(emptyList()) }
+    val permissionUsages = remember {
+        mapOf(
+            "READ_MEDIA_AUDIO" to listOf(
+                "MediaPlayerService & Tab: Songs & Podcasts abspielen",
+                "SpotifyDownloader: Speichern von Audiodateien im MediaStore"
+            ),
+            "POST_NOTIFICATIONS" to listOf(
+                "QuietHoursNotificationService: Anzeigen von Quiet-Hours Benachrichtigungen",
+                "MediaPlayerService: Wiedergabenotifikationen",
+                "Status-Updates für laufende Downloads",
+                "ChargingTrackerService: Ladeinformationen",
+                "NetworkInfo: Netzwerkinfos",
+                "BatteryInfo: Batterieinformationen"
+            ),
+            "ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION" to listOf(
+                "Standortbasierte Wettervorhersage im WeatherTab",
+                "ExploreTab & ExploreLocationTracker: Standortverfolgung und Geofencing",
+                "showNetwerkInfo: Anzeige der WLAN-SSID"
+            ),
+            "SYSTEM_ALERT_WINDOW" to listOf(
+                "QuietHoursNotificationService: Test-Overlay für YouTube"
+            ),
+            "FOREGROUND_SERVICE" to listOf(
+                "MediaPlayerService: Medienwiedergabe im Vordergrund",
+                "QuietHoursNotificationService: Dauerhafte Benachrichtigungen",
+                "ChargingTrackerService: Ladeüberwachung",
+                "AudioForegroundService: Audioaufnahmen"
+            ),
+            "READ_MEDIA_IMAGES / READ_MEDIA_VIDEO" to listOf(
+                "GalleryTab: Anzeige von Bildern und Videos aus der Galerie"
+            ),
+            "READ_CONTACTS / WRITE_CONTACTS" to listOf(
+                "ContactsTab: Laden, Speichern und Löschen von Kontakten"
+            ),
+            "RECEIVE_BOOT_COMPLETED" to listOf(
+                "BootReceiver: Starten von QuietHoursNotificationService beim Gerätestart"
+            ),
+            "RECORD_AUDIO" to listOf(
+                "AudioRecorderTab & AudioForegroundService: Audioaufnahmen mit Mikrofon"
+            ),
+            "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" to listOf(
+                "QuietHoursNotificationService: Anfrage zum Ignorieren von Batterieoptimierungen für zuverlässige Hintergrunddienste"
+            ),
+            "CAMERA" to listOf(
+                "Authenticator: Scannen von QR Codes für 2FA"
+            )
+        )
+    }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0C1017))
+            .windowInsetsPadding(WindowInsets.systemBars)
+    ) {
+        val hazeState = remember { HazeState() }
+        var headerHeightDp by remember { mutableStateOf(0.dp) }
+        val density = LocalDensity.current
+
+        run {
+            @Composable
+            fun PermissionButton(txt: String) {
+                val shape = RoundedCornerShape(22.dp)
+                val isSelected = selectedPermission == txt
+
+                Button(
+                    onClick = {
+                        selectedPermission = txt
+                        titleDialog = txt
+                        usagesDialog = permissionUsages[txt] ?: listOf("Keine Angaben hinterlegt")
+                    },
+                    shape = shape,
+                    colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) APP_COLOR.copy(alpha = 0.3f) else Color.Transparent),
+                    modifier = Modifier
+                        .padding(vertical = 5.dp)
+                        .fillMaxWidth()
+                        .clip(shape)
+                        .background(if (isSelected) APP_COLOR.copy(alpha = 0.3f) else APP_COLOR)
+                        .animateContentSize()
+                        .border(
+                            BorderStroke(
+                                1.dp,
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFFFF368A),
+                                        Color(0xFF7C4DFF)
+                                    )
+                                )
+                            ),
+                            shape
+                        )
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(txt, modifier = Modifier.weight(1f), fontSize = 16.sp)
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowForwardIos,
+                            contentDescription = "Open information",
+                            tint = Color.White.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 15.dp)
+            ) {
+                Spacer(Modifier.height(headerHeightDp))
+
+                PermissionButton("READ_MEDIA_AUDIO")
+                PermissionButton("POST_NOTIFICATIONS")
+                PermissionButton("ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION")
+                PermissionButton("SYSTEM_ALERT_WINDOW")
+                PermissionButton("FOREGROUND_SERVICE")
+                PermissionButton("READ_MEDIA_IMAGES / READ_MEDIA_VIDEO")
+                PermissionButton("READ_CONTACTS / WRITE_CONTACTS")
+                PermissionButton("CAMERA")
+                PermissionButton("RECEIVE_BOOT_COMPLETED")
+                PermissionButton("RECORD_AUDIO")
+                PermissionButton("REQUEST_IGNORE_BATTERY_OPTIMIZATIONS")
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .hazeEffect(
+                    state = hazeState,
+                    style = HazeStyle(
+                        backgroundColor = Color(0xFF0C1017),
+                        tint = HazeTint(Color(0xFF0C1017).copy(alpha = 0.7f)),
+                        blurRadius = 60.dp,
+                        noiseFactor = 0f
+                    )
+                ) {
+                    progressive = HazeProgressive.verticalGradient(
+                        startIntensity = 1f,
+                        endIntensity = 0f,
+                        preferPerformance = true
+                    )
+                }
+                .onGloballyPositioned {
+                    headerHeightDp = with(density) { it.size.height.toDp() }
+                }
+                .padding(horizontal = 15.dp)
+                .padding(bottom = 16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Tabslify Berechtigungen",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 5.dp),
+                    fontSize = 22.sp
+                )
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.background(
+                        Color.White.copy(alpha = 0.1f),
+                        CircleShape
+                    )
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = Color.White
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Text(
+                text = buildAnnotatedString {
+                    append("Tabslify ist ")
+                    withStyle(
+                        SpanStyle(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFFFF368A),
+                                    Color(0xFF7C4DFF)
+                                )
+                            )
+                        )
+                    ) {
+                        append("nicht nur irgendeine App")
+                    }
+                    append(", sie ist ein ")
+                    withStyle(
+                        SpanStyle(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFFFF368A),
+                                    Color(0xFF7C4DFF)
+                                )
+                            )
+                        )
+                    ) {
+                        append("Mix aus ganz vielen")
+                    }
+                    append(" Apps, unter anderem für die Schule, zum eigenen Erfolg tracken oder zum Podcast hören. \nDieser Mix aus Funktionen benötigt ")
+                    withStyle(
+                        SpanStyle(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFFFF368A),
+                                    Color(0xFF7C4DFF)
+                                )
+                            )
+                        )
+                    ) {
+                        append("jeweils viele Berechtigungen")
+                    }
+                    append(" um das Benutzererlebnis ")
+                    withStyle(
+                        SpanStyle(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFFFF368A),
+                                    Color(0xFF7C4DFF)
+                                )
+                            )
+                        )
+                    ) {
+                        append("möglichst unkompliziert")
+                    }
+                    append(" zu halten.")
+                },
+                color = APP_COLOR.copy(
+                    red = APP_COLOR.red + .6f,
+                    green = APP_COLOR.green + .6f,
+                    blue = APP_COLOR.blue + .6f
+                ),
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                fontFamily = FontFamily.Default
+            )
+        }
+
+        AnimatedVisibility(
+            visible = selectedPermission != null,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut()
+        ) {
+            DialogTabslify(
+                onConfirm = { selectedPermission = null },
+                onDismiss = { selectedPermission = null },
+                title = titleDialog,
+                text = usagesDialog.joinToString("\n\n") { "•  $it" },
+                confirmText = "Schließen",
+                oneButton = true,
+                modifier = Modifier.fillMaxWidth(0.9f)
+            )
+        }
+    }
+}
+
+@Composable
 fun SettingsFrame(
     visible: Boolean,
     onClose: () -> Unit
@@ -919,55 +1201,6 @@ fun SettingsFrame(
             onClose()
         }
     }
-
-    var titleDialog by remember { mutableStateOf("") }
-    var usagesDialog by remember { mutableStateOf<List<String>>(emptyList()) }
-    val permissionUsages = mapOf(
-        "READ_MEDIA_AUDIO" to listOf(
-            "MediaPlayerService & Tab: Songs & Podcasts abspielen",
-            "SpotifyDownloader: Speichern von Audiodateien im MediaStore"
-        ),
-        "POST_NOTIFICATIONS" to listOf(
-            "QuietHoursNotificationService: Anzeigen von Quiet-Hours Benachrichtigungen",
-            "MediaPlayerService: Wiedergabenotifikationen",
-            "Status-Updates für laufende Downloads",
-            "ChargingTrackerService: Ladeinformationen",
-            "NetworkInfo: Netzwerkinfos",
-            "BatteryInfo: Batterieinformationen"
-        ),
-        "ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION" to listOf(
-            "Standortbasierte Wettervorhersage im WeatherTab",
-            "ExploreTab & ExploreLocationTracker: Standortverfolgung und Geofencing",
-            "showNetwerkInfo: Anzeige der WLAN-SSID"
-        ),
-        "SYSTEM_ALERT_WINDOW" to listOf(
-            "QuietHoursNotificationService: Test-Overlay für YouTube"
-        ),
-        "FOREGROUND_SERVICE" to listOf(
-            "MediaPlayerService: Medienwiedergabe im Vordergrund",
-            "QuietHoursNotificationService: Dauerhafte Benachrichtigungen",
-            "ChargingTrackerService: Ladeüberwachung",
-            "AudioForegroundService: Audioaufnahmen"
-        ),
-        "READ_MEDIA_IMAGES / READ_MEDIA_VIDEO" to listOf(
-            "GalleryTab: Anzeige von Bildern und Videos aus der Galerie"
-        ),
-        "READ_CONTACTS / WRITE_CONTACTS" to listOf(
-            "ContactsTab: Laden, Speichern und Löschen von Kontakten"
-        ),
-        "RECEIVE_BOOT_COMPLETED" to listOf(
-            "BootReceiver: Starten von QuietHoursNotificationService beim Gerätestart"
-        ),
-        "RECORD_AUDIO" to listOf(
-            "AudioRecorderTab & AudioForegroundService: Audioaufnahmen mit Mikrofon"
-        ),
-        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" to listOf(
-            "QuietHoursNotificationService: Anfrage zum Ignorieren von Batterieoptimierungen für zuverlässige Hintergrunddienste"
-        ),
-        "CAMERA" to listOf(
-            "Authenticator: Scannen von QR Codes für 2FA"
-        )
-    )
 
     var masterEnabled by remember { mutableStateOf(prefs.getBoolean("services_master", false)) }
     var servicesExpanded by remember { mutableStateOf(false) }
@@ -1668,8 +1901,6 @@ fun SettingsFrame(
             }
         }
 
-        var selectedPermission by remember { mutableStateOf<String?>(null) }
-
         AnimatedVisibility(
             visible = showPermissionInfo && animatePermissionInfo,
             enter = fadeIn() + expandVertically(),
@@ -1683,206 +1914,7 @@ fun SettingsFrame(
                     animatePermissionInfo = false
                 }
             }
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFF0C1017))
-                    .windowInsetsPadding(WindowInsets.systemBars)
-            ) {
-                val hazeState = remember { HazeState() }
-                var headerHeightDp by remember { mutableStateOf(0.dp) }
-                val density = LocalDensity.current
-
-                run {
-                    @Composable
-                    fun PermissionButton(txt: String) {
-                        val shape = RoundedCornerShape(22.dp)
-                        val isSelected = selectedPermission == txt
-
-                        Button(
-                            onClick = {
-                                selectedPermission = txt
-                                titleDialog = txt
-                                usagesDialog = permissionUsages[txt] ?: listOf("Keine Angaben hinterlegt")
-                            },
-                            shape = shape,
-                            colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) APP_COLOR.copy(alpha = 0.3f) else Color.Transparent),
-                            modifier = Modifier
-                                .padding(vertical = 5.dp)
-                                .fillMaxWidth()
-                                .clip(shape)
-                                .background(if (isSelected) APP_COLOR.copy(alpha = 0.3f) else APP_COLOR)
-                                .animateContentSize()
-                                .border(
-                                    BorderStroke(
-                                        1.dp,
-                                        Brush.linearGradient(
-                                            colors = listOf(
-                                                Color(0xFFFF368A),
-                                                Color(0xFF7C4DFF)
-                                            )
-                                        )
-                                    ),
-                                    shape
-                                )
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(txt, modifier = Modifier.weight(1f), fontSize = 16.sp)
-                                Icon(
-                                    Icons.AutoMirrored.Filled.ArrowForwardIos,
-                                    contentDescription = "Open information",
-                                    tint = Color.White.copy(alpha = 0.8f)
-                                )
-                            }
-                        }
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .hazeSource(state = hazeState)
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 15.dp)
-                    ) {
-                        // Platzhalter in Höhe des Headers, damit die Liste darunter startet
-                        Spacer(Modifier.height(headerHeightDp))
-
-                        // man soll nur in dieser column scrollen können, Items blurren dabei unter dem Header
-                        PermissionButton("READ_MEDIA_AUDIO")
-                        PermissionButton("POST_NOTIFICATIONS")
-                        PermissionButton("ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION")
-                        PermissionButton("SYSTEM_ALERT_WINDOW")
-                        PermissionButton("FOREGROUND_SERVICE")
-                        PermissionButton("READ_MEDIA_IMAGES / READ_MEDIA_VIDEO")
-                        PermissionButton("READ_CONTACTS / WRITE_CONTACTS")
-                        PermissionButton("CAMERA")
-                        PermissionButton("RECEIVE_BOOT_COMPLETED")
-                        PermissionButton("RECORD_AUDIO")
-                        PermissionButton("REQUEST_IGNORE_BATTERY_OPTIMIZATIONS")
-                    }
-                }
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .hazeEffect(
-                            state = hazeState,
-                            style = HazeStyle(
-                                backgroundColor = Color(0xFF0C1017),
-                                tint = HazeTint(Color(0xFF0C1017).copy(alpha = 0.7f)),
-                                blurRadius = 60.dp,
-                                noiseFactor = 0f
-                            )
-                        ) {
-                            progressive = HazeProgressive.verticalGradient(
-                                startIntensity = 1f,
-                                endIntensity = 0f,
-                                preferPerformance = true
-                            )
-                        }
-                        .onGloballyPositioned {
-                            headerHeightDp = with(density) { it.size.height.toDp() }
-                        }
-                        .padding(horizontal = 15.dp)
-                        .padding(bottom = 16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "Tabslify Berechtigungen",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(start = 5.dp),
-                            fontSize = 22.sp
-                        )
-                        IconButton(
-                            onClick = { showPermissionInfo = false },
-                            modifier = Modifier.background(
-                                Color.White.copy(alpha = 0.1f),
-                                CircleShape
-                            )
-                        ) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Close",
-                                tint = Color.White
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-
-                    Text(
-                        text = buildAnnotatedString {
-                            append("Tabslify ist ")
-                            withStyle(
-                                SpanStyle(
-                                    brush = Brush.linearGradient(
-                                        colors = listOf(
-                                            Color(0xFFFF368A),
-                                            Color(0xFF7C4DFF)
-                                        )
-                                    )
-                                )
-                            ) {
-                                append("nicht nur irgendeine App")
-                            }
-                            append(", sie ist ein ")
-                            withStyle(
-                                SpanStyle(
-                                    brush = Brush.linearGradient(
-                                        colors = listOf(
-                                            Color(0xFFFF368A),
-                                            Color(0xFF7C4DFF)
-                                        )
-                                    )
-                                )
-                            ) {
-                                append("Mix aus ganz vielen")
-                            }
-                            append(" Apps, unter anderem für die Schule, zum eigenen Erfolg tracken oder zum Podcast hören. \nDieser Mix aus Funktionen benötigt ")
-                            withStyle(
-                                SpanStyle(
-                                    brush = Brush.linearGradient(
-                                        colors = listOf(
-                                            Color(0xFFFF368A),
-                                            Color(0xFF7C4DFF)
-                                        )
-                                    )
-                                )
-                            ) {
-                                append("jeweils viele Berechtigungen")
-                            }
-                            append(" um das Benutzererlebnis ")
-                            withStyle(
-                                SpanStyle(
-                                    brush = Brush.linearGradient(
-                                        colors = listOf(
-                                            Color(0xFFFF368A),
-                                            Color(0xFF7C4DFF)
-                                        )
-                                    )
-                                )
-                            ) {
-                                append("möglichst unkompliziert")
-                            }
-                            append(" zu halten.")
-                        },
-                        color = APP_COLOR.copy(
-                            red = APP_COLOR.red + .6f,
-                            green = APP_COLOR.green + .6f,
-                            blue = APP_COLOR.blue + .6f
-                        ),
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp,
-                        fontFamily = FontFamily.Default
-                    )
-                }
-            }
+            PermissionInfoScreen(onClose = { showPermissionInfo = false })
         }
 
         AnimatedVisibility(
@@ -2026,22 +2058,6 @@ fun SettingsFrame(
                     Spacer(Modifier.height(32.dp))
                 }
             }
-        }
-
-        AnimatedVisibility(
-            visible = selectedPermission != null,
-            enter = fadeIn() + scaleIn(),
-            exit = fadeOut() + scaleOut()
-        ) {
-            DialogTabslify(
-                onConfirm = { selectedPermission = null },
-                onDismiss = { selectedPermission = null },
-                title = titleDialog,
-                text = usagesDialog.joinToString("\n\n") { "•  $it" },
-                confirmText = "Schließen",
-                oneButton = true,
-                modifier = Modifier.fillMaxWidth(0.9f)
-            )
         }
     }
 }
