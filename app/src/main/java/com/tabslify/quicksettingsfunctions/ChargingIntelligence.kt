@@ -246,7 +246,11 @@ class ChargingTrackerService : Service() {
     override fun onCreate() {
         super.onCreate()
         val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
-        if (!prefs.getBoolean("services_master", false) || !prefs.getBoolean("service_charge", false)) {
+        if (!prefs.getBoolean("services_master", false) || !prefs.getBoolean(
+                "service_charge",
+                false
+            )
+        ) {
             stopSelf()
             return
         }
@@ -368,11 +372,15 @@ suspend fun predictChargingTime(context: Context): Int? {
     val usageStats = runCatching {
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val now = System.currentTimeMillis()
-        usm.queryUsageStats(UsageStatsManager.INTERVAL_WEEKLY, now - 28L * 86400000, now)
-            .filter { it.totalTimeInForeground > 0 }
-            .sortedByDescending { it.totalTimeInForeground }
-            .take(5)
-            .joinToString(", ") { "${it.packageName.substringAfterLast('.')}: ${it.totalTimeInForeground / 60000}min" }
+        if (context.checkSelfPermission(android.Manifest.permission.PACKAGE_USAGE_STATS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            return@runCatching "Berechtigung fehlt (PACKAGE_USAGE_STATS)"
+        } else {
+            usm.queryUsageStats(UsageStatsManager.INTERVAL_WEEKLY, now - 28L * 86400000, now)
+                .filter { it.totalTimeInForeground > 0 }
+                .sortedByDescending { it.totalTimeInForeground }
+                .take(5)
+                .joinToString(", ") { "${it.packageName.substringAfterLast('.')}: ${it.totalTimeInForeground / 60000}min" }
+        }
     }.getOrElse { "Berechtigung fehlt (PACKAGE_USAGE_STATS)" }
 
     val prompt = buildString {
