@@ -4,9 +4,9 @@
 > Media player, browser, password & 2FA manager, notes, weather, movies, gallery, contacts, calendar, vocab trainer, AI chat — bundled into a single, privacy-first Android app.
 
 > [!IMPORTANT]
-> RELASE IN 1h! (1:00 AM · Jul 6, 26)
+> RELASE IN NEXT DAYS
 >
-> <sub><sub>12:00 AM · Jul 6, 26</sub></sub>
+> <sub><sub>01:00 AM · Jul 6, 26</sub></sub>
 
 Tabslify is a powerful, multi-functional Android application with **ONE** goal: **replacing** and **improving** third-party apps with a **single** app — **no tracking** (optional tracking for the Music Player for AI analysis, disabled by default), **optional server binding**, and **enhanced privacy**.
 
