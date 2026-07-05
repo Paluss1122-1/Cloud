@@ -8,10 +8,6 @@
 >
 > <sub><sub>12:00 AM · Jul 6, 26</sub></sub>
 
-> [!TIP]
-> Tabslify is compatible with Samsung OneUI 8.5  
-> <sub><sub>9:11 PM · 5/19/2026</sub></sub>
-
 Tabslify is a powerful, multi-functional Android application with **ONE** goal: **replacing** and **improving** third-party apps with a **single** app — **no tracking** (optional tracking for the Music Player for AI analysis, disabled by default), **optional server binding**, and **enhanced privacy**.
 
 ## Why Tabslify?
