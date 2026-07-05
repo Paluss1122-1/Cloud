@@ -2,6 +2,7 @@
 
 package com.tabslify.inactive.exclude
 
+import android.annotation.SuppressLint
 import android.app.usage.UsageStats
 import android.app.usage.UsageStatsManager
 import android.content.Context
@@ -25,6 +26,7 @@ data class AppUsageInfo(
  * @param days     Anzahl der Tage, die ausgelesen werden sollen (Standard: 7)
  * @return         Sortierte Liste der App-Nutzung (meistgenutzt zuerst), oder null bei fehlendem Zugriff
  */
+@SuppressLint("MissingPermission")
 fun getAppUsageStats(context: Context, days: Int = 7): List<AppUsageInfo>? {
 
     if (!hasUsageStatsPermission(context)) {
@@ -75,6 +77,7 @@ fun getAppUsageStats(context: Context, days: Int = 7): List<AppUsageInfo>? {
     return aggregatedMap.values.sortedByDescending { it.totalTimeInForeground }
 }
 
+@SuppressLint("MissingPermission")
 fun getForegroundTimePerApp(context: Context, days: Int = 7): Map<String, Long> {
     val usageStatsManager =
         context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
@@ -97,6 +100,7 @@ fun getForegroundTimePerApp(context: Context, days: Int = 7): Map<String, Long> 
 /**
  * Prüft, ob die PACKAGE_USAGE_STATS Berechtigung erteilt wurde.
  */
+@SuppressLint("MissingPermission")
 fun hasUsageStatsPermission(context: Context): Boolean {
     val usageStatsManager =
         context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
