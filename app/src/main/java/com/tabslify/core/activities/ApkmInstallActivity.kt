@@ -89,6 +89,7 @@ import com.tabslify.core.ui.Typography
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.core.net.toUri
 
 /** UI-Phasen des Installers. */
 private enum class Phase { LOADING, ERROR, READY, INSTALLING, SUCCESS, FAILURE }
@@ -97,7 +98,6 @@ class ApkmInstallActivity : ComponentActivity() {
 
     private lateinit var installer: ApkmInstaller
 
-    // --- Reaktiver UI-State ---
     private var phase by mutableStateOf(Phase.LOADING)
     private var loadText by mutableStateOf("Bundle wird vorbereitet…")
     private var loadProgress by mutableStateOf<Float?>(null)
@@ -208,10 +208,10 @@ class ApkmInstallActivity : ComponentActivity() {
     }
 
     private fun requestInstallPermission() {
-        val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))
+        val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+            "package:$packageName".toUri())
         runCatching { unknownSourcesLauncher.launch(intent) }
             .onFailure {
-                // Fallback: generische Seite
                 unknownSourcesLauncher.launch(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES))
             }
     }
