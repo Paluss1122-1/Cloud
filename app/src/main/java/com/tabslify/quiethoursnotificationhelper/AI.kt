@@ -204,7 +204,7 @@ private suspend fun sendNvidiaChatMessageAITab(
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("X-Android-Cert", sha256)
                 connectTimeout = 15_000
-                readTimeout = 60_000
+                readTimeout = if (onToken != null) 0 else 60_000
                 doOutput = true
             }
             connection.outputStream.use { it.write(requestBody.toByteArray(Charsets.UTF_8)) }
