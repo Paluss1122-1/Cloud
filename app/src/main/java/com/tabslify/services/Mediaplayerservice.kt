@@ -554,7 +554,7 @@ class MediaPlayerService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
-        if (!prefs.getBoolean("services_master", false) || !prefs.getBoolean("service_media", false)) {
+        if (!prefs.getBoolean("services_master", true) || !prefs.getBoolean("service_media", false)) {
             stopSelf()
             return
         }
@@ -1135,7 +1135,7 @@ class MediaPlayerService : MediaSessionService() {
 
             override fun loadBitmap(uri: Uri): ListenableFuture<Bitmap> {
                 val future = SettableFuture.create<Bitmap>()
-                CoroutineScope(Dispatchers.IO).launch {
+                appScope.launch(Dispatchers.IO) {
                     try {
                         val retriever = MediaMetadataRetriever()
                         try {
@@ -1167,7 +1167,7 @@ class MediaPlayerService : MediaSessionService() {
 
             override fun decodeBitmap(data: ByteArray): ListenableFuture<Bitmap> {
                 val future = SettableFuture.create<Bitmap>()
-                CoroutineScope(Dispatchers.IO).launch {
+                appScope.launch(Dispatchers.IO) {
                     try {
                         val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size)
                         if (bitmap != null) {
@@ -1330,7 +1330,7 @@ class MediaPlayerService : MediaSessionService() {
                 musicPrefs.editAsync { putBoolean("is_playing", true) }
 
                 // Extract metadata and update media session
-                CoroutineScope(Dispatchers.IO).launch {
+                appScope.launch(Dispatchers.IO) {
                     try {
                         val retriever = MediaMetadataRetriever()
                         try {
