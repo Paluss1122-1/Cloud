@@ -158,11 +158,6 @@ fun PodcastTab() {
         error = null
         results = emptyList()
         try {
-            val sha256 = Config.getAppSignatureSha256(context) ?: run {
-                error = "App-Signatur konnte nicht validiert werden"
-                return
-            }
-
             val requestBody = JSONObject().apply {
                 put("action", "podcastindex")
                 put("payload", JSONObject().apply {
@@ -176,17 +171,13 @@ fun PodcastTab() {
                         }"
                     )
                 })
+                put("apiKey", Config.userApiKey(context, "podcastindex"))
+                put("apiSecret", Config.userApiKey(context, "podcastindex_secret"))
             }.toString()
 
-            val conn = withContext(Dispatchers.IO) {
-                (URL("${Config.SUPABASE_URL}/functions/v1/api-proxy").openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    setRequestProperty("Authorization", "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}")
-                    setRequestProperty("Content-Type", "application/json")
-                    setRequestProperty("X-Android-Cert", sha256)
-                    doOutput = true
-                    connect()
-                }
+            val conn = Config.openApiProxyConnection(context) ?: run {
+                error = "App-Signatur konnte nicht validiert werden"
+                return
             }
             withContext(Dispatchers.IO) {
                 conn.outputStream.use { it.write(requestBody.toByteArray(Charsets.UTF_8)) }
