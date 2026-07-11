@@ -18,21 +18,30 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -63,6 +72,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -105,7 +115,8 @@ import kotlin.time.Duration.Companion.milliseconds
 data class WeatherRequest(
     val lat: Double,
     val lon: Double,
-    val days: Int
+    val days: Int,
+    val apiKey: String = ""
 )
 
 data class HourData(
@@ -151,12 +162,17 @@ fun iconToEmoji(icon: String): String {
     }
 }
 
-suspend fun fetchWeatherForecast(lat: Double, lon: Double, days: Int = 7): WeatherData =
+suspend fun fetchWeatherForecast(
+    lat: Double,
+    lon: Double,
+    days: Int = 7,
+    apiKey: String = ""
+): WeatherData =
     withContext(Dispatchers.IO) {
 
         val response = client.functions.invoke(
             function = "weather-api",
-            body = WeatherRequest(lat = lat, lon = lon, days = days)
+            body = WeatherRequest(lat = lat, lon = lon, days = days, apiKey = apiKey)
         )
 
         val json = Json.parseToJsonElement(response.bodyAsText()).jsonObject
@@ -310,6 +326,9 @@ fun WeatherTabContent(
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var selectionState by remember { mutableStateOf(SelectionState(hour = null, dayIndex = null)) }
+    var showBackHint by remember { mutableStateOf(false) }
+    val backHintPrefs =
+        remember { ctx.getSharedPreferences("tabslify_weather", Context.MODE_PRIVATE) }
     var weather by remember { mutableStateOf<WeatherData?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -347,6 +366,14 @@ fun WeatherTabContent(
         )
     }
 
+    // Show the back-navigation hint the first time the user opens a day.
+    LaunchedEffect(selectionState.dayIndex) {
+        if (selectionState.dayIndex != null && !backHintPrefs.getBoolean("seen_back_hint", false)) {
+            showBackHint = true
+            backHintPrefs.edit().putBoolean("seen_back_hint", true).apply()
+        }
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             viewModel.reset()
@@ -354,10 +381,14 @@ fun WeatherTabContent(
     }
 
     BackHandler(enabled = selectionState.hour != null || selectionState.dayIndex != null) {
-        selectionState = if (selectionState.hour != null) {
-            selectionState.copy(hour = null)
+        if (showBackHint) {
+            showBackHint = false
         } else {
-            selectionState.copy(dayIndex = null)
+            selectionState = if (selectionState.hour != null) {
+                selectionState.copy(hour = null)
+            } else {
+                selectionState.copy(dayIndex = null)
+            }
         }
     }
 
@@ -423,7 +454,12 @@ fun WeatherTabContent(
                 return@launch
             }
             try {
-                weather = fetchWeatherForecast(loc.latitude, loc.longitude, days = 14)
+                weather = fetchWeatherForecast(
+                    loc.latitude,
+                    loc.longitude,
+                    days = 14,
+                    apiKey = Config.userApiKey(ctx, "weatherapi")
+                )
             } catch (e: Exception) {
                 error = "Fehler: ${e.message}"
             } finally {
@@ -450,7 +486,12 @@ fun WeatherTabContent(
                 if (coords == null) {
                     error = "Ort nicht gefunden: $query"
                 } else {
-                    weather = fetchWeatherForecast(coords.first, coords.second, days = 14)
+                    weather = fetchWeatherForecast(
+                        coords.first,
+                        coords.second,
+                        days = 14,
+                        apiKey = Config.userApiKey(ctx, "weatherapi")
+                    )
                 }
             } catch (e: Exception) {
                 error = "Fehler: ${e.message}"
@@ -486,130 +527,275 @@ fun WeatherTabContent(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    PullToRefreshBox(
-        isRefreshing = isLoading,
-        onRefresh = {
-            selectionState = SelectionState(hour = null, dayIndex = null)
-            refreshWeather()
-        },
-        modifier = Modifier
-            .fillMaxSize()
-            .alpha(alpha.value),
-        indicator = {}
-    ) {
-        Column(
+    Box(modifier = Modifier.fillMaxSize()) {
+        PullToRefreshBox(
+            isRefreshing = isLoading,
+            onRefresh = {
+                selectionState = SelectionState(hour = null, dayIndex = null)
+                refreshWeather()
+            },
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Transparent)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp)
+                .alpha(alpha.value),
+            indicator = {}
         ) {
-            if (error != null) {
-                Text(error!!, color = Color.Red, modifier = Modifier.padding(vertical = 8.dp))
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Transparent)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp)
             ) {
-                OutlinedTextField(
-                    value = searchText,
-                    onValueChange = { searchText = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text("Ort suchen...", color = Color.Gray) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF6B6BFF),
-                        unfocusedBorderColor = Color(0xFF44444F),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        cursorColor = Color(0xFF6B6BFF)
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { searchWeather(searchText) })
-                )
-                Spacer(Modifier.width(8.dp))
-                IconButton(onClick = { searchWeather(searchText) }) {
-                    Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White)
+                if (error != null) {
+                    Text(error!!, color = Color.Red, modifier = Modifier.padding(vertical = 8.dp))
                 }
-                if (ActivityCompat.checkSelfPermission(
-                        ctx,
-                        Manifest.permission.ACCESS_FINE_LOCATION
-                    ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
-                        ctx,
-                        Manifest.permission.ACCESS_COARSE_LOCATION
-                    ) != PackageManager.PERMISSION_GRANTED
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Spacer(Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                animIconbgColor.value.copy(alpha = animIconbg.value),
-                                shape = RoundedCornerShape(100)
-                            )
-                            .clip(RoundedCornerShape(8.dp))
-                    ) {
-                        IconButton(onClick = { manualLoc() }) {
-                            Icon(
-                                Icons.Default.LocationOff,
-                                contentDescription = null,
-                                tint = Color.White
-                            )
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-
-            AnimatedContent(
-                targetState = Triple(weather, selectionState.hour, selectionState.dayIndex),
-                transitionSpec = {
-                    fadeIn(animationSpec = tween(300)) togetherWith fadeOut(
-                        animationSpec = tween(
-                            300
-                        )
+                    OutlinedTextField(
+                        value = searchText,
+                        onValueChange = { searchText = it },
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("Ort suchen...", color = Color.Gray) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF6B6BFF),
+                            unfocusedBorderColor = Color(0xFF44444F),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = Color(0xFF6B6BFF)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { searchWeather(searchText) })
                     )
-                }
-            ) { (data, selHour, selDayIdx) ->
-                if (data == null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
-                        contentAlignment = Alignment.Center
+                    Spacer(Modifier.width(8.dp))
+                    IconButton(onClick = { searchWeather(searchText) }) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "Search",
+                            tint = Color.White
+                        )
+                    }
+                    if (ActivityCompat.checkSelfPermission(
+                            ctx,
+                            Manifest.permission.ACCESS_FINE_LOCATION
+                        ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                            ctx,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        ) != PackageManager.PERMISSION_GRANTED
                     ) {
-                        if (!isLoading) {
-                            Text("Keine Daten verfügbar", color = Color.LightGray)
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    animIconbgColor.value.copy(alpha = animIconbg.value),
+                                    shape = RoundedCornerShape(100)
+                                )
+                                .clip(RoundedCornerShape(8.dp))
+                        ) {
+                            IconButton(onClick = { manualLoc() }) {
+                                Icon(
+                                    Icons.Default.LocationOff,
+                                    contentDescription = null,
+                                    tint = Color.White
+                                )
+                            }
                         }
                     }
-                } else {
-                    when {
-                        selHour != null -> {
-                            SelectedHourView(hour = selHour)
-                        }
+                }
+                Spacer(Modifier.height(12.dp))
 
-                        selDayIdx != null -> {
-                            val days = data.days
-                            if (selDayIdx in days.indices) {
-                                DayHoursView(
-                                    days[selDayIdx],
-                                    onHourSelected = { hourData ->
-                                        selectionState = selectionState.copy(hour = hourData)
+                AnimatedContent(
+                    targetState = Triple(weather, selectionState.hour, selectionState.dayIndex),
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(300)) togetherWith fadeOut(
+                            animationSpec = tween(
+                                300
+                            )
+                        )
+                    }
+                ) { (data, selHour, selDayIdx) ->
+                    if (data == null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (!isLoading) {
+                                Text("Keine Daten verfügbar", color = Color.LightGray)
+                            }
+                        }
+                    } else {
+                        when {
+                            selHour != null -> {
+                                SelectedHourView(hour = selHour)
+                            }
+
+                            selDayIdx != null -> {
+                                val days = data.days
+                                if (selDayIdx in days.indices) {
+                                    DayHoursView(
+                                        days[selDayIdx],
+                                        onHourSelected = { hourData ->
+                                            selectionState = selectionState.copy(hour = hourData)
+                                        }
+                                    )
+                                }
+                            }
+
+                            else -> {
+                                MainView(
+                                    data = data,
+                                    onDaySelected = { idx ->
+                                        selectionState = selectionState.copy(dayIndex = idx)
                                     }
                                 )
                             }
                         }
-
-                        else -> {
-                            MainView(
-                                data = data,
-                                onDaySelected = { idx ->
-                                    selectionState = selectionState.copy(dayIndex = idx)
-                                }
-                            )
-                        }
                     }
+                }
+            }
+        }
+
+        if (showBackHint) {
+            BackHintOverlay(onDismiss = { showBackHint = false })
+        }
+    }
+}
+
+@Composable
+fun BackHintOverlay(onDismiss: () -> Unit) {
+    val infinite = rememberInfiniteTransition(label = "backhint")
+    val swipe by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "swipe"
+    )
+    val edgeAlpha by infinite.animateFloat(
+        initialValue = 0.28f,
+        targetValue = 0.85f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "edge"
+    )
+
+    val fingerAlpha = when {
+        swipe < 0.12f -> swipe / 0.12f
+        swipe > 0.62f -> (1f - swipe) / 0.38f
+        else -> 1f
+    }.coerceIn(0f, 1f)
+
+    val accentBrush = Brush.linearGradient(
+        listOf(Color(0xFFFF8A4C), Color(0xFFB45CFC), Color(0xFF6B4CFC))
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(listOf(Color(0xE0060509), Color(0xF2060509)))
+            )
+            // Swallow touches so the dimmed screen behind is not interactive.
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { }
+    ) {
+        // left-edge accent bar (pulsing)
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .fillMaxHeight()
+                .width(5.dp)
+                .alpha(edgeAlpha)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFFFF8A4C), Color(0xFFB45CFC), Color(0xFF6B4CFC))
+                    ),
+                    shape = RoundedCornerShape(topEnd = 4.dp, bottomEnd = 4.dp)
+                )
+        )
+
+        // animated swipe finger travelling from the left edge
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .offset(x = (14 + swipe * 160).dp, y = (-40).dp)
+                .size(52.dp)
+                .alpha(fingerAlpha)
+                .background(
+                    Brush.radialGradient(
+                        listOf(Color(0xF2FFFFFF), Color(0x59FFFFFF), Color(0x1FFFFFFF))
+                    ),
+                    shape = RoundedCornerShape(50)
+                )
+        )
+
+        Card(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1A2D)),
+            shape = RoundedCornerShape(26.dp)
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(100))
+                        .background(Color(0x29B45CFC))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text("💡", fontSize = 12.sp)
+                    Spacer(Modifier.width(7.dp))
+                    Text(
+                        "TIPP",
+                        color = Color(0xFFC9BEF7),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "Zurück zur Übersicht",
+                    color = Color(0xFFF7F5FB),
+                    fontSize = 23.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Du hast einen Tag geöffnet. Wische vom linken Rand nach rechts – oder nutze die Zurück-Geste deines Handys – um wieder zur Wetter-Übersicht zu gelangen.",
+                    color = Color(0xA8FFFFFF),
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp
+                )
+                Spacer(Modifier.height(22.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(accentBrush)
+                        .clickable { onDismiss() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "Verstanden",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }
