@@ -61,6 +61,7 @@ class DownloadRepositoryImpl(
                 put("payload", kotlinx.serialization.json.buildJsonObject {
                     put("songId", "https://open.spotify.com/track/$trackId")
                 })
+                put("apiKey", Config.userApiKey(context, "rapidapi"))
             }.toString()
 
             val response: HttpResponse =
