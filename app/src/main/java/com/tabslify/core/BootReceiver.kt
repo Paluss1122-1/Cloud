@@ -10,7 +10,7 @@ import com.tabslify.services.QuietHoursNotificationService
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val prefs = context.getSharedPreferences("app_prefs", MODE_PRIVATE)
-        if (!prefs.getBoolean("services_master", false) || !prefs.getBoolean("service_qhns", false)) {
+        if (!prefs.getBoolean("services_master", true) || !prefs.getBoolean("service_qhns", false)) {
             return
         }
 
