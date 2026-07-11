@@ -55,6 +55,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.activities.Tabslify.Companion.serviceScope
 import com.tabslify.core.functions.showSimpleNotificationExtern
+import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.SHOWCOMMANDS
 import com.tabslify.core.objects.Config.client
 import com.tabslify.core.objects.Config.fetchBWMP
@@ -825,7 +826,7 @@ private fun getAvailableCommands(context: Context): List<Command> {
 @OptIn(DelicateCoroutinesApi::class)
 fun executeCommand(commandText: String, context: Context) {
     val prefs = context.getSharedPreferences("app_prefs", MODE_PRIVATE)
-    if (!prefs.getBoolean("services_master", false) || !prefs.getBoolean("service_qhns", false)) {
+    if (!prefs.getBoolean("services_master", true) || !prefs.getBoolean("service_qhns", false)) {
         showSimpleNotificationExtern("Hintergrund Aktivität deaktiviert", "Du hast die Hintergrundaktivität deaktviert", context = context)
         return
     }
@@ -929,7 +930,8 @@ fun executeCommand(commandText: String, context: Context) {
                                         fetchWeatherForecast(
                                             loc.latitude,
                                             loc.longitude,
-                                            days = 14
+                                            days = 14,
+                                            apiKey = Config.userApiKey(context, "weatherapi")
                                         )
 
                                     weathernot(
@@ -1154,7 +1156,7 @@ fun executeCommand(commandText: String, context: Context) {
         }
 
         "gallerie", "gal", "g", "gallery" -> {
-            loadGalleryImages(argument?.toInt() ?: 0, context)
+            loadGalleryImages(argument?.toIntOrNull() ?: 0, context)
             return
         }
 
@@ -1166,7 +1168,7 @@ fun executeCommand(commandText: String, context: Context) {
 
         "pd", "pc", "Podcast", "podcast", "py" -> {
             if (argument != null) {
-                PodcastPlayerServiceCompat.sendForwardAction(context, argument.toInt() * 1000)
+                PodcastPlayerServiceCompat.sendForwardAction(context, (argument.toIntOrNull() ?: 0) * 1000)
             } else {
                 PodcastPlayerServiceCompat.startService(context)
                 PodcastPlayerServiceCompat.sendPlayAction(context)
@@ -1966,6 +1968,8 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
                         put("hour", hour)
                         put("targetDepartureTime", targetDepartureTime)
                         put("targetDestination", targetDestination)
+                        put("clientId", Config.userApiKey(context, "db_client_id"))
+                        put("apiKey", Config.userApiKey(context, "db_api_key"))
                     }
                 )
             }
