@@ -430,7 +430,7 @@ class QuietHoursNotificationService : Service() {
         super.onCreate()
         realDevice = !getDeviceName().trim().contains("sdk_gphone", ignoreCase = true)
         val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
-        if (!prefs.getBoolean("services_master", false) || !prefs.getBoolean("service_qhns", false)) {
+        if (!prefs.getBoolean("services_master", true) || !prefs.getBoolean("service_qhns", false)) {
             createNotificationChannel(this)
             startForeground(
                 NOTIFICATION_ID,
@@ -1193,7 +1193,7 @@ class QuietHoursNotificationService : Service() {
         }
         
         val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
-        val shouldRestart = prefs.getBoolean("services_master", false) &&
+        val shouldRestart = prefs.getBoolean("services_master", true) &&
                 prefs.getBoolean("service_qhns", false)
 
         if (shouldRestart) {
@@ -1235,7 +1235,7 @@ class QuietHoursNotificationService : Service() {
         startForeground(NOTIFICATION_ID, notification)
 
         val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
-        val shouldRestart = prefs.getBoolean("services_master", false) &&
+        val shouldRestart = prefs.getBoolean("services_master", true) &&
                 prefs.getBoolean("service_qhns", false)
 
         if (shouldRestart) {
