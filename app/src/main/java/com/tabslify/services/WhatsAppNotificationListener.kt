@@ -103,6 +103,28 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             return false
         }
 
+        /**
+         * Verwirft eine Notification exakt anhand ihres stabilen [sbn.key].
+         * Bevorzugt gegenüber der ID, da diese nicht app-übergreifend eindeutig ist.
+         */
+        fun cancelExternalNotificationByKey(key: String): Boolean {
+            val svc = instance?.get() ?: return false
+            if (!svc.listenerConnected) return false
+            return try {
+                val exists = svc.activeNotifications?.any { it.key == key } == true
+                if (exists) {
+                    svc.cancelNotification(key)
+                    Log.d("MessageListener", "Successfully cancelled notification by key: $key")
+                    true
+                } else {
+                    false
+                }
+            } catch (e: Exception) {
+                Log.w("MessageListener", "Failed to cancel notification by key $key: ${e.message}")
+                false
+            }
+        }
+
         fun keyFor(packageName: String, title: String): String = "$packageName|$title"
 
         fun isSupportedApp(packageName: String): Boolean {
@@ -165,6 +187,9 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                         put("text", text)
                         put("time", sbn.postTime)
                         put("id", sbn.id)
+                        // Stabile, eindeutige Identität für exaktes Verwerfen
+                        // und Dedupe auf PC/Website (sbn.id ist nicht app-übergreifend eindeutig).
+                        put("key", sbn.key)
                     })
                 }
 
@@ -201,11 +226,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        if (!prvt()) return
-        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
-        if (!prefs.getBoolean("services_master", false) || !prefs.getBoolean("service_wh", false)) {
-            return
-        }
+        if (!prvt() || !isWhForwardingEnabled()) return
         try {
             super.onNotificationPosted(sbn)
 
@@ -317,8 +338,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             val quietEnd = prefs.getString("quiet_hours_start", null)?.toIntOrNull() ?: 7
             val quietStart = prefs.getString("quiet_hours_end", null)?.toIntOrNull() ?: 21
 
-            // Fix: außerhalb der aktiven Stunden → zurückhalten
-            if (hour in quietStart..<quietEnd) return
+            if (hour !in quietEnd..<quietStart) return
 
             QuietHoursNotificationService.updateSingleSenderNotification(this, title)
         } catch (_: DeadObjectException) {
@@ -326,11 +346,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        if (!prvt()) return
-        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
-        if (!prefs.getBoolean("services_master", false) || !prefs.getBoolean("service_wh", false)) {
-            return
-        }
+        if (!prvt() || !isWhForwardingEnabled()) return
         try {
             super.onNotificationRemoved(sbn)
 
@@ -384,6 +400,11 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         replyActions.clear()
         messagesByContact.clear()
         NotificationRepository.clear()
+    }
+
+    private fun isWhForwardingEnabled(): Boolean {
+        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        return prefs.getBoolean("services_master", true) && prefs.getBoolean("service_wh", false)
     }
 
     private fun handleBlockedSender(
