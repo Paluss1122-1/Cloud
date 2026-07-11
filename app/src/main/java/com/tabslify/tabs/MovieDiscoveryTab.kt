@@ -79,6 +79,18 @@ data class SavedMovie(
 
 fun Movie.toSaved() = SavedMovie(id, title, overview, posterPath, voteAverage)
 
+private val movieGenres = mapOf(
+    null to "🎬 Alle",
+    28 to "Action",
+    35 to "Komödie",
+    18 to "Drama",
+    27 to "Horror",
+    878 to "Sci-Fi",
+    53 to "Thriller",
+    10749 to "Romantik",
+    16 to "Animation"
+)
+
 @Composable
 fun MovieDiscoveryTabContent(
     modifier: Modifier = Modifier
@@ -93,18 +105,6 @@ fun MovieDiscoveryTabContent(
     var selectedMovie by remember { mutableStateOf<Movie?>(null) }
     var showSavedOnly by remember { mutableStateOf(false) }
 
-    val genres = mapOf(
-        null to "🎬 Alle",
-        28 to "Action",
-        35 to "Komödie",
-        18 to "Drama",
-        27 to "Horror",
-        878 to "Sci-Fi",
-        53 to "Thriller",
-        10749 to "Romantik",
-        16 to "Animation"
-    )
-
     fun loadMovies() {
         scope.launch {
             isLoading = true
@@ -117,6 +117,15 @@ fun MovieDiscoveryTabContent(
                 isLoading = false
             }
         }
+    }
+
+    fun toggleSaved(movie: Movie) {
+        savedMovies = if (savedMovies.any { it.id == movie.id }) {
+            savedMovies.filter { it.id != movie.id }.toSet()
+        } else {
+            savedMovies + movie.toSaved()
+        }
+        saveMoviesToPrefs(context, savedMovies)
     }
 
     LaunchedEffect(Unit) {
@@ -143,7 +152,7 @@ fun MovieDiscoveryTabContent(
                 .height(60.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(genres.entries.toList()) { entry ->
+            items(movieGenres.entries.toList()) { entry ->
                 FilterChip(
                     selected = selectedGenre == entry.key,
                     onClick = {
@@ -221,14 +230,7 @@ fun MovieDiscoveryTabContent(
                         MovieCard(
                             movie = movie,
                             isSaved = savedMovies.any { it.id == movie.id },
-                            onSaveToggle = {
-                                savedMovies = if (savedMovies.any { it.id == movie.id }) {
-                                    savedMovies.filter { it.id != movie.id }.toSet()
-                                } else {
-                                    savedMovies + movie.toSaved()
-                                }
-                                saveMoviesToPrefs(context, savedMovies)
-                            },
+                            onSaveToggle = { toggleSaved(movie) },
                             onClick = {
                                 selectedMovie = movie
                             }
@@ -244,14 +246,7 @@ fun MovieDiscoveryTabContent(
             movie = movie,
             isSaved = savedMovies.any { it.id == movie.id },
             onDismiss = { selectedMovie = null },
-            onSaveToggle = {
-                savedMovies = if (savedMovies.any { it.id == movie.id }) {
-                    savedMovies.filter { it.id != movie.id }.toSet()
-                } else {
-                    savedMovies + movie.toSaved()
-                }
-                saveMoviesToPrefs(context, savedMovies)
-            }
+            onSaveToggle = { toggleSaved(movie) }
         )
     }
 }
@@ -343,7 +338,6 @@ fun MovieCard(
 
 suspend fun fetchMoviesFromTMDB(context: Context, genreId: Int?): List<Movie> =
     withContext(Dispatchers.IO) {
-        val sha256 = Config.getAppSignatureSha256(context) ?: return@withContext emptyList<Movie>()
         val randomPage = (1..5).random()
         val genreParam = if (genreId != null) "&with_genres=$genreId" else ""
         val endpoint =
@@ -354,35 +348,16 @@ suspend fun fetchMoviesFromTMDB(context: Context, genreId: Int?): List<Movie> =
             put("payload", JSONObject().apply {
                 put("endpoint", endpoint)
             })
-        }.toString()
-
-        val url = "${Config.SUPABASE_URL}/functions/v1/api-proxy"
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            setRequestProperty("Authorization", "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}")
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("X-Android-Cert", sha256)
-            connectTimeout = 15_000
-            readTimeout = 15_000
-            doOutput = true
-        }
-        connection.outputStream.use { it.write(requestBody.toByteArray(Charsets.UTF_8)) }
-
-        if (connection.responseCode != 200) {
-            val errorText = connection.errorStream?.bufferedReader()?.readText() ?: "No error body"
-            android.util.Log.e(
-                "MovieDiscoveryTab",
-                "TMDB API Error: Code ${connection.responseCode}, Body: $errorText"
-            )
-            return@withContext emptyList()
+            put("apiKey", Config.userApiKey(context, "tmdb"))
         }
 
-        val response = connection.inputStream.bufferedReader().readText()
-        val json = JSONObject(response)
-        val results = json.getJSONArray("results")
+        val response = Config.apiProxyPost(context, requestBody, "MovieDiscoveryTab")
+            ?: return@withContext emptyList()
 
+        val results = JSONObject(response).getJSONArray("results")
         (0 until results.length()).map { i ->
             val movieJson = results.getJSONObject(i)
+            val genreIdsArr = movieJson.getJSONArray("genre_ids")
             Movie(
                 id = movieJson.getInt("id"),
                 title = movieJson.getString("title"),
@@ -390,8 +365,7 @@ suspend fun fetchMoviesFromTMDB(context: Context, genreId: Int?): List<Movie> =
                 posterPath = movieJson.optString("poster_path", ""),
                 releaseDate = movieJson.optString("release_date", ""),
                 voteAverage = movieJson.getDouble("vote_average"),
-                genreIds = (0 until movieJson.getJSONArray("genre_ids").length())
-                    .map { movieJson.getJSONArray("genre_ids").getInt(it) }
+                genreIds = (0 until genreIdsArr.length()).map { genreIdsArr.getInt(it) }
             )
         }
     }
