@@ -771,41 +771,44 @@ fun loadNotes(context: Context): List<Note> {
     val raw = prefs.getString("notes", null) ?: return emptyList()
 
     return raw.split("||").mapNotNull { entry ->
-        val parts = entry.split("##")
-        if (parts.size < 5) return@mapNotNull null
+        runCatching {
+            val parts = entry.split("##")
+            if (parts.size < 5) return@runCatching null
 
-        val (id, title, timestamp, colorName, typeRaw) = parts
+            val (id, title, timestamp, colorName, typeRaw) = parts
 
-        val type = when {
-            typeRaw.startsWith("TEXT;;") ->
-                NoteType.Text(typeRaw.removePrefix("TEXT;;"))
+            val type = when {
+                typeRaw.startsWith("TEXT;;") ->
+                    NoteType.Text(typeRaw.removePrefix("TEXT;;"))
 
-            typeRaw.startsWith("CHECK;;") -> {
-                val items = typeRaw
-                    .removePrefix("CHECK;;")
-                    .takeIf { it.isNotBlank() }
-                    ?.split(";;")
-                    ?.map {
-                        val i = it.split(",")
-                        ChecklistItem(
-                            id = i[0],
-                            text = i[1],
-                            isChecked = i[2].toBoolean()
-                        )
-                    } ?: emptyList()
+                typeRaw.startsWith("CHECK;;") -> {
+                    val items = typeRaw
+                        .removePrefix("CHECK;;")
+                        .takeIf { it.isNotBlank() }
+                        ?.split(";;")
+                        ?.mapNotNull {
+                            val i = it.split(",")
+                            if (i.size < 3) null
+                            else ChecklistItem(
+                                id = i[0],
+                                text = i[1],
+                                isChecked = i[2].toBoolean()
+                            )
+                        } ?: emptyList()
 
-                NoteType.Checklist(items)
+                    NoteType.Checklist(items)
+                }
+
+                else -> return@runCatching null
             }
 
-            else -> return@mapNotNull null
-        }
-
-        Note(
-            id = id,
-            title = title,
-            timestamp = timestamp.toLong(),
-            color = NoteColor.valueOf(colorName),
-            type = type
-        )
+            Note(
+                id = id,
+                title = title,
+                timestamp = timestamp.toLong(),
+                color = NoteColor.valueOf(colorName),
+                type = type
+            )
+        }.getOrNull()
     }
 }
