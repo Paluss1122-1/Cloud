@@ -835,7 +835,7 @@ fun isTriggerPortOpen(): Boolean {
             socket.connect(InetSocketAddress("127.0.0.1", Config.TRIGGER_PORT), 1000)
             true
         }
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         false
     }
 }
@@ -928,6 +928,7 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
 
                 writer.println(payloadObj.toString())
                 writer.flush()
+                socket.shutdownOutput() // "hier ist Schluss": signalisiert dem PC per TCP-FIN, dass keine weiteren Daten kommen, statt dass der Server auf ein Timeout warten muss
 
                 reader.readLine() ?: throw IOException("Keine Antwort vom Server")
             }
@@ -977,7 +978,7 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
             showSimpleNotificationExtern("Error", "${e.message}", 10.seconds, context)
         } catch (e: Exception) {
             val msg = e.message
-            if (msg == null || !msg.contains("Connection reset")) {
+            if (msg == null || !msg.contains("Connection reset") || !msg.contains("IOException")) {
                 logError("syncTodosWithLaptop", e)
                 withContext(Dispatchers.Main) {
                     showSimpleNotificationExtern(
@@ -1080,6 +1081,7 @@ private fun sendSessionDataToLaptop(context: Context) {
             writer.println(payload.toString())
             writer.flush()
         }
+    } catch (_: SocketTimeoutException) {
     } catch (e: Exception) {
         logError("sendSessionDataToLaptop", e)
     }
@@ -1135,7 +1137,7 @@ fun showOpenTodos(context: Context) {
 fun saveTodos(context: Context, todos: List<TodoItem>) {
     val prefs = context.getSharedPreferences("todos_prefs", MODE_PRIVATE)
     try {
-        prefs.edit { putString("todos", todosToJsonArray(todos).toString()).apply() }
+        prefs.edit { putString("todos", todosToJsonArray(todos).toString()) }
     } catch (e: Exception) {
         logError("saveTodos", e)
     }
@@ -1585,28 +1587,34 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
         }
 
         "deleteNotif" -> {
-            println(json.toString())
-            println("CALLL")
-            println(json.optJSONObject("extras"))
             val extras = json.optJSONObject("extras")
+            val key = extras?.optString("key", "")?.takeIf { it.isNotBlank() }
             val idValue = extras?.opt("id")
-            println("idValue: $idValue")
-
             val notificationId = when (idValue) {
                 is Int -> idValue
                 is Long -> idValue.toInt()
                 is String -> idValue.toIntOrNull()
                 else -> null
             }
-            if (notificationId != null) {
-                // First try to dismiss via NotificationListenerService (for external apps like WhatsApp, Telegram, etc.)
-                val dismissed = WhatsAppNotificationListener.cancelExternalNotification(notificationId)
+
+            // 1) Bevorzugt exakt per stabilem key verwerfen.
+            var dismissed = key?.let {
+                WhatsAppNotificationListener.cancelExternalNotificationByKey(it)
+            } ?: false
+
+            // 2) Fallback auf die (nicht eindeutige) ID.
+            if (!dismissed && notificationId != null) {
+                dismissed = WhatsAppNotificationListener.cancelExternalNotification(notificationId)
                 if (!dismissed) {
-                    // Fall back to canceling local/Tabslify notifications if it was posted by Tabslify itself
+                    // 3) Letzter Fallback: lokal/von Tabslify gepostete Notification.
                     val nm = context.getSystemService(NotificationManager::class.java)
                     nm.cancel(notificationId)
                 }
             }
+
+            // Frischen Snapshot senden, damit PC/Website das Entfernen schnell
+            // bestätigen (statt erst nach dem 500ms-Debounce von onNotificationRemoved).
+            WhatsAppNotificationListener.forwardNotificationsToLaptop1()
         }
 
         else -> {}
@@ -2414,13 +2422,12 @@ fun reportDeviceInformation(intent: Intent) {
     val now = System.currentTimeMillis()
     if (now - cache.lastSync < 3000) return
     cache.lastSync = now
-    val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1).takeIf { it >= 0 }.toString()
-        .ifEmpty { return }
+    val level = (intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1).takeIf { it >= 0 } ?: return).toString()
     val temp =
-        intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1).takeIf { it != -1 }?.div(10f)
-            .toString().ifEmpty { return }
+        (intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1).takeIf { it != -1 }?.div(10f)
+            ?: return).toString()
     val plugged =
-        intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0).toString().ifEmpty { return }
+        intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0).toString()
 
     val pluggedb = plugged != "0"
     val bl = buildString {
@@ -2434,7 +2441,7 @@ fun reportDeviceInformation(intent: Intent) {
 
     if (bl.isEmpty()) return
 
-    CoroutineScope(Dispatchers.IO).launch {
+    syncScope.launch(Dispatchers.IO) {
         try {
             val currentLaptopIp = laptopIp.ifEmpty { return@launch }
             Socket(currentLaptopIp, INFO_PORT).use { socket ->
