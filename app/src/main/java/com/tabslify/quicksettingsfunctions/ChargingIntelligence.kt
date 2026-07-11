@@ -246,7 +246,7 @@ class ChargingTrackerService : Service() {
     override fun onCreate() {
         super.onCreate()
         val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
-        if (!prefs.getBoolean("services_master", false) || !prefs.getBoolean(
+        if (!prefs.getBoolean("services_master", true) || !prefs.getBoolean(
                 "service_charge",
                 false
             )
