@@ -2958,6 +2958,7 @@ object MediaAnalyticsManager {
 
     private const val PREFS_NAME = "media_analytics"
     const val KEY_SESSIONS = "sessions"
+    private const val KEY_ANALYTICS_ENABLED = "analytics_enabled"
 
     val gson: Gson = GsonBuilder().create()
     var prefs: SharedPreferences? = null
@@ -2966,7 +2967,20 @@ object MediaAnalyticsManager {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
+    fun isAnalyticsEnabled(): Boolean {
+        return prefs?.getBoolean(KEY_ANALYTICS_ENABLED, true) ?: true
+    }
+
+    fun setAnalyticsEnabled(enabled: Boolean) {
+        prefs?.edit()?.putBoolean(KEY_ANALYTICS_ENABLED, enabled)?.apply()
+    }
+
+    fun clearAllSessions() {
+        prefs?.edit()?.remove(KEY_SESSIONS)?.apply()
+    }
+
     fun addSession(session: ListenSession) {
+        if (!isAnalyticsEnabled()) return
         val list = getSessions().toMutableList()
         list.add(session)
         prefs?.edit()?.putString(KEY_SESSIONS, gson.toJson(list))?.apply()
