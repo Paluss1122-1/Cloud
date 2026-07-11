@@ -26,18 +26,16 @@ private fun buildSystemPrompt(target: String = ""): String {
     val aiTabInfo =
         if (target == "AITab") " Der Nutzer kann zwischen verschiedenen NVIDIA-Modellen und verschiedenen Gemini-Modellen auswählen – und hat sich für DICH entschieden." else ""
     val notif = if (target == "notif") " von einem Reply System" else ""
-    var str = ""
-    if (target.isEmpty()) {
-        str = buildString {
-            append(
-                """Du wirst per API aus einer Multifunktions-Android-App (names Tabslify)${aiTab}${notif} aufgerufen.${aiTabInfo} Deine Aufgabe ist es, die Frage des Nutzers zu beantworten.
+    return buildString {
+        append(
+            """Du wirst per API aus einer Multifunktions-Android-App (names Tabslify)${aiTab}${notif} aufgerufen.${aiTabInfo} Deine Aufgabe ist es, die Frage des Nutzers zu beantworten.
                     Wichtige Hinweise:
                         * Antworte kurz, klar und auf Deutsch.
                         * Sei ein hilfsbereiter Chat-Assistent."""
-            )
-            if (target == "AITab") {
-                append(
-                    """* Nutze Markdown für Formatierungen (Überschriften, Listen, Fettschrift etc.).
+        )
+        if (target == "AITab") {
+            append(
+                """* Nutze Markdown für Formatierungen (Überschriften, Listen, Fettschrift etc.).
                         * Nutze die folgenden Callouts für einprägsame Informationen (immer in einem eigenen Blockquote):
                           - [!TIP] oder [!HINT] oder [!IMPORTANT] für Tipps und wichtige Hinweise
                           - [!WARNING] oder [!CAUTION] oder [!ATTENTION] für einprägsame Informationen
@@ -45,11 +43,9 @@ private fun buildSystemPrompt(target: String = ""): String {
                           - [!NOTE] für Notizen
                           - [!SUCCESS] oder [!CHECK] oder [!DONE] für Erfolgsmeldungen
                           - [!DANGER] oder [!ERROR] für Fehler""${'"'}"""
-                )
-            }
+            )
         }
     }
-    return str
 }
 
 
@@ -179,7 +175,6 @@ private suspend fun sendNvidiaChatMessageAITab(
     onToken: ((String) -> Unit)? = null
 ): String? {
     val messages = buildNvidiaAITabMessages(history, userMessage, pic)
-    val sha256 = Config.getAppSignatureSha256(ctx) ?: return null
 
     val payload = JSONObject().apply {
         put("model", model)
@@ -192,21 +187,13 @@ private suspend fun sendNvidiaChatMessageAITab(
     val requestBody = JSONObject().apply {
         put("action", "nvidia")
         put("payload", payload)
+        put("apiKey", Config.userApiKey(ctx, "nvidia"))
     }.toString()
 
     return withContext(Dispatchers.IO) {
-        var connection: HttpURLConnection? = null
+        val connection = Config.openApiProxyConnection(ctx, if (onToken != null) 0 else 60_000)
+            ?: return@withContext null
         try {
-            val url = "${Config.SUPABASE_URL}/functions/v1/api-proxy"
-            connection = (URL(url).openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                setRequestProperty("Authorization", "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}")
-                setRequestProperty("Content-Type", "application/json")
-                setRequestProperty("X-Android-Cert", sha256)
-                connectTimeout = 15_000
-                readTimeout = if (onToken != null) 0 else 60_000
-                doOutput = true
-            }
             connection.outputStream.use { it.write(requestBody.toByteArray(Charsets.UTF_8)) }
 
             if (connection.responseCode != 200) {
@@ -249,7 +236,7 @@ private suspend fun sendNvidiaChatMessageAITab(
                 response
             }
         } finally {
-            connection?.disconnect()
+            connection.disconnect()
         }
     }
 }
