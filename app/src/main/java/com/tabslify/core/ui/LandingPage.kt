@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -46,6 +47,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
@@ -76,6 +78,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -113,12 +116,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.tabslify.BuildConfig
 import com.tabslify.R
 import com.tabslify.core.functions.canNotify
 import com.tabslify.core.objects.Config
@@ -131,6 +136,7 @@ import com.tabslify.quicksettingsfunctions.startBatteryWorker
 import com.tabslify.quicksettingsfunctions.stopBatteryWorker
 import com.tabslify.services.QuietHoursNotificationService
 import com.tabslify.services.WhatsAppNotificationListener
+import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
 import dev.chrisbanes.haze.HazeProgressive
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
@@ -146,6 +152,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import kotlin.time.Duration.Companion.milliseconds
+
+const val FORCE_WELCOME_ONBOARDING = true
 
 val inAppNotifications = mutableStateListOf<String>()
 
@@ -208,19 +216,12 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
 
     val appPrefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
     var showFirstStartPermissionInfo by remember {
-        mutableStateOf(!appPrefs.getBoolean("has_seen_permission_info", false))
-    }
-    if (showFirstStartPermissionInfo) {
-        PermissionInfoScreen(onClose = {
-            appPrefs.edit { putBoolean("has_seen_permission_info", true) }
-            showFirstStartPermissionInfo = false
-        })
-        return
+        mutableStateOf(FORCE_WELCOME_ONBOARDING || !appPrefs.getBoolean("has_seen_permission_info", false))
     }
 
     if (realDevice && prvt()) {
         if (masterPw == null || Config.masterPassword.isEmpty()) {
-            MasterPasswordSetupScreen { pw ->
+            MasterPasswordSetupScreen(modifier = Modifier.zIndex(10f)) { pw ->
                 PasswordStorage.savePassword(context, pw)
                 Config.masterPassword = pw
             }
@@ -231,7 +232,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
         val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
         var hasCoords by remember { mutableStateOf(prefs.getBoolean("has_coordinates", false)) }
         if (!hasCoords) {
-            CoordinatesSetupScreen { lat, lon ->
+            CoordinatesSetupScreen(modifier = Modifier.zIndex(10f)) { lat, lon ->
                 prefs.edit {
                     putLong("lat_key_d", java.lang.Double.doubleToRawLongBits(lat))
                     putLong("lon_key_d", java.lang.Double.doubleToRawLongBits(lon))
@@ -243,6 +244,22 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
             }
             return
         }
+    }
+
+    AnimatedVisibility(
+        visible = showFirstStartPermissionInfo,
+        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+        modifier = Modifier.zIndex(10f)
+    ) {
+        WelcomeOnboardingScreen(onFinished = {
+            appPrefs.edit { putBoolean("has_seen_permission_info", true) }
+            showFirstStartPermissionInfo = false
+        })
+    }
+
+    if (showFirstStartPermissionInfo) {
+        return
     }
 
     LaunchedEffect(Unit) {
@@ -420,13 +437,13 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
 }
 
 @Composable
-fun MasterPasswordSetupScreen(onPasswordSaved: (String) -> Unit) {
+fun MasterPasswordSetupScreen(modifier: Modifier, onPasswordSaved: (String) -> Unit) {
     var input by remember { mutableStateOf("") }
     var confirmed by remember { mutableStateOf("") }
     val isValid = input.length >= 20 && input == confirmed
 
     Box(
-        Modifier
+        modifier
             .fillMaxSize()
             .background(Color(0xFF17171C)), contentAlignment = Alignment.Center
     ) {
@@ -482,7 +499,7 @@ fun MasterPasswordSetupScreen(onPasswordSaved: (String) -> Unit) {
 }
 
 @Composable
-fun CoordinatesSetupScreen(onCoordinatesSaved: (Double, Double) -> Unit) {
+fun CoordinatesSetupScreen(modifier: Modifier, onCoordinatesSaved: (Double, Double) -> Unit) {
     var latInput by remember { mutableStateOf("") }
     var lonInput by remember { mutableStateOf("") }
     val latDouble = latInput.toDoubleOrNull()
@@ -490,7 +507,7 @@ fun CoordinatesSetupScreen(onCoordinatesSaved: (Double, Double) -> Unit) {
     val isValid = latDouble != null && lonDouble != null
 
     Box(
-        Modifier
+        modifier
             .fillMaxSize()
             .background(Color(0xFF17171C)), contentAlignment = Alignment.Center
     ) {
@@ -562,56 +579,63 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            "Tabslify Login",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
+        Image(
+            painter = painterResource(id = R.drawable.night),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize()
         )
-        Spacer(Modifier.height(32.dp))
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = { Text("E-Mail") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        Spacer(Modifier.height(12.dp))
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Passwort") },
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        Box(
-            modifier = Modifier
-                .height(36.dp)
-                .padding(top = 8.dp)
-        ) {
-            error?.let {
-                val formattedError = when {
-                    it.contains("invalid_credentials") -> "Invalid Credentials"
-                    else -> it
-                }
-                Text(formattedError, color = MaterialTheme.colorScheme.error)
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-        Button(onClick = {
-            loading = true
-            scope.launch {
-                try {
-                    client.auth.signInWith(Email) { this.email = email; this.password = password }
-                    onLoggedIn()
-                } catch (e: Exception) {
-                    error = e.message
-                } finally {
-                    loading = false
+        Column() {
+            Text(
+                "Tabslify Login",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(32.dp))
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("E-Mail") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Passwort") },
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            Box(
+                modifier = Modifier
+                    .height(36.dp)
+                    .padding(top = 8.dp)
+            ) {
+                error?.let {
+                    val formattedError = when {
+                        it.contains("invalid_credentials") -> "Invalid Credentials"
+                        else -> it
+                    }
+                    Text(formattedError, color = MaterialTheme.colorScheme.error)
                 }
             }
-        }, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
-            Text(if (loading) "..." else "Anmelden")
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = {
+                loading = true
+                scope.launch {
+                    try {
+                        client.auth.signInWith(Email) { this.email = email; this.password = password }
+                        onLoggedIn()
+                    } catch (e: Exception) {
+                        error = e.message
+                    } finally {
+                        loading = false
+                    }
+                }
+            }, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
+                Text(if (loading) "..." else "Anmelden")
+            }
         }
     }
 }
@@ -910,7 +934,7 @@ fun TabCard(
 }
 
 @Composable
-fun PermissionInfoScreen(onClose: () -> Unit) {
+fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = null) {
     var selectedPermission by remember { mutableStateOf<String?>(null) }
     var titleDialog by remember { mutableStateOf("") }
     var usagesDialog by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -966,8 +990,12 @@ fun PermissionInfoScreen(onClose: () -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xFF0C1017))
-            .windowInsetsPadding(WindowInsets.systemBars)
+            .then(
+                if (onboarding) Modifier.systemGestureExclusion()
+                else Modifier
+                    .background(Color(0xFF0C1017))
+                    .windowInsetsPadding(WindowInsets.systemBars)
+            )
     ) {
         val hazeState = remember { HazeState() }
         var headerHeightDp by remember { mutableStateOf(0.dp) }
@@ -1077,18 +1105,20 @@ fun PermissionInfoScreen(onClose: () -> Unit) {
                     modifier = Modifier.padding(start = 5.dp),
                     fontSize = 22.sp
                 )
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier.background(
-                        Color.White.copy(alpha = 0.1f),
-                        CircleShape
-                    )
-                ) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = "Close",
-                        tint = Color.White
-                    )
+                if (onClose != null) {
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.background(
+                            Color.White.copy(alpha = 0.1f),
+                            CircleShape
+                        )
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = Color.White
+                        )
+                    }
                 }
             }
 
@@ -1202,7 +1232,7 @@ fun SettingsFrame(
         }
     }
 
-    var masterEnabled by remember { mutableStateOf(prefs.getBoolean("services_master", false)) }
+    var masterEnabled by remember { mutableStateOf(prefs.getBoolean("services_master", true)) }
     var servicesExpanded by remember { mutableStateOf(false) }
 
     var serviceQhns by remember { mutableStateOf(prefs.getBoolean("service_qhns", true)) }
@@ -1246,8 +1276,35 @@ fun SettingsFrame(
     }
     var aiSettingsExpanded by remember { mutableStateOf(false) }
 
+    val apiKeyDefs = remember {
+        listOf(
+            "NVIDIA API-Key" to "api_key_nvidia",
+            "TMDB API-Key" to "api_key_tmdb",
+            "WeatherAPI-Key" to "api_key_weatherapi",
+            "RapidAPI-Key (Spotify)" to "api_key_rapidapi",
+            "PodcastIndex-Key" to "api_key_podcastindex",
+            "PodcastIndex-Secret" to "api_key_podcastindex_secret",
+            "DB Client-ID (Bahn)" to "api_key_db_client_id",
+            "DB API-Key (Bahn)" to "api_key_db_api_key"
+        )
+    }
+    val apiKeyValues = remember {
+        mutableStateMapOf<String, String>().apply {
+            apiKeyDefs.forEach { (_, key) -> put(key, prefs.getString(key, "") ?: "") }
+        }
+    }
+    var apiKeysExpanded by remember { mutableStateOf(false) }
+
     var hasNotificationPermission by remember { mutableStateOf(true) }
     var intendedToEnableQhns by remember { mutableStateOf(false) }
+
+    var showMediaAnalyticsDialog by remember { mutableStateOf(false) }
+    var mediaAnalyticsEnabled by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        MediaAnalyticsManager.init(context)
+        mediaAnalyticsEnabled = com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.isAnalyticsEnabled()
+    }
 
     fun applyService(cls: Class<*>, enabled: Boolean) {
         if (cls == WhatsAppNotificationListener::class.java) return
@@ -1299,7 +1356,7 @@ fun SettingsFrame(
         val permitted = canNotify(context)
         hasNotificationPermission = permitted
 
-        masterEnabled = prefs.getBoolean("services_master", false)
+        masterEnabled = prefs.getBoolean("services_master", true)
         serviceWh = prefs.getBoolean("service_wh", true)
         serviceCharge = prefs.getBoolean("service_charge", true)
         serviceBattery = prefs.getBoolean("service_battery", true)
@@ -1370,7 +1427,7 @@ fun SettingsFrame(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                //.verticalScroll(rememberScrollState())
+                    .verticalScroll(rememberScrollState())
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1750,6 +1807,120 @@ fun SettingsFrame(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                NeonBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    neonColors = listOf(Color(0xFFFFC107), Color(0xFF7C4DFF)),
+                    backgroundAlpha = 0.15f
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { apiKeysExpanded = !apiKeysExpanded }
+                                .padding(20.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Eigene API-Schlüssel",
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    "Leer lassen = Standard-Schlüssel des Servers verwenden",
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Text(
+                                if (apiKeysExpanded) "▲" else "▼",
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        AnimatedVisibility(visible = apiKeysExpanded) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color.White.copy(alpha = 0.05f))
+                                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                            ) {
+                                apiKeyDefs.forEach { (label, key) ->
+                                    OutlinedTextField(
+                                        value = apiKeyValues[key] ?: "",
+                                        onValueChange = { v ->
+                                            apiKeyValues[key] = v
+                                            prefs.edit { putString(key, v.trim()) }
+                                        },
+                                        label = { Text(label) },
+                                        singleLine = true,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                NeonBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    neonColors = listOf(Color(0xFF00FF00), Color(0xFF00CC00)),
+                    backgroundAlpha = 0.15f
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Media Analytics",
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    "Tracke Hörgewohnheiten für Statistiken",
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Switch(
+                                checked = mediaAnalyticsEnabled,
+                                onCheckedChange = { newValue ->
+                                    if (newValue) {
+                                        // Just enable it immediately
+                                        mediaAnalyticsEnabled = true
+                                        com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.setAnalyticsEnabled(true)
+                                    } else {
+                                        // Show confirmation dialog
+                                        showMediaAnalyticsDialog = true
+                                    }
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                    uncheckedThumbColor = Color.Gray,
+                                    uncheckedTrackColor = Color.DarkGray,
+                                    disabledUncheckedTrackColor = Color.DarkGray.copy(alpha = 0.4f)
+                                )
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -1890,7 +2061,7 @@ fun SettingsFrame(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Tabslify v1.0.0",
+                    text = BuildConfig.VERSION_NAME,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 32.dp),
@@ -1901,20 +2072,77 @@ fun SettingsFrame(
             }
         }
 
+        LaunchedEffect(showPermissionInfo) {
+            if (showPermissionInfo) {
+                delay(50.milliseconds)
+                animatePermissionInfo = true
+            } else {
+                animatePermissionInfo = false
+            }
+        }
+
         AnimatedVisibility(
             visible = showPermissionInfo && animatePermissionInfo,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
+            enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { it })
         ) {
-            LaunchedEffect(showPermissionInfo) {
-                if (showPermissionInfo) {
-                    delay(50.milliseconds)
-                    animatePermissionInfo = true
-                } else {
-                    animatePermissionInfo = false
-                }
-            }
             PermissionInfoScreen(onClose = { showPermissionInfo = false })
+        }
+
+        // Media Analytics Confirmation Dialog
+        if (showMediaAnalyticsDialog) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showMediaAnalyticsDialog = false },
+                title = { Text("Media Analytics deaktivieren?", color = Color.White) },
+                text = {
+                    Column {
+                        Text(
+                            "Möchtest du Media Analytics wirklich deaktivieren?",
+                            color = Color.White.copy(alpha = 0.8f)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Option 1: Deaktivieren & alle Daten löschen",
+                            color = Color.White.copy(alpha = 0.8f)
+                        )
+                        Text(
+                            "Option 2: Nur deaktivieren, Daten behalten",
+                            color = Color.White.copy(alpha = 0.8f)
+                        )
+                    }
+                },
+                confirmButton = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                // Option 1: Disable and clear all data
+                                mediaAnalyticsEnabled = false
+                                com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.setAnalyticsEnabled(false)
+                                com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.clearAllSessions()
+                                showMediaAnalyticsDialog = false
+                            }
+                        ) {
+                            Text("Deaktivieren & Daten löschen")
+                        }
+                        Button(
+                            onClick = {
+                                // Option 2: Just disable, keep data
+                                mediaAnalyticsEnabled = false
+                                com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.setAnalyticsEnabled(false)
+                                showMediaAnalyticsDialog = false
+                            }
+                        ) {
+                            Text("Nur deaktivieren")
+                        }
+                    }
+                },
+                dismissButton = {
+                    Button(onClick = { showMediaAnalyticsDialog = false }) {
+                        Text("Abbrechen")
+                    }
+                },
+                containerColor = Color(0xFF121212)
+            )
         }
 
         AnimatedVisibility(
