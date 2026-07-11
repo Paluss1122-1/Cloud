@@ -135,8 +135,6 @@ suspend fun fetchAndRun(scriptName: String, context: Context) {
     val result = executeJs(script.code, context)
     println("Ergebnis: $result")
 }
-
-// 1. Das ist unsere Brücke. Nur die Methoden HIER DRIN darf das JS nutzen.
 @Suppress("unused")
 class AppBridge(private val androidContext: Context) {
 
