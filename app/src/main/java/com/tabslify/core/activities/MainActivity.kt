@@ -86,7 +86,7 @@ class MainActivity : FragmentActivity() {
             }
         }
 
-        if (prvt()) {
+        if (prvt() && Config.realDevice) {
             requestPermission("all", launcher)
         } else {
             requestPermission("not", launcher)
@@ -120,8 +120,7 @@ class MainActivity : FragmentActivity() {
 
         val apkmUri = resolveApkmUri(intent)
         if (apkmUri != null) pendingApkmUri = apkmUri
-        val startTarget = if (apkmUri != null) "apkm" else intent.getStringExtra("target")
-        this.startTarget = startTarget
+        startTarget = if (apkmUri != null) "apkm" else intent.getStringExtra("target")
         setContent {
             val appColor = rememberAppColor()
             MaterialTheme(
