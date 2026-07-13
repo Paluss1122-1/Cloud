@@ -4,7 +4,7 @@
 > Media player, browser, password & 2FA manager, notes, weather, movies, gallery, contacts, calendar, vocab trainer, AI chat — bundled into a single, privacy-first Android app.
 
 > [!IMPORTANT]
-> (GERMAN VERSION) RELASE IN 40 MINUTES! (0:00 AM ET, Jul 14, 26)
+> (GERMAN VERSION) BETA RELASE IN 40 MINUTES! (0:00 AM ET, Jul 14, 26)
 >
 > <sub><sub>11:20 PM · Jul 13, 26</sub></sub>
 
