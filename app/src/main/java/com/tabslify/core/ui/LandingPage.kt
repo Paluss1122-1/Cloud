@@ -1616,7 +1616,7 @@ fun SettingsFrame(
                                     .background(Color.White.copy(alpha = 0.05f))
                                     .padding(horizontal = 20.dp, vertical = 8.dp)
                             ) {
-                                val services = if (!prvt()) emptyList() else listOfNotNull(
+                                val services = listOfNotNull(
                                     Triple(
                                         "QuietHoursNotificationService",
                                         "Alles rund um Commands",
@@ -1902,62 +1902,64 @@ fun SettingsFrame(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                if (prvt()) {
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                NeonBox(
-                    modifier = Modifier.fillMaxWidth(),
-                    neonColors = listOf(Color(0xFFFFC107), Color(0xFF7C4DFF)),
-                    backgroundAlpha = 0.15f
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { apiKeysExpanded = !apiKeysExpanded }
-                                .padding(20.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
+                    NeonBox(
+                        modifier = Modifier.fillMaxWidth(),
+                        neonColors = listOf(Color(0xFFFFC107), Color(0xFF7C4DFF)),
+                        backgroundAlpha = 0.15f
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { apiKeysExpanded = !apiKeysExpanded }
+                                    .padding(20.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Eigene API-Schlüssel",
+                                        color = Color.White,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        "Leer lassen = Standard-Schlüssel des Servers verwenden",
+                                        color = Color.White.copy(alpha = 0.6f),
+                                        fontSize = 12.sp
+                                    )
+                                }
                                 Text(
-                                    "Eigene API-Schlüssel",
-                                    color = Color.White,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    "Leer lassen = Standard-Schlüssel des Servers verwenden",
-                                    color = Color.White.copy(alpha = 0.6f),
+                                    if (apiKeysExpanded) "▲" else "▼",
+                                    color = Color.White.copy(alpha = 0.5f),
                                     fontSize = 12.sp
                                 )
                             }
-                            Text(
-                                if (apiKeysExpanded) "▲" else "▼",
-                                color = Color.White.copy(alpha = 0.5f),
-                                fontSize = 12.sp
-                            )
-                        }
 
-                        AnimatedVisibility(visible = apiKeysExpanded) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color.White.copy(alpha = 0.05f))
-                                    .padding(horizontal = 20.dp, vertical = 8.dp)
-                            ) {
-                                apiKeyDefs.forEach { (label, key) ->
-                                    OutlinedTextField(
-                                        value = apiKeyValues[key] ?: "",
-                                        onValueChange = { v ->
-                                            apiKeyValues[key] = v
-                                            prefs.edit { putString(key, v.trim()) }
-                                        },
-                                        label = { Text(label) },
-                                        singleLine = true,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 6.dp)
-                                    )
+                            AnimatedVisibility(visible = apiKeysExpanded) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color.White.copy(alpha = 0.05f))
+                                        .padding(horizontal = 20.dp, vertical = 8.dp)
+                                ) {
+                                    apiKeyDefs.forEach { (label, key) ->
+                                        OutlinedTextField(
+                                            value = apiKeyValues[key] ?: "",
+                                            onValueChange = { v ->
+                                                apiKeyValues[key] = v
+                                                prefs.edit { putString(key, v.trim()) }
+                                            },
+                                            label = { Text(label) },
+                                            singleLine = true,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 6.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
