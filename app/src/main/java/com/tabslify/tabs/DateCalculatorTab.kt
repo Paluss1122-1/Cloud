@@ -14,6 +14,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tabslify.core.ui.APP_COLOR
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.Calendar
@@ -83,7 +85,10 @@ fun DateCalculatorContent(modifier: Modifier = Modifier) {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 16.dp)
+                    .padding(vertical = 16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = APP_COLOR
+                )
             ) {
                 Column(
                     modifier = Modifier
@@ -124,11 +129,11 @@ fun DateCalculatorContent(modifier: Modifier = Modifier) {
                 daysDifference = null
             },
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF666666)
+                containerColor = APP_COLOR
             ),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Zurücksetzen", fontSize = 16.sp)
+            Text("Zurücksetzen", fontSize = 16.sp, color = Color.Gray)
         }
     }
 }
@@ -145,7 +150,7 @@ fun DateSelectionCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF333333)
+            containerColor = APP_COLOR
         )
     ) {
         Column(
