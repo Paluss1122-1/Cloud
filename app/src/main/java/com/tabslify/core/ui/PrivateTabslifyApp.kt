@@ -33,15 +33,23 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,10 +71,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Laptop
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.QuestionMark
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.Button
@@ -362,6 +372,7 @@ fun PrivateTabslifyApp(
         mutableStateOf(initialMenuItem)
     }
     var isFullScreen by rememberSaveable { mutableStateOf(false) }
+    var isHelpOpen by rememberSaveable { mutableStateOf(false) }
     var webViewUrl by rememberSaveable { mutableStateOf("https://www.google.com") }
     var currentUrl by rememberSaveable { mutableStateOf(webViewUrl) }
     var webViewState by remember { mutableStateOf<WebView?>(null) }
@@ -405,6 +416,7 @@ fun PrivateTabslifyApp(
     }
 
     LaunchedEffect(selectedMenuItem) {
+        isHelpOpen = false
         gesturesEnabled = when (selectedMenuItem) {
             MenuItem.EXPLORE -> false
             MenuItem.GALLERY -> false
@@ -529,6 +541,16 @@ fun PrivateTabslifyApp(
                                     fontWeight = FontWeight.Bold
                                 )
                             },
+                            actions = {
+                                IconButton(onClick = { isHelpOpen = true }) {
+                                    Icon(
+                                        imageVector = Icons.Default.QuestionMark,
+                                        contentDescription = "Hilfe öffnen",
+                                        tint = Color.White
+                                    )
+                                }
+                            },
+
                             navigationIcon = {
                                 if (onMenuClick != null) {
                                     IconButton(onClick = { onMenuClick() }) {
@@ -599,6 +621,16 @@ fun PrivateTabslifyApp(
                         }
 
                         else -> selectedMenuItem.content(setGesturesEnabled)
+                    }
+                    AnimatedVisibility(
+                        visible = isHelpOpen,
+                        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                    ) {
+                        HelpFrame(
+                            selectedMenuItem = selectedMenuItem,
+                            onDismiss = { isHelpOpen = false }
+                        )
                     }
                 }
             }
@@ -2294,5 +2326,116 @@ fun GoodNightScreen(ai: String) {
     }
     if (showStats) {
         AiResponseHistorySheet(context = context, onDismiss = { showStats = false })
+    }
+}
+
+private val HelpBgTop = Color(0xFF1A1330)
+private val HelpBgBottom = Color(0xFF060509)
+private val HelpChipBg = Color(0x0DFFFFFF)
+private val HelpTextPrimary = Color(0xFFF7F5FB)
+private val HelpTextSecondary = Color(0xD1FFFFFF)
+private val HelpAccentBrush = Brush.linearGradient(
+    listOf(Color(0xFFFF8A4C), Color(0xFFB45CFC), Color(0xFF6B4CFC))
+)
+
+//@Preview
+@Composable
+fun HelpFrame(
+    selectedMenuItem: MenuItem = MenuItem.GMAIL,
+    onDismiss: () -> Unit = {}
+) {
+    val helpText = Config.helpFrameEntries[selectedMenuItem]
+        ?: "Für diesen Bereich gibt es noch keine Hilfe."
+
+    BackHandler(enabled = true, onBack = onDismiss)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(HelpBgTop, HelpBgBottom)))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {}
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 28.dp, vertical = 24.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(HelpAccentBrush),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = selectedMenuItem.icon, fontSize = 34.sp)
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Hilfe",
+                        color = HelpTextSecondary.copy(alpha = 0.7f),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = selectedMenuItem.title,
+                        color = HelpTextPrimary,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Hilfe schließen",
+                        tint = Color.White
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(28.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(HelpChipBg)
+                    .padding(20.dp)
+            ) {
+                Text(
+                    text = helpText,
+                    color = HelpTextSecondary,
+                    fontSize = 16.sp,
+                    lineHeight = 24.sp
+                )
+            }
+
+            Spacer(Modifier.height(32.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(HelpAccentBrush)
+                    .clickable(onClick = onDismiss),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Verstanden",
+                    color = Color.White,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
     }
 }
