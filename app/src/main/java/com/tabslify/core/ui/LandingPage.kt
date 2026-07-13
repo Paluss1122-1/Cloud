@@ -58,6 +58,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -72,6 +73,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -92,8 +94,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -145,6 +149,7 @@ import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
@@ -153,7 +158,7 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 import kotlin.time.Duration.Companion.milliseconds
 
-const val FORCE_WELCOME_ONBOARDING = true
+const val FORCE_WELCOME_ONBOARDING = false
 
 val inAppNotifications = mutableStateListOf<String>()
 
@@ -206,7 +211,6 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     var hasLoadedApp by rememberSaveable { mutableStateOf(startTarget != null) }
     var selectedMenuItem by rememberSaveable { mutableStateOf<MenuItem?>(null) }
     var masterPw by remember { mutableStateOf(PasswordStorage.loadPassword(context)) }
-    var supabaseReady by remember { mutableStateOf(false) }
     val landingListState = rememberSaveable(saver = LazyListState.Saver) {
         LazyListState()
     }
@@ -218,6 +222,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     var showFirstStartPermissionInfo by remember {
         mutableStateOf(FORCE_WELCOME_ONBOARDING || !appPrefs.getBoolean("has_seen_permission_info", false))
     }
+    var onboardingExiting by remember { mutableStateOf(false) }
 
     if (realDevice && prvt()) {
         if (masterPw == null || Config.masterPassword.isEmpty()) {
@@ -252,26 +257,38 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
         exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
         modifier = Modifier.zIndex(10f)
     ) {
-        WelcomeOnboardingScreen(onFinished = {
-            appPrefs.edit { putBoolean("has_seen_permission_info", true) }
-            showFirstStartPermissionInfo = false
-        })
+        WelcomeOnboardingScreen(
+            onFinished = {
+                appPrefs.edit { putBoolean("has_seen_permission_info", true) }
+                showFirstStartPermissionInfo = false
+            },
+            onExitStart = { onboardingExiting = true }
+        )
     }
 
-    if (showFirstStartPermissionInfo) {
+    if (showFirstStartPermissionInfo && !onboardingExiting) {
         return
     }
 
-    LaunchedEffect(Unit) {
-        if (prvt()) {
-            client.auth.awaitInitialization()
-            supabaseReady = client.auth.currentSessionOrNull() != null
+    val sessionStatus by client.auth.sessionStatus.collectAsState()
+
+    if (prvt()) {
+        when (sessionStatus) {
+            is SessionStatus.NotAuthenticated -> {
+                SupabaseLoginScreen { }
+                return
+            }
+
+            is SessionStatus.Authenticated -> Unit
+
+            SessionStatus.Initializing,
+            is SessionStatus.RefreshFailure -> {
+                if (client.auth.currentSessionOrNull() == null) {
+                    SupabaseLoadingScreen()
+                    return
+                }
+            }
         }
-    }
-
-    if (!supabaseReady && prvt()) {
-        SupabaseLoginScreen { supabaseReady = true }
-        return
     }
 
     DisposableEffect(Unit) {
@@ -565,6 +582,34 @@ fun CoordinatesSetupScreen(modifier: Modifier, onCoordinatesSaved: (Double, Doub
 }
 
 @Composable
+fun SupabaseLoadingScreen() {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(id = R.drawable.night),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            APP_COLOR.copy(alpha = 0.55f),
+                            Color(0xFF001A93).copy(alpha = 0.75f)
+                        )
+                    )
+                )
+        )
+        CircularProgressIndicator(
+            color = Color.White,
+            modifier = Modifier.align(Alignment.Center)
+        )
+    }
+}
+
+@Composable
 fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -572,69 +617,87 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
     var loading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
         Image(
             painter = painterResource(id = R.drawable.night),
             contentDescription = null,
+            contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
         )
-        Column() {
-            Text(
-                "Tabslify Login",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(32.dp))
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
-                label = { Text("E-Mail") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text("Passwort") },
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-            Box(
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            APP_COLOR.copy(alpha = 0.55f),
+                            Color(0xFF001A93).copy(alpha = 0.75f)
+                        )
+                    )
+                )
+        )
+
+        CompositionLocalProvider(LocalContentColor provides Color.White) {
+            Column(
                 modifier = Modifier
-                    .height(36.dp)
-                    .padding(top = 8.dp)
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.systemBars)
+                    .padding(32.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                error?.let {
-                    val formattedError = when {
-                        it.contains("invalid_credentials") -> "Invalid Credentials"
-                        else -> it
+                Text(
+                    "Tabslify Login",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(Modifier.height(32.dp))
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("E-Mail") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Passwort") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Box(
+                    modifier = Modifier
+                        .height(36.dp)
+                        .padding(top = 8.dp)
+                ) {
+                    error?.let {
+                        val formattedError = when {
+                            it.contains("invalid_credentials") -> "Invalid Credentials"
+                            else -> it
+                        }
+                        Text(formattedError, color = MaterialTheme.colorScheme.error)
                     }
-                    Text(formattedError, color = MaterialTheme.colorScheme.error)
                 }
-            }
-            Spacer(Modifier.height(16.dp))
-            Button(onClick = {
-                loading = true
-                scope.launch {
-                    try {
-                        client.auth.signInWith(Email) { this.email = email; this.password = password }
-                        onLoggedIn()
-                    } catch (e: Exception) {
-                        error = e.message
-                    } finally {
-                        loading = false
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = {
+                    loading = true
+                    scope.launch {
+                        try {
+                            client.auth.signInWith(Email) { this.email = email; this.password = password }
+                            onLoggedIn()
+                        } catch (e: Exception) {
+                            error = e.message
+                        } finally {
+                            loading = false
+                        }
                     }
+                }, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (loading) "..." else "Anmelden")
                 }
-            }, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
-                Text(if (loading) "..." else "Anmelden")
             }
         }
     }
@@ -1068,127 +1131,159 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
             }
         }
 
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .hazeEffect(
-                    state = hazeState,
-                    style = HazeStyle(
-                        backgroundColor = Color(0xFF0C1017),
-                        tint = HazeTint(Color(0xFF0C1017).copy(alpha = 0.7f)),
-                        blurRadius = 60.dp,
-                        noiseFactor = 0f
-                    )
-                ) {
-                    progressive = HazeProgressive.verticalGradient(
-                        startIntensity = 1f,
-                        endIntensity = 0f,
-                        preferPerformance = true
-                    )
-                }
                 .onGloballyPositioned {
                     headerHeightDp = with(density) { it.size.height.toDp() }
                 }
-                .padding(horizontal = 15.dp)
-                .padding(bottom = 16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Tabslify Berechtigungen",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 5.dp),
-                    fontSize = 22.sp
-                )
-                if (onClose != null) {
-                    IconButton(
-                        onClick = onClose,
-                        modifier = Modifier.background(
-                            Color.White.copy(alpha = 0.1f),
-                            CircleShape
+            // Blur-Flaeche: liegt HINTER dem Text. Traegt den progressiven Blur
+            // (funktioniert beim Scrollen) UND eine weiche obere Kante.
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    // 1) In einen Offscreen-Layer rendern, damit die DstIn-Maske
+                    //    NUR diese Blur-Ebene betrifft (nicht Titel/Text).
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    // 2) Progressiver Blur bleibt exakt wie gehabt.
+                    .hazeEffect(
+                        state = hazeState,
+                        style = HazeStyle(
+                            backgroundColor = Color(0xFF0C1017),
+                            tint = HazeTint(Color(0xFF0C1017).copy(alpha = 0.7f)),
+                            blurRadius = 60.dp,
+                            noiseFactor = 0f
                         )
                     ) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = Color.White
+                        progressive = HazeProgressive.verticalGradient(
+                            startIntensity = 1f,
+                            endIntensity = 0f,
+                            preferPerformance = true
                         )
+                    }
+                    // 3) Weiche obere Kante: Alpha der Blur-Ebene 0 -> 1 ueber ~24dp.
+                    //    Das ersetzt die (bei progressive ignorierte) mask-Funktion.
+                    .drawWithContent {
+                        drawContent()
+                        val fadePx = 24.dp.toPx()
+                        val topStop = (fadePx / size.height).coerceIn(0f, 1f)
+                        val bottomStop = (1f - fadePx / size.height).coerceIn(0f, 1f)
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                topStop to Color.Black,
+                                bottomStop to Color.Black,
+                                1f to Color.Transparent
+                            ),
+                            blendMode = BlendMode.DstIn
+                        )
+                    }
+            )
+
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 15.dp)
+                    .padding(bottom = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Tabslify Berechtigungen",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 5.dp),
+                        fontSize = 22.sp
+                    )
+                    if (onClose != null) {
+                        IconButton(
+                            onClick = onClose,
+                            modifier = Modifier.background(
+                                Color.White.copy(alpha = 0.1f),
+                                CircleShape
+                            )
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = Color.White
+                            )
+                        }
                     }
                 }
+
+                Spacer(Modifier.height(16.dp))
+
+                Text(
+                    text = buildAnnotatedString {
+                        append("Tabslify ist ")
+                        withStyle(
+                            SpanStyle(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFFFF368A),
+                                        Color(0xFF7C4DFF)
+                                    )
+                                )
+                            )
+                        ) {
+                            append("nicht nur irgendeine App")
+                        }
+                        append(", sie ist ein ")
+                        withStyle(
+                            SpanStyle(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFFFF368A),
+                                        Color(0xFF7C4DFF)
+                                    )
+                                )
+                            )
+                        ) {
+                            append("Mix aus ganz vielen")
+                        }
+                        append(" Apps, unter anderem für die Schule, zum eigenen Erfolg tracken oder zum Podcast hören. \nDieser Mix aus Funktionen benötigt ")
+                        withStyle(
+                            SpanStyle(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFFFF368A),
+                                        Color(0xFF7C4DFF)
+                                    )
+                                )
+                            )
+                        ) {
+                            append("jeweils viele Berechtigungen")
+                        }
+                        append(" um das Benutzererlebnis ")
+                        withStyle(
+                            SpanStyle(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFFFF368A),
+                                        Color(0xFF7C4DFF)
+                                    )
+                                )
+                            )
+                        ) {
+                            append("möglichst unkompliziert")
+                        }
+                        append(" zu halten.")
+                    },
+                    color = APP_COLOR.copy(
+                        red = APP_COLOR.red + .6f,
+                        green = APP_COLOR.green + .6f,
+                        blue = APP_COLOR.blue + .6f
+                    ),
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                    fontFamily = FontFamily.Default
+                )
             }
-
-            Spacer(Modifier.height(16.dp))
-
-            Text(
-                text = buildAnnotatedString {
-                    append("Tabslify ist ")
-                    withStyle(
-                        SpanStyle(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFFFF368A),
-                                    Color(0xFF7C4DFF)
-                                )
-                            )
-                        )
-                    ) {
-                        append("nicht nur irgendeine App")
-                    }
-                    append(", sie ist ein ")
-                    withStyle(
-                        SpanStyle(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFFFF368A),
-                                    Color(0xFF7C4DFF)
-                                )
-                            )
-                        )
-                    ) {
-                        append("Mix aus ganz vielen")
-                    }
-                    append(" Apps, unter anderem für die Schule, zum eigenen Erfolg tracken oder zum Podcast hören. \nDieser Mix aus Funktionen benötigt ")
-                    withStyle(
-                        SpanStyle(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFFFF368A),
-                                    Color(0xFF7C4DFF)
-                                )
-                            )
-                        )
-                    ) {
-                        append("jeweils viele Berechtigungen")
-                    }
-                    append(" um das Benutzererlebnis ")
-                    withStyle(
-                        SpanStyle(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFFFF368A),
-                                    Color(0xFF7C4DFF)
-                                )
-                            )
-                        )
-                    ) {
-                        append("möglichst unkompliziert")
-                    }
-                    append(" zu halten.")
-                },
-                color = APP_COLOR.copy(
-                    red = APP_COLOR.red + .6f,
-                    green = APP_COLOR.green + .6f,
-                    blue = APP_COLOR.blue + .6f
-                ),
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
-                fontFamily = FontFamily.Default
-            )
         }
 
         AnimatedVisibility(
@@ -1612,192 +1707,194 @@ fun SettingsFrame(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                if (prvt()) {
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                NeonBox(
-                    modifier = Modifier.fillMaxWidth(),
-                    neonColors = listOf(Color(0xFF00E5FF), Color(0xFFE8622A)),
-                    backgroundAlpha = 0.15f
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(20.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
+                    NeonBox(
+                        modifier = Modifier.fillMaxWidth(),
+                        neonColors = listOf(Color(0xFF00E5FF), Color(0xFFE8622A)),
+                        backgroundAlpha = 0.15f
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(20.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Bevorzugte AI (Global)",
+                                        color = Color.White,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        "Standard-Anbieter für alle Dienste",
+                                        color = Color.White.copy(alpha = 0.6f),
+                                        fontSize = 12.sp
+                                    )
+                                }
+
+                                var showGlobalDropdown by remember { mutableStateOf(false) }
+                                Box {
+                                    Text(
+                                        text = aiPrefGlobal.uppercase(),
+                                        color = Color(0xFF00E5FF),
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier
+                                            .clickable { showGlobalDropdown = true }
+                                            .border(
+                                                1.dp,
+                                                Color.White.copy(alpha = 0.2f),
+                                                RoundedCornerShape(4.dp)
+                                            )
+                                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                    DropdownMenu(
+                                        expanded = showGlobalDropdown,
+                                        onDismissRequest = { showGlobalDropdown = false },
+                                        containerColor = Color.Black
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Gemini", color = Color.White) },
+                                            onClick = {
+                                                aiPrefGlobal = "gemini"; showGlobalDropdown =
+                                                false; save()
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("NVIDIA", color = Color.White) },
+                                            onClick = {
+                                                aiPrefGlobal = "nvidia"; showGlobalDropdown =
+                                                false; save()
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { aiSettingsExpanded = !aiSettingsExpanded }
+                                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
-                                    "Bevorzugte AI (Global)",
-                                    color = Color.White,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    "Einzelne Dienste anpassen",
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
                                 )
                                 Text(
-                                    "Standard-Anbieter für alle Dienste",
-                                    color = Color.White.copy(alpha = 0.6f),
+                                    if (aiSettingsExpanded) "▲" else "▼",
+                                    color = Color.White.copy(alpha = 0.5f),
                                     fontSize = 12.sp
                                 )
                             }
 
-                            var showGlobalDropdown by remember { mutableStateOf(false) }
-                            Box {
-                                Text(
-                                    text = aiPrefGlobal.uppercase(),
-                                    color = Color(0xFF00E5FF),
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
+                            AnimatedVisibility(visible = aiSettingsExpanded) {
+                                Column(
                                     modifier = Modifier
-                                        .clickable { showGlobalDropdown = true }
-                                        .border(
-                                            1.dp,
-                                            Color.White.copy(alpha = 0.2f),
-                                            RoundedCornerShape(4.dp)
-                                        )
-                                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                                )
-                                DropdownMenu(
-                                    expanded = showGlobalDropdown,
-                                    onDismissRequest = { showGlobalDropdown = false },
-                                    containerColor = Color.Black
+                                        .fillMaxWidth()
+                                        .background(Color.White.copy(alpha = 0.05f))
+                                        .padding(horizontal = 20.dp, vertical = 8.dp)
                                 ) {
-                                    DropdownMenuItem(
-                                        text = { Text("Gemini", color = Color.White) },
-                                        onClick = {
-                                            aiPrefGlobal = "gemini"; showGlobalDropdown =
-                                            false; save()
-                                        }
+                                    val aiServices = listOf(
+                                        Triple(
+                                            "Befehl 'ai' / Chat",
+                                            aiPrefChat
+                                        ) { v: String -> aiPrefChat = v },
+                                        Triple(
+                                            "Musik-Zusammenfassung",
+                                            aiPrefMusicSummary
+                                        ) { v: String -> aiPrefMusicSummary = v },
+                                        Triple(
+                                            "Vokabel-Vision",
+                                            aiPrefVision
+                                        ) { v: String -> aiPrefVision = v },
+                                        Triple(
+                                            "Nachrichten-Antworten",
+                                            aiPrefReplies
+                                        ) { v: String -> aiPrefReplies = v }
                                     )
-                                    DropdownMenuItem(
-                                        text = { Text("NVIDIA", color = Color.White) },
-                                        onClick = {
-                                            aiPrefGlobal = "nvidia"; showGlobalDropdown =
-                                            false; save()
-                                        }
-                                    )
-                                }
-                            }
-                        }
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { aiSettingsExpanded = !aiSettingsExpanded }
-                                .padding(horizontal = 20.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "Einzelne Dienste anpassen",
-                                color = Color.White.copy(alpha = 0.7f),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                if (aiSettingsExpanded) "▲" else "▼",
-                                color = Color.White.copy(alpha = 0.5f),
-                                fontSize = 12.sp
-                            )
-                        }
-
-                        AnimatedVisibility(visible = aiSettingsExpanded) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color.White.copy(alpha = 0.05f))
-                                    .padding(horizontal = 20.dp, vertical = 8.dp)
-                            ) {
-                                val aiServices = listOf(
-                                    Triple(
-                                        "Befehl 'ai' / Chat",
-                                        aiPrefChat
-                                    ) { v: String -> aiPrefChat = v },
-                                    Triple(
-                                        "Musik-Zusammenfassung",
-                                        aiPrefMusicSummary
-                                    ) { v: String -> aiPrefMusicSummary = v },
-                                    Triple(
-                                        "Vokabel-Vision",
-                                        aiPrefVision
-                                    ) { v: String -> aiPrefVision = v },
-                                    Triple(
-                                        "Nachrichten-Antworten",
-                                        aiPrefReplies
-                                    ) { v: String -> aiPrefReplies = v }
-                                )
-
-                                aiServices.forEachIndexed { index, (title, currentVal, setter) ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 8.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            title,
-                                            color = Color.White,
-                                            fontSize = 14.sp,
-                                            modifier = Modifier.weight(1f)
-                                        )
-
-                                        var showServiceDropdown by remember { mutableStateOf(false) }
-                                        Box {
+                                    aiServices.forEachIndexed { index, (title, currentVal, setter) ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 8.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
                                             Text(
-                                                text = when (currentVal) {
-                                                    "default" -> "Standard"
-                                                    "gemini" -> "Gemini"
-                                                    "nvidia" -> "NVIDIA"
-                                                    else -> "Standard"
-                                                },
-                                                color = Color.White.copy(alpha = 0.8f),
-                                                fontSize = 12.sp,
-                                                modifier = Modifier
-                                                    .clickable { showServiceDropdown = true }
-                                                    .border(
-                                                        1.dp,
-                                                        Color.White.copy(alpha = 0.15f),
-                                                        RoundedCornerShape(4.dp)
-                                                    )
-                                                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                                                title,
+                                                color = Color.White,
+                                                fontSize = 14.sp,
+                                                modifier = Modifier.weight(1f)
                                             )
-                                            DropdownMenu(
-                                                expanded = showServiceDropdown,
-                                                onDismissRequest = { showServiceDropdown = false },
-                                                containerColor = Color.Black
-                                            ) {
-                                                DropdownMenuItem(
-                                                    text = {
-                                                        Text(
-                                                            "Standard (Global)",
-                                                            color = Color.White
-                                                        )
+
+                                            var showServiceDropdown by remember { mutableStateOf(false) }
+                                            Box {
+                                                Text(
+                                                    text = when (currentVal) {
+                                                        "default" -> "Standard"
+                                                        "gemini" -> "Gemini"
+                                                        "nvidia" -> "NVIDIA"
+                                                        else -> "Standard"
                                                     },
-                                                    onClick = {
-                                                        setter("default"); showServiceDropdown =
-                                                        false; save()
-                                                    }
+                                                    color = Color.White.copy(alpha = 0.8f),
+                                                    fontSize = 12.sp,
+                                                    modifier = Modifier
+                                                        .clickable { showServiceDropdown = true }
+                                                        .border(
+                                                            1.dp,
+                                                            Color.White.copy(alpha = 0.15f),
+                                                            RoundedCornerShape(4.dp)
+                                                        )
+                                                        .padding(horizontal = 10.dp, vertical = 4.dp)
                                                 )
-                                                DropdownMenuItem(
-                                                    text = { Text("Gemini", color = Color.White) },
-                                                    onClick = {
-                                                        setter("gemini"); showServiceDropdown =
-                                                        false; save()
-                                                    }
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text("NVIDIA", color = Color.White) },
-                                                    onClick = {
-                                                        setter("nvidia"); showServiceDropdown =
-                                                        false; save()
-                                                    }
-                                                )
+                                                DropdownMenu(
+                                                    expanded = showServiceDropdown,
+                                                    onDismissRequest = { showServiceDropdown = false },
+                                                    containerColor = Color.Black
+                                                ) {
+                                                    DropdownMenuItem(
+                                                        text = {
+                                                            Text(
+                                                                "Standard (Global)",
+                                                                color = Color.White
+                                                            )
+                                                        },
+                                                        onClick = {
+                                                            setter("default"); showServiceDropdown =
+                                                            false; save()
+                                                        }
+                                                    )
+                                                    DropdownMenuItem(
+                                                        text = { Text("Gemini", color = Color.White) },
+                                                        onClick = {
+                                                            setter("gemini"); showServiceDropdown =
+                                                            false; save()
+                                                        }
+                                                    )
+                                                    DropdownMenuItem(
+                                                        text = { Text("NVIDIA", color = Color.White) },
+                                                        onClick = {
+                                                            setter("nvidia"); showServiceDropdown =
+                                                            false; save()
+                                                        }
+                                                    )
+                                                }
                                             }
                                         }
-                                    }
-                                    if (index < aiServices.lastIndex) {
-                                        HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                                        if (index < aiServices.lastIndex) {
+                                            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                                        }
                                     }
                                 }
                             }

@@ -2,6 +2,7 @@ package com.tabslify.core.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -45,19 +46,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -71,15 +73,12 @@ import java.util.Calendar
 
 private val BgTop = Color(0xFF1A1330)
 private val BgBottom = Color(0xFF060509)
-private val Surface = Color(0xFF0F0B14)
 private val TextPrimaryOnboarding = Color(0xFFF7F5FB)
 private val TextSecondaryOnboarding = Color(0xB3FFFFFF) // white @ 70%
 private val ChipBg = Color(0x0DFFFFFF)        // white @ 5%
-private val ChipBgSelected = Color(0x3DB45CFC) // accent violet @ 24%
 
 private val AccentColors = listOf(Color(0xFFFF8A4C), Color(0xFFB45CFC), Color(0xFF6B4CFC))
 private val AccentBrush = Brush.linearGradient(AccentColors)
-private val AccentBorderBrush = Brush.linearGradient(listOf(Color(0xFFFF8A4C), Color(0xFF7C4DFF)))
 
 /* ------------------------------------------------------------------ */
 /*  Page model                                                        */
@@ -147,15 +146,10 @@ private val gridTiles = listOf(
     GridTile(Icons.Filled.AutoAwesome, Brush.linearGradient(listOf(Color(0xFFFF5CAF), Color(0xFFD95CFF))))
 )
 
-@Preview
-@Composable
-fun Prev() {
-    WelcomeOnboardingScreen(currentPage = 3)
-}
-
 @Composable
 fun WelcomeOnboardingScreen(
     onFinished: () -> Unit = {},
+    onExitStart: () -> Unit = {},
     initialPage: Int = 0,
     currentPage: Int? = null,
     onPageChanged: ((Int) -> Unit)? = null
@@ -164,6 +158,17 @@ fun WelcomeOnboardingScreen(
     val pagerState = rememberPagerState(initialPage = safeInitialPage, pageCount = { pages.size })
     val scope = rememberCoroutineScope()
     val isLast = pagerState.currentPage == pages.lastIndex
+
+    val exitProgress = remember { Animatable(0f) }
+    var finishing by remember { mutableStateOf(false) }
+    LaunchedEffect(finishing) {
+        if (finishing) {
+            onExitStart()
+            repeat(3) { withFrameNanos { } }
+            exitProgress.animateTo(1f, tween(380, easing = FastOutSlowInEasing))
+            onFinished()
+        }
+    }
 
     BackHandler {
         if (pagerState.currentPage > 0) {
@@ -185,6 +190,16 @@ fun WelcomeOnboardingScreen(
         modifier = Modifier
             .fillMaxSize()
             .systemGestureExclusion()
+            // Onboarding hebt sich beim Beenden leicht an, zoomt weg und blendet aus,
+            // sodass die App darunter zum Vorschein kommt.
+            .graphicsLayer {
+                val p = exitProgress.value
+                alpha = 1f - p
+                val s = 1f + 0.08f * p
+                scaleX = s
+                scaleY = s
+                translationY = -48.dp.toPx() * p
+            }
     ) {
         val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
         val bgpicture = remember {
@@ -256,8 +271,9 @@ fun WelcomeOnboardingScreen(
                     .fillMaxWidth()
                     .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 28.dp)
             ) {
-                if (isLast) onFinished()
-                else scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                if (isLast) {
+                    if (!finishing) finishing = true
+                } else scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
             }
         }
     }
