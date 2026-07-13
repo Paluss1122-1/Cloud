@@ -377,9 +377,10 @@ object ExploreLocationTracker {
         val repo = ExploreRepository(context)
         val client = getClient(context)
 
-        val request = LocationRequest.Builder(Priority.PRIORITY_PASSIVE, 60_000L)
-            .setMinUpdateDistanceMeters(50f)
-            .setWaitForAccurateLocation(true)
+        val request = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 30_000L)
+            .setMinUpdateIntervalMillis(15_000L)
+            .setMinUpdateDistanceMeters(25f)
+            .setWaitForAccurateLocation(false)
             .build()
 
         val callback = object : LocationCallback() {
@@ -413,7 +414,7 @@ object ExploreLocationTracker {
                 )
 
                 val distance = lastLocation?.distanceTo(loc) ?: Float.MAX_VALUE
-                if (distance < 50f) {
+                if (distance < 25f) {
                     errorInsert(
                         "ExploreTracker",
                         "onLocationResult() - Update ignoriert (Bewegung nur ${distance}m, lat=${loc.latitude}, lng=${loc.longitude}, distanzZuhause=${distanceHome}m)",
