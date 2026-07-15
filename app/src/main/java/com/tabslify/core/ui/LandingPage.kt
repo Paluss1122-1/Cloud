@@ -721,7 +721,7 @@ fun LandingPage(
     val allTabsSorted = remember {
         MenuItem.entries.filter {
             it != MenuItem.APKM_INSTALLER &&
-                    (!prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD && it != MenuItem.REMOTEDESKTOP && it != MenuItem.PC_MANAGER))
+                    (prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD && it != MenuItem.REMOTEDESKTOP && it != MenuItem.PC_MANAGER && it != MenuItem.HEISE_NEWS))
         }.sortedBy { it.title }
     }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
@@ -823,12 +823,14 @@ fun LandingPage(
                         modifier = Modifier.align(Alignment.CenterEnd),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = { showNotifications = true }) {
-                            Icon(
-                                Icons.Default.Notifications,
-                                contentDescription = "Open notification frame",
-                                tint = Color.White
-                            )
+                        if (prvt()) {
+                            IconButton(onClick = { showNotifications = true }) {
+                                Icon(
+                                    Icons.Default.Notifications,
+                                    contentDescription = "Open notification frame",
+                                    tint = Color.White
+                                )
+                            }
                         }
                         IconButton(onClick = { showSettings = true }) {
                             Icon(
