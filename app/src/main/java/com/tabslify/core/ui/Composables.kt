@@ -107,6 +107,33 @@ enum class CalloutType {
     WARNING, INFO, NOTE, TIP, SUCCESS, DANGER
 }
 
+fun normalizeCallouts(text: String): String {
+    val calloutStart = Regex("^\\[!(\\w+)]")
+    val builder = StringBuilder()
+    var inCallout = false
+    for (line in text.lines()) {
+        val trimmed = line.trimStart()
+        when {
+            trimmed.startsWith(">") -> {
+                inCallout = calloutStart.containsMatchIn(trimmed.removePrefix(">").trimStart())
+                builder.append(line).append('\n')
+            }
+            calloutStart.containsMatchIn(trimmed) -> {
+                inCallout = true
+                builder.append("> ").append(trimmed).append('\n')
+            }
+            inCallout && trimmed.isNotBlank() -> {
+                builder.append("> ").append(trimmed).append('\n')
+            }
+            else -> {
+                if (trimmed.isBlank()) inCallout = false
+                builder.append(line).append('\n')
+            }
+        }
+    }
+    return builder.toString().trimEnd('\n')
+}
+
 @Composable
 fun Callout(
     type: CalloutType,
