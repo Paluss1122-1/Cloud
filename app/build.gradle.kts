@@ -25,7 +25,7 @@ android {
         minSdk = 35
         targetSdk = 37
         versionCode = 1
-        versionName = "pre-beta 1.0"
+        versionName = "1.0.0-beta01"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SUPABASE_URL", prop("SUPABASE_URL"))
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", prop("SUPABASE_PUBLISHABLE_KEY"))
@@ -46,11 +46,19 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".private"
+            isDebuggable = false
+            buildConfigField("boolean", "IS_DEV", "true")
+        }
+        create("fast") {
+            initWith(getByName("debug"))
+            isDebuggable = true
+            matchingFallbacks += listOf("debug", "release")
         }
         release {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
+            buildConfigField("boolean", "IS_DEV", "false")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -117,6 +125,7 @@ dependencies {
     implementation(libs.core)
     implementation(libs.zxing.android.embedded)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    "fastImplementation"(libs.androidx.compose.ui.tooling)
     ksp(libs.androidx.room.compiler)
     implementation(libs.ktor.client.okhttp)
     implementation(libs.gson)
@@ -138,4 +147,12 @@ dependencies {
     implementation(libs.firebase.messaging)
     implementation(libs.haze)
     implementation(libs.haze.materials)
+}
+
+tasks.configureEach {
+    if (name.contains("Debug") &&
+        (name.contains("ArtProfile") || name.contains("BaselineProfile"))
+    ) {
+        enabled = false
+    }
 }
