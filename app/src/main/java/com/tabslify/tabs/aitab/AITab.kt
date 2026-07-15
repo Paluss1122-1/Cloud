@@ -97,6 +97,7 @@ import com.tabslify.core.ui.SharedViewModel
 import com.tabslify.core.ui.TextPrimary
 import com.tabslify.core.ui.c
 import com.tabslify.core.ui.calloutAwareMarkdownComponents
+import com.tabslify.core.ui.normalizeCallouts
 
 @Composable
 fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewModel()) {
@@ -544,7 +545,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                     )
                                 ) {
                                     Markdown(
-                                        content = if (vm.isLoading && msg.text.isEmpty()) "..." else msg.text,
+                                        content = if (vm.isLoading && msg.text.isEmpty()) "..." else normalizeCallouts(msg.text),
                                         colors = markdownColors,
                                         typography = markdownTypography,
                                         components = markdownComponents
