@@ -1110,6 +1110,21 @@ fun executeCommand(commandText: String, context: Context) {
             return
         }
 
+        "clearoldprefs", "cop", "cleanoldprefs", "delsecrets", "pcsecretsclear" -> {
+            if (!prvt()) {
+                Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+                return
+            }
+            val removed = context.deleteSharedPreferences("pc_secrets")
+            showSimpleNotificationExtern(
+                if (removed) "🧹 Alte Prefs gelöscht" else "ℹ️ Nichts zu löschen",
+                if (removed) "pc_secrets wurde vollständig entfernt" else "pc_secrets war nicht vorhanden",
+                20.seconds,
+                context
+            )
+            return
+        }
+
         "tb", "tagesbericht", "upload", "uploadimage" -> {
             if (!prvt()) {
                 Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
