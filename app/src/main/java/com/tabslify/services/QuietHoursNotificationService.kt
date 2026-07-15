@@ -1286,6 +1286,12 @@ class QuietHoursNotificationService : Service() {
 
                     val xml = URL(feedUrl).readText()
                     val doc = DocumentBuilderFactory.newInstance()
+                        .apply {
+                            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+                            setFeature("http://xml.org/sax/features/external-general-entities", false)
+                            setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+                            isExpandEntityReferences = false
+                        }
                         .newDocumentBuilder()
                         .parse(InputSource(StringReader(xml)))
 
