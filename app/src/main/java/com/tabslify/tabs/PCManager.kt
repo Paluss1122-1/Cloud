@@ -87,10 +87,8 @@ fun PCManagerTab() {
     LaunchedEffect(Unit) {
         while (true) {
             val allPcs = prefs.all.map { (name, regInfo) ->
-                // pc_secrets is keyed by hardware UUID, not name - UUID is the only
-                // identifier that can't change out from under a registered PC.
                 val uuid = uuidPrefs.getString(name, null) ?: "NO_UUID"
-                val secret = secretsPrefs.getString(uuid, null) ?: ""
+                val secret = if (uuid != "NO_UUID") TotpGenerator.deriveTotpSecretFromUuid(uuid) else ""
                 val liveCode = if (secret.isNotEmpty()) TotpGenerator.generateTOTP(secret) else "?"
                 PcDetails(
                     name = name,
@@ -243,11 +241,7 @@ fun PCManagerTab() {
 
                                 Button(
                                     onClick = {
-                                        val allowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
-                                        val newSecret = (1..16).map { allowedChars.random() }.joinToString("")
-                                        
                                         val nowStr = SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault()).format(Date())
-                                        secretsPrefs.edit().putString(pc.uuid, newSecret).apply()
                                         prefs.edit().putString(pc.name, "Registriert am $nowStr").apply()
                                         uuidPrefs.edit().putString(pc.name, pc.uuid).apply()
 
@@ -317,7 +311,6 @@ fun PCManagerTab() {
                                 Button(
                                     onClick = {
                                         prefs.edit().remove(pc.name).apply()
-                                        secretsPrefs.edit().remove(pc.uuid).apply()
                                         uuidPrefs.edit().remove(pc.name).apply()
                                         if (pc.name == laptopName) {
                                             stopAllSyncServices(context)
@@ -358,7 +351,6 @@ fun PCManagerTab() {
                 Button(
                     onClick = {
                         prefs.edit().clear().apply()
-                        secretsPrefs.edit().clear().apply()
                         pendingPrefs.edit().clear().apply()
                         uuidPrefs.edit().clear().apply()
                         stopAllSyncServices(context)
