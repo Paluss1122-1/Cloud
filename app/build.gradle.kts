@@ -15,7 +15,7 @@ val localProps = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 
-fun prop(key: String) = "\"${localProps.getProperty(key) ?: ""}\""
+fun prop(key: String) = "\"${localProps.getProperty(key)}\""
 
 android {
     namespace = "com.tabslify"
