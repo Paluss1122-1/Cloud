@@ -3,6 +3,7 @@ package com.tabslify.quiethoursnotificationhelper
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.util.Base64
+import android.util.Log
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
@@ -120,7 +121,8 @@ private suspend fun sendGeminiRequest(
         } else {
             generativeModel.generateContent(requestContent).text
         }
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        Log.e("GeminiAI", "generateContent failed for model=$model target=$target: ${e.message}", e)
         null
     }
 }
