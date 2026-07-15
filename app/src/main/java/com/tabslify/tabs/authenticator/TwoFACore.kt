@@ -14,6 +14,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Update
 import java.io.ByteArrayOutputStream
+import java.security.MessageDigest
 import java.util.Locale
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
@@ -143,5 +144,29 @@ object TotpGenerator {
         } catch (_: Exception) {
             return "ERROR"
         }
+    }
+
+    fun base32Encode(data: ByteArray): String {
+        val base32Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+        val sb = StringBuilder()
+        var buffer = 0
+        var bitsLeft = 0
+        for (b in data) {
+            buffer = (buffer shl 8) or (b.toInt() and 0xFF)
+            bitsLeft += 8
+            while (bitsLeft >= 5) {
+                bitsLeft -= 5
+                sb.append(base32Chars[(buffer shr bitsLeft) and 0x1F])
+            }
+        }
+        if (bitsLeft > 0) {
+            sb.append(base32Chars[(buffer shl (5 - bitsLeft)) and 0x1F])
+        }
+        return sb.toString()
+    }
+
+    fun deriveTotpSecretFromUuid(uuid: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(uuid.toByteArray(Charsets.UTF_8))
+        return base32Encode(digest)
     }
 }
