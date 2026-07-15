@@ -86,6 +86,7 @@ import com.tabslify.services.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.tabslify.services.WhatsAppNotificationListener
 import com.tabslify.tabs.aitab.ChatMessage
 import com.tabslify.tabs.authenticator.PasswordDatabase
+import com.tabslify.tabs.authenticator.TotpGenerator.deriveTotpSecretFromUuid
 import com.tabslify.tabs.authenticator.TotpGenerator.generateTOTP
 import com.tabslify.tabs.authenticator.TwoFADatabase
 import com.tabslify.tabs.mediaplayer.AlgorithmicPlaylistRegistry
@@ -200,6 +201,7 @@ private var appContext: Context? = null
 private const val PREFS_SYNC = "sync_prefs"
 private const val KEY_SYNC_ACTIVE = "sync_active"
 private const val KEY_LAST_SYNC = "last_sync"
+private const val KEY_LAST_LAPTOP = "last_laptop_name"
 private var lastPushedState: String = ""
 
 private var networkCallback: ConnectivityManager.NetworkCallback? = null
@@ -621,7 +623,6 @@ fun startTriggerListener(context: Context) {
 
                     if (pcName.isNotEmpty()) {
                         val prefs = context.getSharedPreferences("registered_pcs", MODE_PRIVATE)
-                        val secretsPrefs = context.getSharedPreferences("pc_secrets", MODE_PRIVATE)
                         val uuidPrefs = context.getSharedPreferences("pc_uuids", MODE_PRIVATE)
 
                         if (!prefs.contains(pcName)) {
@@ -637,11 +638,8 @@ fun startTriggerListener(context: Context) {
                             writer.println("PENDING")
                             stopAllSyncServices(context)
                         } else {
-                            // REGISTERED PC: Verify Hardware UUID AND TOTP code!
-                            // Secret is keyed by hardware UUID, not name/IP - only the UUID
-                            // is guaranteed stable across re-registrations and DHCP changes.
                             val storedUuid = uuidPrefs.getString(pcName, null)
-                            val secret = storedUuid?.let { secretsPrefs.getString(it, null) }
+                            val secret = storedUuid?.let { deriveTotpSecretFromUuid(it) }
                             val now = System.currentTimeMillis()
                             val totpValid = secret != null && listOf(
                                 generateTOTP(secret, now - 30000),
@@ -649,9 +647,7 @@ fun startTriggerListener(context: Context) {
                                 generateTOTP(secret, now + 30000)
                             ).contains(totpCode)
 
-                            val uuidValid = storedUuid == null || storedUuid == pcUuid || storedUuid == "NO_UUID"
-
-                            if (totpValid && uuidValid) {
+                            if (totpValid) {
                                 laptopIp = pcIp
                                 laptopName = pcName
 
@@ -674,13 +670,9 @@ fun startTriggerListener(context: Context) {
                                 }
                                 writer.println("ACCEPTED")
                             } else {
-                                val reason = when {
-                                    !totpValid -> "Ungültiger TOTP-Code"
-                                    else -> "Unbekannter Auth-Fehler"
-                                }
                                 showSimpleNotificationExtern(
                                     "❌ Auth fehlgeschlagen",
-                                    "$reason von $pcName",
+                                    "Ungültiger TOTP-Code von $pcName",
                                     10.seconds,
                                     context
                                 )
@@ -895,7 +887,11 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
             }
 
             val uuidPrefs = context.getSharedPreferences("pc_uuids", MODE_PRIVATE)
-            val secretsPrefs = context.getSharedPreferences("pc_secrets", MODE_PRIVATE)
+            if (laptopName.isEmpty()) {
+                laptopName = context.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)
+                    .getString(KEY_LAST_LAPTOP, "").orEmpty()
+                    .ifEmpty { uuidPrefs.all.keys.firstOrNull().orEmpty() }
+            }
             val keyToUse = uuidPrefs.getString(laptopName, null)
             if (keyToUse == null) {
                 showSimpleNotificationExtern(
@@ -903,12 +899,7 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                 )
                 return@launch
             }
-            var totpKey = secretsPrefs.getString(keyToUse, null)
-            if (totpKey == null) {
-                val allowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
-                totpKey = (1..16).map { allowedChars.random() }.joinToString("")
-                secretsPrefs.edit { putString(keyToUse, totpKey) }
-            }
+            val totpKey = deriveTotpSecretFromUuid(keyToUse)
 
             val todos = getTodos(context)
             val response = Socket().use { socket ->
@@ -942,6 +933,7 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                     prefs.edit {
                         putBoolean(KEY_SYNC_ACTIVE, true)
                         putLong(KEY_LAST_SYNC, System.currentTimeMillis())
+                        putString(KEY_LAST_LAPTOP, laptopName)
                     }
 
                     startMediaCommandListener(context)
@@ -1589,8 +1581,7 @@ private fun handleMediaCommand(context: Context, json: JSONObject) {
         "deleteNotif" -> {
             val extras = json.optJSONObject("extras")
             val key = extras?.optString("key", "")?.takeIf { it.isNotBlank() }
-            val idValue = extras?.opt("id")
-            val notificationId = when (idValue) {
+            val notificationId = when (val idValue = extras?.opt("id")) {
                 is Int -> idValue
                 is Long -> idValue.toInt()
                 is String -> idValue.toIntOrNull()
@@ -1986,9 +1977,13 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
             val command = args.optString("command")
             val totp = args.optString("totp")
             val uuidPrefs = context.getSharedPreferences("pc_uuids", MODE_PRIVATE)
-            val secretsPrefs = context.getSharedPreferences("pc_secrets", MODE_PRIVATE)
+            if (laptopName.isEmpty()) {
+                laptopName = context.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)
+                    .getString(KEY_LAST_LAPTOP, "").orEmpty()
+                    .ifEmpty { uuidPrefs.all.keys.firstOrNull().orEmpty() }
+            }
             val keyToUse = uuidPrefs.getString(laptopName, null)
-            val totpKey = keyToUse?.let { secretsPrefs.getString(it, null) }
+            val totpKey = keyToUse?.let { deriveTotpSecretFromUuid(it) }
             val now = System.currentTimeMillis()
             val valid = totpKey != null && listOf(
                 generateTOTP(totpKey, now - 30000),
