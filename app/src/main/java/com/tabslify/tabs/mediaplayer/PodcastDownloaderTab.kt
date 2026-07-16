@@ -69,6 +69,7 @@ import kotlinx.serialization.json.Json
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 
 data class PodcastFeed(
@@ -224,9 +225,13 @@ fun PodcastTab() {
                 conn.setRequestProperty("Accept-Charset", "UTF-8")
                 DocumentBuilderFactory.newInstance()
                     .apply {
+                        setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
                         setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
                         setFeature("http://xml.org/sax/features/external-general-entities", false)
                         setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+                        setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "")
+                        setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "")
+                        isXIncludeAware = false
                         isExpandEntityReferences = false
                     }
                     .newDocumentBuilder()
