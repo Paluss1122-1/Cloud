@@ -223,21 +223,19 @@ fun PodcastTab() {
             val doc = withContext(Dispatchers.IO) {
                 val conn = URL(feedUrl).openConnection() as HttpURLConnection
                 conn.setRequestProperty("Accept-Charset", "UTF-8")
-                DocumentBuilderFactory.newInstance()
-                    .apply {
-                        setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
-                        setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-                        setFeature("http://xml.org/sax/features/external-general-entities", false)
-                        setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-                        runCatching {
-                            setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "")
-                            setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "")
-                        }
-                        isXIncludeAware = false
-                        isExpandEntityReferences = false
-                    }
-                    .newDocumentBuilder()
-                    .parse(conn.inputStream)
+                val factory = DocumentBuilderFactory.newInstance()
+                factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+                factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
+                factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+                factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+                runCatching {
+                    factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "")
+                    factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "")
+                }
+                factory.isXIncludeAware = false
+                factory.isExpandEntityReferences = false
+                val builder = factory.newDocumentBuilder()
+                builder.parse(conn.inputStream)
             }
             val items = doc.getElementsByTagName("item")
             val list = (0 until minOf(items.length, 50)).mapNotNull { i ->
