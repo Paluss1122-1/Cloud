@@ -105,7 +105,7 @@ jobs:
                 "android_client_info": { "package_name": "com.paluss1122.tabslify" }
               },
               "oauth_client": [],
-              "api_key": [ { "current_key": "AIzaSyDUMMYDUMMYDUMMYDUMMYDUMMYDUMMYDUM" } ],
+              "api_key": [ { "current_key": " " } ],
               "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
             },
             {
@@ -114,7 +114,7 @@ jobs:
                 "android_client_info": { "package_name": "com.paluss1122.tabslify.private" }
               },
               "oauth_client": [],
-              "api_key": [ { "current_key": "AIzaSyDUMMYDUMMYDUMMYDUMMYDUMMYDUMMYDUM" } ],
+              "api_key": [ { "current_key": " " } ],
               "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
             }
           ],
