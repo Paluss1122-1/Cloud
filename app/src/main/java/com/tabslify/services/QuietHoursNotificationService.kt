@@ -108,6 +108,7 @@ import com.tabslify.quiethoursnotificationhelper.getTodayKey
 import com.tabslify.quiethoursnotificationhelper.isQuietHoursNow
 import com.tabslify.quiethoursnotificationhelper.loadGalleryImages
 import com.tabslify.quiethoursnotificationhelper.loadTodayOrYesterdayEntry
+import com.tabslify.quiethoursnotificationhelper.markMessageAsRead
 import com.tabslify.quiethoursnotificationhelper.markReadReceiver
 import com.tabslify.quiethoursnotificationhelper.messageSentReceiver
 import com.tabslify.quiethoursnotificationhelper.notificationDismissReceiver
@@ -617,6 +618,14 @@ class QuietHoursNotificationService : Service() {
 
                 ACTION_SHOW_MESSAGES -> {
                     showUnreadMessages(this)
+                    START_STICKY
+                }
+
+                ACTION_MARK_PARTS_READ -> {
+                    val messageId = intent.getStringExtra(EXTRA_MESSAGE_ID)
+                    if (messageId != null) {
+                        markMessageAsRead(messageId, readMessageIds, this)
+                    }
                     START_STICKY
                 }
 

@@ -20,6 +20,7 @@ import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config.cms
 import com.tabslify.core.objects.tNotify
+import com.tabslify.services.QuietHoursNotificationService
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_MARK_PARTS_READ
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_MESSAGE_SENT
 import com.tabslify.services.QuietHoursNotificationService.Companion.EXTRA_MESSAGE_ID
@@ -101,11 +102,11 @@ private fun postChatNotification(key: String, context: Context, sourceLabel: Str
                 parts.reversed().forEachIndexed { idx, part ->
                     val partId = notifId + partIndex
                     partIndex++
-                    val markPi = getBroadcast(
+                    val markPi = PendingIntent.getService(
                         context, partId + 500000,
-                        Intent(ACTION_MARK_PARTS_READ).apply {
+                        Intent(context, QuietHoursNotificationService::class.java).apply {
+                            action = ACTION_MARK_PARTS_READ
                             putExtra(EXTRA_MESSAGE_ID, msgId)
-                            `package` = context.packageName
                         },
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
