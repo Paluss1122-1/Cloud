@@ -44,7 +44,7 @@ jobs:
       matrix:
         include:
         - language: java-kotlin
-          build-mode: none
+          build-mode: manual
         # CodeQL supports the following values keywords for 'language': 'actions', 'c-cpp', 'csharp', 'go', 'java-kotlin', 'javascript-typescript', 'python', 'ruby', 'rust', 'swift'
         # Use `c-cpp` to analyze code written in C, C++ or both
         # Use 'java-kotlin' to analyze code written in Java, Kotlin or both
@@ -57,11 +57,12 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # Add any setup steps before running the `github/codeql-action/init` action.
-    # This includes steps like installing compilers or runtimes (`actions/setup-node`
-    # or others). This is typically only required for manual builds.
-    # - name: Setup runtime (example)
-    #   uses: actions/setup-example@v1
+    - name: Set up JDK 17
+      if: matrix.language == 'java-kotlin'
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '17'
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
@@ -86,12 +87,47 @@ jobs:
       if: matrix.build-mode == 'manual'
       shell: bash
       run: |
-        echo 'If you are using a "manual" build mode for one or more of the' \
-          'languages you are analyzing, replace this with the commands to build' \
-          'your code, for example:'
-        echo '  make bootstrap'
-        echo '  make release'
-        exit 1
+        # google-services.json is git-ignored (it is per-developer config), but the
+        # Google Services Gradle plugin refuses to configure without it. Write a
+        # placeholder that satisfies the plugin's structure and package-name checks
+        # so a debug compile can run. No real Firebase project is contacted at build time.
+        cat > app/google-services.json <<'JSON'
+        {
+          "project_info": {
+            "project_number": "000000000000",
+            "project_id": "tabslify-ci",
+            "storage_bucket": "tabslify-ci.appspot.com"
+          },
+          "client": [
+            {
+              "client_info": {
+                "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                "android_client_info": { "package_name": "com.paluss1122.tabslify" }
+              },
+              "oauth_client": [],
+              "api_key": [ { "current_key": "AIzaSyDUMMYDUMMYDUMMYDUMMYDUMMYDUMMYDUM" } ],
+              "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+            },
+            {
+              "client_info": {
+                "mobilesdk_app_id": "1:000000000000:android:1111111111111111111111",
+                "android_client_info": { "package_name": "com.paluss1122.tabslify.private" }
+              },
+              "oauth_client": [],
+              "api_key": [ { "current_key": "AIzaSyDUMMYDUMMYDUMMYDUMMYDUMMYDUMMYDUM" } ],
+              "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+            }
+          ],
+          "configuration_version": "1"
+        }
+        JSON
+
+        # Compile the debug variant only. Release signing and the local.properties
+        # secrets are not needed for a debug compile; missing BuildConfig values
+        # simply render as the string "null", which compiles fine.
+        ./gradlew --no-daemon --stacktrace \
+          :app:compileDebugSources \
+          :extern_accessibily:compileDebugSources
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
