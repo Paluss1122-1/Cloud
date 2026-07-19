@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -69,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.tabslify.R
 import com.tabslify.apkm.ApkEntryInfo
 import com.tabslify.apkm.ApkKind
 import com.tabslify.apkm.ApkmInstaller
@@ -97,11 +99,20 @@ private val AccentAmber = Color(0xFFFFB300)
 @Composable
 fun ApkmInstallerTabContent(uri: Uri, onDone: () -> Unit) {
     val context = LocalContext.current
+    
+    val bundleWirdVorbereitetMsg = stringResource(R.string.bundle_wird_vorbereitet)
+    val bundleWirdKopiertMsg = stringResource(R.string.bundle_wird_kopiert)
+    val bundleWirdAnalysiertMsg = stringResource(R.string.bundle_wird_analysiert)
+    val unbekannterFehlerMsg = stringResource(R.string.unbekannter_fehler)
+    val basisApkIstErforderlichMsg = stringResource(R.string.basis_apk_ist_erforderlich)
+    val installationWirdVorbereitetMsg = stringResource(R.string.installation_wird_vorbereitet)
+    val bitteBestaetiigenMsg = stringResource(R.string.bitte_im_system_dialog_bestatigen)
+    
     val scope = rememberCoroutineScope()
     val installer = remember(uri) { ApkmInstaller(context.applicationContext) }
 
     var phase by remember(uri) { mutableStateOf(ApkmPhase.LOADING) }
-    var loadText by remember(uri) { mutableStateOf("Bundle wird vorbereitet…") }
+    var loadText by remember(uri) { mutableStateOf(bundleWirdVorbereitetMsg) }
     var loadProgress by remember(uri) { mutableStateOf<Float?>(null) }
     var pkg by remember(uri) { mutableStateOf<ApkmPackage?>(null) }
     var errorType by remember(uri) { mutableStateOf<ParseError?>(null) }
@@ -133,13 +144,13 @@ fun ApkmInstallerTabContent(uri: Uri, onDone: () -> Unit) {
         val sourceName = uri.lastPathSegment ?: "bundle.apkm"
         try {
             phase = ApkmPhase.LOADING
-            loadText = "Bundle wird kopiert…"
+            loadText = bundleWirdKopiertMsg
             val cacheFile = withContext(Dispatchers.IO) {
                 installer.copyToCache(uri) { copied, total ->
                     loadProgress = if (total > 0) (copied.toFloat() / total).coerceIn(0f, 1f) else null
                 }
             }
-            loadText = "Bundle wird analysiert…"
+            loadText = bundleWirdAnalysiertMsg
             loadProgress = null
             val parsed = withContext(Dispatchers.IO) { installer.parse(cacheFile, sourceName) }
             pkg = parsed
@@ -149,12 +160,12 @@ fun ApkmInstallerTabContent(uri: Uri, onDone: () -> Unit) {
             phase = ApkmPhase.READY
         } catch (e: ApkmParseException) {
             errorType = e.error
-            errorMessage = e.message ?: "Unbekannter Fehler"
+            errorMessage = e.message ?: unbekannterFehlerMsg
             installer.log("❌ Parsen fehlgeschlagen: ${e.message}")
             phase = ApkmPhase.ERROR
         } catch (e: Exception) {
             errorType = ParseError.UNREADABLE
-            errorMessage = e.message ?: "Unbekannter Fehler"
+            errorMessage = e.message ?: unbekannterFehlerMsg
             installer.log("❌ Unerwarteter Fehler: ${e.message}")
             phase = ApkmPhase.ERROR
         }
@@ -175,15 +186,15 @@ fun ApkmInstallerTabContent(uri: Uri, onDone: () -> Unit) {
         val current = pkg ?: return
         val selected = current.apks.filter { selection[it.entryName] == true }
         if (selected.none { it.kind == ApkKind.BASE }) {
-            Toast.makeText(context, "Basis-APK ist erforderlich.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, basisApkIstErforderlichMsg, Toast.LENGTH_LONG).show()
             return
         }
         phase = ApkmPhase.INSTALLING
-        installStatusText = "Installation wird vorbereitet…"
+        installStatusText = installationWirdVorbereitetMsg
         scope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 installer.install(current, selected) { confirmIntent ->
-                    installStatusText = "Bitte im System-Dialog bestätigen…"
+                    installStatusText = bitteBestaetiigenMsg
                     runCatching { context.startActivity(confirmIntent) }
                 }
             }
@@ -261,9 +272,9 @@ private fun ErrorContent(
     onRetry: () -> Unit
 ) {
     val title = when (type) {
-        ParseError.CORRUPTED -> "🧩 Datei beschädigt"
-        ParseError.NO_APKS -> "📭 Kein gültiges Bundle"
-        ParseError.UNREADABLE, null -> "⚠️ Datei nicht lesbar"
+        ParseError.CORRUPTED -> stringResource(R.string.datei_beschadigt)
+        ParseError.NO_APKS -> stringResource(R.string.kein_gultiges_bundle)
+        ParseError.UNREADABLE, null -> stringResource(R.string.datei_nicht_lesbar)
     }
     Column(modifier = Modifier.fillMaxSize()) {
         NeonBox(
@@ -278,11 +289,11 @@ private fun ErrorContent(
             }
         }
         Spacer(Modifier.height(16.dp))
-        ExpandableNeonSection("Logs", "Technische Details", listOf(AccentViolet, AccentCyan)) {
+        ExpandableNeonSection(stringResource(R.string.logs), stringResource(R.string.technische_details), listOf(AccentViolet, AccentCyan)) {
             LogView(installer)
         }
         Spacer(Modifier.weight(1f))
-        GlowButton("Schließen", listOf(AccentRed, AccentOrange), onClick = onRetry)
+        GlowButton(stringResource(R.string.schliesen), listOf(AccentRed, AccentOrange), onClick = onRetry)
     }
 }
 
@@ -323,8 +334,8 @@ private fun ReadyContent(
             }
 
             ExpandableNeonSection(
-                "Enthaltene APKs",
-                "${pkg.apks.size} Dateien · ${selectedApks.size} ausgewählt",
+                stringResource(R.string.enthaltene_apks),
+                stringResource(R.string.dateien_ausgewahlt, pkg.apks.size, selectedApks.size),
                 listOf(AccentCyan, AccentViolet),
                 initiallyExpanded = false
             ) {
@@ -334,7 +345,7 @@ private fun ReadyContent(
             Spacer(Modifier.height(12.dp))
 
             ExpandableNeonSection(
-                "Signatur & Version",
+                stringResource(R.string.signatur_version),
                 signatureLabel(pkg.signatureState),
                 listOf(if (mismatch) AccentRed else AccentGreen, AccentCyan)
             ) {
@@ -344,8 +355,8 @@ private fun ReadyContent(
             Spacer(Modifier.height(12.dp))
 
             ExpandableNeonSection(
-                "Geräteabgleich",
-                "ABIs · Sprachen · Auflösung",
+                stringResource(R.string.gerateabgleich),
+                stringResource(R.string.abis_sprachen_auflosung),
                 listOf(AccentViolet, AccentOrange)
             ) {
                 DeviceMatchDetails(pkg)
@@ -353,14 +364,14 @@ private fun ReadyContent(
 
             if (pkg.infoJsonRaw != null) {
                 Spacer(Modifier.height(12.dp))
-                ExpandableNeonSection("info.json", "Rohe Bundle-Metadaten", listOf(AccentOrange, AccentAmber)) {
+                ExpandableNeonSection("info.json", stringResource(R.string.rohe_bundle_metadaten), listOf(AccentOrange, AccentAmber)) {
                     MonospaceBlock(pkg.infoJsonRaw)
                 }
             }
 
             Spacer(Modifier.height(12.dp))
 
-            ExpandableNeonSection("Logs (live)", "${installer.logs.size} Einträge", listOf(AccentViolet, AccentCyan)) {
+            ExpandableNeonSection(stringResource(R.string.logs_live), stringResource(R.string.eintrage, installer.logs.size), listOf(AccentViolet, AccentCyan)) {
                 LogView(installer)
             }
 
@@ -372,10 +383,10 @@ private fun ReadyContent(
             (!mismatch || signatureAcknowledged)
 
         val (btnLabel, btnColors) = when {
-            needsInstallPermission -> "Erst Quelle erlauben" to listOf(Color.Gray, Color.DarkGray)
-            mismatch && !signatureAcknowledged -> "Signaturrisiko bestätigen" to listOf(Color.Gray, Color.DarkGray)
-            mismatch -> "Trotz Signaturkonflikt installieren" to listOf(AccentRed, AccentOrange)
-            else -> "Installieren (${humanSize(selectedSize)})" to listOf(AccentGreen, AccentCyan)
+            needsInstallPermission -> stringResource(R.string.erst_quelle_erlauben) to listOf(Color.Gray, Color.DarkGray)
+            mismatch && !signatureAcknowledged -> stringResource(R.string.signaturrisiko_bestatigen) to listOf(Color.Gray, Color.DarkGray)
+            mismatch -> stringResource(R.string.trotz_signaturkonflikt_installieren) to listOf(AccentRed, AccentOrange)
+            else -> stringResource(R.string.installieren, humanSize(selectedSize)) to listOf(AccentGreen, AccentCyan)
         }
 
         GlowButton(
@@ -427,19 +438,19 @@ private fun AppHeaderCard(pkg: ApkmPackage, selectedSize: Long, selectedCount: I
                     append("v${pkg.versionName ?: "?"} (${pkg.versionCode})")
                     if (installedCode != null) {
                         val arrow = when {
-                            pkg.versionCode > installedCode -> "  ⬆ Update"
-                            pkg.versionCode < installedCode -> "  ⬇ Downgrade"
-                            else -> "  ↺ Neuinstallation"
+                            pkg.versionCode > installedCode -> stringResource(R.string.update)
+                            pkg.versionCode < installedCode -> stringResource(R.string.downgrade)
+                            else -> stringResource(R.string.neuinstallation)
                         }
                         append(arrow)
                     } else {
-                        append("  ✨ Neu")
+                        append(stringResource(R.string.neu_2))
                     }
                 }
                 Text(versionLine, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "$selectedCount APKs · ${humanSize(selectedSize)}",
+                    stringResource(R.string.apks, selectedCount, humanSize(selectedSize)),
                     color = Color.White.copy(alpha = 0.55f),
                     fontSize = 12.sp
                 )
@@ -477,12 +488,10 @@ private fun SignatureWarningCard(
         backgroundAlpha = 0.2f
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Text("⚠️ Signaturkonflikt", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.signaturkonflikt), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
             Text(
-                "Die installierte App \"${pkg.packageName}\" wurde mit einem anderen Zertifikat signiert. " +
-                    "Android verhindert das Update. Zum Fortfahren müsste die vorhandene App zuerst " +
-                    "deinstalliert werden – dabei gehen ihre Daten verloren.",
+                stringResource(R.string.signaturkonflikt_text, pkg.packageName),
                 color = Color.White.copy(alpha = 0.85f),
                 fontSize = 13.sp
             )
@@ -500,7 +509,7 @@ private fun SignatureWarningCard(
                 )
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    "Ich verstehe das Risiko und will fortfahren",
+                    stringResource(R.string.ich_verstehe_das_risiko_und),
                     color = Color.White.copy(alpha = 0.9f),
                     fontSize = 13.sp
                 )
@@ -517,15 +526,15 @@ private fun PermissionCard(onRequest: () -> Unit) {
         backgroundAlpha = 0.18f
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Text("🔓 Berechtigung benötigt", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.berechtigung_benotigt), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
             Text(
-                "Damit Tabslify Apps installieren darf, muss \"Apps aus dieser Quelle installieren\" aktiviert werden.",
+                stringResource(R.string.damit_tabslify_apps_installieren_darf),
                 color = Color.White.copy(alpha = 0.85f),
                 fontSize = 13.sp
             )
             Spacer(Modifier.height(14.dp))
-            GlowButton("Installationsquelle erlauben", listOf(AccentAmber, AccentOrange), onClick = onRequest)
+            GlowButton(stringResource(R.string.installationsquelle_erlauben), listOf(AccentAmber, AccentOrange), onClick = onRequest)
         }
     }
 }
@@ -561,11 +570,11 @@ private fun ApkSelectionList(
                             Text(apk.fileName, color = Color.White, fontSize = 13.sp)
                             if (apk.recommended && !isBase) {
                                 Spacer(Modifier.width(6.dp))
-                                Tag("empfohlen", AccentGreen)
+                                Tag(stringResource(R.string.empfohlen), AccentGreen)
                             }
                             if (isBase) {
                                 Spacer(Modifier.width(6.dp))
-                                Tag("erforderlich", AccentAmber)
+                                Tag(stringResource(R.string.erforderlich), AccentAmber)
                             }
                         }
                         Text(
@@ -596,26 +605,26 @@ private fun ApkSelectionList(
 @Composable
 private fun SignatureDetails(pkg: ApkmPackage) {
     Column(modifier = Modifier.padding(16.dp)) {
-        InfoRow("Signaturstatus", signatureLabel(pkg.signatureState))
-        InfoRow("Neue Version", "v${pkg.versionName ?: "?"} (${pkg.versionCode})")
+        InfoRow(stringResource(R.string.signaturstatus), signatureLabel(pkg.signatureState))
+        InfoRow(stringResource(R.string.neue_version), "v${pkg.versionName ?: "?"} (${pkg.versionCode})")
         if (pkg.installedVersionName != null) {
-            InfoRow("Installiert", "v${pkg.installedVersionName} (${pkg.installedVersionCode})")
+            InfoRow(stringResource(R.string.installiert), "v${pkg.installedVersionName} (${pkg.installedVersionCode})")
         } else {
-            InfoRow("Installiert", "— (Neuinstallation)")
+            InfoRow(stringResource(R.string.installiert), stringResource(R.string.neuinstallation_2))
         }
-        InfoRow("Min. SDK", pkg.minSdk?.toString() ?: "?")
-        InfoRow("Target SDK", pkg.targetSdk?.toString() ?: "?")
-        InfoRow("Gesamtgröße", humanSize(pkg.totalSize))
+        InfoRow(stringResource(R.string.min_sdk), pkg.minSdk?.toString() ?: "?")
+        InfoRow(stringResource(R.string.target_sdk), pkg.targetSdk?.toString() ?: "?")
+        InfoRow(stringResource(R.string.gesamtgrose), humanSize(pkg.totalSize))
     }
 }
 
 @Composable
 private fun DeviceMatchDetails(pkg: ApkmPackage) {
     Column(modifier = Modifier.padding(16.dp)) {
-        InfoRow("Gerät ABIs", android.os.Build.SUPPORTED_ABIS.joinToString(", "))
-        InfoRow("Bundle ABIs", pkg.supportedAbis.ifEmpty { listOf("universal") }.joinToString(", "))
-        InfoRow("Bundle Sprachen", pkg.supportedLanguages.ifEmpty { listOf("—") }.joinToString(", "))
-        InfoRow("Bundle Auflösungen", pkg.supportedDensities.ifEmpty { listOf("—") }.joinToString(", "))
+        InfoRow(stringResource(R.string.gerat_abis), android.os.Build.SUPPORTED_ABIS.joinToString(", "))
+        InfoRow(stringResource(R.string.bundle_abis), pkg.supportedAbis.ifEmpty { listOf("universal") }.joinToString(", "))
+        InfoRow(stringResource(R.string.bundle_sprachen), pkg.supportedLanguages.ifEmpty { listOf("—") }.joinToString(", "))
+        InfoRow(stringResource(R.string.bundle_auflosungen), pkg.supportedDensities.ifEmpty { listOf("—") }.joinToString(", "))
     }
 }
 
@@ -658,7 +667,7 @@ private fun ResultContent(
                 Text(if (success) "✅" else "❌", fontSize = 48.sp)
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    if (success) "Installation erfolgreich" else "Installation fehlgeschlagen",
+                    if (success) stringResource(R.string.installation_erfolgreich) else stringResource(R.string.installation_fehlgeschlagen),
                     color = Color.White,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
@@ -676,7 +685,7 @@ private fun ResultContent(
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "↩ Es wurde nichts teilweise installiert (Rollback).",
+                        stringResource(R.string.es_wurde_nichts_teilweise_installiert),
                         color = AccentAmber,
                         fontSize = 12.sp
                     )
@@ -685,8 +694,8 @@ private fun ResultContent(
         }
         Spacer(Modifier.height(16.dp))
         ExpandableNeonSection(
-            "Logs",
-            "${installer.logs.size} Einträge",
+            stringResource(R.string.logs),
+            stringResource(R.string.eintrage, installer.logs.size),
             listOf(AccentViolet, AccentCyan),
             initiallyExpanded = !success
         ) {
@@ -694,7 +703,7 @@ private fun ResultContent(
         }
         Spacer(Modifier.weight(1f))
         GlowButton(
-            if (success) "Fertig" else "Schließen",
+            if (success) stringResource(R.string.fertig_2) else stringResource(R.string.schliesen),
             if (success) listOf(AccentGreen, AccentCyan) else listOf(AccentRed, AccentOrange),
             onClick = onDone
         )
@@ -800,7 +809,7 @@ private fun LogView(installer: ApkmInstaller) {
                 .padding(10.dp)
         ) {
             if (installer.logs.isEmpty()) {
-                Text("Keine Logs.", color = Color.White.copy(alpha = 0.4f), fontSize = 11.sp)
+                Text(stringResource(R.string.keine_logs), color = Color.White.copy(alpha = 0.4f), fontSize = 11.sp)
             } else {
                 Column {
                     installer.logs.forEach { line ->
@@ -817,7 +826,7 @@ private fun LogView(installer: ApkmInstaller) {
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            "📋 Logs kopieren",
+            stringResource(R.string.logs_kopieren),
             color = AccentCyan,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
@@ -881,27 +890,29 @@ private fun GlowButton(
     }
 }
 
+@Composable
 private fun kindLabel(kind: ApkKind): String = when (kind) {
-    ApkKind.BASE -> "Basis-APK"
-    ApkKind.ARCH -> "Architektur (ABI)"
-    ApkKind.DENSITY -> "Bildschirmauflösung"
-    ApkKind.LANGUAGE -> "Sprachen"
-    ApkKind.FEATURE -> "Feature-Module"
-    ApkKind.OTHER -> "Sonstige"
+    ApkKind.BASE -> stringResource(R.string.basis_apk)
+    ApkKind.ARCH -> stringResource(R.string.architektur_abi)
+    ApkKind.DENSITY -> stringResource(R.string.bildschirmauflosung)
+    ApkKind.LANGUAGE -> stringResource(R.string.sprachen)
+    ApkKind.FEATURE -> stringResource(R.string.feature_module)
+    ApkKind.OTHER -> stringResource(R.string.sonstige)
 }
 
+@Composable
 private fun signatureLabel(state: SignatureState): String = when (state) {
-    SignatureState.NOT_INSTALLED -> "Neuinstallation (keine Kollision)"
-    SignatureState.MATCH -> "✓ Signatur passt zur installierten App"
-    SignatureState.MISMATCH -> "✗ Signaturkonflikt!"
-    SignatureState.UNKNOWN -> "Unbekannt"
+    SignatureState.NOT_INSTALLED -> stringResource(R.string.neuinstallation_keine_kollision)
+    SignatureState.MATCH -> stringResource(R.string.signatur_passt_zur_installierten_app)
+    SignatureState.MISMATCH -> stringResource(R.string.signaturkonflikt_2)
+    SignatureState.UNKNOWN -> stringResource(R.string.unbekannt)
 }
 
+@Composable
 private fun friendlyFailure(failure: InstallOutcome.Failure): String {
     if (failure.isSignatureConflict) {
-        return "Signaturkonflikt: Die vorhandene App wurde mit einem anderen Zertifikat signiert. " +
-            "Deinstalliere sie zuerst und versuche es erneut."
+        return stringResource(R.string.signaturkonflikt_failure)
     }
-    val base = failure.message?.takeIf { it.isNotBlank() } ?: "Unbekannter Fehler"
-    return "Fehler: $base"
+    val base = failure.message?.takeIf { it.isNotBlank() } ?: stringResource(R.string.unbekannter_fehler)
+    return stringResource(R.string.fehler_msg, base)
 }
