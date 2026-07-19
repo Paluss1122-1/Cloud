@@ -74,6 +74,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -88,6 +89,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
+import com.tabslify.R
 import com.tabslify.core.objects.prvt
 import com.tabslify.core.ui.AlertDialogTabslify
 import com.tabslify.core.ui.BgSurface
@@ -202,8 +204,8 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
         AlertDialogTabslify(
             onDismiss = { vm.showLimitReached = false },
             onConfirm = { vm.showLimitReached = false },
-            title = "Tageslimit erreicht",
-            text = "Du hast dein tägliches Limit für AI-Nachrichten erreicht!",
+            title = stringResource(R.string.tageslimit_erreicht),
+            text = stringResource(R.string.du_hast_dein_tagliches_limit),
             confirmText = "OK",
             oneButton = true,
         )
@@ -213,13 +215,14 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
         AlertDialogTabslify(
             onDismiss = { clearHistoryConfirmation = false },
             onConfirm = { vm.clearHistory(); clearHistoryConfirmation = false },
-            title = "Chat leeren?",
-            text = "Alle Nachrichten in diesem Chat werden dauerhaft entfernt",
-            confirmText = "Chat leeren"
+            title = stringResource(R.string.chat_leeren),
+            text = stringResource(R.string.alle_nachrichten_in_diesem_chat),
+            confirmText = stringResource(R.string.chat_leeren_2)
         )
     }
 
     val cs = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val aitabMessageLabel = stringResource(R.string.aitab_message)
 
     Box(
         Modifier
@@ -286,7 +289,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                             )
 
                                             Text(
-                                                text = "VISION MODELS:",
+                                                text = stringResource(R.string.vision_models),
                                                 modifier = Modifier.padding(horizontal = 8.dp)
                                             )
 
@@ -363,7 +366,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                             colors = buttonColors(containerColor = Color.Red),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Icon(Icons.Default.Delete, "Clear AI History")
+                            Icon(Icons.Default.Delete, stringResource(R.string.clear_ai_history))
                         }
                     }
                 }
@@ -454,7 +457,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                         shape = RoundedCornerShape(14.dp),
                                         placeholder = {
                                             Text(
-                                                "Nachricht bearbeiten...",
+                                                stringResource(R.string.nachricht_bearbeiten),
                                                 color = Color(0xFF888888)
                                             )
                                         },
@@ -609,7 +612,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                 ) {
                     Icon(
                         if (vm.selectedImageUri == null) Icons.Default.CameraAlt else Icons.Default.Check,
-                        "Bild Anhängen",
+                        stringResource(R.string.bild_anhangen),
                         tint = Black
                     )
                 }
@@ -628,7 +631,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                 ) {
                     Icon(
                         if (vm.selectedAudioUri == null) Icons.Default.MusicNote else Icons.Default.Check,
-                        "Audio Anhängen",
+                        stringResource(R.string.audio_anhangen),
                         tint = Black
                     )
                 }
@@ -639,7 +642,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                     shape = RoundedCornerShape(24.dp),
-                    placeholder = { Text("Nachricht eingeben...", color = Color(0xFF888888)) },
+                    placeholder = { Text(stringResource(R.string.nachricht_eingeben), color = Color(0xFF888888)) },
                     colors = TextFieldDefaults.colors(
                         focusedTextColor = White,
                         unfocusedTextColor = White,
@@ -661,7 +664,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                         .clickable(onClick = { vm.sendMessage() }),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send message")
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send_message))
                 }
             }
         }
@@ -752,7 +755,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                     val text = message?.text ?: return@clickable
                                     val clip = ClipData(
                                         ClipDescription(
-                                            "AITab Message",
+                                            aitabMessageLabel,
                                             arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN)
                                         ),
                                         ClipData.Item(text)
@@ -764,7 +767,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
                             Text(
-                                "Kopieren",
+                                stringResource(R.string.kopieren),
                                 color = TextPrimary,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 22.sp
@@ -789,7 +792,7 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                     .padding(horizontal = 16.dp, vertical = 8.dp)
                             ) {
                                 Text(
-                                    "Bearbeiten",
+                                    stringResource(R.string.bearbeiten),
                                     color = TextPrimary,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 22.sp
