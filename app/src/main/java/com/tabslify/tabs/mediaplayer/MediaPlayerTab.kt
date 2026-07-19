@@ -99,6 +99,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -116,6 +117,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
+import com.tabslify.R
 import com.tabslify.core.ui.NeonBox
 import com.tabslify.quiethoursnotificationhelper.AiResponseEntry
 import com.tabslify.quiethoursnotificationhelper.aiResponseFlow
@@ -246,7 +248,7 @@ fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "🎶 Media Player",
+                            text = stringResource(R.string.media_player_2),
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 26.sp
@@ -266,7 +268,7 @@ fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
                                 )
                                 Icon(
                                     Icons.Default.Download,
-                                    contentDescription = "Open Downloader",
+                                    contentDescription = stringResource(R.string.open_downloader),
                                     tint = color
                                 )
                             }
@@ -284,7 +286,7 @@ fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
                                 )
                                 Icon(
                                     Icons.Default.Mic,
-                                    contentDescription = "Open Recorder",
+                                    contentDescription = stringResource(R.string.open_recorder),
                                     tint = color
                                 )
                             }
@@ -311,13 +313,13 @@ fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
                         ) {
                             Text("🔒", fontSize = 40.sp)
                             Text(
-                                "Medienzugriff benötigt",
+                                stringResource(R.string.medienzugriff_benotigt),
                                 color = TextPrimary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 18.sp
                             )
                             Text(
-                                "Um Musik und Podcasts zu laden, braucht Tabslify Zugriff auf deine Audiodateien.",
+                                stringResource(R.string.um_musik_und_podcasts_zu),
                                 color = TextSecondary,
                                 fontSize = 14.sp
                             )
@@ -329,7 +331,7 @@ fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Berechtigung erteilen")
+                                Text(stringResource(R.string.berechtigung_erteilen))
                             }
                         }
                     }
@@ -475,10 +477,10 @@ private fun MediaBottomBar(currentTab: MediaTab, onTabSelected: (MediaTab) -> Un
         windowInsets = WindowInsets(0, 10, 0, 20)
     ) {
         val tabs = listOf(
-            Triple(MediaTab.HOME, "Home", "🏠"),
-            Triple(MediaTab.SEARCH, "Suche", "🔍"),
-            Triple(MediaTab.MUSIC, "Musik", "🎵"),
-            Triple(MediaTab.PODCASTS, "Podcasts", "📚")
+            Triple(MediaTab.HOME, stringResource(R.string.home), "🏠"),
+            Triple(MediaTab.SEARCH, stringResource(R.string.suche), "🔍"),
+            Triple(MediaTab.MUSIC, stringResource(R.string.musik), "🎵"),
+            Triple(MediaTab.PODCASTS, stringResource(R.string.podcasts), "📚")
         )
         tabs.forEach { (tab, label, icon) ->
             val selected = currentTab == tab
@@ -605,14 +607,14 @@ private fun HomeTab(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    StatItem("⏰", formatDuration(stats.totalListenedMs), "Gesamt")
+                    StatItem("⏰", formatDuration(stats.totalListenedMs), stringResource(R.string.gesamt))
                     StatDivider()
                     StatItem(
-                        "🔥", "${stats.listeningStreakDays}d", "Streak",
+                        "🔥", "${stats.listeningStreakDays}d", stringResource(R.string.streak),
                         dimmed = !stats.playedToday
                     )
                     StatDivider()
-                    StatItem("🎵", "${stats.totalSongsPlayed}", "Songs gespielt")
+                    StatItem("🎵", "${stats.totalSongsPlayed}", stringResource(R.string.songs_gespielt))
                 }
 
                 Spacer(Modifier.height(12.dp))
@@ -632,7 +634,7 @@ private fun HomeTab(
                     ) {
                         Text("📊", fontSize = 14.sp)
                         Text(
-                            "Alle Statistiken",
+                            stringResource(R.string.alle_statistiken),
                             color = AccentViolet,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold
@@ -653,7 +655,7 @@ private fun HomeTab(
 
         if (state.algorithmicPlaylists.isNotEmpty()) {
             item {
-                SectionHeader("Für dich")
+                SectionHeader(stringResource(R.string.fur_dich))
             }
             item {
                 LazyRow(
@@ -679,7 +681,7 @@ private fun HomeTab(
         }
 
         if (state.userPlaylists.isNotEmpty()) {
-            item { SectionHeader("Meine Playlists") }
+            item { SectionHeader(stringResource(R.string.meine_playlists)) }
             item {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
@@ -722,7 +724,7 @@ private fun HomeTab(
                                     )
                                     Spacer(Modifier.height(4.dp))
                                     Text(
-                                        "$songCount Songs",
+                                        stringResource(R.string.songs_2, songCount),
                                         color = TextSecondary,
                                         fontSize = 12.sp
                                     )
@@ -735,7 +737,7 @@ private fun HomeTab(
         }
 
         if (activePodcasts.isNotEmpty()) {
-            item { SectionHeader("Weiter hören") }
+            item { SectionHeader(stringResource(R.string.weiter_horen)) }
             items(activePodcasts.take(5)) { ep ->
                 PodcastEpisodeRow(
                     episode = ep,
@@ -746,7 +748,7 @@ private fun HomeTab(
             }
         }
         if (recentSongs.isNotEmpty()) {
-            item { SectionHeader("Zuletzt gehört") }
+            item { SectionHeader(stringResource(R.string.zuletzt_gehort)) }
             items(recentSongs) { song ->
                 SongRow(
                     song = song,
@@ -760,8 +762,8 @@ private fun HomeTab(
             item {
                 EmptyState(
                     icon = "🎵",
-                    title = "Keine Medien gefunden",
-                    subtitle = "Lege Musik in /Cloud/ ab"
+                    title = stringResource(R.string.keine_medien_gefunden),
+                    subtitle = stringResource(R.string.lege_musik_in_cloud_ab)
                 )
             }
         }
@@ -775,7 +777,7 @@ private fun HomeTab(
             }
         }
         PlaylistDetailSheet(
-            title = source.name,
+            title = stringResource(source.nameRes),
             icon = source.icon,
             songs = (detailPlaylist ?: cachedDetailPlaylistData)!!.second,
             onStart = { onSongClick(it) },
@@ -843,10 +845,25 @@ private fun AllStatsBottomSheet(onDismiss: () -> Unit) {
             .sortedByDescending { it.second }
     }
 
+    val spotifyGroups = remember(allSessions) {
+        allSessions.filter { it.source == "spotify" || it.source == "spotify_pc" }
+            .groupBy { it.label }
+            .map { (label, sessions) ->
+                Triple(
+                    label,
+                    sessions.sumOf { it.listenedMs },
+                    sessions.size
+                )
+            }
+            .sortedByDescending { it.second }
+    }
+
     val totalMusicMs = remember(musicGroups) { musicGroups.sumOf { it.second } }
     val totalPodcastMs = remember(podcastGroups) { podcastGroups.sumOf { it.second } }
+    val totalSpotifyMs = remember(spotifyGroups) { spotifyGroups.sumOf { it.second } }
     val maxMusicMs = remember(musicGroups) { musicGroups.firstOrNull()?.second ?: 1L }
     val maxPodcastMs = remember(podcastGroups) { podcastGroups.firstOrNull()?.second ?: 1L }
+    val maxSpotifyMs = remember(spotifyGroups) { spotifyGroups.firstOrNull()?.second ?: 1L }
 
     var selectedTab by remember { mutableIntStateOf(0) }
 
@@ -867,14 +884,14 @@ private fun AllStatsBottomSheet(onDismiss: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "📊 Statistiken",
+                    stringResource(R.string.statistiken),
                     color = TextPrimary,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
                 Text(
-                    "${allSessions.size} Sessions",
+                    stringResource(R.string.sessions, allSessions.size),
                     color = TextTertiary,
                     fontSize = 12.sp
                 )
@@ -889,14 +906,16 @@ private fun AllStatsBottomSheet(onDismiss: () -> Unit) {
                     .padding(12.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                StatItem("🎵", formatDuration(totalMusicMs), "Musik gesamt")
+                StatItem("🎵", formatDuration(totalMusicMs), stringResource(R.string.musik_gesamt))
                 StatDivider()
-                StatItem("🎙️", formatDuration(totalPodcastMs), "Podcast gesamt")
+                StatItem("🎙️", formatDuration(totalPodcastMs), stringResource(R.string.podcast_gesamt))
+                StatDivider()
+                StatItem("🟢", formatDuration(totalSpotifyMs), "davon Spotify")
                 StatDivider()
                 StatItem(
                     "⏰",
                     formatDuration(totalMusicMs + totalPodcastMs),
-                    "Alles"
+                    stringResource(R.string.alles)
                 )
             }
 
@@ -910,7 +929,7 @@ private fun AllStatsBottomSheet(onDismiss: () -> Unit) {
                     .background(BgCard)
                     .padding(4.dp)
             ) {
-                listOf("🎵 Musik", "🎙️ Podcasts").forEachIndexed { i, label ->
+                listOf(stringResource(R.string.musik_2), stringResource(R.string.podcasts_3), "Spotify").forEachIndexed { i, label ->
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -932,14 +951,26 @@ private fun AllStatsBottomSheet(onDismiss: () -> Unit) {
 
             Spacer(Modifier.height(8.dp))
 
-            val items = if (selectedTab == 0) musicGroups else podcastGroups
-            val maxMs = if (selectedTab == 0) maxMusicMs else maxPodcastMs
+            val items = when (selectedTab) {
+                0 -> musicGroups
+                1 -> podcastGroups
+                else -> spotifyGroups
+            }
+            val maxMs = when (selectedTab) {
+                0 -> maxMusicMs
+                1 -> maxPodcastMs
+                else -> maxSpotifyMs
+            }
 
             if (items.isEmpty()) {
                 EmptyState(
-                    icon = if (selectedTab == 0) "🎵" else "🎙️",
-                    title = "Noch keine Daten",
-                    subtitle = "Spiele erst etwas ab"
+                    icon = when (selectedTab) {
+                        0 -> "🎵"
+                        1 -> "🎙️"
+                        else -> "🟢"
+                    },
+                    title = stringResource(R.string.noch_keine_daten),
+                    subtitle = stringResource(R.string.spiele_erst_etwas_ab)
                 )
             } else {
                 LazyColumn(
@@ -958,7 +989,8 @@ private fun AllStatsBottomSheet(onDismiss: () -> Unit) {
                             totalMs = totalMs,
                             sessionCount = sessionCount,
                             barFraction = (totalMs.toFloat() / maxMs).coerceIn(0f, 1f),
-                            isMusic = selectedTab == 0
+                            isMusic = selectedTab == 0,
+                            icon = if (selectedTab == 2) "🟢" else null
                         )
                     }
                     item { Spacer(Modifier.height(8.dp)) }
@@ -974,7 +1006,8 @@ private fun StatsRow(
     totalMs: Long,
     sessionCount: Int,
     barFraction: Float,
-    isMusic: Boolean
+    isMusic: Boolean,
+    icon: String? = null
 ) {
     Column(
         modifier = Modifier
@@ -998,8 +1031,8 @@ private fun StatsRow(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    if (isMusic) label.take(1).uppercase() else "🎙️",
-                    fontSize = if (isMusic) 15.sp else 14.sp,
+                    icon ?: if (isMusic) label.take(1).uppercase() else "🎙️",
+                    fontSize = if (icon == null && isMusic) 15.sp else 14.sp,
                     color = TextPrimary,
                     fontWeight = FontWeight.Bold
                 )
@@ -1015,7 +1048,7 @@ private fun StatsRow(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    "$sessionCount Sessions",
+                    stringResource(R.string.sessions, sessionCount),
                     color = TextTertiary,
                     fontSize = 11.sp
                 )
@@ -1072,19 +1105,19 @@ private fun SearchTab(
         if (query.length < 2) {
             EmptyState(
                 icon = "🔍",
-                title = "Suche starten",
-                subtitle = "Gib mindestens 2 Zeichen ein"
+                title = stringResource(R.string.suche_starten),
+                subtitle = stringResource(R.string.gib_mindestens_2_zeichen_ein)
             )
         } else if (!hasResults) {
             EmptyState(
                 icon = "😕",
-                title = "Keine Ergebnisse",
-                subtitle = "Nichts für \"$query\" gefunden"
+                title = stringResource(R.string.keine_ergebnisse),
+                subtitle = stringResource(R.string.nichts_fur_gefunden, query)
             )
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 if (results.songs.isNotEmpty()) {
-                    item { SectionHeader("Songs (${results.songs.size})") }
+                    item { SectionHeader(stringResource(R.string.songs_3, results.songs.size)) }
                     items(results.songs) { song ->
                         SongRow(
                             song = song,
@@ -1093,7 +1126,7 @@ private fun SearchTab(
                     }
                 }
                 if (results.episodes.isNotEmpty()) {
-                    item { SectionHeader("Podcast-Folgen (${results.episodes.size})") }
+                    item { SectionHeader(stringResource(R.string.podcast_folgen, results.episodes.size)) }
                     items(results.episodes) { ep ->
                         PodcastEpisodeRow(
                             ep,
@@ -1103,7 +1136,7 @@ private fun SearchTab(
                     }
                 }
                 if (results.shows.isNotEmpty()) {
-                    item { SectionHeader("Shows (${results.shows.size})") }
+                    item { SectionHeader(stringResource(R.string.shows_2, results.shows.size)) }
                     items(results.shows) { show ->
                         ShowCard(
                             show = show,
@@ -1140,9 +1173,9 @@ private fun LibraryTab(
     ) {
         item {
             Row {
-                SectionHeader("Podcast-Shows")
+                SectionHeader(stringResource(R.string.podcast_shows_3))
                 Button(onClick = { PodcastShowManager.resetToDefault() }) {
-                    Text("Reset")
+                    Text(stringResource(R.string.reset_2))
                 }
             }
         }
@@ -1216,7 +1249,7 @@ private fun MusicTab(
             contentPadding = PaddingValues(bottom = 100.dp)
         ) {
             if (state.algorithmicPlaylists.isNotEmpty()) {
-                item { SectionHeader("Für dich") }
+                item { SectionHeader(stringResource(R.string.fur_dich)) }
                 item {
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
@@ -1240,7 +1273,7 @@ private fun MusicTab(
             }
 
             if (state.userPlaylists.isNotEmpty()) {
-                item { SectionHeader("Meine Playlists (${state.userPlaylists.size})") }
+                item { SectionHeader(stringResource(R.string.meine_playlists_2, state.userPlaylists.size)) }
                 items(state.userPlaylists) { playlist ->
                     val songCount = playlist.items.size
                     Row(
@@ -1272,7 +1305,7 @@ private fun MusicTab(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                "$songCount Songs",
+                                stringResource(R.string.songs_2, songCount),
                                 color = TextTertiary,
                                 fontSize = 11.sp
                             )
@@ -1293,7 +1326,7 @@ private fun MusicTab(
             }
 
             if (state.songs.isNotEmpty()) {
-                item { SectionHeader("Alle Songs (${state.songs.size})") }
+                item { SectionHeader(stringResource(R.string.alle_songs_3, state.songs.size)) }
                 items(state.songs) { song ->
                     val isSelected = selectedSongs.contains(song.path)
                     Row(
@@ -1374,7 +1407,7 @@ private fun MusicTab(
                         .padding(horizontal = 14.dp, vertical = 8.dp)
                 ) {
                     Text(
-                        "${selectedSongs.size} ausgewählt",
+                        stringResource(R.string.ausgewahlt, selectedSongs.size),
                         color = AccentViolet,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
@@ -1422,7 +1455,7 @@ private fun MusicTab(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            if (selectedSongs.isNotEmpty()) "Playlist erstellen" else "Neue Playlist",
+                            if (selectedSongs.isNotEmpty()) stringResource(R.string.playlist_erstellen_2) else stringResource(R.string.neue_playlist),
                             color = TextPrimary,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
@@ -1435,7 +1468,7 @@ private fun MusicTab(
 
     detailPlaylist?.let { (source, songs) ->
         PlaylistDetailSheet(
-            title = source.name,
+            title = stringResource(source.nameRes),
             icon = source.icon,
             songs = songs,
             onStart = { onSongClick(it) },
@@ -1460,11 +1493,11 @@ private fun MusicTab(
             onDismissRequest = { playlistToDelete = null },
             containerColor = BgSurface,
             title = {
-                Text("Playlist löschen?", color = TextPrimary, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.playlist_loschen_2), color = TextPrimary, fontWeight = FontWeight.Bold)
             },
             text = {
                 Text(
-                    "\"${playlist.name}\" wird unwiderruflich gelöscht.",
+                    stringResource(R.string.wird_unwiderruflich_geloscht, playlist.name),
                     color = TextSecondary
                 )
             },
@@ -1480,7 +1513,7 @@ private fun MusicTab(
                         }
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    Text("Löschen", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.loschen), color = TextPrimary, fontWeight = FontWeight.SemiBold)
                 }
             },
             dismissButton = {
@@ -1491,7 +1524,7 @@ private fun MusicTab(
                         .clickable { playlistToDelete = null }
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    Text("Abbrechen", color = TextSecondary)
+                    Text(stringResource(R.string.abbrechen), color = TextSecondary)
                 }
             }
         )
@@ -1550,13 +1583,13 @@ private fun CreatePlaylistBottomSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "🎵 Playlist erstellen",
+                    stringResource(R.string.playlist_erstellen_3),
                     color = TextPrimary,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
-                Text("${selectedPaths.size} Songs", color = AccentViolet, fontSize = 13.sp)
+                Text(stringResource(R.string.songs_2, selectedPaths.size), color = AccentViolet, fontSize = 13.sp)
             }
 
             Box(
@@ -1568,7 +1601,7 @@ private fun CreatePlaylistBottomSheet(
                     .padding(horizontal = 16.dp, vertical = 14.dp)
             ) {
                 if (playlistName.isEmpty()) {
-                    Text("Playlist-Name...", color = TextTertiary, fontSize = 15.sp)
+                    Text(stringResource(R.string.playlist_name_platzhalter), color = TextTertiary, fontSize = 15.sp)
                 }
                 BasicTextField(
                     value = playlistName,
@@ -1590,7 +1623,7 @@ private fun CreatePlaylistBottomSheet(
                     .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
                 if (searchQuery.isEmpty()) {
-                    Text("🔍 Songs suchen...", color = TextTertiary, fontSize = 14.sp)
+                    Text(stringResource(R.string.songs_suchen), color = TextTertiary, fontSize = 14.sp)
                 }
                 BasicTextField(
                     value = searchQuery,
@@ -1682,7 +1715,7 @@ private fun CreatePlaylistBottomSheet(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "✓ Playlist erstellen (${selectedPaths.size} Songs)",
+                    stringResource(R.string.playlist_erstellen_songs, selectedPaths.size),
                     color = if (playlistName.isNotBlank() && selectedPaths.isNotEmpty())
                         TextPrimary else TextTertiary,
                     fontSize = 15.sp,
@@ -1720,7 +1753,7 @@ private fun ShowAssignBottomSheet(
                 .navigationBarsPadding()
         ) {
             Text(
-                "Show zuweisen",
+                stringResource(R.string.show_zuweisen),
                 color = TextPrimary,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
@@ -1799,7 +1832,7 @@ private fun ShowAssignBottomSheet(
                     )
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        "Neue Show erstellen",
+                        stringResource(R.string.neue_show_erstellen),
                         color = AccentViolet,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium
@@ -1821,7 +1854,7 @@ private fun ShowAssignBottomSheet(
                             .padding(horizontal = 16.dp, vertical = 14.dp)
                     ) {
                         if (newShowName.isEmpty()) {
-                            Text("Show-Name...", color = TextTertiary, fontSize = 15.sp)
+                            Text(stringResource(R.string.show_name_platzhalter), color = TextTertiary, fontSize = 15.sp)
                         }
                         BasicTextField(
                             value = newShowName,
@@ -1842,7 +1875,7 @@ private fun ShowAssignBottomSheet(
                                 .padding(vertical = 12.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("Abbrechen", color = TextSecondary, fontSize = 14.sp)
+                            Text(stringResource(R.string.abbrechen), color = TextSecondary, fontSize = 14.sp)
                         }
                         Box(
                             modifier = Modifier
@@ -1856,7 +1889,7 @@ private fun ShowAssignBottomSheet(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                "Erstellen & Zuweisen",
+                                stringResource(R.string.erstellen_zuweisen),
                                 color = if (newShowName.isNotBlank()) TextPrimary else TextTertiary,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium
@@ -1929,7 +1962,7 @@ private fun AlgorithmicPlaylistCard(
             Text(source.icon, fontSize = 36.sp)
             Column {
                 Text(
-                    source.name,
+                    stringResource(source.nameRes),
                     color = TextPrimary,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
@@ -1937,9 +1970,9 @@ private fun AlgorithmicPlaylistCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.height(4.dp))
-                Text("$songCount Songs", color = TextSecondary, fontSize = 12.sp)
+                Text(stringResource(R.string.songs_2, songCount), color = TextSecondary, fontSize = 12.sp)
                 Text(
-                    source.description, color = TextTertiary, fontSize = 11.sp,
+                    stringResource(source.descriptionRes), color = TextTertiary, fontSize = 11.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
             }
@@ -1984,7 +2017,7 @@ private fun SongRow(
                 fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
             if (sessionCount > 0) {
-                Text("${sessionCount}× gehört", color = TextTertiary, fontSize = 11.sp)
+                Text(stringResource(R.string.gehort, sessionCount), color = TextTertiary, fontSize = 11.sp)
             }
         }
     }
@@ -2110,13 +2143,15 @@ private fun ShowCard(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "$episodeCount Folgen${if (unheard > 0) " · $unheard neu" else ""}${
-                        if (totalListenedMs > 0) " · ${
-                            formatDuration(
-                                totalListenedMs
-                            )
-                        } gehört" else ""
-                    }",
+                    stringResource(
+                        R.string.folgen,
+                        episodeCount,
+                        (if (unheard > 0) stringResource(R.string.neu_suffix, unheard) else "") +
+                                (if (totalListenedMs > 0) stringResource(
+                                    R.string.gehort_suffix,
+                                    formatDuration(totalListenedMs)
+                                ) else "")
+                    ),
                     color = TextSecondary, fontSize = 12.sp
                 )
             }
@@ -2142,7 +2177,7 @@ private fun ShowCard(
                 }
                 if (episodes.isEmpty()) {
                     Text(
-                        "Keine Folgen",
+                        stringResource(R.string.keine_folgen),
                         color = TextTertiary, fontSize = 13.sp,
                         modifier = Modifier.padding(16.dp)
                     )
@@ -2187,7 +2222,7 @@ private fun SearchBar(query: String, onQueryChange: (String) -> Unit) {
             .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
         if (query.isEmpty()) {
-            Text("🔍  Songs, Podcasts, Shows suchen...", color = TextTertiary, fontSize = 15.sp)
+            Text(stringResource(R.string.songs_podcasts_shows_suchen), color = TextTertiary, fontSize = 15.sp)
         }
         BasicTextField(
             value = query,
@@ -2234,7 +2269,7 @@ private fun SongAnalyticsContent(song: MediaPlayerService.Song) {
         Spacer(Modifier.height(4.dp))
 
         if (sessions.isEmpty()) {
-            Text("Noch nicht gespielt", color = TextTertiary, fontSize = 14.sp)
+            Text(stringResource(R.string.noch_nicht_gespielt), color = TextTertiary, fontSize = 14.sp)
             Spacer(Modifier.height(32.dp))
             return@Column
         }
@@ -2255,12 +2290,12 @@ private fun SongAnalyticsContent(song: MediaPlayerService.Song) {
             ) {
                 Column {
                     Text(
-                        "🔁 Längste Dauerschleife",
+                        stringResource(R.string.langste_dauerschleife),
                         color = NeonGreen.copy(alpha = 0.85f),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
-                    Text("${it.repeatCount}× am Stück", color = TextTertiary, fontSize = 11.sp)
+                    Text(stringResource(R.string.am_stuck, it.repeatCount), color = TextTertiary, fontSize = 11.sp)
                 }
                 Text(
                     formatDuration(it.listenedMs),
@@ -2276,7 +2311,7 @@ private fun SongAnalyticsContent(song: MediaPlayerService.Song) {
             val date = SimpleDateFormat("dd.MM · HH:mm", Locale.GERMANY)
                 .format(Date(session.startedAt))
             val repeatStr =
-                if (session.repeatCount > 1) " · ${session.repeatCount}× wiederholt" else ""
+                if (session.repeatCount > 1) stringResource(R.string.wiederholt, session.repeatCount) else ""
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2324,12 +2359,12 @@ private fun PodcastAnalyticsContent(episode: PodcastEpisode) {
             fontWeight = FontWeight.Bold, maxLines = 2
         )
         Spacer(Modifier.height(4.dp))
-        Text("Show: $showName", color = TextSecondary, fontSize = 13.sp)
+        Text(stringResource(R.string.show_prefix, showName), color = TextSecondary, fontSize = 13.sp)
         Spacer(Modifier.height(16.dp))
 
         if (episode.isCompleted) {
             Text(
-                "✓ Vollständig angehört", color = Color(0xFF43A047),
+                stringResource(R.string.vollstandig_angehort), color = Color(0xFF43A047),
                 fontSize = 14.sp, fontWeight = FontWeight.Medium
             )
             Spacer(Modifier.height(8.dp))
@@ -2337,7 +2372,7 @@ private fun PodcastAnalyticsContent(episode: PodcastEpisode) {
 
         if (showTotalMs > 0) {
             Text(
-                "Show insgesamt gehört: ${formatDuration(showTotalMs)}",
+                stringResource(R.string.show_insgesamt_gehort, formatDuration(showTotalMs)),
                 color = TextSecondary, fontSize = 14.sp
             )
             Spacer(Modifier.height(16.dp))
@@ -2345,7 +2380,7 @@ private fun PodcastAnalyticsContent(episode: PodcastEpisode) {
 
         if (showSessions.isNotEmpty()) {
             Text(
-                "Letzte Show-Sessions", color = TextSecondary,
+                stringResource(R.string.letzte_show_sessions), color = TextSecondary,
                 fontSize = 14.sp, fontWeight = FontWeight.Medium
             )
             Spacer(Modifier.height(8.dp))
@@ -2370,7 +2405,7 @@ private fun PodcastAnalyticsContent(episode: PodcastEpisode) {
                 Spacer(Modifier.height(4.dp))
             }
         } else {
-            Text("Noch nicht angehört", color = TextTertiary, fontSize = 14.sp)
+            Text(stringResource(R.string.noch_nicht_angehort), color = TextTertiary, fontSize = 14.sp)
         }
         Spacer(Modifier.height(32.dp))
     }
@@ -2555,7 +2590,7 @@ private fun FullscreenPlayerContent(
                     .padding(horizontal = 12.dp, vertical = 12.dp)
             ) {
                 Text(
-                    if (nowPlaying.mode == "podcast") "🎙️  PODCAST" else "🎵  MUSIK",
+                    if (nowPlaying.mode == "podcast") stringResource(R.string.podcast_2) else stringResource(R.string.musik_3),
                     color = accent,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
@@ -2834,7 +2869,7 @@ private fun PlaylistDetailSheet(
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    Text("${songs.size} Songs", color = TextTertiary, fontSize = 12.sp)
+                    Text(stringResource(R.string.songs_2, songs.size), color = TextTertiary, fontSize = 12.sp)
                 }
             }
 
@@ -2870,7 +2905,7 @@ private fun PlaylistDetailSheet(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        "Alle abspielen",
+                        stringResource(R.string.alle_abspielen),
                         color = TextPrimary,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold
@@ -2948,7 +2983,8 @@ data class ListenSession(
     val type: String,
     val listenedMs: Long,
     val startedAt: Long,
-    val repeatCount: Int = 1
+    val repeatCount: Int = 1,
+    val source: String = "local"
 )
 
 data class SongAnalytics(val path: String)
@@ -3040,6 +3076,24 @@ object MediaAnalyticsManager {
 
     fun rebuildSessions(sessions: List<ListenSession>) {
         prefs?.edit()?.putString(KEY_SESSIONS, gson.toJson(sessions))?.apply()
+    }
+
+    fun mergeSessions(incoming: List<ListenSession>): Int {
+        if (!isAnalyticsEnabled() || incoming.isEmpty()) return 0
+        val existing = getSessions().toMutableList()
+        val existingKeys = existing.mapTo(HashSet()) { Triple(it.source, it.label, it.startedAt) }
+        var added = 0
+        for (session in incoming) {
+            val key = Triple(session.source, session.label, session.startedAt)
+            if (existingKeys.add(key)) {
+                existing.add(session)
+                added++
+            }
+        }
+        if (added > 0) {
+            prefs?.edit()?.putString(KEY_SESSIONS, gson.toJson(existing))?.apply()
+        }
+        return added
     }
 }
 
@@ -3293,7 +3347,7 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
                 isActive = songName.isNotEmpty(),
                 mode = "music",
                 title = songName,
-                subtitle = "Musik",
+                subtitle = app.getString(R.string.musik),
                 isPlaying = musicPrefs.getBoolean("is_playing", false),
                 positionMs = posMs,
                 durationMs = durMs,
@@ -3316,7 +3370,7 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
                 isActive = ep != null,
                 mode = "podcast",
                 title = ep?.title ?: "",
-                subtitle = show?.name ?: "Podcast",
+                subtitle = show?.name ?: app.getString(R.string.podcast),
                 isPlaying = musicPrefs.getBoolean("is_playing", false),
                 positionMs = pos,
                 durationMs = ep?.durationMs ?: 0L,
@@ -3404,8 +3458,8 @@ enum class PlaylistSourceType {
 
 interface PlaylistSource {
     val id: String
-    val name: String
-    val description: String
+    val nameRes: Int
+    val descriptionRes: Int
     val type: PlaylistSourceType
     val icon: String
     val accentColor: Color
@@ -3418,8 +3472,8 @@ interface PlaylistSource {
 
 object RecentlyPlayedPlaylist : PlaylistSource {
     override val id = "recently_played"
-    override val name = "Zuletzt gespielt"
-    override val description = "Deine letzten 20 Songs"
+    override val nameRes = R.string.zuletzt_gespielt
+    override val descriptionRes = R.string.deine_letzten_20_songs
     override val type = PlaylistSourceType.ALGORITHMIC
     override val icon = "🕐"
     override val accentColor = Color(0xFF7C4DFF)
@@ -3441,8 +3495,8 @@ object RecentlyPlayedPlaylist : PlaylistSource {
 
 object NeverPlayedPlaylist : PlaylistSource {
     override val id = "never_played"
-    override val name = "Noch nie gehört"
-    override val description = "Songs die auf ihre Chance warten"
+    override val nameRes = R.string.noch_nie_gehort
+    override val descriptionRes = R.string.songs_die_auf_ihre_chance
     override val type = PlaylistSourceType.ALGORITHMIC
     override val icon = "🌱"
     override val accentColor = Color(0xFF00BFA5)
@@ -3461,8 +3515,8 @@ object NeverPlayedPlaylist : PlaylistSource {
 
 object MostPlayedPlaylist : PlaylistSource {
     override val id = "most_played"
-    override val name = "Meistgespielt"
-    override val description = "Deine absoluten Lieblinge"
+    override val nameRes = R.string.meistgespielt
+    override val descriptionRes = R.string.deine_absoluten_lieblinge
     override val type = PlaylistSourceType.ALGORITHMIC
     override val icon = "🔥"
     override val accentColor = Color(0xFFE53935)
@@ -3484,8 +3538,8 @@ object MostPlayedPlaylist : PlaylistSource {
 
 object RecentlyAddedPlaylist : PlaylistSource {
     override val id = "recently_added"
-    override val name = "Neu hinzugefügt"
-    override val description = "In den letzten 24 Stunden geaddet"
+    override val nameRes = R.string.neu_hinzugefugt
+    override val descriptionRes = R.string.in_den_letzten_24_stunden
     override val type = PlaylistSourceType.ALGORITHMIC
     override val icon = "✨"
     override val accentColor = Color(0xFF00BCD4)
@@ -3530,8 +3584,8 @@ object RecentlyAddedPlaylist : PlaylistSource {
 
 object FavoritesPlaylist : PlaylistSource {
     override val id = "favorites"
-    override val name = "Favoriten"
-    override val description = "Deine markierten Lieblinge"
+    override val nameRes = R.string.favoriten
+    override val descriptionRes = R.string.deine_markierten_lieblinge
     override val type = PlaylistSourceType.ALGORITHMIC
     override val icon = "⭐"
     override val accentColor = Color(0xFFFDD835)
@@ -3873,7 +3927,7 @@ fun AiResponseHistorySheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "🤖 AI Verlauf",
+                    stringResource(R.string.ai_verlauf),
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     style = TextStyle(
@@ -3882,7 +3936,7 @@ fun AiResponseHistorySheet(
                     modifier = Modifier.weight(1f)
                 )
                 Text(
-                    "${entries.size} Einträge",
+                    stringResource(R.string.eintrage, entries.size),
                     color = TextTertiary,
                     fontSize = 12.sp
                 )
@@ -3891,8 +3945,8 @@ fun AiResponseHistorySheet(
             if (entries.isEmpty()) {
                 EmptyState(
                     icon = "🤖",
-                    title = "Keine Einträge",
-                    subtitle = "Noch keine AI-Antworten gespeichert"
+                    title = stringResource(R.string.keine_eintrage),
+                    subtitle = stringResource(R.string.noch_keine_ai_antworten_gespeichert)
                 )
             } else {
                 LazyColumn(
@@ -3911,7 +3965,7 @@ fun AiResponseHistorySheet(
                                 containerColor = BgSurface,
                                 title = {
                                     Text(
-                                        "Eintrag löschen?",
+                                        stringResource(R.string.eintrag_loschen),
                                         color = TextPrimary,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -3936,7 +3990,7 @@ fun AiResponseHistorySheet(
                                             .padding(horizontal = 16.dp, vertical = 8.dp)
                                     ) {
                                         Text(
-                                            "Löschen",
+                                            stringResource(R.string.loschen),
                                             color = TextPrimary,
                                             fontWeight = FontWeight.SemiBold
                                         )
@@ -3950,7 +4004,7 @@ fun AiResponseHistorySheet(
                                             .clickable { showDeleteConfirm = false }
                                             .padding(horizontal = 16.dp, vertical = 8.dp)
                                     ) {
-                                        Text("Abbrechen", color = TextSecondary)
+                                        Text(stringResource(R.string.abbrechen), color = TextSecondary)
                                     }
                                 }
                             )
