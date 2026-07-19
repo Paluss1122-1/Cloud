@@ -55,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -71,6 +72,7 @@ import com.google.zxing.ResultPoint
 import com.journeyapps.barcodescanner.BarcodeCallback
 import com.journeyapps.barcodescanner.BarcodeResult
 import com.journeyapps.barcodescanner.DecoratedBarcodeView
+import com.tabslify.R
 import com.tabslify.core.functions.errorInsert
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -153,7 +155,7 @@ fun AuthenticatorTab() {
                 )
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "Fehler: MainActivity muss FragmentActivity erben",
+                    stringResource(R.string.fehler_mainactivity_muss_fragmentactivity_erben),
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
                     color = Color.White
@@ -268,23 +270,23 @@ private fun LockScreen(onRetry: () -> Unit) {
         ) {
             Icon(
                 imageVector = Icons.Default.Lock,
-                contentDescription = "Gesperrt",
+                contentDescription = stringResource(R.string.gesperrt),
                 modifier = Modifier.size(80.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
             Spacer(Modifier.height(24.dp))
             Text(
-                "App gesperrt",
+                stringResource(R.string.app_gesperrt),
                 style = MaterialTheme.typography.headlineMedium,
                 color = Color.White
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Biometrische Authentifizierung erforderlich",
+                stringResource(R.string.biometrische_authentifizierung_erforderlich),
                 style = MaterialTheme.typography.bodyMedium, color = Color.White
             )
             Spacer(Modifier.height(24.dp))
-            Button(onClick = onRetry) { Text("Entsperren") }
+            Button(onClick = onRetry) { Text(stringResource(R.string.entsperren)) }
         }
     }
 }
@@ -305,13 +307,13 @@ private fun ErrorScreen(message: String, onRetry: () -> Unit, onUnlock: () -> Un
         ) {
             Icon(
                 imageVector = Icons.Default.Lock,
-                contentDescription = "Fehler",
+                contentDescription = stringResource(R.string.fehler),
                 modifier = Modifier.size(80.dp),
                 tint = MaterialTheme.colorScheme.error
             )
             Spacer(Modifier.height(24.dp))
             Text(
-                "Authentifizierungsfehler",
+                stringResource(R.string.authentifizierungsfehler),
                 style = MaterialTheme.typography.headlineMedium,
                 color = Color.White
             )
@@ -323,9 +325,9 @@ private fun ErrorScreen(message: String, onRetry: () -> Unit, onUnlock: () -> Un
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(24.dp))
-            Button(onClick = onRetry) { Text("Erneut versuchen") }
+            Button(onClick = onRetry) { Text(stringResource(R.string.erneut_versuchen)) }
             Spacer(Modifier.height(8.dp))
-            TextButton(onClick = onUnlock) { Text("Ohne Authentifizierung fortfahren") }
+            TextButton(onClick = onUnlock) { Text(stringResource(R.string.ohne_authentifizierung_fortfahren)) }
         }
     }
 }
@@ -337,7 +339,7 @@ private fun showBiometricPrompt(
     onError: (error: String, isCritical: Boolean) -> Unit
 ) {
     if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-        onError("Activity nicht bereit", true); return
+        onError(activity.getString(R.string.activity_nicht_bereit), true); return
     }
 
     val bm = BiometricManager.from(activity)
@@ -349,21 +351,21 @@ private fun showBiometricPrompt(
 
         BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
             onError(
-                "Keine Authentifizierung eingerichtet. Bitte richte einen Fingerabdruck oder PIN ein.",
+                activity.getString(R.string.keine_authentifizierung_eingerichtet_bitte_richte),
                 true
             ); return
         }
 
         BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> {
-            onError("Biometrische Hardware nicht verfügbar", true); return
+            onError(activity.getString(R.string.biometrische_hardware_nicht_verfugbar), true); return
         }
 
         BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> {
-            onError("Hardware temporär nicht verfügbar", true); return
+            onError(activity.getString(R.string.hardware_temporar_nicht_verfugbar), true); return
         }
 
         else -> {
-            onError("Authentifizierung nicht verfügbar", true); return
+            onError(activity.getString(R.string.authentifizierung_nicht_verfugbar), true); return
         }
     }
 
@@ -373,7 +375,7 @@ private fun showBiometricPrompt(
     try {
         cipher.init(Cipher.ENCRYPT_MODE, BiometricKeyHelper.getOrCreateKey())
     } catch (_: KeyPermanentlyInvalidatedException) {
-        onError("Biometriedaten haben sich geändert. Bitte erneut einrichten.", true)
+        onError(activity.getString(R.string.biometriedaten_haben_sich_geandert_bitte), true)
         return
     }
 
@@ -383,7 +385,7 @@ private fun showBiometricPrompt(
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 super.onAuthenticationSucceeded(result)
                 val unlockedCipher = result.cryptoObject?.cipher ?: run {
-                    onError("Kryptografisches Objekt fehlt", true); return
+                    onError(activity.getString(R.string.kryptografisches_objekt_fehlt), true); return
                 }
                 onSuccess(unlockedCipher)
             }
@@ -395,42 +397,42 @@ private fun showBiometricPrompt(
                     BiometricPrompt.ERROR_HW_UNAVAILABLE,
                     BiometricPrompt.ERROR_HW_NOT_PRESENT,
                     BiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL ->
-                        onError("Biometrische Authentifizierung nicht verfügbar", true)
+                        onError(activity.getString(R.string.biometrische_authentifizierung_nicht_verfugbar), true)
 
                     BiometricPrompt.ERROR_USER_CANCELED,
                     BiometricPrompt.ERROR_NEGATIVE_BUTTON,
                     BiometricPrompt.ERROR_CANCELED ->
-                        onError("Authentifizierung abgebrochen", false)
+                        onError(activity.getString(R.string.authentifizierung_abgebrochen), false)
 
                     BiometricPrompt.ERROR_LOCKOUT,
                     BiometricPrompt.ERROR_LOCKOUT_PERMANENT ->
-                        onError("Zu viele Fehlversuche. Bitte warte einen Moment.", true)
+                        onError(activity.getString(R.string.zu_viele_fehlversuche_bitte_warte), true)
 
                     BiometricPrompt.ERROR_TIMEOUT ->
-                        onError("Zeitüberschreitung", false)
+                        onError(activity.getString(R.string.zeituberschreitung), false)
 
                     else ->
-                        onError("Fehler: $errString", false)
+                        onError(activity.getString(R.string.fehler_msg, errString), false)
                 }
             }
         }
     )
 
     val promptInfo = BiometricPrompt.PromptInfo.Builder()
-        .setTitle("Tabslify Passwort-Manager")
-        .setSubtitle("Authentifizieren um fortzufahren")
+        .setTitle(activity.getString(R.string.tabslify_passwort_manager))
+        .setSubtitle(activity.getString(R.string.authentifizieren_um_fortzufahren))
         .setAllowedAuthenticators(Authenticators.BIOMETRIC_STRONG)
-        .setNegativeButtonText("Abbrechen")
+        .setNegativeButtonText(activity.getString(R.string.abbrechen))
         .build()
 
     try {
         prompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
     } catch (_: KeyPermanentlyInvalidatedException) {
         BiometricKeyHelper.deleteKey()
-        onError("Biometriedaten haben sich geändert. Bitte erneut einrichten.", true)
+        onError(activity.getString(R.string.biometriedaten_haben_sich_geandert_bitte), true)
         return
     } catch (e: Exception) {
-        onError("Fehler beim Starten: ${e.message}", true)
+        onError(activity.getString(R.string.fehler_beim_starten, e.message), true)
     }
 }
 
@@ -454,6 +456,13 @@ fun SettingsScreenWithScreenshotProtection() {
     val context = LocalContext.current
     val activity = LocalActivity.current
     val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+
+    val noEnrolledMsg = stringResource(R.string.keine_authentifizierung_eingerichtet_bitte_richte)
+    val noHardwareMsg = stringResource(R.string.biometrische_hardware_nicht_verfugbar)
+    val hwUnavailableMsg = stringResource(R.string.hardware_temporar_nicht_verfugbar)
+    val authUnavailableMsg = stringResource(R.string.authentifizierung_nicht_verfugbar)
+    val screenshotsLockedMsg = stringResource(R.string.screenshots_gesperrt)
+    val screenshotsAllowedMsg = stringResource(R.string.screenshots_erlaubt)
 
     var lockEnabled by remember { mutableStateOf(prefs.getBoolean("lockEnabled", false)) }
     var screenshotProtectionEnabled by remember {
@@ -481,7 +490,7 @@ fun SettingsScreenWithScreenshotProtection() {
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
-            Text("⚙️ Einstellungen", color = TextP, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.einstellungen_2), color = TextP, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(24.dp))
 
             Box(
@@ -499,12 +508,12 @@ fun SettingsScreenWithScreenshotProtection() {
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "App-Sperre",
+                                stringResource(R.string.app_sperre),
                                 color = TextP,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
-                            Text("Biometrische Authentifizierung", color = TextS, fontSize = 12.sp)
+                            Text(stringResource(R.string.biometrische_authentifizierung), color = TextS, fontSize = 12.sp)
                         }
                         Switch(
                             checked = lockEnabled,
@@ -518,16 +527,16 @@ fun SettingsScreenWithScreenshotProtection() {
                                 } else {
                                     biometricErrorMsg = when (canAuth) {
                                         BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED ->
-                                            "Keine Authentifizierung eingerichtet. Bitte richte einen Fingerabdruck oder PIN ein."
+                                            noEnrolledMsg
 
                                         BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE ->
-                                            "Biometrische Hardware nicht verfügbar"
+                                            noHardwareMsg
 
                                         BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE ->
-                                            "Hardware temporär nicht verfügbar"
+                                            hwUnavailableMsg
 
                                         else ->
-                                            "Authentifizierung nicht verfügbar"
+                                            authUnavailableMsg
                                     }
                                     showBiometricInfoDialog = true
                                 }
@@ -545,13 +554,13 @@ fun SettingsScreenWithScreenshotProtection() {
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Screenshot-Schutz",
+                                stringResource(R.string.screenshot_schutz),
                                 color = TextP,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                "Screenshots und Screen-Recording blockieren",
+                                stringResource(R.string.screenshots_und_screen_recording_blockieren),
                                 color = TextS,
                                 fontSize = 12.sp
                             )
@@ -572,7 +581,7 @@ fun SettingsScreenWithScreenshotProtection() {
                                 )
                                 Toast.makeText(
                                     context,
-                                    if (enabled) "Screenshots gesperrt" else "Screenshots erlaubt",
+                                    if (enabled) screenshotsLockedMsg else screenshotsAllowedMsg,
                                     Toast.LENGTH_SHORT
                                 ).show()
                             },
@@ -595,7 +604,7 @@ fun SettingsScreenWithScreenshotProtection() {
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("🔑 Autofill aktivieren", color = TextP)
+                Text(stringResource(R.string.autofill_aktivieren), color = TextP)
             }
         }
 
@@ -603,7 +612,7 @@ fun SettingsScreenWithScreenshotProtection() {
             AlertDialog(
                 onDismissRequest = { showBiometricInfoDialog = false },
                 containerColor = Surface1,
-                title = { Text("Biometrie nicht verfügbar", color = TextP) },
+                title = { Text(stringResource(R.string.biometrie_nicht_verfugbar), color = TextP) },
                 text = { Text(biometricErrorMsg, color = TextS) },
                 confirmButton = {
                     TextButton(onClick = { showBiometricInfoDialog = false }) {
@@ -622,6 +631,15 @@ fun SilentCaptureScreen(
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    
+    val ungueltigesFormatMsg = stringResource(R.string.ungultiges_format)
+    val unbekannMsg = stringResource(R.string.unbekannt)
+    val keinSecretMsg = stringResource(R.string.kein_secret_gefunden)
+    val existsAlreadyMsg = stringResource(R.string.eintrag_existiert_bereits)
+    val addedLocalCloudMsg = stringResource(R.string.hinzugefugt_lokal_cloud)
+    val addFailedMsg = stringResource(R.string.hinzugefugt_cloud_fehlgeschlagen)
+    val errorMsg = stringResource(R.string.fehler_5)
+    
     var isProcessing by remember { mutableStateOf(false) }
 
     BackHandler {
@@ -654,7 +672,7 @@ fun SilentCaptureScreen(
                                             withContext(Dispatchers.Main) {
                                                 Toast.makeText(
                                                     context,
-                                                    "❌ Ungültiges Format!",
+                                                    ungueltigesFormatMsg,
                                                     Toast.LENGTH_LONG
                                                 ).show()
                                                 errorInsert(
@@ -669,7 +687,7 @@ fun SilentCaptureScreen(
                                             return@launch
                                         }
 
-                                        val label = uri.path?.removePrefix("/") ?: "Unbekannt"
+                                        val label = uri.path?.removePrefix("/") ?: unbekannMsg
                                         val secretParam = uri.getQueryParameter("secret")
                                         val issuerParam = uri.getQueryParameter("issuer")
                                         val displayName =
@@ -678,7 +696,7 @@ fun SilentCaptureScreen(
                                         if (secretParam.isNullOrBlank()) {
                                             Toast.makeText(
                                                 context,
-                                                "❌ Kein Secret gefunden!",
+                                                keinSecretMsg,
                                                 Toast.LENGTH_LONG
                                             ).show()
                                             errorInsert(
@@ -712,7 +730,7 @@ fun SilentCaptureScreen(
                                             }) {
                                             Toast.makeText(
                                                 context,
-                                                "⚠️ Eintrag existiert bereits!",
+                                                existsAlreadyMsg,
                                                 Toast.LENGTH_LONG
                                             ).show()
                                             isProcessing = false; onDismiss()
@@ -725,7 +743,7 @@ fun SilentCaptureScreen(
                                         if (inserted == -1L) {
                                             Toast.makeText(
                                                 context,
-                                                "⚠️ Eintrag existiert bereits!",
+                                                existsAlreadyMsg,
                                                 Toast.LENGTH_LONG
                                             ).show()
                                             isProcessing = false; onDismiss()
@@ -736,7 +754,7 @@ fun SilentCaptureScreen(
                                         withContext(Dispatchers.Main) {
                                             Toast.makeText(
                                                 context,
-                                                if (ok) "✅ $displayName hinzugefügt (lokal & Cloud)!" else "✅ $displayName hinzugefügt (Cloud fehlgeschlagen)",
+                                                if (ok) addedLocalCloudMsg.format(displayName) else addFailedMsg.format(displayName),
                                                 Toast.LENGTH_LONG
                                             ).show()
                                             isProcessing = false; onDismiss()
@@ -744,7 +762,7 @@ fun SilentCaptureScreen(
                                     } catch (e: Exception) {
                                         Toast.makeText(
                                             context,
-                                            "❌ Fehler: ${e.message}",
+                                            errorMsg.format(e.message),
                                             Toast.LENGTH_LONG
                                         ).show()
                                         errorInsert(
@@ -781,7 +799,7 @@ fun SilentCaptureScreen(
             )
             Spacer(Modifier.height(40.dp))
             Text(
-                "Halte den QR-Code in den Rahmen",
+                stringResource(R.string.halte_den_qr_code_in),
                 color = Color.White,
                 style = MaterialTheme.typography.titleMedium
             )
