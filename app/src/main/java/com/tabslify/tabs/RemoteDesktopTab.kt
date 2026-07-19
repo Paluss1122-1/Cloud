@@ -75,6 +75,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -91,6 +92,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.tabslify.R
 import com.tabslify.core.objects.prvt
 import com.tabslify.core.ui.APP_COLOR
 import kotlinx.coroutines.Dispatchers
@@ -270,7 +272,7 @@ class RemoteDesktopViewModel : ViewModel() {
                             val json = JSONObject(String(pkt.data, 0, pkt.length))
                             if (json.optString("type") == "announce") {
                                 val host = RemoteHost(
-                                    name = json.optString("name", "Unbekannt"),
+                                    name = json.optString("name", context.getString(R.string.unbekannt)),
                                     ip = pkt.address.hostAddress ?: "",
                                     sessionId = json.optString("session_id", ""),
                                     port = json.optInt("port", 54322),
@@ -295,7 +297,7 @@ class RemoteDesktopViewModel : ViewModel() {
                 withContext(Dispatchers.Main) {
                     if (foundHosts.isEmpty()) {
                         _state.value = RemoteDesktopState.Error(
-                            "Keine Hosts gefunden. Beide Geräte im selben WLAN?",
+                            context.getString(R.string.keine_hosts_gefunden_beide_gerate),
                             canRetry = true
                         )
                     } else {
@@ -306,7 +308,7 @@ class RemoteDesktopViewModel : ViewModel() {
                 Log.e(TAG, "[DISCOVERY] Fehler", e)
                 withContext(Dispatchers.Main) {
                     _state.value = RemoteDesktopState.Error(
-                        "Discovery fehlgeschlagen: ${e.message}",
+                        context.getString(R.string.discovery_fehlgeschlagen, e.message),
                         canRetry = true
                     )
                 }
@@ -556,7 +558,7 @@ class RemoteDesktopViewModel : ViewModel() {
 fun RemoteDesktopTabContent() {
     val context = LocalContext.current
     if (!prvt()) {
-        Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.forbidden), Toast.LENGTH_SHORT).show()
         return
     }
     val viewModel: RemoteDesktopViewModel = viewModel()
@@ -623,7 +625,7 @@ fun ModeSelectionScreen(onConnect: () -> Unit, onHost: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            "🖥️ Remote Desktop",
+            stringResource(R.string.remote_desktop_2),
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White,
@@ -648,13 +650,13 @@ fun ModeSelectionScreen(onConnect: () -> Unit, onHost: () -> Unit) {
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Verbinden",
+                        stringResource(R.string.verbinden),
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     Text(
-                        "Auf einen PC zugreifen",
+                        stringResource(R.string.auf_einen_pc_zugreifen),
                         fontSize = 14.sp,
                         color = Color.White.copy(alpha = 0.7f)
                     )
@@ -679,13 +681,13 @@ fun ModeSelectionScreen(onConnect: () -> Unit, onHost: () -> Unit) {
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Freigeben",
+                        stringResource(R.string.freigeben),
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White.copy(alpha = 0.5f)
                     )
                     Text(
-                        "Dieses Gerät freigeben (nicht verfügbar)",
+                        stringResource(R.string.dieses_gerat_freigeben_nicht_verfugbar),
                         fontSize = 12.sp,
                         color = Color.White.copy(alpha = 0.4f),
                         textAlign = TextAlign.Center
@@ -702,10 +704,10 @@ fun DiscoveryScreen(onCancel: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator(modifier = Modifier.size(64.dp), color = Color.White)
             Spacer(Modifier.height(24.dp))
-            Text("Suche im Netzwerk...", fontSize = 18.sp, color = Color.White)
+            Text(stringResource(R.string.suche_im_netzwerk), fontSize = 18.sp, color = Color.White)
             Spacer(Modifier.height(16.dp))
             Text(
-                "Stelle sicher, dass beide Geräte\nim selben WLAN sind",
+                stringResource(R.string.stelle_sicher_dass_beide_gerate),
                 fontSize = 14.sp,
                 color = Color.White.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center
@@ -714,7 +716,7 @@ fun DiscoveryScreen(onCancel: () -> Unit) {
             Button(
                 onClick = onCancel,
                 colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-            ) { Text("Abbrechen") }
+            ) { Text(stringResource(R.string.abbrechen)) }
         }
     }
 }
@@ -744,12 +746,12 @@ fun HostListScreen(
             IconButton(onClick = onBack) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
-                    "Zurück",
+                    stringResource(R.string.zuruck),
                     tint = Color.White
                 )
             }
             Text(
-                "Gefundene Hosts (${hosts.size})",
+                stringResource(R.string.gefundene_hosts, hosts.size),
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
@@ -757,7 +759,7 @@ fun HostListScreen(
             IconButton(onClick = onRetry) {
                 Icon(
                     Icons.Default.Refresh,
-                    "Erneut suchen",
+                    stringResource(R.string.erneut_suchen),
                     tint = Color.White
                 )
             }
@@ -796,11 +798,11 @@ fun HostListScreen(
         AlertDialog(
             onDismissRequest = { showDialog = false },
             containerColor = Color.DarkGray,
-            title = { Text("PIN eingeben", color = Color.White) },
+            title = { Text(stringResource(R.string.pin_eingeben), color = Color.White) },
             text = {
                 Column {
                     Text(
-                        "Verbinde mit: ${selectedHost!!.name}",
+                        stringResource(R.string.verbinde_mit, selectedHost!!.name),
                         color = Color.White.copy(alpha = 0.7f),
                         fontSize = 14.sp
                     )
@@ -832,12 +834,12 @@ fun HostListScreen(
                     if (pin.isNotEmpty()) {
                         onSelectHost(selectedHost!!, pin); showDialog = false
                     }
-                }, enabled = pin.isNotEmpty()) { Text("Verbinden") }
+                }, enabled = pin.isNotEmpty()) { Text(stringResource(R.string.verbinden)) }
             },
             dismissButton = {
                 TextButton(onClick = { showDialog = false }) {
                     Text(
-                        "Abbrechen",
+                        stringResource(R.string.abbrechen),
                         color = Color.Gray
                     )
                 }
@@ -852,13 +854,13 @@ fun ConnectingScreen(host: RemoteHost, onCancel: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator(modifier = Modifier.size(64.dp), color = Color.White)
             Spacer(Modifier.height(24.dp))
-            Text("Verbinde mit ${host.name}...", fontSize = 18.sp, color = Color.White)
+            Text(stringResource(R.string.verbinde_mit_2, host.name), fontSize = 18.sp, color = Color.White)
             Text(host.ip, fontSize = 14.sp, color = Color.White.copy(alpha = 0.7f))
             Spacer(Modifier.height(32.dp))
             Button(
                 onClick = onCancel,
                 colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-            ) { Text("Abbrechen") }
+            ) { Text(stringResource(R.string.abbrechen)) }
         }
     }
 }
@@ -1071,7 +1073,7 @@ fun ConnectedScreen(
             IconButton(onClick = { isFullscreen = !isFullscreen }) {
                 Icon(
                     if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                    "Vollbild", tint = Color.White,
+                    stringResource(R.string.vollbild), tint = Color.White,
                     modifier = Modifier
                         .size(32.dp)
                         .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
@@ -1080,7 +1082,7 @@ fun ConnectedScreen(
             }
             IconButton(onClick = onDisconnect) {
                 Icon(
-                    Icons.Default.Close, "Trennen", tint = Color.White,
+                    Icons.Default.Close, stringResource(R.string.trennen), tint = Color.White,
                     modifier = Modifier
                         .size(32.dp)
                         .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
@@ -1099,10 +1101,10 @@ fun ConnectedScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = Color.White, modifier = Modifier.size(48.dp))
                     Spacer(Modifier.height(16.dp))
-                    Text("Warte auf ersten Frame...", color = Color.White, fontSize = 16.sp)
+                    Text(stringResource(R.string.warte_auf_ersten_frame), color = Color.White, fontSize = 16.sp)
                     Spacer(Modifier.height(32.dp))
                     Text(
-                        "💡 Querformat für beste Darstellung",
+                        stringResource(R.string.querformat_fur_beste_darstellung),
                         color = Color.White.copy(alpha = 0.7f),
                         fontSize = 14.sp,
                         textAlign = TextAlign.Center
@@ -1122,7 +1124,7 @@ fun HostingScreen(
     onStop: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("Host-Modus nicht verfügbar", color = Color.White, fontSize = 18.sp)
+        Text(stringResource(R.string.host_modus_nicht_verfugbar), color = Color.White, fontSize = 18.sp)
     }
 }
 
@@ -1135,7 +1137,7 @@ fun ErrorScreen(message: String, canRetry: Boolean, onRetry: () -> Unit, onBack:
         ) {
             Icon(Icons.Default.Error, null, modifier = Modifier.size(64.dp), tint = Color.Red)
             Spacer(Modifier.height(24.dp))
-            Text("Fehler", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(stringResource(R.string.fehler), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
             Spacer(Modifier.height(16.dp))
             Text(
                 message,
@@ -1148,8 +1150,8 @@ fun ErrorScreen(message: String, canRetry: Boolean, onRetry: () -> Unit, onBack:
                 Button(
                     onClick = onBack,
                     colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-                ) { Text("Zurück") }
-                if (canRetry) Button(onClick = onRetry) { Text("Erneut versuchen") }
+                ) { Text(stringResource(R.string.zuruck)) }
+                if (canRetry) Button(onClick = onRetry) { Text(stringResource(R.string.erneut_versuchen)) }
             }
         }
     }
