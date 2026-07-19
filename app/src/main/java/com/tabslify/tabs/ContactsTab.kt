@@ -41,10 +41,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tabslify.R
 import com.tabslify.core.functions.errorInsert
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -77,7 +79,7 @@ fun ContactsTabContent(
     val context = LocalContext.current
     if (context.checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
-            Text("Keine Berechtigung auf Kontakte", color = Color.Gray, fontSize = 16.sp)
+            Text(stringResource(R.string.keine_berechtigung_auf_kontakte), color = Color.Gray, fontSize = 16.sp)
         }
     }
     var selectedContact by remember { mutableStateOf<Contact?>(null) }
@@ -115,7 +117,7 @@ fun ContactsTabContent(
                     .weight(1f)
                     .height(56.dp)
             ) {
-                Text("Kontakte laden", fontSize = 15.sp)
+                Text(stringResource(R.string.kontakte_laden), fontSize = 15.sp)
             }
 
             Button(
@@ -127,7 +129,7 @@ fun ContactsTabContent(
                     .weight(1f)
                     .height(56.dp)
             ) {
-                Text("Neu erstellen", fontSize = 15.sp)
+                Text(stringResource(R.string.neu_erstellen), fontSize = 15.sp)
             }
         }
 
@@ -137,11 +139,11 @@ fun ContactsTabContent(
             state.loading -> {
                 CircularProgressIndicator(color = Color(0xFFFFA500))
                 Spacer(Modifier.height(8.dp))
-                Text("Lade Kontakte…", color = Color.White)
+                Text(stringResource(R.string.lade_kontakte), color = Color.White)
             }
 
             state.error != null -> {
-                Text("Fehler: ${state.error}", color = Color.Red)
+                Text(stringResource(R.string.fehler_msg, state.error), color = Color.Red)
                 LaunchedEffect(Unit) {
                     errorInsert(
                         "tabcontentoriginal",
@@ -154,7 +156,7 @@ fun ContactsTabContent(
             }
 
             state.contacts.isEmpty() -> {
-                Text("Keine Kontakte vorhanden", color = Color.Gray, fontSize = 16.sp)
+                Text(stringResource(R.string.keine_kontakte_vorhanden), color = Color.Gray, fontSize = 16.sp)
             }
 
             else -> {
@@ -242,14 +244,14 @@ fun ContactCard(
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
                     modifier = Modifier.height(40.dp)
                 ) {
-                    Text("Bearbeiten", fontSize = 14.sp)
+                    Text(stringResource(R.string.bearbeiten), fontSize = 14.sp)
                 }
                 Button(
                     onClick = onDelete,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF44336)),
                     modifier = Modifier.height(40.dp)
                 ) {
-                    Text("Löschen", fontSize = 14.sp)
+                    Text(stringResource(R.string.loschen), fontSize = 14.sp)
                 }
             }
         }
@@ -269,7 +271,7 @@ fun ContactEditDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (contact.id.isEmpty()) "Neuer Kontakt" else "Kontakt bearbeiten")
+            Text(if (contact.id.isEmpty()) stringResource(R.string.neuer_kontakt) else stringResource(R.string.kontakt_bearbeiten))
         },
         text = {
             Column(
@@ -278,19 +280,19 @@ fun ContactEditDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.name)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
-                    label = { Text("E-Mail") },
+                    label = { Text(stringResource(R.string.e_mail)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = phone,
                     onValueChange = { phone = it },
-                    label = { Text("Telefon") },
+                    label = { Text(stringResource(R.string.telefon)) },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -307,12 +309,12 @@ fun ContactEditDialog(
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
             ) {
-                Text("Speichern")
+                Text(stringResource(R.string.speichern))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Abbrechen")
+                Text(stringResource(R.string.abbrechen))
             }
         }
     )
