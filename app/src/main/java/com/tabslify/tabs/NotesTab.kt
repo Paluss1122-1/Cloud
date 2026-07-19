@@ -61,12 +61,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.edit
+import com.tabslify.R
 import com.tabslify.core.ui.APP_COLOR
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -122,7 +124,7 @@ fun NotizenApp() {
                 onClick = { showCreateDialog = true },
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Notiz erstellen")
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.notiz_erstellen))
             }
         },
         modifier = Modifier.background(Color.Transparent),
@@ -144,7 +146,7 @@ fun NotizenApp() {
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        "Keine Notizen vorhanden",
+                        stringResource(R.string.keine_notizen_vorhanden),
                         style = MaterialTheme.typography.bodyLarge,
                         color = Color.White
                     )
@@ -202,7 +204,7 @@ fun NotizenApp() {
 
 @Composable
 private fun DeleteConfirmationDialog(
-    message: String = "Möchtest du diese Notiz wirklich löschen?",
+    message: String = stringResource(R.string.mochtest_du_diese_notiz_wirklich),
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -229,14 +231,14 @@ private fun DeleteConfirmationDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("Abbrechen", color = Color.LightGray)
+                        Text(stringResource(R.string.abbrechen), color = Color.LightGray)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = onConfirm,
                         colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
                     ) {
-                        Text("Löschen")
+                        Text(stringResource(R.string.loschen))
                     }
                 }
             }
@@ -284,7 +286,7 @@ fun NoteCard(
                 ) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "Löschen",
+                        contentDescription = stringResource(R.string.loschen),
                         modifier = Modifier.size(20.dp),
                         tint = Color.Red
                     )
@@ -322,7 +324,7 @@ fun NoteCard(
                         }
                         if (type.items.size > 3) {
                             Text(
-                                text = "+${type.items.size - 3} weitere",
+                                text = stringResource(R.string.weitere, type.items.size - 3),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline
                             )
@@ -357,6 +359,7 @@ fun CreateNoteDialog(
     onNoteCreated: (Note) -> Unit
 ) {
     var noteTypeSelection by remember { mutableStateOf<String?>(null) }
+    val newChecklistTitle = stringResource(R.string.neue_checkliste)
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -371,7 +374,7 @@ fun CreateNoteDialog(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Notiztyp auswählen",
+                    text = stringResource(R.string.notiztyp_auswahlen),
                     style = MaterialTheme.typography.titleLarge,
                     color = Color.White
                 )
@@ -398,9 +401,9 @@ fun CreateNoteDialog(
                         Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White)
                         Spacer(modifier = Modifier.width(16.dp))
                         Column {
-                            Text("Textnotiz", fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(stringResource(R.string.textnotiz), fontWeight = FontWeight.Bold, color = Color.White)
                             Text(
-                                "Normale Notiz mit Text",
+                                stringResource(R.string.normale_notiz_mit_text),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.White
                             )
@@ -434,9 +437,9 @@ fun CreateNoteDialog(
                         )
                         Spacer(modifier = Modifier.width(16.dp))
                         Column {
-                            Text("Checkliste", fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(stringResource(R.string.checkliste), fontWeight = FontWeight.Bold, color = Color.White)
                             Text(
-                                "Liste mit Kontrollkästchen",
+                                stringResource(R.string.liste_mit_kontrollkastchen),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.White
                             )
@@ -451,7 +454,7 @@ fun CreateNoteDialog(
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("Abbrechen")
+                        Text(stringResource(R.string.abbrechen))
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
@@ -466,7 +469,7 @@ fun CreateNoteDialog(
 
                                 "checklist" -> onNoteCreated(
                                     Note(
-                                        title = "Neue Checkliste",
+                                        title = newChecklistTitle,
                                         type = NoteType.Checklist(emptyList())
                                     )
                                 )
@@ -474,7 +477,7 @@ fun CreateNoteDialog(
                         },
                         enabled = noteTypeSelection != null
                     ) {
-                        Text("Erstellen")
+                        Text(stringResource(R.string.erstellen))
                     }
                 }
             }
@@ -524,7 +527,7 @@ fun EditNoteDialog(
                 )
         ) {
             TopAppBar(
-                title = { Text("Notiz bearbeiten", color = titleColor) },
+                title = { Text(stringResource(R.string.notiz_bearbeiten), color = titleColor) },
                 colors = if (selectedColor == NoteColor.DEFAULT) {
                     TopAppBarDefaults.topAppBarColors(
                         containerColor = APP_COLOR
@@ -538,7 +541,7 @@ fun EditNoteDialog(
                     IconButton(onClick = onDismiss) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Zurück",
+                            contentDescription = stringResource(R.string.zuruck),
                             tint = titleColor
                         )
                     }
@@ -547,14 +550,14 @@ fun EditNoteDialog(
                     IconButton(onClick = { showColorPicker = !showColorPicker }) {
                         Icon(
                             Icons.Default.Info,
-                            contentDescription = "Farbe",
+                            contentDescription = stringResource(R.string.farbe),
                             tint = titleColor
                         )
                     }
                     IconButton(onClick = { showDeleteConfirm = true }) {
                         Icon(
                             Icons.Default.Delete,
-                            contentDescription = "Löschen",
+                            contentDescription = stringResource(R.string.loschen),
                             tint = Color.Red
                         )
                     }
@@ -599,7 +602,7 @@ fun EditNoteDialog(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("Titel", color = titleColor) },
+                    label = { Text(stringResource(R.string.titel), color = titleColor) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -617,7 +620,7 @@ fun EditNoteDialog(
                         OutlinedTextField(
                             value = textContent,
                             onValueChange = { textContent = it },
-                            label = { Text("Notiz") },
+                            label = { Text(stringResource(R.string.notiz)) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f),
@@ -662,7 +665,7 @@ fun EditNoteDialog(
                                     ) {
                                         Icon(
                                             Icons.Default.Close,
-                                            contentDescription = "Entfernen"
+                                            contentDescription = stringResource(R.string.entfernen)
                                         )
                                     }
                                 }
@@ -678,7 +681,7 @@ fun EditNoteDialog(
                             OutlinedTextField(
                                 value = newItemText,
                                 onValueChange = { newItemText = it },
-                                label = { Text("Neuer Punkt") },
+                                label = { Text(stringResource(R.string.neuer_punkt)) },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true
                             )
@@ -691,7 +694,7 @@ fun EditNoteDialog(
                                     }
                                 }
                             ) {
-                                Icon(Icons.Default.Add, contentDescription = "Hinzufügen")
+                                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.hinzufugen))
                             }
                         }
                     }
@@ -715,13 +718,13 @@ fun EditNoteDialog(
                     .padding(16.dp),
                 enabled = title.isNotBlank()
             ) {
-                Text("Speichern")
+                Text(stringResource(R.string.speichern))
             }
         }
     }
     if (showDeleteConfirm) {
         DeleteConfirmationDialog(
-            message = "Willst du die Notiz \"${note.title}\" wirklich löschen?",
+            message = stringResource(R.string.willst_du_die_notiz_wirklich, note.title),
             onConfirm = {
                 onDelete()
                 showDeleteConfirm = false
