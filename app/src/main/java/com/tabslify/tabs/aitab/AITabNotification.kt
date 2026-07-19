@@ -6,6 +6,7 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.tabslify.R
 import com.tabslify.core.activities.MainActivity
 import com.tabslify.core.functions.canNotify
 import com.tabslify.core.objects.tNotify
@@ -16,7 +17,7 @@ fun isAppInForeground(): Boolean {
 
 fun sendAITabBackgroundNotification(
     context: Context,
-    title: String = "AI Tab Antwort",
+    title: String = context.getString(R.string.ai_tab_antwort),
     message: String
 ) {
     if (isAppInForeground()) return
