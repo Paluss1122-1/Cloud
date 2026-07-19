@@ -61,6 +61,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -73,6 +74,7 @@ import coil.compose.AsyncImage
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
+import com.tabslify.R
 import com.tabslify.core.TabNavigationViewModel
 import com.tabslify.quiethoursnotificationhelper.AiProvider
 import com.tabslify.quiethoursnotificationhelper.sendAiRequest
@@ -428,6 +430,17 @@ fun HeiseNewsTabContent(
     viewModel: TabNavigationViewModel
 ) {
     val context = LocalContext.current
+    
+    val unbekannterFehlerMsg = stringResource(R.string.unbekannter_fehler)
+    val artikeltextKonntNichtGeladenMsg = stringResource(R.string.artikeltext_konnte_nicht_geladen_werden)
+    val keineZusammenfassungMsg = stringResource(R.string.keine_zusammenfassung_erhalten)
+    val zusammenfassungFehlgeschlagenMsg = stringResource(R.string.zusammenfassung_fehlgeschlagen)
+    val keineAntwortMsg = stringResource(R.string.keine_antwort_erhalten)
+    val fehlerMsgTemplate = stringResource(R.string.fehler_msg)
+    val antwortFehlgeschlagenMsg = stringResource(R.string.antwort_fehlgeschlagen)
+    val bitteWartenMsg = stringResource(R.string.bitte_warten_bis_die_antwort)
+    val artikelKonntNichtGeoffnetMsg = stringResource(R.string.artikel_konnte_nicht_geoffnet_werden)
+    
     val scope = rememberCoroutineScope()
     val articleTextCache = remember { mutableStateMapOf<String, String>() }
     val summaryCache = remember { mutableStateMapOf<String, String>() }
@@ -473,7 +486,7 @@ fun HeiseNewsTabContent(
                 articles = freshArticles
                 saveArticlesToPrefs(context, freshArticles)
             } catch (e: Exception) {
-                errorMessage = e.message ?: "Unbekannter Fehler"
+                errorMessage = e.message ?: unbekannterFehlerMsg
                 val (cachedArticles, _) = loadArticlesFromPrefs(context)
                 if (cachedArticles.isNotEmpty()) {
                     articles = cachedArticles
@@ -492,7 +505,7 @@ fun HeiseNewsTabContent(
             try {
                 articleTextCache[article.link] = fetchFullArticleText(article.link)
             } catch (e: Exception) {
-                articleError = e.message ?: "Artikeltext konnte nicht geladen werden"
+                articleError = e.message ?: artikeltextKonntNichtGeladenMsg
             } finally {
                 loadingArticleLink = null
             }
@@ -535,11 +548,11 @@ fun HeiseNewsTabContent(
                     target = "",
                     provider = AiProvider.NVIDIA
                 )
-                val summaryResult = response?.ifBlank { null } ?: "Keine Zusammenfassung erhalten."
+                val summaryResult = response?.ifBlank { null } ?: keineZusammenfassungMsg
                 summaryCache[article.link] = summaryResult
                 saveSummaryToPrefs(context, article.link, summaryResult)
             } catch (e: Exception) {
-                summaryError = e.message ?: "Zusammenfassung fehlgeschlagen"
+                summaryError = e.message ?: zusammenfassungFehlgeschlagenMsg
             } finally {
                 summarizingArticleLink = null
             }
@@ -598,13 +611,13 @@ fun HeiseNewsTabContent(
                 )
                 if (messages[answerIndex].text.isBlank()) {
                     messages[answerIndex] = messages[answerIndex].copy(
-                        text = response?.ifBlank { null } ?: "Keine Antwort erhalten."
+                        text = response?.ifBlank { null } ?: keineAntwortMsg
                     )
                 }
                 saveChatToPrefs(context, article.link, messages)
             } catch (e: Exception) {
                 messages[answerIndex] = messages[answerIndex].copy(
-                    text = "Fehler: ${e.message ?: "Antwort fehlgeschlagen"}"
+                    text = fehlerMsgTemplate.format(e.message ?: antwortFehlgeschlagenMsg)
                 )
                 saveChatToPrefs(context, article.link, messages)
             } finally {
@@ -617,7 +630,7 @@ fun HeiseNewsTabContent(
         if (summarizingArticleLink == article.link || askingArticleLink == article.link) {
             Toast.makeText(
                 context,
-                "Bitte warten, bis die Antwort fertig ist …",
+                bitteWartenMsg,
                 Toast.LENGTH_SHORT
             ).show()
             return
@@ -671,7 +684,7 @@ fun HeiseNewsTabContent(
                 }.onFailure {
                     Toast.makeText(
                         context,
-                        "Artikel konnte nicht geöffnet werden",
+                        artikelKonntNichtGeoffnetMsg,
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -702,7 +715,7 @@ fun HeiseNewsTabContent(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = if (articles.isEmpty()) "Aktuelle News per Atom-Feed" else "${articles.size} Meldungen geladen",
+                    text = if (articles.isEmpty()) stringResource(R.string.aktuelle_news_per_atom_feed) else stringResource(R.string.meldungen_geladen, articles.size),
                     color = Color.White.copy(alpha = 0.65f),
                     fontSize = 12.sp
                 )
@@ -717,7 +730,7 @@ fun HeiseNewsTabContent(
                 } else {
                     Icon(
                         imageVector = Icons.Default.Refresh,
-                        contentDescription = "News aktualisieren",
+                        contentDescription = stringResource(R.string.news_aktualisieren),
                         tint = Color.White
                     )
                 }
@@ -850,8 +863,8 @@ private fun HeiseArticleDetail(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextButton(onClick = onBack) { Text("Zurück") }
-                TextButton(onClick = onOpenOriginal) { Text("Original öffnen") }
+                TextButton(onClick = onBack) { Text(stringResource(R.string.zuruck)) }
+                TextButton(onClick = onOpenOriginal) { Text(stringResource(R.string.original_offnen)) }
             }
         }
 
@@ -893,7 +906,7 @@ private fun HeiseArticleDetail(
             ) {
                 Column(Modifier.padding(14.dp)) {
                     Text(
-                        text = "AI Summary",
+                        text = stringResource(R.string.ai_summary),
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp
@@ -907,7 +920,7 @@ private fun HeiseArticleDetail(
                                 color = Color.White
                             )
                             Text(
-                                text = "  Zusammenfassung wird erstellt...",
+                                text = stringResource(R.string.zusammenfassung_wird_erstellt),
                                 color = Color.White.copy(alpha = 0.75f)
                             )
                         }
@@ -919,17 +932,17 @@ private fun HeiseArticleDetail(
                         )
 
                         articleText.isNullOrBlank() -> Text(
-                            text = "Lade zuerst den vollständigen Artikeltext.",
+                            text = stringResource(R.string.lade_zuerst_den_vollstandigen_artikeltext),
                             color = Color.White.copy(alpha = 0.65f),
                             fontSize = 14.sp
                         )
 
                         else -> Row(verticalAlignment = Alignment.CenterVertically) {
                             TextButton(onClick = onSummarize) {
-                                Text("AI-Zusammenfassung erstellen")
+                                Text(stringResource(R.string.ai_zusammenfassung_erstellen))
                             }
                             TextButton(onClick = onSummarizeTest) {
-                                Text("Test", color = Color.White.copy(alpha = 0.55f))
+                                Text(stringResource(R.string.test), color = Color.White.copy(alpha = 0.55f))
                             }
                         }
                     }
@@ -950,14 +963,14 @@ private fun HeiseArticleDetail(
             ) {
                 Column(Modifier.padding(14.dp)) {
                     Text(
-                        text = "Fragen zum Artikel",
+                        text = stringResource(R.string.fragen_zum_artikel),
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Tippe auf einen markierten Begriff in der Zusammenfassung oder stelle unten eine eigene Frage.",
+                        text = stringResource(R.string.tippe_auf_einen_markierten_begriff),
                         color = Color.White.copy(alpha = 0.55f),
                         fontSize = 12.sp
                     )
@@ -987,7 +1000,7 @@ private fun HeiseArticleDetail(
                                                 color = Color.White
                                             )
                                             Text(
-                                                text = "  denkt nach...",
+                                                text = stringResource(R.string.denkt_nach),
                                                 color = Color.White.copy(alpha = 0.75f),
                                                 fontSize = 13.sp
                                             )
@@ -1037,7 +1050,7 @@ private fun HeiseArticleDetail(
                             shape = RoundedCornerShape(24.dp),
                             placeholder = {
                                 Text(
-                                    if (isAiBusy) "Bitte warten..." else "Frage zum Artikel stellen...",
+                                    if (isAiBusy) stringResource(R.string.bitte_warten) else stringResource(R.string.frage_zum_artikel_stellen),
                                     color = Color(0xFF888888)
                                 )
                             },
@@ -1075,7 +1088,7 @@ private fun HeiseArticleDetail(
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.Send,
-                                contentDescription = "Frage senden",
+                                contentDescription = stringResource(R.string.frage_senden),
                                 tint = if (!isAiBusy && chatInput.isNotBlank()) Color.White else Color.White.copy(
                                     alpha = 0.4f
                                 )
@@ -1094,7 +1107,7 @@ private fun HeiseArticleDetail(
             ) {
                 Column(Modifier.padding(14.dp)) {
                     Text(
-                        text = "Artikeltext",
+                        text = stringResource(R.string.artikeltext),
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp
@@ -1108,7 +1121,7 @@ private fun HeiseArticleDetail(
                                 color = Color.White
                             )
                             Text(
-                                "  Artikel wird geladen...",
+                                stringResource(R.string.artikel_wird_geladen),
                                 color = Color.White.copy(alpha = 0.75f)
                             )
                         }
@@ -1116,11 +1129,11 @@ private fun HeiseArticleDetail(
                         !articleError.isNullOrBlank() -> {
                             Text(articleError, color = Color(0xFFFF8A80), fontSize = 13.sp)
                             Spacer(Modifier.height(8.dp))
-                            TextButton(onClick = onRetryArticle) { Text("Erneut laden") }
+                            TextButton(onClick = onRetryArticle) { Text(stringResource(R.string.erneut_laden)) }
                         }
 
                         articleText.isNullOrBlank() -> Text(
-                            text = "Kein Artikeltext gefunden.",
+                            text = stringResource(R.string.kein_artikeltext_gefunden),
                             color = Color.White.copy(alpha = 0.65f)
                         )
 
@@ -1151,7 +1164,7 @@ private fun ErrorNewsState(message: String, onRetry: () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "Feed konnte nicht geladen werden",
+                text = stringResource(R.string.feed_konnte_nicht_geladen_werden),
                 color = Color.White,
                 fontWeight = FontWeight.Bold
             )
@@ -1163,7 +1176,7 @@ private fun ErrorNewsState(message: String, onRetry: () -> Unit) {
             )
             Spacer(Modifier.height(12.dp))
             TextButton(onClick = onRetry) {
-                Text("Erneut versuchen")
+                Text(stringResource(R.string.erneut_versuchen))
             }
         }
     }
@@ -1173,10 +1186,10 @@ private fun ErrorNewsState(message: String, onRetry: () -> Unit) {
 private fun EmptyNewsState(onRetry: () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Keine News gefunden", color = Color.White)
+            Text(stringResource(R.string.keine_news_gefunden), color = Color.White)
             Spacer(Modifier.height(12.dp))
             TextButton(onClick = onRetry) {
-                Text("Aktualisieren")
+                Text(stringResource(R.string.aktualisieren_2))
             }
         }
     }
