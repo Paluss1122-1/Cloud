@@ -10,6 +10,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.tabslify.R
 import com.tabslify.core.activities.Tabslify.Companion.serviceScope
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config
@@ -33,8 +34,8 @@ fun showLastFriendMessages(context: Context) {
         try {
             Handler(Looper.getMainLooper()).post {
                 showSimpleNotificationExtern(
-                    "📨 Lade Nachrichten...",
-                    "Rufe letzte Nachrichten von friend ab",
+                    context.getString(R.string.lade_nachrichten),
+                    context.getString(R.string.rufe_letzte_nachrichten_von_friend),
                     3.seconds,
                     context
                 )
@@ -58,8 +59,8 @@ fun showLastFriendMessages(context: Context) {
             if (messages.isEmpty()) {
                 Handler(Looper.getMainLooper()).post {
                     showSimpleNotificationExtern(
-                        "📭 Keine Nachrichten",
-                        "Keine Nachrichten von friend gefunden",
+                        context.getString(R.string.keine_nachrichten),
+                        context.getString(R.string.keine_nachrichten_von_friend_gefunden),
                         context = context
                     )
                 }
@@ -73,8 +74,8 @@ fun showLastFriendMessages(context: Context) {
         } catch (e: Exception) {
             Handler(Looper.getMainLooper()).post {
                 showSimpleNotificationExtern(
-                    "❌ Fehler",
-                    "Nachrichten konnten nicht geladen werden: ${e.message}",
+                    context.getString(R.string.fehler_2),
+                    context.getString(R.string.nachrichten_konnten_nicht_geladen_werden, e.message),
                     20.seconds,
                     context
                 )
@@ -96,20 +97,20 @@ private fun showFriendMessagesNotification(messages: List<ChatService.Message>, 
                 }
             } catch (_: Exception) {
                 msg.created_at?.take(16)?.replace("T", " ")
-            } ?: "Unbekannt"
+            } ?: context.getString(R.string.unbekannt)
 
-            "🕐 $timeStr\n${msg.content}"
+            context.getString(R.string.str_3, timeStr, msg.content)
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_email)
-            .setContentTitle("💬 Letzte ${messages.size} Nachrichten von friend")
+            .setContentTitle(context.getString(R.string.letzte_nachrichten_von_friend, messages.size))
             .setContentText(messages.lastOrNull()?.content ?: "")
             .setStyle(
                 NotificationCompat.BigTextStyle()
                     .bigText(messageText)
-                    .setBigContentTitle("💬 Chat-Verlauf mit friend")
-                    .setSummaryText("${messages.size} Nachrichten")
+                    .setBigContentTitle(context.getString(R.string.chat_verlauf_mit_friend))
+                    .setSummaryText(context.getString(R.string.nachrichten, messages.size))
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
@@ -123,8 +124,8 @@ private fun showFriendMessagesNotification(messages: List<ChatService.Message>, 
 
     } catch (e: Exception) {
         showSimpleNotificationExtern(
-            "❌ Fehler",
-            "Benachrichtigung konnte nicht angezeigt werden: ${e.message}",
+            context.getString(R.string.fehler_2),
+            context.getString(R.string.benachrichtigung_konnte_nicht_angezeigt_werden, e.message),
             20.seconds,
             context
         )
@@ -137,8 +138,8 @@ fun setSoundMode(mode: String, context: Context) {
 
         if (!canWriteSettings(context)) {
             showSimpleNotificationExtern(
-                "❌ Keine Berechtigung",
-                "WRITE_SETTINGS Berechtigung fehlt. Aktiviere sie manuell.",
+                context.getString(R.string.keine_berechtigung),
+                context.getString(R.string.write_settings_berechtigung_fehlt_aktiviere),
                 20.seconds,
                 context
             )
@@ -165,8 +166,8 @@ fun setSoundMode(mode: String, context: Context) {
                 }
 
                 showSimpleNotificationExtern(
-                    "📳 Vibration aktiviert",
-                    "Nur Vibrationen, keine Töne",
+                    context.getString(R.string.vibration_aktiviert),
+                    context.getString(R.string.nur_vibrationen_keine_tone),
                     context = context
                 )
             }
@@ -190,8 +191,8 @@ fun setSoundMode(mode: String, context: Context) {
                 }
 
                 showSimpleNotificationExtern(
-                    "🔇 Stumm",
-                    "Keine Töne, keine Vibrationen",
+                    context.getString(R.string.stumm),
+                    context.getString(R.string.keine_tone_keine_vibrationen),
                     context = context
                 )
             }
@@ -215,16 +216,16 @@ fun setSoundMode(mode: String, context: Context) {
                 }
 
                 showSimpleNotificationExtern(
-                    "🔊 Normal",
-                    "Töne und Vibrationen aktiviert",
+                    context.getString(R.string.normal),
+                    context.getString(R.string.tone_und_vibrationen_aktiviert),
                     context = context
                 )
             }
 
             else -> {
                 showSimpleNotificationExtern(
-                    "❌ Ungültig",
-                    "Nutze: sound [vibrate|silent|normal]",
+                    context.getString(R.string.ungultig),
+                    context.getString(R.string.nutze_sound_vibrate_silent_normal),
                     20.seconds,
                     context
                 )
@@ -233,8 +234,8 @@ fun setSoundMode(mode: String, context: Context) {
 
     } catch (e: Exception) {
         showSimpleNotificationExtern(
-            "❌ Fehler",
-            "Sound-Modus konnte nicht geändert werden: ${e.message}",
+            context.getString(R.string.fehler_2),
+            context.getString(R.string.sound_modus_konnte_nicht_geandert, e.message),
             20.seconds,
             context
         )
