@@ -1,6 +1,9 @@
 package com.tabslify.tabs.authenticator
 
+import android.content.Context
 import android.net.Uri
+import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,11 +38,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.tabslify.R
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -111,7 +117,16 @@ fun ImportPasswordsDialog(
     onImportDone: () -> Unit
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     val scope = rememberCoroutineScope()
+    
+    LaunchedEffect(Unit) {
+        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(view.windowToken, 0)
+    }
+    
+    val fehlerMsgTemplate = stringResource(R.string.fehler_msg)
+    
     var result by remember { mutableStateOf<ImportResult?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var importTotp by remember { mutableStateOf(true) }
@@ -168,7 +183,7 @@ fun ImportPasswordsDialog(
                         ImportResult(pwInserted, pwUpdated, totpInserted, skipped, removedEntries)
                     if (removedEntries.isEmpty()) onImportDone()
                 } catch (e: Exception) {
-                    Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, fehlerMsgTemplate.format(e.message), Toast.LENGTH_LONG).show()
                 } finally {
                     isLoading = false
                 }
@@ -187,9 +202,9 @@ fun ImportPasswordsDialog(
                 .background(S1)
                 .padding(24.dp)
         ) {
-            Text("📥 Import", color = TP, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.import_action), color = TP, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
-            Text("Bitwarden JSON Export (unverschlüsselt)", color = TS, fontSize = 13.sp)
+            Text(stringResource(R.string.bitwarden_json_export_unverschlusselt), color = TS, fontSize = 13.sp)
             Spacer(Modifier.height(16.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -199,29 +214,29 @@ fun ImportPasswordsDialog(
                     colors = SwitchDefaults.colors(checkedTrackColor = AB, uncheckedTrackColor = S3)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("TOTP-Secrets auch importieren", color = TP, fontSize = 13.sp)
+                Text(stringResource(R.string.totp_secrets_auch_importieren), color = TP, fontSize = 13.sp)
             }
 
             Spacer(Modifier.height(16.dp))
 
             result?.let {
                 Text(
-                    "✅ ${it.passwords} neu importiert",
+                    stringResource(R.string.neu_importiert, it.passwords),
                     color = Color(0xFF4CAF50),
                     fontSize = 14.sp
                 )
                 if (it.updated > 0) Text(
-                    "🔄 ${it.updated} aktualisiert",
+                    stringResource(R.string.aktualisiert, it.updated),
                     color = Color(0xFFFBC02D),
                     fontSize = 14.sp
                 )
                 if (it.totp > 0) Text(
-                    "🛡️ ${it.totp} 2FA-Einträge importiert",
+                    stringResource(R.string.s_2fa_eintrage_importiert, it.totp),
                     color = Color(0xFF4CAF50),
                     fontSize = 14.sp
                 )
                 if (it.skipped > 0) Text(
-                    "⏭ ${it.skipped} übersprungen",
+                    stringResource(R.string.ubersprungen, it.skipped),
                     color = TS,
                     fontSize = 13.sp
                 )
@@ -237,7 +252,7 @@ fun ImportPasswordsDialog(
                     colors = ButtonDefaults.buttonColors(containerColor = AB),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Fertig")
+                    Text(stringResource(R.string.fertig_2))
                 }
             } ?: run {
                 if (isLoading) {
@@ -247,14 +262,14 @@ fun ImportPasswordsDialog(
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
-                            Text("Abbrechen", color = TS)
+                            Text(stringResource(R.string.abbrechen), color = TS)
                         }
                         Button(
                             onClick = { launcher.launch("application/json") },
                             colors = ButtonDefaults.buttonColors(containerColor = AB),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Datei wählen")
+                            Text(stringResource(R.string.datei_wahlen))
                         }
                     }
                 }
@@ -303,13 +318,13 @@ fun RemovalDecisionDialog(
                 .padding(24.dp)
         ) {
             Text(
-                "🗑️ Nicht mehr im Export",
+                stringResource(R.string.nicht_mehr_im_export),
                 color = TP,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(4.dp))
-            Text("${index + 1} von ${entries.size}", color = TS, fontSize = 12.sp)
+            Text(stringResource(R.string.fortschritt_von, index + 1, entries.size), color = TS, fontSize = 12.sp)
             Spacer(Modifier.height(16.dp))
 
             Column(
@@ -327,21 +342,21 @@ fun RemovalDecisionDialog(
             }
 
             Spacer(Modifier.height(20.dp))
-            Text("Was soll mit diesem Eintrag passieren?", color = TP, fontSize = 13.sp)
+            Text(stringResource(R.string.was_soll_mit_diesem_eintrag), color = TP, fontSize = 13.sp)
             Spacer(Modifier.height(12.dp))
 
             Button(
                 onClick = { onDecision(entry, true); index++ },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE74C3C)),
                 modifier = Modifier.fillMaxWidth()
-            ) { Text("Löschen") }
+            ) { Text(stringResource(R.string.loschen)) }
 
             Spacer(Modifier.height(8.dp))
 
             OutlinedButton(
                 onClick = { onDecision(entry, false); index++ },
                 modifier = Modifier.fillMaxWidth()
-            ) { Text("Behalten", color = TS) }
+            ) { Text(stringResource(R.string.behalten), color = TS) }
         }
     }
 }
