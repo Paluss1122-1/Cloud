@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Intent
 import android.media.MediaRecorder
 import androidx.core.app.NotificationCompat
+import com.tabslify.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -72,7 +73,7 @@ class AudioForegroundService : Service() {
         )
 
         val builder = NotificationCompat.Builder(this, "audio_channel")
-            .setContentTitle("🎙️ Aufnahme läuft")
+            .setContentTitle(getString(R.string.aufnahme_lauft))
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .setContentIntent(launchTabslifyPendingIntent)
@@ -85,7 +86,7 @@ class AudioForegroundService : Service() {
         try {
             val channel = NotificationChannel(
                 "audio_channel",
-                "Audio Aufnahme",
+                getString(R.string.audio_aufnahme),
                 NotificationManager.IMPORTANCE_LOW
             )
             val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
