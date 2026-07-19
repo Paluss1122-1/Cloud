@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -55,6 +56,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
+import com.tabslify.R
+import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.cms
 import com.tabslify.core.objects.tNotify
 import com.tabslify.core.ui.PloppingButton
@@ -110,22 +113,22 @@ fun QuickSettingsTabContent() {
     ) {
         QuickSettingRow(
             listOf(
-                "Netzwerk\nInfos" to { showNetworkInfo(context) },
-                "Display\nInfos" to { showDisplayInfo(context) },
-                "Uptime" to { showNumberDialogSave = true }
+                stringResource(R.string.netzwerk_infos) to { showNetworkInfo(context) },
+                stringResource(R.string.display_infos) to { showDisplayInfo(context) },
+                stringResource(R.string.uptime) to { showNumberDialogSave = true }
             ))
         Spacer(Modifier.height(8.dp))
         QuickSettingRow(
             listOf(
-                "🔋\nBatterie\nInfo" to { showBatteryInfo(context) },
-                "Batterie\nDiagramm" to { showBatteryChart = true },
-                "📱\nGeräte\nInfo" to { showDeviceInfo(context) }
+                stringResource(R.string.batterie_info_2) to { showBatteryInfo(context) },
+                stringResource(R.string.batterie_diagramm) to { showBatteryChart = true },
+                stringResource(R.string.gerate_info) to { showDeviceInfo(context) }
             )
         )
         Spacer(Modifier.height(8.dp))
         QuickSettingRow(
             listOf(
-                "Downtime" to { showNumberDialog = true }
+                stringResource(R.string.downtime) to { showNumberDialog = true }
             )
         )
 
@@ -214,10 +217,10 @@ fun showDisplayInfo(context: Context) {
 
     val info = StringBuilder()
 
-    info.append("📏 Phys. Auflösung: $realWidth × $realHeight px\n")
+    info.append(context.getString(R.string.phys_auflosung_px, realWidth, realHeight))
 
     if (usableWidth != realWidth || usableHeight != realHeight) {
-        info.append("📦 Nutzbare Fläche: $usableWidth × $usableHeight px\n")
+        info.append(context.getString(R.string.nutzbare_flache_px, usableWidth, usableHeight))
     }
 
     val densityStr = when {
@@ -228,39 +231,39 @@ fun showDisplayInfo(context: Context) {
         densityDpi <= 480 -> "xxhdpi (480 dpi)"
         else -> "xxxhdpi (≥ $densityDpi dpi)"
     }
-    info.append("🔍 Dichte: $densityDpi dpi ($densityStr)\n")
+    info.append(context.getString(R.string.dichte_dpi, densityDpi, densityStr))
 
     try {
         val widthInches = realWidth / xdpi.toDouble()
         val heightInches = realHeight / ydpi.toDouble()
         val diagonalInches =
             sqrt(widthInches * widthInches + heightInches * heightInches)
-        info.append("📐 Bildschirmgröße: ${String.format(Locale.US, "%.1f", diagonalInches)} Zoll\n")
+        info.append(context.getString(R.string.bildschirmgrose, String.format(Locale.US, "%.1f", diagonalInches)))
     } catch (_: Exception) {
-        info.append("📐 Bildschirmgröße: N/A\n")
+        info.append(context.getString(R.string.bildschirmgrose_n_a))
     }
 
     try {
         val refreshRate = display.refreshRate
-        info.append("🔄 Refresh Rate: ${String.format(Locale.US, "%.1f", refreshRate)} Hz\n")
+        info.append(context.getString(R.string.refresh_rate, String.format(Locale.US, "%.1f", refreshRate)))
     } catch (_: Exception) {
-        info.append("🔄 Refresh Rate: N/A\n")
+        info.append(context.getString(R.string.refresh_rate_n_a))
     }
 
     val rotation = display.rotation
     val orientationStr = when (rotation) {
-        Surface.ROTATION_0 -> "Hochformat (0°)"
-        Surface.ROTATION_90 -> "Querformat (90°)"
-        Surface.ROTATION_180 -> "Hochformat (180°, umgekehrt)"
-        Surface.ROTATION_270 -> "Querformat (270°, umgekehrt)"
-        else -> "Unbekannt"
+        Surface.ROTATION_0 -> context.getString(R.string.hochformat_0)
+        Surface.ROTATION_90 -> context.getString(R.string.querformat_90)
+        Surface.ROTATION_180 -> context.getString(R.string.hochformat_180_umgekehrt)
+        Surface.ROTATION_270 -> context.getString(R.string.querformat_270_umgekehrt)
+        else -> context.getString(R.string.unbekannt)
     }
-    info.append("🧭 Ausrichtung: $orientationStr\n")
+    info.append(context.getString(R.string.ausrichtung, orientationStr))
 
     val builder = NotificationCompat.Builder(context, SSN_CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_menu_gallery)
-        .setContentTitle("🖥️ Display-Info")
-        .setContentText("Auflösung, Dichte, Größe, Refresh Rate")
+        .setContentTitle(context.getString(R.string.display_info))
+        .setContentText(context.getString(R.string.auflosung_dichte_grose_refresh_rate))
         .setStyle(NotificationCompat.BigTextStyle().bigText(info.toString()))
         .setPriority(NotificationCompat.PRIORITY_LOW)
         .setAutoCancel(true)
@@ -354,18 +357,18 @@ fun showDeviceInfo(context: Context) {
 
     val channel = NotificationChannel(
         channelId,
-        "Geräte-Infos",
+        context.getString(R.string.gerate_infos),
         NotificationManager.IMPORTANCE_LOW
     ).apply {
-        description = "Zeigt System-, Hardware-, App- und Netzwerk-Infos an"
+        description = context.getString(R.string.zeigt_system_hardware_app_und)
     }
     notificationManager.createNotificationChannel(channel)
 
     val categories = listOf(
-        "📱 System" to systemInfo,
-        "⚙️ Hardware" to hardwareInfo,
-        "📦 App" to appInfo,
-        "🌐 Netzwerk" to networkInfo
+        context.getString(R.string.system) to systemInfo,
+        context.getString(R.string.hardware) to hardwareInfo,
+        context.getString(R.string.app) to appInfo,
+        context.getString(R.string.netzwerk) to networkInfo
     )
 
     for ((title, content) in categories) {
@@ -395,7 +398,7 @@ fun NumberInputDialog(
         containerColor = Color(0xFF2A2A2A),
         title = {
             Text(
-                text = "Nummer eingeben",
+                text = stringResource(R.string.nummer_eingeben),
                 color = Color.White,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
@@ -405,7 +408,7 @@ fun NumberInputDialog(
             Column {
                 if (currentNumber.isNotEmpty()) {
                     Text(
-                        text = "Gespeicherte Nummer: $currentNumber",
+                        text = stringResource(R.string.gespeicherte_nummer, currentNumber),
                         color = Color(0xFF4CAF50),
                         fontSize = 14.sp,
                         modifier = Modifier.padding(bottom = 8.dp)
@@ -415,7 +418,7 @@ fun NumberInputDialog(
                 OutlinedTextField(
                     value = numberText,
                     onValueChange = { numberText = it },
-                    label = { Text("Nummer", color = Color.Gray) },
+                    label = { Text(stringResource(R.string.nummer), color = Color.Gray) },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Number,
                         imeAction = ImeAction.Done
@@ -438,12 +441,63 @@ fun NumberInputDialog(
             TextButton(
                 onClick = { onSave(numberText) }
             ) {
-                Text("Speichern", color = Color(0xFF4CAF50))
+                Text(stringResource(R.string.speichern), color = Color(0xFF4CAF50))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Abbrechen", color = Color.Gray)
+                Text(stringResource(R.string.abbrechen), color = Color.Gray)
+            }
+        }
+    )
+}
+
+@Composable
+fun LanguageDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val current = remember { Config.currentAppLanguage(context) }
+    val options = listOf(
+        "" to stringResource(R.string.language_system),
+        "de" to stringResource(R.string.language_german),
+        "en" to stringResource(R.string.language_english)
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF2A2A2A),
+        title = {
+            Text(
+                text = stringResource(R.string.language_title),
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column {
+                options.forEach { (tag, label) ->
+                    val selected = tag == current
+                    TextButton(
+                        onClick = {
+                            Config.setAppLanguage(context, tag)
+                            onDismiss()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = if (selected) "✓ $label" else label,
+                            color = if (selected) Color(0xFF4CAF50) else Color.White,
+                            fontSize = 16.sp,
+                            textAlign = TextAlign.Start,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.abbrechen), color = Color.Gray)
             }
         }
     )
