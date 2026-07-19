@@ -76,6 +76,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -89,6 +90,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.edit
 import com.google.gson.GsonBuilder
+import com.tabslify.R
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -294,7 +296,7 @@ fun CalendarTabContent() {
             contentColor = TextPrimary,
             shape = CircleShape
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Neuer Eintrag")
+            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.neuer_eintrag))
         }
     }
 
@@ -371,7 +373,7 @@ private fun CalendarHeader(
         }
 
         TextButton(onClick = onToday) {
-            Text("Heute", color = NeonGreen, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.heute), color = NeonGreen, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         }
 
         IconButton(onClick = onNext) {
@@ -543,7 +545,7 @@ private fun DayTimeline(
                 modifier = Modifier.weight(1f)
             )
             Text(
-                "${entries.size} Einträge",
+                stringResource(R.string.eintrage, entries.size),
                 color = TextTertiary,
                 fontSize = 12.sp
             )
@@ -800,7 +802,7 @@ private fun EntryDialog(
                     // Title bar
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            if (existingEntry == null) "Neuer Eintrag" else "Eintrag bearbeiten",
+                            if (existingEntry == null) stringResource(R.string.neuer_eintrag) else stringResource(R.string.eintrag_bearbeiten),
                             color = TextPrimary,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
@@ -830,7 +832,7 @@ private fun EntryDialog(
                     OutlinedTextField(
                         value = title,
                         onValueChange = { title = it },
-                        label = { Text("Titel", color = TextTertiary) },
+                        label = { Text(stringResource(R.string.titel), color = TextTertiary) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
@@ -844,7 +846,7 @@ private fun EntryDialog(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         MinutePicker(
-                            label = "Von",
+                            label = stringResource(R.string.von),
                             minute = startMin,
                             onMinuteChange = {
                                 startMin = it
@@ -864,11 +866,11 @@ private fun EntryDialog(
                                     uncheckedColor = TextTertiary
                                 )
                             )
-                            Text("Endzeit festlegen", color = TextSecondary, fontSize = 13.sp)
+                            Text(stringResource(R.string.endzeit_festlegen), color = TextSecondary, fontSize = 13.sp)
                         }
                         if (hasEndTime) {
                             MinutePicker(
-                                label = "Bis",
+                                label = stringResource(R.string.bis),
                                 minute = endMin,
                                 onMinuteChange = {
                                     endMin = it
@@ -883,7 +885,7 @@ private fun EntryDialog(
                     if (hasEndTime) {
                         val durationMin = endMin - startMin
                         Text(
-                            "Dauer: ${durationMin / 60}h ${durationMin % 60}min",
+                            stringResource(R.string.dauer_h_min, durationMin / 60, durationMin % 60),
                             color = NeonGreen,
                             fontSize = 12.sp
                         )
@@ -893,14 +895,14 @@ private fun EntryDialog(
                     OutlinedTextField(
                         value = description,
                         onValueChange = { description = it },
-                        label = { Text("Beschreibung (optional)", color = TextTertiary) },
+                        label = { Text(stringResource(R.string.beschreibung_optional), color = TextTertiary) },
                         modifier = Modifier.fillMaxWidth(),
                         maxLines = 3,
                         colors = dialogTextFieldColors()
                     )
 
                     // Color picker
-                    Text("Farbe", color = TextSecondary, fontSize = 13.sp)
+                    Text(stringResource(R.string.farbe), color = TextSecondary, fontSize = 13.sp)
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(entryColors) { color ->
                             Box(
@@ -929,7 +931,7 @@ private fun EntryDialog(
                                 modifier = Modifier.weight(1f),
                                 border = BorderStroke(1.dp, NeonPink),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonPink)
-                            ) { Text("Löschen") }
+                            ) { Text(stringResource(R.string.loschen)) }
                         }
                         Button(
                             onClick = {
@@ -951,7 +953,7 @@ private fun EntryDialog(
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             enabled = title.isNotBlank() && (!hasEndTime || endMin > startMin)
                         ) {
-                            Text(if (existingEntry == null) "Erstellen" else "Speichern")
+                            Text(if (existingEntry == null) stringResource(R.string.erstellen) else stringResource(R.string.speichern))
                         }
                     }
                 }
@@ -964,21 +966,21 @@ private fun EntryDialog(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             containerColor = BgSurface,
-            title = { Text("Eintrag löschen?", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.eintrag_loschen), color = TextPrimary, fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    "\"${existingEntry?.title}\" wird unwiderruflich gelöscht.",
+                    stringResource(R.string.wird_unwiderruflich_geloscht, existingEntry?.title ?: ""),
                     color = TextSecondary
                 )
             },
             confirmButton = {
                 TextButton(onClick = { onDelete?.invoke(); showDeleteConfirm = false }) {
-                    Text("Löschen", color = NeonPink)
+                    Text(stringResource(R.string.loschen), color = NeonPink)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Abbrechen", color = TextTertiary)
+                    Text(stringResource(R.string.abbrechen), color = TextTertiary)
                 }
             }
         )
