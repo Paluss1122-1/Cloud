@@ -31,9 +31,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tabslify.R
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -46,6 +48,9 @@ fun JsonEditorContent(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val gespeichertMsg = stringResource(R.string.gespeichert)
+    val ungueltigesFormatMsg = stringResource(R.string.ungultiges_json_format)
+    
     var jsonContent by remember { mutableStateOf(loadJsonFile(context, filePath, fileUri)) }
     var isEditing by remember { mutableStateOf(false) }
     var editedContent by remember { mutableStateOf(jsonContent) }
@@ -63,7 +68,7 @@ fun JsonEditorContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "JSON Editor",
+                text = stringResource(R.string.json_editor),
                 color = Color.White,
                 fontSize = 20.sp,
                 modifier = Modifier.weight(1f)
@@ -96,9 +101,9 @@ fun JsonEditorContent(
                             saveJsonFile(context, filePath, fileUri, editedContent)
                             jsonContent = editedContent
                             isEditing = false
-                            Toast.makeText(context, "Gespeichert!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, gespeichertMsg, Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "Ungültiges JSON-Format!", Toast.LENGTH_SHORT)
+                            Toast.makeText(context, ungueltigesFormatMsg, Toast.LENGTH_SHORT)
                                 .show()
                         }
                     } else {
@@ -110,7 +115,7 @@ fun JsonEditorContent(
                     containerColor = if (isEditing) Color(0xFF4CAF50) else Color(0xFF2196F3)
                 )
             ) {
-                Text(if (isEditing) "💾 Speichern" else "✏️ Bearbeiten")
+                Text(if (isEditing) stringResource(R.string.speichern_2) else stringResource(R.string.bearbeiten_2))
             }
 
             if (isEditing) {
@@ -123,7 +128,7 @@ fun JsonEditorContent(
                         containerColor = Color(0xFFFF5722)
                     )
                 ) {
-                    Text("✖ Abbrechen")
+                    Text(stringResource(R.string.abbrechen_2))
                 }
             }
 
@@ -140,7 +145,7 @@ fun JsonEditorContent(
                     containerColor = Color(0xFF9C27B0)
                 )
             ) {
-                Text("🔧 Formatieren")
+                Text(stringResource(R.string.formatieren))
             }
         }
 
@@ -192,7 +197,7 @@ fun JsonEditorContent(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = if (isEditing) "⚠️ Im Bearbeitungsmodus" else "👁️ Anzeigemodus",
+            text = if (isEditing) stringResource(R.string.im_bearbeitungsmodus) else stringResource(R.string.anzeigemodus),
             color = if (isEditing) Color(0xFFFFA500) else Color.Gray,
             fontSize = 12.sp,
             modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -205,12 +210,12 @@ private fun loadJsonFile(context: Context, filePath: String, fileUri: Uri?): Str
         if (fileUri != null && fileUri.scheme == "content") {
             context.contentResolver.openInputStream(fileUri)?.use { inputStream ->
                 inputStream.bufferedReader().use { it.readText() }
-            } ?: throw Exception("Konnte Datei nicht öffnen")
+            } ?: throw Exception(context.getString(R.string.konnte_datei_nicht_offnen))
         } else {
             File(filePath).readText()
         }
     } catch (e: Exception) {
-        "{\n  \"error\": \"Datei konnte nicht geladen werden\",\n  \"message\": \"${e.message}\"\n}"
+        context.getString(R.string.error_datei_konnte_nicht_geladen, e.message)
     }
 }
 
@@ -219,12 +224,12 @@ private fun saveJsonFile(context: Context, filePath: String, fileUri: Uri?, cont
         if (fileUri != null && fileUri.scheme == "content") {
             context.contentResolver.openOutputStream(fileUri)?.use { outputStream ->
                 outputStream.write(content.toByteArray())
-            } ?: throw Exception("Konnte nicht in Datei schreiben")
+            } ?: throw Exception(context.getString(R.string.konnte_nicht_in_datei_schreiben))
         } else {
             File(filePath).writeText(content)
         }
     } catch (e: Exception) {
-        Toast.makeText(context, "Fehler beim Speichern: ${e.message}", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, context.getString(R.string.fehler_beim_speichern_2, e.message), Toast.LENGTH_LONG).show()
     }
 }
 
