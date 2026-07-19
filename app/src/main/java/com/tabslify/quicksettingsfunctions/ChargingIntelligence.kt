@@ -20,6 +20,7 @@ import androidx.core.content.edit
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
+import com.tabslify.R
 import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.objects.Config.DEF_GEMINI
 import com.tabslify.core.objects.Config.client
@@ -143,7 +144,7 @@ object ChargeSessionRepository {
     private suspend fun loadSessions(): List<ChargingSession> = withContext(Dispatchers.IO) {
         runCatching {
             if (!prvt()) {
-                Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.forbidden), Toast.LENGTH_SHORT).show()
                 return@withContext emptyList()
             }
             val local = context.getSharedPreferences("charge_sessions", Context.MODE_PRIVATE)
@@ -162,7 +163,7 @@ object ChargeSessionRepository {
         appScope.launch(Dispatchers.IO) {
             runCatching {
                 if (!prvt()) {
-                    Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.forbidden), Toast.LENGTH_SHORT).show()
                     return@runCatching
                 }
                 client.from("Tabslify").upsert(buildJsonObject {
@@ -262,14 +263,14 @@ class ChargingTrackerService : Service() {
         nm.createNotificationChannel(
             NotificationChannel(
                 "charging_tracker",
-                "Ladetracking",
+                getString(R.string.ladetracking),
                 NotificationManager.IMPORTANCE_LOW
             )
         )
 
         startForeground(
             9823, NotificationCompat.Builder(this, "charging_tracker")
-                .setContentTitle("Ladetracking aktiv")
+                .setContentTitle(getString(R.string.ladetracking_aktiv))
                 .setSmallIcon(android.R.drawable.ic_menu_info_details)
                 .build()
         )
@@ -280,10 +281,10 @@ class ChargingTrackerService : Service() {
         )
         tNotify(
             this, NOTIF_PERMISSION_ID, NotificationCompat.Builder(this, "charging_tracker")
-                .setContentTitle("Detailliertes Laden loggen?")
-                .setContentText("Helligkeit & Bildschirmstatus pro Prozent aufzeichnen")
+                .setContentTitle(getString(R.string.detailliertes_laden_loggen))
+                .setContentText(getString(R.string.helligkeit_bildschirmstatus_pro_prozent_aufzeichnen))
                 .setSmallIcon(android.R.drawable.ic_menu_info_details)
-                .addAction(0, "Erlauben", allowPi)
+                .addAction(0, getString(R.string.erlauben), allowPi)
                 .setAutoCancel(true)
                 .build()
         )
