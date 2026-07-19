@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.tasks.Tasks
+import com.tabslify.R
 import com.tabslify.core.objects.Config
 import com.tabslify.core.ui.AlertDialogTabslify
 import com.tabslify.core.ui.NeonBox
@@ -154,12 +156,12 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 StatCard(
-                    label = "🗺️ Tiles",
+                    label = stringResource(R.string.tiles),
                     value = tileCount.toString(),
                     modifier = Modifier.weight(1f)
                 )
-                StatCard("🌍 Erkundet", "%.8f%%".format(exploredPercent), Modifier.weight(1f))
-                StatCard("📅 Heute", vm.todayCount.toString(), Modifier.weight(1f))
+                StatCard(stringResource(R.string.erkundet), "%.8f%%".format(exploredPercent), Modifier.weight(1f))
+                StatCard(stringResource(R.string.heute_2), vm.todayCount.toString(), Modifier.weight(1f))
             }
 
             Row(
@@ -170,7 +172,7 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 StatCard(
-                    label = "📡 Tracker Status",
+                    label = stringResource(R.string.tracker_status),
                     value = trackerStatus,
                     modifier = Modifier.weight(1f)
                 )
@@ -242,8 +244,8 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                 },
                 onDismiss = { tileToDelete = null },
                 icon = { Text("🗺️", fontSize = 24.sp) },
-                title = "Tile löschen",
-                text = "Diesen Bereich als unbesucht markieren?"
+                title = stringResource(R.string.tile_loschen),
+                text = stringResource(R.string.diesen_bereich_als_unbesucht_markieren)
             )
         }
     }
@@ -298,29 +300,32 @@ private fun TrackerDebugInfo(info: ExploreTrackerInfo, modifier: Modifier = Modi
         Column(
             modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp)
         ) {
-            DebugLine("Zuhause", "%.6f, %.6f".format(info.homeLat, info.homeLng))
+            DebugLine(stringResource(R.string.zuhause), "%.6f, %.6f".format(info.homeLat, info.homeLng))
             DebugLine(
-                "Letzte Position",
+                stringResource(R.string.letzte_position),
                 if (info.lastLat != null && info.lastLng != null)
                     "%.6f, %.6f".format(info.lastLat, info.lastLng)
                 else "—"
             )
             DebugLine(
-                "Distanz zuhause",
+                stringResource(R.string.distanz_zuhause),
                 info.distanceToHomeMeters?.let { "%.0f m".format(it) } ?: "—"
             )
-            DebugLine("Letztes Update", info.lastUpdate ?: "—")
+            DebugLine(stringResource(R.string.letztes_update), info.lastUpdate ?: "—")
             DebugLine(
-                "Geofence",
-                if (info.geofenceRegistered) "aktiv"
-                else info.geofenceError?.let { "Fehler: $it" } ?: "nicht registriert"
+                stringResource(R.string.geofence),
+                if (info.geofenceRegistered) stringResource(R.string.aktiv)
+                else info.geofenceError?.let { stringResource(R.string.fehler_msg, it) }
+                    ?: stringResource(R.string.nicht_registriert)
             )
             DebugLine(
-                "Heim-WLAN",
-                info.lastWifiHome?.let { if (it) "verbunden" else "nicht verbunden" } ?: "—"
+                stringResource(R.string.heim_wlan),
+                info.lastWifiHome?.let {
+                    if (it) stringResource(R.string.verbunden) else stringResource(R.string.nicht_verbunden)
+                } ?: "—"
             )
-            DebugLine("Nachtmodus", if (info.isNight) "ja" else "nein")
-            DebugLine("Enabled", if (info.isEnabled) "ja" else "nein")
+            DebugLine(stringResource(R.string.nachtmodus), if (info.isNight) stringResource(R.string.ja) else stringResource(R.string.nein))
+            DebugLine(stringResource(R.string.enabled), if (info.isEnabled) stringResource(R.string.ja) else stringResource(R.string.nein))
         }
     }
 }
