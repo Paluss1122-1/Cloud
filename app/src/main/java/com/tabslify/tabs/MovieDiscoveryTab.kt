@@ -42,6 +42,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.tabslify.R
 import com.tabslify.core.objects.Config
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -80,15 +82,15 @@ data class SavedMovie(
 fun Movie.toSaved() = SavedMovie(id, title, overview, posterPath, voteAverage)
 
 private val movieGenres = mapOf(
-    null to "🎬 Alle",
-    28 to "Action",
-    35 to "Komödie",
-    18 to "Drama",
-    27 to "Horror",
-    878 to "Sci-Fi",
-    53 to "Thriller",
-    10749 to "Romantik",
-    16 to "Animation"
+    null to R.string.alle_2,
+    28 to R.string.action,
+    35 to R.string.komodie,
+    18 to R.string.drama,
+    27 to R.string.horror,
+    878 to R.string.sci_fi,
+    53 to R.string.thriller,
+    10749 to R.string.romantik,
+    16 to R.string.animation
 )
 
 @Composable
@@ -139,7 +141,7 @@ fun MovieDiscoveryTabContent(
             .padding(16.dp)
     ) {
         Text(
-            "Genre wählen",
+            stringResource(R.string.genre_wahlen),
             color = Color.White,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
@@ -159,7 +161,7 @@ fun MovieDiscoveryTabContent(
                         selectedGenre = entry.key
                         loadMovies()
                     },
-                    label = { Text(entry.value) },
+                    label = { Text(stringResource(entry.value)) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = Color(0xFF4CAF50),
                         selectedLabelColor = Color.White,
@@ -181,7 +183,7 @@ fun MovieDiscoveryTabContent(
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
             ) {
-                Text("🎲 Neue Filme")
+                Text(stringResource(R.string.neue_filme))
             }
 
             Button(
@@ -191,7 +193,7 @@ fun MovieDiscoveryTabContent(
                     containerColor = if (showSavedOnly) Color(0xFFFF9800) else Color(0xFF2196F3)
                 )
             ) {
-                Text(if (showSavedOnly) "🎬 Alle anzeigen" else "⭐ Gemerkte (${savedMovies.size})")
+                Text(if (showSavedOnly) stringResource(R.string.alle_anzeigen) else stringResource(R.string.gemerkte, savedMovies.size))
             }
         }
 
@@ -217,7 +219,7 @@ fun MovieDiscoveryTabContent(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        "Keine gemerkten Filme vorhanden",
+                        stringResource(R.string.keine_gemerkten_filme_vorhanden),
                         color = Color.Gray,
                         fontSize = 16.sp
                     )
@@ -325,7 +327,7 @@ fun MovieCard(
                 )
 
                 Text(
-                    text = movie.overview.ifEmpty { "Keine Beschreibung verfügbar" },
+                    text = movie.overview.ifEmpty { stringResource(R.string.keine_beschreibung_verfugbar) },
                     color = Color.Gray,
                     fontSize = 13.sp,
                     maxLines = 3,
@@ -473,7 +475,7 @@ fun MovieDetailDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "Beschreibung:",
+                    text = stringResource(R.string.beschreibung),
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
@@ -482,7 +484,7 @@ fun MovieDetailDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = movie.overview.ifEmpty { "Keine Beschreibung verfügbar" },
+                    text = movie.overview.ifEmpty { stringResource(R.string.keine_beschreibung_verfugbar) },
                     color = Color.LightGray,
                     fontSize = 14.sp,
                     lineHeight = 20.sp
@@ -494,7 +496,7 @@ fun MovieDetailDialog(
                 onClick = onDismiss,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
             ) {
-                Text("Schließen")
+                Text(stringResource(R.string.schliesen))
             }
         }
     )
