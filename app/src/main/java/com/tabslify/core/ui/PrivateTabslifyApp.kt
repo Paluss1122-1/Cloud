@@ -32,6 +32,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -129,6 +130,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -208,32 +210,32 @@ const val KEY_RECENT_TABS = "recent_tabs"
 const val MAX_RECENT_TABS = 5
 
 enum class MenuItem(
-    val title: String,
+    @StringRes val titleRes: Int,
     val icon: String,
     val content: @Composable (setGesturesEnabled: (Boolean) -> Unit) -> Unit
 ) {
     PRIVATE_CLOUD(
-        "Private Cloud",
+        R.string.private_cloud,
         "☁️",
         {}
     ),
     AITAB(
-        "AI Tab",
+        R.string.ai_tab,
         "☁️",
         { AITabContent() }
     ),
     BROWSER(
-        "Browser",
+        R.string.browser,
         "🌐",
         {}
     ),
     QUICK(
-        "Schnellzugriff",
+        R.string.schnellzugriff,
         "⚡",
         { QuickSettingsTabContent() }
     ),
     GALLERY(
-        "Gallerie",
+        R.string.gallerie,
         "🖼️",
         { setGesturesEnabled ->
             LaunchedEffect(Unit) { setGesturesEnabled(true) }
@@ -241,17 +243,17 @@ enum class MenuItem(
         }
     ),
     AUTHENTICATOR(
-        "Authenticator",
+        R.string.authenticator,
         "🔒",
         { }
     ),
     WEATHER(
-        "Wetter",
+        R.string.wetter,
         "🌡️",
         { }
     ),
     CONTACTS(
-        "Kontakte",
+        R.string.kontakte,
         "🧍",
         {
             val context = LocalContext.current
@@ -283,74 +285,74 @@ enum class MenuItem(
         }
     ),
     RECORDER(
-        "Recorder",
+        R.string.recorder,
         "🎙️",
         { AudioRecorderTab() }
     ),
     DATECALCULATOR(
-        "Date Calculator",
+        R.string.date_calculator,
         "📅",
         { DateCalculatorContent() }
     ),
     MOVIEDISCOVER(
-        "Filme Discovery",
+        R.string.filme_discovery,
         "📺",
         { MovieDiscoveryTabContent() }
     ),
     NOTES(
-        "Notizen",
+        R.string.notizen,
         "📖",
         { NotizenApp() }
     ),
     MEDIAPLAYERTAB(
-        "Media Player",
+        R.string.media_player,
         "️️🎶",
         {}
     ),
     GMAIL(
-        "Gmail",
+        R.string.gmail,
         "️️✉️",
         { GmailTabContent() }
     ),
     Vocabs(
-        "Vokabeln",
+        R.string.vokabeln,
         "️️🏫️",
         {}
     ),
     EXPLORE(
-        "Explore",
+        R.string.explore,
         "🗺️",
         { setGesturesEnabled ->
             ExploreTabContent(setGesturesEnabled)
         }
     ),
     CALENDAR(
-        "Kalender",
+        R.string.kalender,
         "📅",
         { CalendarTabContent() }
     ),
     REMOTEDESKTOP(
-        "Remote Desktop",
+        R.string.remote_desktop,
         "🖥️",
         { RemoteDesktopTabContent() }
     ),
     PODCAST(
-        "Podcasts",
+        R.string.podcasts,
         "🎙️",
         { PodcastTab() }
     ),
     HEISE_NEWS(
-        "Heise News",
+        R.string.heise_news,
         "📰",
         {}
     ),
     PC_MANAGER(
-        "PC Manager",
+        R.string.pc_manager,
         "💻",
         { PCManagerTab() }
     ),
     APKM_INSTALLER(
-        "APKM Installer",
+        R.string.apkm_installer,
         "📦",
         {}
     ),
@@ -385,6 +387,9 @@ fun PrivateTabslifyApp(
         animationSpec = tween(400),
         label = "overlay"
     )
+
+    val wirdHeruntergeladenMsg = stringResource(R.string.wird_heruntergeladen)
+    val downloadGestartMsg = stringResource(R.string.download_gestartet)
 
     LaunchedEffect(Unit) {
         svm.uiEvent.collect { value ->
@@ -536,7 +541,7 @@ fun PrivateTabslifyApp(
                         TopAppBar(
                             title = {
                                 Text(
-                                    text = "${selectedMenuItem.icon} ${selectedMenuItem.title}",
+                                    text = "${selectedMenuItem.icon} ${stringResource(selectedMenuItem.titleRes)}",
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -545,7 +550,7 @@ fun PrivateTabslifyApp(
                                 IconButton(onClick = { isHelpOpen = true }) {
                                     Icon(
                                         imageVector = Icons.Default.QuestionMark,
-                                        contentDescription = "Hilfe öffnen",
+                                        contentDescription = stringResource(R.string.hilfe_offnen),
                                         tint = Color.White
                                     )
                                 }
@@ -556,14 +561,14 @@ fun PrivateTabslifyApp(
                                     IconButton(onClick = { onMenuClick() }) {
                                         Icon(
                                             imageVector = Icons.Default.Menu,
-                                            contentDescription = "Menü öffnen",
+                                            contentDescription = stringResource(R.string.menu_offnen),
                                             tint = Color.White
                                         )
                                     }
                                 } else {
                                     Icon(
                                         imageVector = Icons.Default.Menu,
-                                        contentDescription = "Menü öffnen",
+                                        contentDescription = stringResource(R.string.menu_offnen),
                                         tint = Color.White,
                                         modifier = Modifier
                                             .alpha(0f)
@@ -741,7 +746,7 @@ fun PrivateTabslifyApp(
                         val request = DownloadManager.Request(url.toUri()).apply {
                             setMimeType(mimetype)
                             setTitle(filename)
-                            setDescription("Wird heruntergeladen…")
+                            setDescription(wirdHeruntergeladenMsg)
                             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                             setDestinationInExternalPublicDir(
                                 Environment.DIRECTORY_DOWNLOADS,
@@ -796,7 +801,7 @@ fun PrivateTabslifyApp(
 
                                             Toast.makeText(
                                                 ctx,
-                                                if (moved) "Gespeichert in tabslify/podcasts/" else "Download OK, Verschieben fehlgeschlagen",
+                                                if (moved) ctx.getString(R.string.gespeichert_in_tabslify_podcasts) else ctx.getString(R.string.download_ok_verschieben_fehlgeschlagen),
                                                 Toast.LENGTH_SHORT
                                             ).show()
                                         }
@@ -811,7 +816,7 @@ fun PrivateTabslifyApp(
                             Context.RECEIVER_NOT_EXPORTED
                         )
 
-                        Toast.makeText(context, "Download gestartet", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, downloadGestartMsg, Toast.LENGTH_SHORT).show()
                     }
 
                     loadUrl(webViewUrl)
@@ -880,7 +885,7 @@ fun PrivateTabslifyApp(
                 ) {
                     Icon(
                         imageVector = if (isDesktopMode) Icons.Filled.Laptop else Icons.Filled.Phone,
-                        contentDescription = if (isDesktopMode) "Desktop-Modus" else "Mobile-Modus",
+                        contentDescription = if (isDesktopMode) stringResource(R.string.desktop_modus) else stringResource(R.string.mobile_modus),
                         tint = Color.White
                     )
                 }
@@ -899,12 +904,38 @@ fun PrivateTabslifyApp(
     }
 }
 
+@Composable
+fun formatFileSize(sizeBytes: Long): String {
+    val gb = stringResource(R.string.dateigrose_2f_gb)
+    val mb = stringResource(R.string.dateigrose_2f_mb)
+    val kb = stringResource(R.string.dateigrose_1f_kb)
+    
+    return when {
+        sizeBytes >= 1_000_000_000 -> gb.format(sizeBytes / 1_000_000_000.0)
+        sizeBytes >= 1_000_000 -> mb.format(sizeBytes / 1_000_000.0)
+        else -> kb.format(sizeBytes / 1_000.0)
+    }
+}
+
 @OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class)
 @Composable
 fun MainTabslifyScreen(storage: Storage) {
     val context = LocalContext.current
+    
+    val forbiddenMsg = stringResource(R.string.forbidden)
+    val fehlerBeimLadenMsg = stringResource(R.string.fehler_beim_laden)
+    val geloeschtMsg = stringResource(R.string.geloscht)
+    val fehlerBeimLoeschenMsg = stringResource(R.string.fehler_beim_loschen)
+    val hochgeladenMsg = stringResource(R.string.hochgeladen)
+    val fehlerBeimUploadMsg = stringResource(R.string.fehler_beim_upload)
+    val keineInternetverbindungMsg = stringResource(R.string.keine_internetverbindung)
+    val bildGespeichertMsg = stringResource(R.string.bild_gespeichert)
+    val fehlerMsgTemplate = stringResource(R.string.fehler_msg)
+    val dateiGespeichertMsg = stringResource(R.string.datei_gespeichert)
+    val listeAktualisiertMsg = stringResource(R.string.liste_aktualisiert)
+    
     if (!prvt()) {
-        Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, forbiddenMsg, Toast.LENGTH_SHORT).show()
         return
     }
     data class TabslifyFileMeta(
@@ -992,7 +1023,7 @@ fun MainTabslifyScreen(storage: Storage) {
         } catch (e: Exception) {
             e.printStackTrace()
             withContext(Dispatchers.Main) {
-                Toast.makeText(context, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT)
+                Toast.makeText(context, fehlerBeimLadenMsg.format(e.message), Toast.LENGTH_SHORT)
                     .show()
             }
         }
@@ -1007,12 +1038,12 @@ fun MainTabslifyScreen(storage: Storage) {
             FavoriteManager.remove(context, fileName)
             favoriteFiles = favoriteFiles - fileName
             withContext(Dispatchers.Main) {
-                Toast.makeText(context, "🗑️ '$fileName' gelöscht!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, geloeschtMsg.format(fileName), Toast.LENGTH_SHORT).show()
             }
             loadFiles()
         } catch (e: Exception) {
             withContext(Dispatchers.Main) {
-                Toast.makeText(context, "Fehler beim Löschen: ${e.message}", Toast.LENGTH_LONG)
+                Toast.makeText(context, fehlerBeimLoeschenMsg.format(e.message), Toast.LENGTH_LONG)
                     .show()
             }
             e.printStackTrace()
@@ -1074,14 +1105,14 @@ fun MainTabslifyScreen(storage: Storage) {
                         file.delete()
                     }
 
-                    Toast.makeText(context, "✅ Hochgeladen!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, hochgeladenMsg, Toast.LENGTH_SHORT).show()
                     loadFiles()
                 } catch (e: Exception) {
                     e.printStackTrace()
                     withContext(Dispatchers.Main) {
                         Toast.makeText(
                             context,
-                            "Fehler beim Upload: ${e.message}",
+                            fehlerBeimUploadMsg.format(e.message),
                             Toast.LENGTH_LONG
                         ).show()
                     }
@@ -1096,7 +1127,7 @@ fun MainTabslifyScreen(storage: Storage) {
 
     LaunchedEffect(Unit) {
         if (!isOnline(context)) {
-            Toast.makeText(context, "🚫 Keine Internetverbindung", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, keineInternetverbindungMsg, Toast.LENGTH_LONG).show()
         } else {
             loadFiles()
         }
@@ -1159,7 +1190,13 @@ fun MainTabslifyScreen(storage: Storage) {
                             contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
                         ) {
                             Text(
-                                text = filter,
+                                text = when (filter) {
+                                    "Alle" -> stringResource(R.string.alle)
+                                    "Dateien" -> stringResource(R.string.dateien_2)
+                                    "Bilder" -> stringResource(R.string.bilder)
+                                    "Favoriten" -> stringResource(R.string.favoriten)
+                                    else -> filter
+                                },
                                 color = Color.White,
                                 fontSize = 13.sp,
                                 maxLines = 1,
@@ -1197,7 +1234,7 @@ fun MainTabslifyScreen(storage: Storage) {
                             onValueChange = { searchQuery = it },
                             placeholder = {
                                 Text(
-                                    "Suche",
+                                    stringResource(R.string.suche),
                                     color = Color.White
                                 )
                             },
@@ -1213,12 +1250,16 @@ fun MainTabslifyScreen(storage: Storage) {
                         ) {
                             OutlinedTextField(
                                 readOnly = true,
-                                value = sortOption,
+                                value = when (sortOption) {
+                                    "Größte Datei" -> stringResource(R.string.groste_datei)
+                                    "Zuletzt hochgeladen" -> stringResource(R.string.zuletzt_hochgeladen)
+                                    else -> sortOption
+                                },
                                 onValueChange = {},
                                 trailingIcon = {
                                     Icon(
                                         imageVector = Icons.Filled.ArrowDropDown,
-                                        contentDescription = "Sortierung öffnen",
+                                        contentDescription = stringResource(R.string.sortierung_offnen),
                                         tint = Color.White
                                     )
                                 },
@@ -1240,7 +1281,16 @@ fun MainTabslifyScreen(storage: Storage) {
                             ) {
                                 sortOptions.forEach { option ->
                                     DropdownMenuItem(
-                                        text = { Text(option, color = Color.White) },
+                                        text = {
+                                            Text(
+                                                when (option) {
+                                                    "Größte Datei" -> stringResource(R.string.groste_datei)
+                                                    "Zuletzt hochgeladen" -> stringResource(R.string.zuletzt_hochgeladen)
+                                                    else -> option
+                                                },
+                                                color = Color.White
+                                            )
+                                        },
                                         onClick = {
                                             sortOption = option
                                             expanded = false
@@ -1289,8 +1339,14 @@ fun MainTabslifyScreen(storage: Storage) {
                     }
 
                     if (preFilteredFileList.isEmpty()) {
+                        val emptyFilterLabel = when (selectedFilter) {
+                            "Alle", "Dateien" -> stringResource(R.string.dateien_2)
+                            "Bilder" -> stringResource(R.string.bilder)
+                            "Favoriten" -> stringResource(R.string.favoriten)
+                            else -> selectedFilter
+                        }
                         Text(
-                            "Keine ${if (selectedFilter == "Alle") "Dateien" else selectedFilter} vorhanden",
+                            stringResource(R.string.keine, emptyFilterLabel),
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White
                         )
@@ -1313,7 +1369,7 @@ fun MainTabslifyScreen(storage: Storage) {
                                         val fileDate =
                                             file.updatedAt.replace("T", " ")
                                                 .substringBefore(".")
-                                                .ifEmpty { "Unbekannt" }
+                                                .ifEmpty { stringResource(R.string.unbekannt) }
                                         val sizeBytes = file.size
                                         var publicUrl by remember(fileName) {
                                             mutableStateOf<String?>(
@@ -1387,19 +1443,7 @@ fun MainTabslifyScreen(storage: Storage) {
                                                         val isFavorite =
                                                             favoriteFiles.contains(fileName)
 
-                                                        val sizeText = when {
-                                                            sizeBytes >= 1_000_000_000 -> "Dateigröße: %.2f GB".format(
-                                                                sizeBytes / 1_000_000_000.0
-                                                            )
-
-                                                            sizeBytes >= 1_000_000 -> "Dateigröße: %.2f MB".format(
-                                                                sizeBytes / 1_000_000.0
-                                                            )
-
-                                                            else -> "Dateigröße: %.1f KB".format(
-                                                                sizeBytes / 1_000.0
-                                                            )
-                                                        }
+                                                        val sizeText = formatFileSize(sizeBytes)
                                                         Text(
                                                             text = "$fileName\n $fileDate\n $sizeText",
                                                             style = MaterialTheme.typography.bodySmall.copy(
@@ -1427,7 +1471,7 @@ fun MainTabslifyScreen(storage: Storage) {
                                                         ) {
                                                             Icon(
                                                                 imageVector = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
-                                                                contentDescription = "Favorit",
+                                                                contentDescription = stringResource(R.string.favorit),
                                                                 tint = if (isFavorite) Color.Yellow else Color.White
                                                             )
                                                         }
@@ -1485,7 +1529,7 @@ fun MainTabslifyScreen(storage: Storage) {
 
                                                                             Toast.makeText(
                                                                                 context,
-                                                                                "Bild gespeichert ✅",
+                                                                                bildGespeichertMsg,
                                                                                 Toast.LENGTH_SHORT
                                                                             ).show()
 
@@ -1495,7 +1539,7 @@ fun MainTabslifyScreen(storage: Storage) {
                                                                         } catch (e: Exception) {
                                                                             Toast.makeText(
                                                                                 context,
-                                                                                "Fehler: ${e.message}",
+                                                                                fehlerMsgTemplate.format(e.message),
                                                                                 Toast.LENGTH_LONG
                                                                             ).show()
                                                                         } finally {
@@ -1517,7 +1561,7 @@ fun MainTabslifyScreen(storage: Storage) {
                                                                 } else {
                                                                     Icon(
                                                                         imageVector = Icons.Filled.ArrowDropDown,
-                                                                        contentDescription = "Download",
+                                                                        contentDescription = stringResource(R.string.download),
                                                                         tint = Black
                                                                     )
                                                                 }
@@ -1551,7 +1595,7 @@ fun MainTabslifyScreen(storage: Storage) {
                                                             ) {
                                                                 Icon(
                                                                     imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                                                                    contentDescription = "Öffnen",
+                                                                    contentDescription = stringResource(R.string.offnen),
                                                                     tint = Color.White
                                                                 )
                                                             }
@@ -1570,7 +1614,7 @@ fun MainTabslifyScreen(storage: Storage) {
                                                         ) {
                                                             Icon(
                                                                 imageVector = Icons.Default.Delete,
-                                                                contentDescription = "Löschen",
+                                                                contentDescription = stringResource(R.string.loschen),
                                                                 tint = Color.Red
                                                             )
                                                         }
@@ -1591,7 +1635,7 @@ fun MainTabslifyScreen(storage: Storage) {
                                     file.updatedAt
                                         .replace("T", " ")
                                         .substringBefore(".")
-                                        .ifEmpty { "Unbekannt" }
+                                        .ifEmpty { stringResource(R.string.unbekannt) }
                                 val sizeBytes = file.size
                                 val showOpenButton =
                                     sizeBytes >= 0 && fileExistsLocallyWithSameSize(
@@ -1629,7 +1673,7 @@ fun MainTabslifyScreen(storage: Storage) {
                                                 )
 
                                                 Text(
-                                                    text = "Hochgeladen: $fileDate",
+                                                    text = stringResource(R.string.hochgeladen_datum, fileDate),
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = Color.LightGray,
                                                     fontSize = 10.sp
@@ -1672,7 +1716,7 @@ fun MainTabslifyScreen(storage: Storage) {
                                             ) {
                                                 Icon(
                                                     imageVector = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
-                                                    contentDescription = "Favorit",
+                                                    contentDescription = stringResource(R.string.favorit),
                                                     tint = if (isFavorite) Color.Yellow else Color.White
                                                 )
                                             }
@@ -1703,7 +1747,7 @@ fun MainTabslifyScreen(storage: Storage) {
                                                     }) {
                                                         Icon(
                                                             Icons.AutoMirrored.Filled.OpenInNew,
-                                                            contentDescription = "Öffnen",
+                                                            contentDescription = stringResource(R.string.offnen),
                                                             tint = Color.White
                                                         )
                                                     }
@@ -1731,7 +1775,7 @@ fun MainTabslifyScreen(storage: Storage) {
                                                 }) {
                                                     Icon(
                                                         Icons.AutoMirrored.Filled.OpenInNew,
-                                                        contentDescription = "Öffnen",
+                                                        contentDescription = stringResource(R.string.offnen),
                                                         tint = Color.White
                                                     )
                                                 }
@@ -1834,7 +1878,7 @@ fun MainTabslifyScreen(storage: Storage) {
 
                                                                 Toast.makeText(
                                                                     context,
-                                                                    "Datei gespeichert ✅",
+                                                                    dateiGespeichertMsg,
                                                                     Toast.LENGTH_SHORT
                                                                 ).show()
 
@@ -1845,7 +1889,7 @@ fun MainTabslifyScreen(storage: Storage) {
                                                                 e.printStackTrace()
                                                                 Toast.makeText(
                                                                     context,
-                                                                    "Fehler: ${e.message}",
+                                                                    String.format(fehlerMsgTemplate, e.message),
                                                                     Toast.LENGTH_LONG
                                                                 ).show()
                                                             } finally {
@@ -1866,7 +1910,7 @@ fun MainTabslifyScreen(storage: Storage) {
                                                     } else {
                                                         Icon(
                                                             imageVector = Icons.Filled.ArrowDropDown,
-                                                            contentDescription = "Download",
+                                                            contentDescription = stringResource(R.string.download),
                                                             tint = Black
                                                         )
                                                     }
@@ -1899,7 +1943,7 @@ fun MainTabslifyScreen(storage: Storage) {
                             modifier = Modifier.weight(1f)
                         ) {
                             Text(
-                                "Datei auswählen & hochladen",
+                                stringResource(R.string.datei_auswahlen_hochladen),
                                 fontSize = 13.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -1913,14 +1957,14 @@ fun MainTabslifyScreen(storage: Storage) {
                                     if (!isOnline(context)) {
                                         Toast.makeText(
                                             context,
-                                            "🚫 Keine Internetverbindung",
+                                            keineInternetverbindungMsg,
                                             Toast.LENGTH_LONG
                                         ).show()
                                     } else {
                                         loadFiles()
                                         Toast.makeText(
                                             context,
-                                            "Liste aktualisiert ✅",
+                                            listeAktualisiertMsg,
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     }
@@ -1929,7 +1973,7 @@ fun MainTabslifyScreen(storage: Storage) {
                             modifier = Modifier.weight(0.64f)
                         ) {
                             Text(
-                                "🔄 Aktualisieren",
+                                stringResource(R.string.aktualisieren),
                                 fontSize = 13.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -2030,10 +2074,10 @@ fun MainTabslifyScreen(storage: Storage) {
                             null,
                             null
                         )
-                        Toast.makeText(context, "Bild gespeichert ✅", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, bildGespeichertMsg, Toast.LENGTH_SHORT).show()
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     } catch (e: Exception) {
-                        Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, fehlerMsgTemplate.format(e.message), Toast.LENGTH_LONG).show()
                     } finally {
                         isDownloading = null
                         delay(500.milliseconds)
@@ -2149,10 +2193,10 @@ fun showBatteryInfo(context: Context) {
 
         val plugged = batteryIntent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1)
         val chargingType = when (plugged) {
-            BatteryManager.BATTERY_PLUGGED_AC -> "Netzteil (AC)"
+            BatteryManager.BATTERY_PLUGGED_AC -> context.getString(R.string.netzteil_ac)
             BatteryManager.BATTERY_PLUGGED_USB -> "USB"
-            BatteryManager.BATTERY_PLUGGED_WIRELESS -> "Wireless"
-            else -> "Nicht angeschlossen"
+            BatteryManager.BATTERY_PLUGGED_WIRELESS -> context.getString(R.string.wireless)
+            else -> context.getString(R.string.nicht_angeschlossen)
         }
 
         val temperature = batteryIntent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) / 10.0
@@ -2160,21 +2204,21 @@ fun showBatteryInfo(context: Context) {
 
         val health = batteryIntent.getIntExtra(BatteryManager.EXTRA_HEALTH, -1)
         val healthText = when (health) {
-            BatteryManager.BATTERY_HEALTH_GOOD -> "Gut"
-            BatteryManager.BATTERY_HEALTH_OVERHEAT -> "Überhitzt"
-            BatteryManager.BATTERY_HEALTH_DEAD -> "Defekt"
-            BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE -> "Überspannung"
-            BatteryManager.BATTERY_HEALTH_COLD -> "Zu kalt"
-            else -> "Unbekannt"
+            BatteryManager.BATTERY_HEALTH_GOOD -> context.getString(R.string.gut)
+            BatteryManager.BATTERY_HEALTH_OVERHEAT -> context.getString(R.string.uberhitzt)
+            BatteryManager.BATTERY_HEALTH_DEAD -> context.getString(R.string.defekt)
+            BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE -> context.getString(R.string.uberspannung)
+            BatteryManager.BATTERY_HEALTH_COLD -> context.getString(R.string.zu_kalt)
+            else -> context.getString(R.string.unbekannt)
         }
 
         val channelId = "battery_info_channel"
         val channel = NotificationChannel(
             channelId,
-            "Batterie-Informationen",
+            context.getString(R.string.batterie_informationen),
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "Zeigt detaillierte Batterie-Informationen an"
+            description = context.getString(R.string.zeigt_detaillierte_batterie_info)
         }
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -2182,19 +2226,20 @@ fun showBatteryInfo(context: Context) {
 
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("🔋 Batterie-Info")
-            .setContentText("Ladezustand: $percentage%")
+            .setContentTitle(context.getString(R.string.batterie_info))
+            .setContentText(context.getString(R.string.ladezustand, percentage))
             .setStyle(
                 NotificationCompat.BigTextStyle()
                     .bigText(
-                        """
-                    Ladezustand: $percentage%
-                    Status: ${if (isCharging) "🔌 Lädt" else "🔋 Entlädt"}
-                    Ladetyp: $chargingType
-                    Temperatur: $temperature°C
-                    Spannung: $voltage V
-                    Gesundheit: $healthText
-                """.trimIndent()
+                        context.getString(
+                            R.string.batterie_details,
+                            percentage,
+                            if (isCharging) context.getString(R.string.ladt) else context.getString(R.string.entladt),
+                            chargingType,
+                            temperature,
+                            voltage,
+                            healthText
+                        )
                     )
             )
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -2208,12 +2253,12 @@ fun showBatteryInfo(context: Context) {
         } else {
             Toast.makeText(
                 context,
-                "Ladezustand: $percentage% | Temp: $temperature°C",
+                context.getString(R.string.ladezustand_temp, percentage, temperature),
                 Toast.LENGTH_LONG
             ).show()
         }
     } else {
-        Toast.makeText(context, "Batterie-Info nicht verfügbar", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.batterie_info_nicht_verfugbar), Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -2296,7 +2341,7 @@ fun GoodNightScreen(ai: String) {
             Column(Modifier.fillMaxWidth(0.8f)) {
                 Row {
                     Text(
-                        "Guck wie du heute abgeschnitten hast:",
+                        stringResource(R.string.guck_wie_du),
                         color = Color.White,
                         fontFamily = spaceMono
                     )
@@ -2344,8 +2389,8 @@ fun HelpFrame(
     selectedMenuItem: MenuItem = MenuItem.GMAIL,
     onDismiss: () -> Unit = {}
 ) {
-    val helpText = Config.helpFrameEntries[selectedMenuItem]
-        ?: "Für diesen Bereich gibt es noch keine Hilfe."
+    val helpText = Config.helpFrameEntries[selectedMenuItem]?.let { stringResource(it) }
+        ?: stringResource(R.string.fur_diesen_bereich)
 
     BackHandler(enabled = true, onBack = onDismiss)
 
@@ -2380,13 +2425,13 @@ fun HelpFrame(
                 Spacer(Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Hilfe",
+                        text = stringResource(R.string.hilfe),
                         color = HelpTextSecondary.copy(alpha = 0.7f),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = selectedMenuItem.title,
+                        text = stringResource(selectedMenuItem.titleRes),
                         color = HelpTextPrimary,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold
@@ -2395,7 +2440,7 @@ fun HelpFrame(
                 IconButton(onClick = onDismiss) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Hilfe schließen",
+                        contentDescription = stringResource(R.string.hilfe_schliesen),
                         tint = Color.White
                     )
                 }
@@ -2430,7 +2475,7 @@ fun HelpFrame(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Verstanden",
+                    text = stringResource(R.string.verstanden),
                     color = Color.White,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold
