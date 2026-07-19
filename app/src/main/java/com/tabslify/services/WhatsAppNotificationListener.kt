@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import com.tabslify.core.objects.Config.BLOCKED_MESSAGES
 import com.tabslify.core.objects.Config.NOTIFICATION_PORT
+import com.tabslify.R
 import com.tabslify.core.objects.NotificationRepository
 import com.tabslify.core.objects.prvt
 import com.tabslify.core.objects.tNotify
@@ -391,6 +392,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         listenerConnected = true
         instance = WeakReference(this)
         scheduleBlockedNotificationsAlarm()
+        com.tabslify.tabs.mediaplayer.SpotifyPlaybackTracker.start(applicationContext)
     }
 
     override fun onListenerDisconnected() {
@@ -400,6 +402,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
         replyActions.clear()
         messagesByContact.clear()
         NotificationRepository.clear()
+        com.tabslify.tabs.mediaplayer.SpotifyPlaybackTracker.stop()
     }
 
     private fun isWhForwardingEnabled(): Boolean {
@@ -494,7 +497,7 @@ class BlockedNotificationReceiver : android.content.BroadcastReceiver() {
 
         val channel = android.app.NotificationChannel(
             "blocked_summary_channel",
-            "Zurückgehaltene Nachrichten",
+            context.getString(R.string.zuruckgehaltene_nachrichten),
             android.app.NotificationManager.IMPORTANCE_HIGH
         )
         notificationManager.createNotificationChannel(channel)
@@ -511,7 +514,7 @@ class BlockedNotificationReceiver : android.content.BroadcastReceiver() {
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setContentTitle(sender)
                 .setContentText(text)
-                .setSubText("Erhalten um $timeStr (zurückgehalten)")
+                .setSubText(context.getString(R.string.erhalten_um_zuruckgehalten, timeStr))
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .build()
