@@ -68,6 +68,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -80,6 +81,7 @@ import coil.compose.AsyncImage
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.compose.elements.MarkdownBlockQuote
 import com.mikepenz.markdown.m3.Markdown
+import com.tabslify.R
 import com.tabslify.tabs.mediaplayer.Episode
 import com.tabslify.tabs.mediaplayer.PodcastFeed
 import kotlinx.coroutines.launch
@@ -168,7 +170,11 @@ fun Callout(
 @Composable
 fun calloutAwareMarkdownComponents() = markdownComponents(
     blockQuote = {
-        val (calloutType, remainingContent) = parseCalloutType(it.content)
+        val rawQuote = it.content.substring(it.node.startOffset, it.node.endOffset)
+        val strippedQuote = rawQuote.lines().joinToString("\n") { line ->
+            line.trimStart().removePrefix(">").trimStart()
+        }
+        val (calloutType, remainingContent) = parseCalloutType(strippedQuote)
         if (calloutType != null) {
             Callout(type = calloutType, content = {
                 Markdown(content = remainingContent)
@@ -428,7 +434,7 @@ fun FeedCard(
                     }
 
                     feedEpisodes.isEmpty() -> Text(
-                        "Keine Episoden gefunden",
+                        stringResource(R.string.keine_episoden_gefunden),
                         modifier = Modifier.padding(16.dp),
                         color = Color(0xFF7A7880),
                         fontSize = 13.sp
@@ -502,7 +508,7 @@ fun AlertDialogTabslify(
     icon: @Composable (() -> Unit)? = null,
     title: String = "",
     text: String = "",
-    confirmText: String = "Löschen",
+    confirmText: String = stringResource(R.string.loschen),
     oneButton: Boolean = false,
     shape: Shape = AlertDialogDefaults.shape,
     iconContentColor: Color = AlertDialogDefaults.iconContentColor,
@@ -531,7 +537,7 @@ fun AlertDialogTabslify(
                         .background(BgCard)
                         .clickable(onClick = onDismiss)
                         .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) { Text("Abbrechen", color = TextSecondary) }
+                ) { Text(stringResource(R.string.abbrechen), color = TextSecondary) }
             }
         },
         icon = icon,
@@ -569,7 +575,7 @@ fun DialogTabslify(
     icon: @Composable (() -> Unit)? = null,
     title: String = "",
     text: String = "",
-    confirmText: String = "Löschen",
+    confirmText: String = stringResource(R.string.loschen),
     oneButton: Boolean = false,
     shape: Shape = RoundedCornerShape(28.dp),
     iconContentColor: Color = Color.Unspecified,
@@ -650,7 +656,7 @@ fun DialogTabslify(
                                 .background(BgCard)
                                 .clickable(onClick = onDismiss)
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) { Text("Abbrechen", color = TextSecondary) }
+                        ) { Text(stringResource(R.string.abbrechen), color = TextSecondary) }
                     }
                     Box(
                         modifier = Modifier
