@@ -13,6 +13,7 @@ import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.core.app.NotificationCompat
 import com.tabslify.BuildConfig
+import com.tabslify.R
 import com.tabslify.core.functions.canNotify
 import com.tabslify.core.ui.MenuItem
 import com.tabslify.core.ui.getDeviceName
@@ -77,29 +78,29 @@ object Config {
 
     const val SUPABASE_BUCKET = "Files"
 
-    val helpFrameEntries: Map<MenuItem, String> = mapOf(
-        MenuItem.PRIVATE_CLOUD to "So bedienst du die Private Cloud:\n\n1. Gib beim Öffnen dein Master-Passwort ein, um den Speicher zu entsperren.\n2. Tippe auf das Plus- bzw. Upload-Symbol, um Dateien vom Gerät hochzuladen.\n3. Tippe eine Datei an, um sie herunterzuladen oder zu öffnen.\n4. Halte eine Datei gedrückt, um sie umzubenennen oder zu löschen.\n\nAlle Inhalte werden mit deinem Master-Passwort verschlüsselt und zwischen deinen Geräten synchronisiert.",
-        MenuItem.AITAB to "So bedienst du den KI-Chat:\n\n1. Tippe unten in das Eingabefeld und schreibe deine Frage.\n2. Bei vision Models: Über das Bild-Symbol hängst du ein Foto an, das die KI analysieren soll.\n3. Tippe auf Senden – die Antwort erscheint im Chatverlauf.\n4. Scrolle nach oben, um frühere Nachrichten nachzulesen.",
-        MenuItem.BROWSER to "So bedienst du den Browser:\n\n1. Gib eine Webadresse in die Adresszeile ein oder einen Suchbegriff.\n2. Bestätige mit Enter / Tippe auf den Öffnen-Button, um die Seite zu laden.",
-        MenuItem.QUICK to "So bedienst du die Schnellübersicht:\n\n1. Scrolle durch die Kacheln für Akku-Verlauf, Netzwerk-Infos und Lade-Statistiken.\n2. Tippe eine Kachel an, um Details einzublenden.",
-        MenuItem.GALLERY to "So bedienst du die Galerie:\n\n1. Wische nach oben und unten, um durch deine Fotos und Videos zu blättern.\n2. Tippe ein Bild an, um es im Vollbild zu öffnen.\n3. Ziehe zwei Finger auseinander, um zu zoomen.",
-        MenuItem.AUTHENTICATOR to "So bedienst du den Passwort-Manager:\n\n1. Tippe auf das Plus-Symbol, um einen neuen Eintrag mit Name, Benutzername, Passwort, URL und Notizen anzulegen.\n2. Über das Zauberstab-Symbol erzeugst du starke Passwörter automatisch.\n3. Optional hinterlegst du pro Eintrag ein 2FA-Secret (QR-Code scannen oder Base32-Schlüssel eingeben) – der 6-stellige Code wird dann alle 30 Sekunden neu erzeugt.\n4. Tippe einen Eintrag an, um Details zu sehen, das Passwort ein-/auszublenden oder es zu kopieren.\n5. Nutze die Suche, um Einträge schnell zu finden.\n\nAlle Passwörter und Schlüssel werden verschlüsselt gespeichert.",
-        MenuItem.WEATHER to "So bedienst du das Wetter:\n\n1. Beim ersten Öffnen wird dein Standort abgefragt, um das lokale Wetter zu laden.\n2. Wische seitwärts, um zwischen aktuellem Wetter, Stunden- und Tagesvorhersage zu wechseln.\n3. Ziehe die Ansicht nach unten, um die Daten zu aktualisieren.",
-        MenuItem.CONTACTS to "So bedienst du die Kontakte:\n\n1. Erlaube beim ersten Öffnen den Kontakt-Zugriff.\n2. Tippe auf das Plus-Symbol, um einen neuen Kontakt anzulegen.\n3. Tippe einen Kontakt an, um Details zu sehen oder ihn zu bearbeiten.\n4. Über das Löschen-Symbol entfernst du einen Kontakt.",
-        MenuItem.RECORDER to "So bedienst du den Rekorder:\n\n1. Tippe auf den Aufnahme-Knopf, um eine Sprachnotiz zu starten.\n2. Tippe erneut, um die Aufnahme zu stoppen und zu speichern.\n3. Tippe eine Aufnahme in der Liste an, um sie abzuspielen.\n4. Halte eine Aufnahme gedrückt, um sie umzubenennen oder zu löschen.\n\nAlle Aufnahmen bleiben lokal auf dem Gerät.",
-        MenuItem.DATECALCULATOR to "So bedienst du den Datumsrechner:\n\n1. Wähle für Zeitspannen ein Start- und ein Enddatum – die Differenz wird berechnet.",
-        MenuItem.MOVIEDISCOVER to "So bedienst du die Film-Empfehlungen:\n\n1. Wähle oben ein Genre aus, um die Vorschläge einzugrenzen.\n2. Tippe auf „🎲 Neue Filme“, um neue Zufallsvorschläge zu laden.\n3. Tippe auf den Stern, um einen Film zu merken – über „Gemerkte“ zeigst du nur deine gemerkten Filme an.\n4. Tippe einen Film an, um Poster, Bewertung und Beschreibung zu öffnen.",
-        MenuItem.NOTES to "So bedienst du die Notizen:\n\n1. Tippe auf das Plus-Symbol, um eine neue Notiz zu erstellen.\n2. Tippe eine Notiz an, um sie zu bearbeiten.\n3. Halte eine Notiz gedrückt, um sie zu löschen.\n\nAlle Notizen bleiben lokal auf dem Gerät.",
-        MenuItem.MEDIAPLAYERTAB to "So bedienst du den Media Player:\n\n1. Wähle einen Titel aus der Liste, um die Wiedergabe zu starten.\n2. Mit Play/Pause und den Skip-Tasten steuerst du die Wiedergabe.\n3. Ziehe den Fortschrittsbalken, um an eine andere Stelle zu springen.\n4. Über das Playlist-Menü verwaltest du deine Wiedergabelisten.",
-        MenuItem.GMAIL to "So bedienst du die E-Mails:\n\n1. Tippe eine Nachricht in der Liste an, um sie zu lesen.\n2. Nutze die Symbole zum Antworten, Weiterleiten oder Löschen.\n3. Ziehe die Liste nach unten, um neue Mails abzurufen.",
-        MenuItem.Vocabs to "So bedienst du das Vokabeltraining:\n\n1. Tippe auf das Plus-Symbol, um Vokabeln hinzuzufügen – oder fotografiere eine Liste, damit sie automatisch erkannt wird.\n2. Starte eine Lernrunde: Die Karte zeigt zuerst ein Wort.\n3. Tippe die Karte an, um die Lösung umzudrehen.\n4. Bewerte, ob du sie wusstest – die Wiederholung passt sich an.",
-        MenuItem.EXPLORE to "So funktioniert die Karte:\n\n1. Erlaube den Standort-Zugriff – jeder Bereich, an dem du vorbeikommst, wird automatisch als „erkundet“ markiert und blau eingefärbt.\n2. Das Tracking läuft im Hintergrund.\n3. Oben siehst du deine Statistiken (erkundete Bereiche, Anteil, heute) und den aktuellen Tracker-Status.\n5. Halte einen blauen Bereich gedrückt, um ihn wieder als unbesucht zu markieren.",
-        MenuItem.CALENDAR to "So bedienst du den Kalender:\n\n1. Wische zwischen den Wochen bzw. Monaten, um zu navigieren.\n2. Tippe einen Tag an, um seine Termine zu sehen.\n3. Tippe auf das Plus-Symbol, um ein neues Ereignis anzulegen.\n4. Tippe einen Termin an, um ihn zu bearbeiten oder zu löschen.",
-        MenuItem.REMOTEDESKTOP to "So bedienst du die Fernsteuerung:\n\n1. Stelle sicher, dass dein PC gekoppelt und im selben Netzwerk ist.\n2. Verbinde dich über den Verbinden-Button.\n3. Steuere Maus und Tastatur über die Bildschirmfläche und die Eingabeleiste.",
-        MenuItem.PODCAST to "So bedienst du die Podcasts:\n\n1. Suche einen Podcast und tippe auf den Stern.\n2. Wähle eine Folge aus der Liste, um sie abzuspielen.\n3. Mit Play/Pause und den Skip-Tasten steuerst du die Wiedergabe.\n\nNeue Folgen von mit Stern markierten Shows werden automatisch täglich 15Uhr geladen.",
-        MenuItem.HEISE_NEWS to "So bedienst du die News:\n\n1. Scrolle durch die aktuellen Meldungen.\n2. Tippe eine Überschrift an, um den vollständigen Artikel zu öffnen.\n3. Ziehe die Liste nach unten, um neue Meldungen zu laden.",
-        MenuItem.PC_MANAGER to "So bedienst du den PC-Manager:\n\n1. Stelle sicher, dass dein PC gekoppelt und erreichbar ist.\n2. Sieh dir Status und Dateien deines PCs an.\n3. Wähle einen Befehl aus, um ihn an den PC zu senden.",
-        MenuItem.APKM_INSTALLER to "So bedienst du den APKM-Installer:\n\n1. Tippe auf „Datei auswählen“ und suche das .apkm-Paket.\n2. Bestätige die Auswahl, um die Installation zu starten.\n3. Folge der System-Abfrage, um die Split-APKs zu installieren."
+    val helpFrameEntries: Map<MenuItem, Int> = mapOf(
+        MenuItem.PRIVATE_CLOUD to R.string.so_bedienst_du_die_private,
+        MenuItem.AITAB to R.string.so_bedienst_du_den_ki,
+        MenuItem.BROWSER to R.string.so_bedienst_du_den_browser,
+        MenuItem.QUICK to R.string.so_bedienst_du_die_schnellubersicht,
+        MenuItem.GALLERY to R.string.so_bedienst_du_die_galerie,
+        MenuItem.AUTHENTICATOR to R.string.so_bedienst_du_den_passwort,
+        MenuItem.WEATHER to R.string.so_bedienst_du_das_wetter,
+        MenuItem.CONTACTS to R.string.so_bedienst_du_die_kontakte,
+        MenuItem.RECORDER to R.string.so_bedienst_du_den_rekorder,
+        MenuItem.DATECALCULATOR to R.string.so_bedienst_du_den_datumsrechner,
+        MenuItem.MOVIEDISCOVER to R.string.so_bedienst_du_die_film,
+        MenuItem.NOTES to R.string.so_bedienst_du_die_notizen,
+        MenuItem.MEDIAPLAYERTAB to R.string.so_bedienst_du_den_media,
+        MenuItem.GMAIL to R.string.so_bedienst_du_die_e,
+        MenuItem.Vocabs to R.string.so_bedienst_du_das_vokabeltraining,
+        MenuItem.EXPLORE to R.string.so_funktioniert_die_karte_1,
+        MenuItem.CALENDAR to R.string.so_bedienst_du_den_kalender,
+        MenuItem.REMOTEDESKTOP to R.string.so_bedienst_du_die_fernsteuerung,
+        MenuItem.PODCAST to R.string.so_bedienst_du_die_podcasts,
+        MenuItem.HEISE_NEWS to R.string.so_bedienst_du_die_news,
+        MenuItem.PC_MANAGER to R.string.so_bedienst_du_den_pc,
+        MenuItem.APKM_INSTALLER to R.string.so_bedienst_du_den_apkm
     )
 
     var LAT: Double = 0.0
@@ -119,6 +120,7 @@ object Config {
     const val MEDIA_COMMAND_PORT = 8899
     const val MEDIA_STATE_PORT = 8900
     const val AI_PORT = 8902
+    const val SPOTIFY_HISTORY_PORT = 8903
     const val MAIL_NOTIFY_PORT = 8904
     const val EXECUTE_PORT = 8905
     const val EXECUTE_PORT_SEND_FROM_HANDY = 8906
@@ -166,6 +168,13 @@ object Config {
         return locales?.takeUnless { it.isEmpty }?.get(0)?.language ?: ""
     }
 
+    fun ensureDefaultLanguage(context: Context) {
+        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("language_initialized", false)) return
+        setAppLanguage(context, "en")
+        prefs.edit().putBoolean("language_initialized", true).apply()
+    }
+
     fun cms(): Int = System.currentTimeMillis().toInt()
 
     const val SHOWCOMMANDS = 20000
@@ -202,6 +211,7 @@ object Config {
             "con" -> Manifest.permission.READ_CONTACTS
             "not" -> Manifest.permission.POST_NOTIFICATIONS
             "mic" -> Manifest.permission.RECORD_AUDIO
+            "bt" -> Manifest.permission.BLUETOOTH_CONNECT
             "all" -> {
                 launcher.launch(
                     arrayOf(
@@ -210,7 +220,8 @@ object Config {
                         Manifest.permission.ACCESS_FINE_LOCATION,
                         Manifest.permission.CAMERA,
                         Manifest.permission.READ_CONTACTS,
-                        Manifest.permission.POST_NOTIFICATIONS
+                        Manifest.permission.POST_NOTIFICATIONS,
+                        Manifest.permission.BLUETOOTH_CONNECT
                     )
                 )
                 return true
