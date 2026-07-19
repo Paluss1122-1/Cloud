@@ -77,11 +77,13 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
+import com.tabslify.R
 import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.prvt
@@ -382,7 +384,7 @@ fun VocabTab(paddingValues: PaddingValues) {
                                     vokabeln = result ?: emptyList()
                                     if (vokabeln.isNotEmpty()) screen = VokabelTabScreen.REVIEW
                                     else {
-                                        errorMessage = "Lokale Extraktion leer..."
+                                        errorMessage = context.getString(R.string.lokale_extraktion_leer)
                                     }
                                 } else {
                                     callNvidiaVisionApi(
@@ -416,10 +418,10 @@ fun VocabTab(paddingValues: PaddingValues) {
                                             }
                                         })
                                     if (vokabeln.isNotEmpty()) screen = VokabelTabScreen.REVIEW
-                                    else errorMessage = "Keine Vokabeln erkannt."
+                                    else errorMessage = context.getString(R.string.keine_vokabeln_erkannt)
                                 }
                             } catch (e: Exception) {
-                                errorMessage = "Fehler: ${e.localizedMessage}"
+                                errorMessage = context.getString(R.string.fehler_msg, e.localizedMessage)
                             } finally {
                                 isExtracting = false
                             }
@@ -502,8 +504,8 @@ fun SchoolDashboard(
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         SchoolHeader(
-            title = "Schule",
-            subtitle = "Dein Dashboard",
+            title = stringResource(R.string.schule),
+            subtitle = stringResource(R.string.dein_dashboard),
             savedSets = savedSets,
             onOpenSet = onOpenSet,
             recentMaterials = recentMaterials,
@@ -538,7 +540,7 @@ fun SchoolDashboard(
                         tint = LocalContentColor.current.copy(0.4f)
                     )
                     Text(
-                        "Vokabeln",
+                        stringResource(R.string.vokabeln),
                         color = TextPrimary,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold
@@ -562,7 +564,7 @@ fun SchoolDashboard(
                             tint = LocalContentColor.current.copy(0.4f)
                         )
                         Text(
-                            "Materialien",
+                            stringResource(R.string.materialien),
                             color = TextPrimary,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold
@@ -590,13 +592,13 @@ fun SchoolDashboard(
                 Text("🤖", fontSize = 22.sp)
                 Column {
                     Text(
-                        "AI Chat",
+                        stringResource(R.string.ai_chat),
                         color = TextPrimary,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        "Unterstützung beim Lernen",
+                        stringResource(R.string.unterstutzung_beim_lernen),
                         color = TextTertiary,
                         fontSize = 12.sp
                     )
@@ -631,8 +633,8 @@ fun VocabTabContent(
 
     if (setToDelete != null) {
         AlertDialogTabslify(
-            title = "Set löschen?",
-            text = "\"${setToDelete!!.name}\" wird gelöscht.",
+            title = stringResource(R.string.set_loschen),
+            text = stringResource(R.string.wird_geloscht, setToDelete!!.name),
             onConfirm = { onDeleteSet(setToDelete!!); setToDelete = null },
             onDismiss = { setToDelete = null },
         )
@@ -641,8 +643,8 @@ fun VocabTabContent(
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             SchoolHeader(
-                title = "Vokabeln",
-                subtitle = "Übersicht & Scannen",
+                title = stringResource(R.string.vokabeln),
+                subtitle = stringResource(R.string.ubersicht_scannen),
                 onBack = onBack,
                 savedSets = savedSets,
                 onOpenSet = onOpenSet,
@@ -675,7 +677,7 @@ fun VocabTabContent(
                     ) {
                         Text("📷", fontSize = 22.sp)
                         Text(
-                            "Scannen",
+                            stringResource(R.string.scannen),
                             color = TextPrimary,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
@@ -694,13 +696,13 @@ fun VocabTabContent(
                     ) {
                         Text("📚", fontSize = 56.sp)
                         Text(
-                            "Noch keine Sets",
+                            stringResource(R.string.noch_keine_sets),
                             color = TextPrimary,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            "Scan ein Vokabelbild zum Starten",
+                            stringResource(R.string.scan_ein_vokabelbild_zum_starten),
                             color = TextTertiary,
                             fontSize = 14.sp
                         )
@@ -708,7 +710,7 @@ fun VocabTabContent(
                 }
             } else {
                 Text(
-                    "Gespeicherte Sets (${savedSets.size})",
+                    stringResource(R.string.gespeicherte_sets, savedSets.size),
                     color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
                 )
@@ -837,7 +839,7 @@ fun VocabTabContent(
                                             DropdownMenuItem(
                                                 text = {
                                                     Text(
-                                                        "🎲  Mix-Modus",
+                                                        stringResource(R.string.mix_modus),
                                                         color = TextPrimary,
                                                         fontSize = 14.sp
                                                     )
@@ -849,7 +851,7 @@ fun VocabTabContent(
                                             DropdownMenuItem(
                                                 text = {
                                                     Text(
-                                                        "🗑  Löschen",
+                                                        stringResource(R.string.loschen_3),
                                                         color = Color(0xFFEF5350),
                                                         fontSize = 14.sp
                                                     )
@@ -943,7 +945,7 @@ fun VocabTabContent(
             ) {
                 Icon(
                     imageVector = Icons.Default.Shuffle,
-                    contentDescription = "Sets mischen"
+                    contentDescription = stringResource(R.string.sets_mischen)
                 )
             }
         }
@@ -976,7 +978,7 @@ fun UploadScreen(
             IconButton(onClick = onBack) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Zurück",
+                    contentDescription = stringResource(R.string.zuruck),
                     tint = TextPrimary
                 )
             }
@@ -1011,8 +1013,8 @@ fun UploadScreen(
                         ) {
                             Text("📷", fontSize = 48.sp)
                             Spacer(Modifier.height(8.dp))
-                            Text("Bild auswählen", color = TextSecondary, fontSize = 15.sp)
-                            Text("Format: LATEIN | DEUTSCH", color = TextTertiary, fontSize = 12.sp)
+                            Text(stringResource(R.string.bild_auswahlen), color = TextSecondary, fontSize = 15.sp)
+                            Text(stringResource(R.string.format_latein_deutsch), color = TextTertiary, fontSize = 12.sp)
                         }
                     }
                 }
@@ -1030,7 +1032,7 @@ fun UploadScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            if (bitmap != null) "Anderes Bild" else "Bild wählen",
+                            if (bitmap != null) stringResource(R.string.anderes_bild) else stringResource(R.string.bild_wahlen),
                             color = TextSecondary, fontSize = 14.sp
                         )
                     }
@@ -1057,11 +1059,11 @@ fun UploadScreen(
                                     strokeWidth = 2.dp,
                                     color = TextPrimary
                                 )
-                                Text("Erkenne...", color = TextPrimary, fontSize = 14.sp)
+                                Text(stringResource(R.string.erkenne_platzhalter), color = TextPrimary, fontSize = 14.sp)
                             }
                         } else {
                             Text(
-                                "Text erkennen",
+                                stringResource(R.string.text_erkennen),
                                 color = if (bitmap != null) TextPrimary else TextTertiary,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -1161,14 +1163,14 @@ fun ReviewScreen(
             containerColor = BgSurface,
             title = {
                 Text(
-                    "Erkennung abbrechen?",
+                    stringResource(R.string.erkennung_abbrechen),
                     color = TextPrimary,
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Text(
-                    "Die KI erkennt noch Vokabeln. Wirklich abbrechen?",
+                    stringResource(R.string.die_ki_erkennt_noch_vokabeln),
                     color = TextSecondary
                 )
             },
@@ -1179,7 +1181,7 @@ fun ReviewScreen(
                         .background(Color(0xFFB71C1C))
                         .clickable { showCancelDialog = false; onCancelExtraction?.invoke() }
                         .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) { Text("Abbrechen", color = TextPrimary, fontWeight = FontWeight.SemiBold) }
+                ) { Text(stringResource(R.string.abbrechen), color = TextPrimary, fontWeight = FontWeight.SemiBold) }
             },
             dismissButton = {
                 Box(
@@ -1188,7 +1190,7 @@ fun ReviewScreen(
                         .background(BgCard)
                         .clickable { showCancelDialog = false }
                         .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) { Text("Weiter", color = TextSecondary) }
+                ) { Text(stringResource(R.string.weiter), color = TextSecondary) }
             }
         )
     }
@@ -1215,12 +1217,12 @@ fun ReviewScreen(
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    setName ?: "Neue Vokabeln",
+                    setName ?: stringResource(R.string.neue_vokabeln),
                     color = TextPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text("${currentVokabeln.size} Vokabeln", color = TextTertiary, fontSize = 12.sp)
+                Text(stringResource(R.string.vokabeln_2, currentVokabeln.size), color = TextTertiary, fontSize = 12.sp)
             }
             Box(
                 modifier = Modifier
@@ -1238,7 +1240,7 @@ fun ReviewScreen(
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 Text(
-                    if (changes > 0) "Bestätigen ($changes)" else if (checkExist && !fromScan) "Umbenennen" else "💾 Speichern",
+                    if (changes > 0) stringResource(R.string.bestatigen, changes) else if (checkExist && !fromScan) stringResource(R.string.umbenennen) else stringResource(R.string.speichern_2),
                     color = if (currentVokabeln.isNotEmpty()) TextPrimary else TextTertiary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
@@ -1259,7 +1261,7 @@ fun ReviewScreen(
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Text(
-                        "Lernen →",
+                        stringResource(R.string.lernen),
                         color = if (currentVokabeln.isNotEmpty()) TextPrimary else TextTertiary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
@@ -1283,7 +1285,7 @@ fun ReviewScreen(
                     color = AccentViolet
                 )
                 Text(
-                    "KI erkennt Vokabeln... (${vokabeln.size} bisher)",
+                    stringResource(R.string.ki_erkennt_vokabeln_bisher, vokabeln.size),
                     color = AccentViolet,
                     fontSize = 13.sp
                 )
@@ -1317,13 +1319,13 @@ fun ReviewScreen(
                         ) {
                             OutlinedTextField(
                                 editLatein, { editLatein = it },
-                                label = { Text("Latein") },
+                                label = { Text(stringResource(R.string.latein)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
                             OutlinedTextField(
                                 editDeutsch, { editDeutsch = it },
-                                label = { Text("Deutsch") },
+                                label = { Text(stringResource(R.string.deutsch)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
@@ -1343,7 +1345,7 @@ fun ReviewScreen(
                                         }
                                         .padding(vertical = 10.dp),
                                     contentAlignment = Alignment.Center
-                                ) { Text("Löschen", color = Color(0xFFEF9A9A), fontSize = 13.sp) }
+                                ) { Text(stringResource(R.string.loschen), color = Color(0xFFEF9A9A), fontSize = 13.sp) }
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
@@ -1368,7 +1370,7 @@ fun ReviewScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        "Speichern",
+                                        stringResource(R.string.speichern),
                                         color = TextPrimary,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold
@@ -1512,7 +1514,7 @@ fun LearnScreen(
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Text(
-                    if (showDeutsch) "DE → LA " else "LA → DE ",
+                    if (showDeutsch) stringResource(R.string.de_la) else stringResource(R.string.la_de),
                     color = AccentViolet,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
@@ -1527,7 +1529,7 @@ fun LearnScreen(
             ) {
                 Icon(
                     Icons.Default.Edit,
-                    "Navigate to Review Screen ",
+                    stringResource(R.string.navigate_to_review_screen),
                     tint = AccentViolet
                 )
             }
@@ -1595,7 +1597,7 @@ fun LearnScreen(
                             if (currentIndex == 0) {
                                 Spacer(Modifier.height(20.dp))
                                 Text(
-                                    "Tippe zum Aufdecken",
+                                    stringResource(R.string.tippe_zum_aufdecken),
                                     color = TextPrimary.copy(0.4f),
                                     fontSize = 12.sp
                                 )
@@ -1666,7 +1668,7 @@ fun LearnScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                "Falsch",
+                                stringResource(R.string.falsch),
                                 color = Color(0xFFEF5350),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -1698,7 +1700,7 @@ fun LearnScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                "Richtig",
+                                stringResource(R.string.richtig),
                                 color = TextPrimary,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -1724,13 +1726,13 @@ fun LearnScreen(
                 ) {
                     Text("🎉", fontSize = 48.sp)
                     Text(
-                        "Fertig!",
+                        stringResource(R.string.fertig_ausruf),
                         color = TextPrimary,
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        "${shuffled.size} Vokabeln abgefragt",
+                        stringResource(R.string.vokabeln_abgefragt, shuffled.size),
                         color = TextSecondary,
                         fontSize = 14.sp
                     )
@@ -1742,7 +1744,7 @@ fun LearnScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = AccentViolet
                             )
-                            Text("Richtig", color = TextTertiary, fontSize = 12.sp)
+                            Text(stringResource(R.string.richtig), color = TextTertiary, fontSize = 12.sp)
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
@@ -1751,7 +1753,7 @@ fun LearnScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFEF5350)
                             )
-                            Text("Falsch", color = TextTertiary, fontSize = 12.sp)
+                            Text(stringResource(R.string.falsch), color = TextTertiary, fontSize = 12.sp)
                         }
                     }
                     Box(
@@ -1770,7 +1772,7 @@ fun LearnScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "Nochmal",
+                            stringResource(R.string.nochmal),
                             color = TextPrimary,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
@@ -1791,7 +1793,7 @@ fun LearnScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                "✗ Falsche wiederholen (${wrongVokabeln.size})",
+                                stringResource(R.string.falsche_wiederholen, wrongVokabeln.size),
                                 color = Color(0xFFEF5350),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -1806,7 +1808,7 @@ fun LearnScreen(
                             .clickable { handleBack() }
                             .padding(vertical = 14.dp),
                         contentAlignment = Alignment.Center
-                    ) { Text("Zurück zur Übersicht", color = TextSecondary, fontSize = 14.sp) }
+                    ) { Text(stringResource(R.string.zuruck_zur_ubersicht), color = TextSecondary, fontSize = 14.sp) }
                 }
             }
         }
@@ -1837,12 +1839,12 @@ fun SaveSetDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () ->
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = BgSurface,
-        title = { Text("Set speichern", color = TextPrimary, fontWeight = FontWeight.Bold) },
+        title = { Text(stringResource(R.string.set_speichern), color = TextPrimary, fontWeight = FontWeight.Bold) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Name", color = TextTertiary) },
+                label = { Text(stringResource(R.string.name), color = TextTertiary) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -1861,7 +1863,7 @@ fun SaveSetDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () ->
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Text(
-                    "Speichern",
+                    stringResource(R.string.speichern),
                     color = if (name.isNotBlank()) TextPrimary else TextTertiary,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -1874,7 +1876,7 @@ fun SaveSetDialog(initial: String, onConfirm: (String) -> Unit, onDismiss: () ->
                     .background(BgCard)
                     .clickable { onDismiss() }
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) { Text("Abbrechen", color = TextSecondary) }
+            ) { Text(stringResource(R.string.abbrechen), color = TextSecondary) }
         }
     )
 }
@@ -1887,8 +1889,9 @@ fun MergeVocabSetsDialog(
     onMergeComplete: (VokabelSet) -> Unit
 ) {
     var selectedSets by remember { mutableStateOf(setOf<Long>()) }
+    val defaultMergeName = stringResource(R.string.gemischtes_set, System.currentTimeMillis() % 1000)
     var mergeName by remember {
-        mutableStateOf("Gemischtes Set ${(System.currentTimeMillis() % 1000)}")
+        mutableStateOf(defaultMergeName)
     }
 
     AlertDialog(
@@ -1896,7 +1899,7 @@ fun MergeVocabSetsDialog(
         containerColor = BgSurface,
         title = {
             Text(
-                "Vokabel-Sets mischen",
+                stringResource(R.string.vokabel_sets_mischen),
                 color = TextPrimary,
                 fontWeight = FontWeight.Bold
             )
@@ -1910,7 +1913,7 @@ fun MergeVocabSetsDialog(
                 OutlinedTextField(
                     value = mergeName,
                     onValueChange = { mergeName = it },
-                    label = { Text("Name", color = TextTertiary) },
+                    label = { Text(stringResource(R.string.name), color = TextTertiary) },
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1918,7 +1921,7 @@ fun MergeVocabSetsDialog(
                 )
 
                 Text(
-                    "Sets auswählen (min. 2):",
+                    stringResource(R.string.sets_auswahlen_min_2),
                     style = MaterialTheme.typography.titleSmall,
                     color = TextPrimary,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -1972,7 +1975,7 @@ fun MergeVocabSetsDialog(
                                     fontWeight = FontWeight.Medium
                                 )
                                 Text(
-                                    "${set.vokabeln.size} Vokabeln",
+                                    stringResource(R.string.vokabeln_2, set.vokabeln.size),
                                     color = TextTertiary,
                                     fontSize = 12.sp
                                 )
@@ -2004,7 +2007,7 @@ fun MergeVocabSetsDialog(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Text(
-                    "Mischen (${selectedSets.size})",
+                    stringResource(R.string.mischen, selectedSets.size),
                     color = if (selectedSets.size >= 2 && mergeName.isNotBlank())
                         TextPrimary else TextTertiary,
                     fontWeight = FontWeight.SemiBold
@@ -2019,7 +2022,7 @@ fun MergeVocabSetsDialog(
                     .clickable { onDismiss() }
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                Text("Abbrechen", color = TextSecondary)
+                Text(stringResource(R.string.abbrechen), color = TextSecondary)
             }
         }
     )
