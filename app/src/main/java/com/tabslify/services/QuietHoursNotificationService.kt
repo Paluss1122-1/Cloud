@@ -62,6 +62,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
@@ -81,6 +82,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.tabslify.R
 import com.tabslify.core.activities.MainActivity
 import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.functions.errorInsert
@@ -198,8 +200,8 @@ class QuietHoursNotificationService : Service() {
             }
 
             showSimpleNotificationExtern(
-                "⚠️ Eingeschränkte Hintergrundaktivitäten",
-                "Services laufen evtl. verzögert oder gar nicht. Klicke hier um zu beheben",
+                getString(R.string.eingeschrankte_hintergrundaktivitaten),
+                getString(R.string.services_laufen_evtl_verzogert_oder),
                 10.seconds,
                 context = this,
                 onClick = "requestIgnoreBatteryOptimizations"
@@ -656,8 +658,8 @@ class QuietHoursNotificationService : Service() {
                         )
                     } catch (e: Exception) {
                         showSimpleNotification(
-                            "❌ Taschenlampe",
-                            "Helligkeit konnte nicht gesetzt werden: ${e.message}",
+                            getString(R.string.taschenlampe),
+                            getString(R.string.helligkeit_konnte_nicht_gesetzt_werden, e.message),
                             20.seconds
                         )
                     }
@@ -789,7 +791,7 @@ class QuietHoursNotificationService : Service() {
                                 )
                             )
                             showSimpleNotification(
-                                "🎵 Tages-Zusammenfassung",
+                                getString(R.string.tages_zusammenfassung),
                                 finalResult,
                                 60.seconds
                             )
@@ -853,7 +855,7 @@ class QuietHoursNotificationService : Service() {
                     if (nm.getNotificationChannel(SCHOOL_SUMMARY_CHANNEL_ID) == null) {
                         android.app.NotificationChannel(
                             SCHOOL_SUMMARY_CHANNEL_ID,
-                            "Schultag Zusammenfassung",
+                            getString(R.string.schultag_zusammenfassung),
                             NotificationManager.IMPORTANCE_HIGH
                         ).apply {
                             enableVibration(true)
@@ -872,11 +874,11 @@ class QuietHoursNotificationService : Service() {
 
                     val notification = NotificationCompat.Builder(this, SCHOOL_SUMMARY_CHANNEL_ID)
                         .setSmallIcon(android.R.drawable.ic_menu_upload)
-                        .setContentTitle("📚 Schultag beendet")
-                        .setContentText("Materialien von heute in die Cloud hochladen.")
+                        .setContentTitle(getString(R.string.schultag_beendet))
+                        .setContentText(getString(R.string.materialien_von_heute_in_die))
                         .setStyle(
                             NotificationCompat.BigTextStyle()
-                                .bigText("Lade deine Unterlagen, Fotos und Notizen vom heutigen Schultag in die Cloud hoch.")
+                                .bigText(getString(R.string.lade_deine_unterlagen_fotos_und))
                         )
                         .setPriority(NotificationCompat.PRIORITY_HIGH)
                         .setCategory(NotificationCompat.CATEGORY_REMINDER)
@@ -909,7 +911,7 @@ class QuietHoursNotificationService : Service() {
     @SuppressLint("SetJavaScriptEnabled")
     private fun showTestOverlay() {
         if (!Settings.canDrawOverlays(this)) {
-            showSimpleNotification("Fehler", "Overlay-Berechtigung fehlt!")
+            showSimpleNotification(getString(R.string.fehler), getString(R.string.overlay_berechtigung_fehlt))
             return
         }
 
@@ -1109,7 +1111,7 @@ class QuietHoursNotificationService : Service() {
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Schließen",
+                            contentDescription = stringResource(R.string.schliesen),
                             tint = Color.White
                         )
                     }
@@ -1132,7 +1134,7 @@ class QuietHoursNotificationService : Service() {
             windowManager.addView(testOverlayView, params)
         } catch (e: Exception) {
             reportServiceError("showTestOverlay:addView", e)
-            showSimpleNotification("Fehler", "Overlay konnte nicht gestartet werden")
+            showSimpleNotification(getString(R.string.fehler), getString(R.string.overlay_konnte_nicht_gestartet_werden))
         }
     }
 
@@ -1259,7 +1261,7 @@ class QuietHoursNotificationService : Service() {
             startActivity(intent)
         } catch (e: Exception) {
             Log.e("QuietHoursService", "Error opening settings", e)
-            showSimpleNotification("Fehler", "Einstellungen konnten nicht geöffnet werden")
+            showSimpleNotification(getString(R.string.fehler), getString(R.string.einstellungen_konnten_nicht_geoffnet_werden))
         }
     }
 
@@ -1366,7 +1368,7 @@ class QuietHoursNotificationService : Service() {
                 if (nm.getNotificationChannel(PODCAST_CHANNEL_ID) == null) {
                     android.app.NotificationChannel(
                         PODCAST_CHANNEL_ID,
-                        "Podcast Check",
+                        context.getString(R.string.podcast_check),
                         NotificationManager.IMPORTANCE_DEFAULT
                     ).also { nm.createNotificationChannel(it) }
                 }
@@ -1382,9 +1384,9 @@ class QuietHoursNotificationService : Service() {
                 )
 
                 val contentText = if (found.size == 1) {
-                    "Neue Folge: ${found[0].optString("title")}"
+                    context.getString(R.string.neue_folge, found[0].optString("title"))
                 } else {
-                    "${found.size} neue Folgen verfügbar"
+                    context.getString(R.string.neue_folgen_verfugbar, found.size)
                 }
 
                 val bigText = buildString {
@@ -1396,7 +1398,7 @@ class QuietHoursNotificationService : Service() {
 
                 val notification = NotificationCompat.Builder(context, PODCAST_CHANNEL_ID)
                     .setSmallIcon(android.R.drawable.ic_menu_save)
-                    .setContentTitle("Neue Podcast-Folgen gefunden")
+                    .setContentTitle(context.getString(R.string.neue_podcast_folgen_gefunden))
                     .setContentText(contentText)
                     .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
                     .setAutoCancel(true)
@@ -1428,7 +1430,7 @@ class QuietHoursNotificationService : Service() {
 
             val request = DownloadManager.Request(audioUrl.toUri()).apply {
                 setTitle(filename)
-                setDescription("Podcast wird heruntergeladen…")
+                setDescription(context.getString(R.string.podcast_wird_heruntergeladen))
                 setDestinationUri(File(destDir, filename).toUri())
                 setAllowedOverMetered(true)
                 addRequestHeader("User-Agent", "Mozilla/5.0")
@@ -1485,7 +1487,7 @@ class QuietHoursNotificationService : Service() {
             MusicPlayerServiceCompat.startService(this)
             MusicPlayerServiceCompat.startAndPlay(this)
         } catch (_: Exception) {
-            showSimpleNotification("Fehler", "Musik Player konnte nicht geöffnet werden")
+            showSimpleNotification(getString(R.string.fehler), getString(R.string.musik_player_konnte_nicht_geoffnet))
         }
     }
 
@@ -1518,7 +1520,7 @@ class QuietHoursNotificationService : Service() {
                         )
                         putExtra(
                             android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                            "Ermöglicht Sicherheitsfunktionen."
+                            getString(R.string.ermoglicht_sicherheitsfunktionen)
                         )
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
@@ -1544,7 +1546,7 @@ class QuietHoursNotificationService : Service() {
             if (nm.getNotificationChannel(PODCAST_CHANNEL_ID) == null) {
                 android.app.NotificationChannel(
                     PODCAST_CHANNEL_ID,
-                    "Podcast Check",
+                    getString(R.string.podcast_check),
                     NotificationManager.IMPORTANCE_DEFAULT
                 ).also { nm.createNotificationChannel(it) }
             }
@@ -1561,10 +1563,10 @@ class QuietHoursNotificationService : Service() {
 
             val notification = NotificationCompat.Builder(this, PODCAST_CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_menu_save)
-                .setContentTitle("Podcast Check fehlgeschlagen")
-                .setContentText("Keine WiFi-Verbindung. Tippen zum Wiederholen.")
+                .setContentTitle(getString(R.string.podcast_check_fehlgeschlagen))
+                .setContentText(getString(R.string.keine_wifi_verbindung_tippen_zum))
                 .setAutoCancel(true)
-                .addAction(android.R.drawable.ic_menu_rotate, "Wiederholen", retryPendingIntent)
+                .addAction(android.R.drawable.ic_menu_rotate, getString(R.string.wiederholen), retryPendingIntent)
                 .setContentIntent(retryPendingIntent)
                 .build()
 
