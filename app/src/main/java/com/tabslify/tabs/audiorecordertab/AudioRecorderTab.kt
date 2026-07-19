@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,8 +52,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tabslify.R
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.toast
+import com.tabslify.core.ui.APP_BLUE
 import com.tabslify.core.ui.AlertDialogTabslify
 import java.io.File
 import java.text.SimpleDateFormat
@@ -65,11 +68,11 @@ private fun MicPermissionDialog(
 ) {
     AlertDialogTabslify(
         onDismiss = onDismiss,
-        title = "Mikrofonzugriff benötigt",
-        text = "Dieser Tab benötigt Zugriff auf das Mikrofon, um Aufnahmen erstellen zu können.\n\n" +
-                "Bitte erlaube den Zugriff in den App-Einstellungen:\n" +
-                "Berechtigungen → Mikrofon → Option 1 oder 2.",
-        confirmText = "Zu den Einstellungen",
+        title = stringResource(R.string.mikrofonzugriff_benotigt),
+        text = stringResource(R.string.dieser_tab_benotigt_zugriff_auf) +
+                stringResource(R.string.bitte_erlaube_den_zugriff_in) +
+                stringResource(R.string.berechtigungen_mikrofon_option_1_oder),
+        confirmText = stringResource(R.string.zu_den_einstellungen),
         onConfirm = onConfirm
     )
 }
@@ -85,6 +88,8 @@ fun AudioRecorderTab(
     var directedToSettings by remember { mutableStateOf(false) }
     var showPermissionDialog by remember { mutableStateOf(false) }
     var hasPermission by remember { mutableStateOf(vm.hasPermission) }  // NEU
+    val micPermissionNeededMsg = stringResource(R.string.dieser_tab_benotigt_die_mikrofon)
+    val micPermissionNotGrantedMsg = stringResource(R.string.dieser_tab_benotigt_die_nicht)
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -92,6 +97,7 @@ fun AudioRecorderTab(
         val granted = permissions[Manifest.permission.RECORD_AUDIO] == true
         if (granted) {
             hasPermission = true
+            vm.hasPermission = true
             restartKey++
         }
     }
@@ -110,6 +116,7 @@ fun AudioRecorderTab(
     }
 
     if (showPermissionDialog) {
+        val string = stringResource(R.string.berechtigungen_mikrofon_option_1_oder)
         MicPermissionDialog(
             onConfirm = {
                 showPermissionDialog = false
@@ -117,11 +124,12 @@ fun AudioRecorderTab(
                     data = Uri.fromParts("package", context.packageName, null)
                 }
                 context.startActivity(intent)
+                toast(context, string)
                 directedToSettings = true
             },
             onDismiss = {
                 showPermissionDialog = false
-                toast(context, "Dieser Tab benötigt die Mikrofon-Berechtigung.")
+                toast(context, micPermissionNeededMsg)
             }
         )
     }
@@ -138,11 +146,12 @@ fun AudioRecorderTab(
 
                 if (permissionGranted) {
                     hasPermission = true
+                    vm.hasPermission = true
                     restartKey++
                 } else {
                     toast(
                         context,
-                        "Dieser Tab benötigt die nicht vorhandene Mikrofon-Berechtigung."
+                        micPermissionNotGrantedMsg
                     )
                 }
             }
@@ -160,7 +169,7 @@ fun AudioRecorderTab(
             .fillMaxSize()
             .padding(40.dp), contentAlignment = Alignment.Center) {
             Text(
-                "Dieser Tab benötigt die nicht vorhandene Mikrofon Berechtigung!",
+                stringResource(R.string.dieser_tab_benotigt_die_nicht_2),
                 color = Color.LightGray,
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,
@@ -215,21 +224,21 @@ private fun AudioRecorderTabContent(
                 onClick = { isMediaRecorderMode = false },
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (!isMediaRecorderMode) Color(0xFF4CAF50) else Color.Transparent,
+                    containerColor = if (!isMediaRecorderMode) APP_BLUE else Color.Transparent,
                     contentColor = Color.White
                 )
             ) {
-                Text("🎙️ Mikrofon")
+                Text(stringResource(R.string.mikrofon))
             }
             Button(
                 onClick = { isMediaRecorderMode = true },
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isMediaRecorderMode) Color(0xFF4CAF50) else Color.Transparent,
+                    containerColor = if (isMediaRecorderMode) APP_BLUE else Color.Transparent,
                     contentColor = Color.White
                 )
             ) {
-                Text("🎵 Onscreen")
+                Text(stringResource(R.string.onscreen))
             }
         }
 
@@ -248,7 +257,7 @@ private fun AudioRecorderTabContent(
             )
         ) {
             Text(
-                text = if (vm.isRecording) "⏹️ Aufnahme Beenden" else "⏺️ Aufnahme Starten",
+                text = if (vm.isRecording) stringResource(R.string.aufnahme_beenden) else stringResource(R.string.aufnahme_starten),
                 fontSize = 18.sp
             )
         }
@@ -272,7 +281,7 @@ private fun AudioRecorderTabContent(
 
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "📁 Aufnahmen (${vm.audioFiles.size})",
+            text = stringResource(R.string.aufnahmen, vm.audioFiles.size),
             fontSize = 18.sp,
             color = Color.White,
             modifier = Modifier
@@ -323,15 +332,15 @@ fun PlayerSection(
             .background(Color(0xFF333333))
             .padding(16.dp)
     ) {
-        Text("▶️ Player: ${file.name}", color = Color.White)
+        Text(stringResource(R.string.player, file.name), color = Color.White)
 
         Slider(
             value = currentPosition,
             onValueChange = onSeek,
             valueRange = 0f..duration,
             colors = SliderDefaults.colors(
-                thumbColor = Color(0xFF4CAF50),
-                activeTrackColor = Color(0xFF4CAF50)
+                thumbColor = APP_BLUE,
+                activeTrackColor = APP_BLUE
             )
         )
 
@@ -349,7 +358,7 @@ fun PlayerSection(
                 .padding(top = 8.dp),
             horizontalArrangement = Arrangement.Center
         ) {
-            Button(onClick = onPlayPause, colors = ButtonDefaults.buttonColors(Color(0xFF4CAF50))) {
+            Button(onClick = onPlayPause, colors = ButtonDefaults.buttonColors(APP_BLUE)) {
                 Text(if (isPlaying) "⏸️" else "▶️")
             }
             Spacer(Modifier.width(8.dp))
@@ -419,27 +428,27 @@ fun ShareDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Audio teilen") },
+        title = { Text(stringResource(R.string.audio_teilen)) },
         text = {
             Column {
-                Text("Bereich auswählen:", modifier = Modifier.padding(bottom = 16.dp))
+                Text(stringResource(R.string.bereich_auswahlen), modifier = Modifier.padding(bottom = 16.dp))
                 RangeSlider(
                     value = currentRange,
                     onValueChange = { currentRange = it },
                     valueRange = 0f..maxDuration,
                     enabled = !isProcessing,
                     colors = SliderDefaults.colors(
-                        thumbColor = Color(0xFF4CAF50),
-                        activeTrackColor = Color(0xFF4CAF50)
+                        thumbColor = APP_BLUE,
+                        activeTrackColor = APP_BLUE
                     )
                 )
                 Text(
-                    "Dauer: ${vm.formatTime((currentRange.endInclusive - currentRange.start).toInt())}",
-                    color = Color(0xFF4CAF50),
+                    stringResource(R.string.dauer, vm.formatTime((currentRange.endInclusive - currentRange.start).toInt())),
+                    color = APP_BLUE,
                     modifier = Modifier.padding(top = 8.dp)
                 )
                 if (isProcessing) Text(
-                    "⏳ Verarbeite...",
+                    stringResource(R.string.verarbeite),
                     color = Color(0xFFFFA500),
                     modifier = Modifier.padding(top = 8.dp)
                 )
@@ -458,7 +467,7 @@ fun ShareDialog(
                 enabled = !isProcessing,
                 colors = ButtonDefaults.buttonColors(Color.Gray)
             ) {
-                Text("Abbrechen")
+                Text(stringResource(R.string.abbrechen))
             }
         }
     )
