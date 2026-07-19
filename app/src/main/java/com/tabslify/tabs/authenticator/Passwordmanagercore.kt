@@ -14,6 +14,7 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Update
+import com.tabslify.R
 import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.prvt
@@ -231,15 +232,15 @@ object PasswordGenerator {
 
 
 enum class PasswordStrength(
-    val label: String,
+    val labelRes: Int,
     val fraction: Float,
     val color: Color
 ) {
-    WEAK("Schwach", 0.20f, Color(0xFFD32F2F)),
-    FAIR("Ausreichend", 0.40f, Color(0xFFE64A19)),
-    GOOD("Gut", 0.60f, Color(0xFFFBC02D)),
-    STRONG("Stark", 0.80f, Color(0xFF388E3C)),
-    EXCELLENT("Ausgezeichnet", 1.00f, Color(0xFF1B5E20))
+    WEAK(R.string.schwach, 0.20f, Color(0xFFD32F2F)),
+    FAIR(R.string.ausreichend, 0.40f, Color(0xFFE64A19)),
+    GOOD(R.string.gut, 0.60f, Color(0xFFFBC02D)),
+    STRONG(R.string.stark, 0.80f, Color(0xFF388E3C)),
+    EXCELLENT(R.string.ausgezeichnet, 1.00f, Color(0xFF1B5E20))
 }
 
 @Suppress("PropertyName")
@@ -263,7 +264,7 @@ suspend fun syncPasswordEntriesWithCloud(
         return SyncResult(uploaded = 0, downloaded = 0, total = 0)
     }
     if (!isOnline(context)) {
-        return SyncResult(uploaded = 0, downloaded = 0, total = 0, error = "Kein Internet")
+        return SyncResult(uploaded = 0, downloaded = 0, total = 0, error = context.getString(R.string.kein_internet))
     }
     return withContext(Dispatchers.IO) {
         try {
