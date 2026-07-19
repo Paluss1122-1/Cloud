@@ -77,6 +77,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -92,6 +93,7 @@ import coil.size.Scale
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
+import com.tabslify.R
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.MAX_GEMINI
 import com.tabslify.core.objects.prvt
@@ -136,7 +138,7 @@ fun MaterialienScreen(
 ) {
     val context = LocalContext.current
     if (!prvt()) {
-        Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.forbidden), Toast.LENGTH_SHORT).show()
         return
     }
     val scope = rememberCoroutineScope()
@@ -313,7 +315,7 @@ fun MaterialienScreen(
                 try {
                     val rawBytes =
                         context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                            ?: throw Exception("Datei nicht lesbar")
+                            ?: throw Exception(context.getString(R.string.datei_nicht_lesbar_2))
                     val (uploadBytes, uploadName) = compressToJpgIfImage(rawBytes, state.fileName)
                     val path = "$selectedSubject/$uploadName"
                     Config.client.storage.from("school").upload(path, uploadBytes) { upsert = true }
@@ -363,7 +365,7 @@ fun MaterialienScreen(
 
         try {
             val localUri = resolveFileUrl(context, subject, fileName)
-                ?: throw Exception("Datei nicht erreichbar")
+                ?: throw Exception(context.getString(R.string.datei_nicht_erreichbar))
 
             val imgBytes = withContext(Dispatchers.IO) {
                 if (localUri.startsWith("file:")) {
@@ -405,7 +407,7 @@ fun MaterialienScreen(
                 pic = base64,
                 model = MAX_GEMINI,
                 provider = AiProvider.GEMINI
-            ) ?: throw Exception("OCR fehlgeschlagen")
+            ) ?: throw Exception(context.getString(R.string.ocr_fehlgeschlagen))
 
             val summary = sendAiRequest(
                 context = context,
@@ -440,7 +442,7 @@ fun MaterialienScreen(
                     Tonfall: Motivierend, klar, verständlich, auf Augenhöhe, fehlerfrei auf Deutsch. Vermeide verschachtelte Sätze und kognitive Überlastung.
                 """.trimIndent(),
                 provider = AiProvider.GEMINI
-            ) ?: throw Exception("Summary fehlgeschlagen")
+            ) ?: throw Exception(context.getString(R.string.summary_fehlgeschlagen))
 
             aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(
                 summary = summary,
@@ -475,20 +477,20 @@ fun MaterialienScreen(
                 }
             },
             onDismiss = { showAiSummaryToRefresh = false },
-            title = "Möchtest du wirklich deine AI Zusammenfassung neu generieren?",
-            text = "Die jetzige geht dabei verloren"
+            title = stringResource(R.string.mochtest_du_wirklich_deine_ai),
+            text = stringResource(R.string.die_jetzige_geht_dabei_verloren)
         )
     }
 
     if (showSubjectDialog) {
         AlertDialog(
             onDismissRequest = { showSubjectDialog = false },
-            title = { Text("Fach erstellen") },
+            title = { Text(stringResource(R.string.fach_erstellen)) },
             text = {
                 OutlinedTextField(
                     value = subjectNameInput,
                     onValueChange = { subjectNameInput = it },
-                    label = { Text("Fachname") },
+                    label = { Text(stringResource(R.string.fachname)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -510,15 +512,15 @@ fun MaterialienScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showSubjectDialog = false }) { Text("Abbrechen") }
+                TextButton(onClick = { showSubjectDialog = false }) { Text(stringResource(R.string.abbrechen)) }
             }
         )
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
         SchoolHeader(
-            title = "Materialien",
-            subtitle = if (selectedSubject != null) "School / $selectedSubject" else "School",
+            title = stringResource(R.string.materialien),
+            subtitle = if (selectedSubject != null) stringResource(R.string.school, selectedSubject.orEmpty()) else stringResource(R.string.school_2),
             onBack = {
                 when {
                     showFullscreenSummary -> showFullscreenSummary = false
@@ -598,13 +600,13 @@ fun MaterialienScreen(
                     ) {
                         Text("🗂️", fontSize = 48.sp)
                         Text(
-                            "Keine Ordner vorhanden",
+                            stringResource(R.string.keine_ordner_vorhanden),
                             color = TextPrimary,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            "Erstelle ein neues Fach via +",
+                            stringResource(R.string.erstelle_ein_neues_fach_via),
                             color = TextTertiary,
                             fontSize = 13.sp
                         )
@@ -657,7 +659,7 @@ fun MaterialienScreen(
                 containerColor = AccentViolet,
                 contentColor = TextPrimary
             ) {
-                Icon(Icons.Default.Add, "Ordner erstellen")
+                Icon(Icons.Default.Add, stringResource(R.string.ordner_erstellen))
             }
         } else {
             if (folderFilesLoading) {
@@ -695,13 +697,13 @@ fun MaterialienScreen(
                             ) {
                                 Text("📂", fontSize = 48.sp)
                                 Text(
-                                    "Noch keine Dateien",
+                                    stringResource(R.string.noch_keine_dateien),
                                     color = TextPrimary,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    "Tippe + um Dateien hochzuladen",
+                                    stringResource(R.string.tippe_um_dateien_hochzuladen),
                                     color = TextTertiary,
                                     fontSize = 13.sp
                                 )
@@ -809,10 +811,10 @@ fun MaterialienScreen(
                             )
                             Text(
                                 when (item.status) {
-                                    UploadStatus.PENDING -> "Warte..."
-                                    UploadStatus.UPLOADING -> "Hochladen..."
-                                    UploadStatus.DONE -> "✓ Fertig"
-                                    UploadStatus.ERROR -> "Fehler"
+                                    UploadStatus.PENDING -> stringResource(R.string.warte_platzhalter)
+                                    UploadStatus.UPLOADING -> stringResource(R.string.hochladen_platzhalter)
+                                    UploadStatus.DONE -> stringResource(R.string.fertig_3)
+                                    UploadStatus.ERROR -> stringResource(R.string.fehler)
                                 },
                                 color = when (item.status) {
                                     UploadStatus.DONE -> Color(0xFF66BB6A)
@@ -848,7 +850,7 @@ fun MaterialienScreen(
                 containerColor = AccentViolet,
                 contentColor = TextPrimary
             ) {
-                Icon(Icons.Default.Add, "Datei hinzufügen")
+                Icon(Icons.Default.Add, stringResource(R.string.datei_hinzufugen))
             }
         }
     }
@@ -1001,14 +1003,14 @@ fun MaterialienScreen(
                             ) {
                                 Text("🤖", fontSize = 18.sp)
                                 Text(
-                                    if (aiSummary != null) "Zusammenfassung bereit" else "KI Analyse...",
+                                    if (aiSummary != null) stringResource(R.string.zusammenfassung_bereit) else stringResource(R.string.ki_analyse),
                                     color = TextSecondary,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium
                                 )
                             }
                             Text(
-                                "Tippe zum Öffnen",
+                                stringResource(R.string.tippe_zum_offnen),
                                 color = TextTertiary,
                                 fontSize = 11.sp
                             )
@@ -1041,7 +1043,7 @@ fun MaterialienScreen(
                             ) {
                                 Text("📅", fontSize = 16.sp)
                                 Text(
-                                    "Fach: $selectedSubject",
+                                    stringResource(R.string.fach_prefix, selectedSubject.orEmpty()),
                                     color = TextPrimary,
                                     fontSize = 14.sp
                                 )
@@ -1068,7 +1070,7 @@ fun MaterialienScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            "AI Summary",
+                                            stringResource(R.string.ai_summary),
                                             color = TextPrimary,
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.SemiBold
@@ -1081,7 +1083,7 @@ fun MaterialienScreen(
                                             ) {
                                                 Icon(
                                                     Icons.Default.OpenInFull,
-                                                    contentDescription = "Vollbild",
+                                                    contentDescription = stringResource(R.string.vollbild),
                                                     tint = TextTertiary,
                                                     modifier = Modifier.size(16.dp)
                                                 )
@@ -1100,7 +1102,7 @@ fun MaterialienScreen(
                                                 color = AccentViolet
                                             )
                                             Text(
-                                                "Analysiere...",
+                                                stringResource(R.string.analysiere_platzhalter),
                                                 color = TextTertiary,
                                                 fontSize = 12.sp
                                             )
@@ -1169,7 +1171,7 @@ fun MaterialienScreen(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
                                             Text(
-                                                "Nicht verfügbar",
+                                                stringResource(R.string.nicht_verfugbar),
                                                 color = TextTertiary,
                                                 fontSize = 12.sp
                                             )
@@ -1210,7 +1212,7 @@ fun MaterialienScreen(
                                 Icon(Icons.Default.Close, null, tint = TextPrimary)
                             }
                             Text(
-                                "AI Zusammenfassung",
+                                stringResource(R.string.ai_zusammenfassung),
                                 color = TextPrimary,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold
@@ -1227,14 +1229,14 @@ fun MaterialienScreen(
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                "Aktualisieren",
+                                stringResource(R.string.aktualisieren_2),
                                 color = AccentViolet,
                                 fontSize = 7.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Icon(
                                 Icons.Default.Refresh,
-                                contentDescription = "Reanalyze Picture",
+                                contentDescription = stringResource(R.string.reanalyze_picture),
                                 tint = Color.White
                             )
                         }
