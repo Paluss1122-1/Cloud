@@ -239,6 +239,12 @@ class FinishedPdDownload : BroadcastReceiver() {
 
 class AkkuReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        reportDeviceInformation(intent)
+        reportDeviceInformation(ctx, intent)
+    }
+}
+
+class BluetoothReceiver : BroadcastReceiver() {
+    override fun onReceive(ctx: Context, intent: Intent) {
+        handleBluetoothBroadcast(ctx, intent)
     }
 }
