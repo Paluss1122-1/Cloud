@@ -33,10 +33,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
+import com.tabslify.R
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.prvt
 import com.tabslify.quiethoursnotificationhelper.isLaptopConnected
@@ -65,7 +67,7 @@ class ShareActivity : ComponentActivity() {
             Intent.ACTION_SEND -> handleSingleShare(intent)
             Intent.ACTION_SEND_MULTIPLE -> handleMultipleShare(intent)
             else -> {
-                Toast.makeText(this, "Ungültiger Share-Intent", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.ungultiger_share_intent), Toast.LENGTH_SHORT).show()
                 finish()
             }
         }
@@ -76,7 +78,7 @@ class ShareActivity : ComponentActivity() {
         if (uri != null) {
             showConfirmationDialog(listOf(uri))
         } else {
-            Toast.makeText(this, "Keine Datei gefunden", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.keine_datei_gefunden), Toast.LENGTH_SHORT).show()
             finish()
         }
     }
@@ -86,7 +88,7 @@ class ShareActivity : ComponentActivity() {
         if (!uris.isNullOrEmpty()) {
             showConfirmationDialog(uris)
         } else {
-            Toast.makeText(this, "Keine Dateien gefunden", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.keine_dateien_gefunden), Toast.LENGTH_SHORT).show()
             finish()
         }
     }
@@ -136,10 +138,11 @@ class ShareActivity : ComponentActivity() {
             }
 
             withContext(Dispatchers.Main) {
-                val message = if (successCount > 0)
-                    "📲 ${if (successCount == 1) "Bild" else "$successCount Bilder"} an Laptop gesendet!"
-                else
-                    "❌ Senden fehlgeschlagen"
+                val message = when {
+                    successCount == 1 -> getString(R.string.bild_an_laptop_gesendet)
+                    successCount > 1 -> getString(R.string.bilder_an_laptop_gesendet, successCount)
+                    else -> getString(R.string.senden_fehlgeschlagen)
+                }
                 Toast.makeText(this@ShareActivity, message, Toast.LENGTH_LONG).show()
                 finish()
             }
@@ -231,9 +234,10 @@ class ShareActivity : ComponentActivity() {
 
                 withContext(Dispatchers.Main) {
                     val message = when {
-                        failCount == 0 -> "✅ ${if (successCount == 1) "Datei" else "$successCount Dateien"} gespeichert!"
-                        successCount == 0 -> "❌ Speichern fehlgeschlagen"
-                        else -> "⚠️ $successCount erfolgreich, $failCount fehlgeschlagen"
+                        failCount == 0 && successCount == 1 -> getString(R.string.datei_gespeichert_2)
+                        failCount == 0 -> getString(R.string.dateien_gespeichert, successCount)
+                        successCount == 0 -> getString(R.string.speichern_fehlgeschlagen)
+                        else -> getString(R.string.erfolgreich_fehlgeschlagen, successCount, failCount)
                     }
                     Toast.makeText(this@ShareActivity, message, Toast.LENGTH_LONG).show()
                     finish()
@@ -241,7 +245,7 @@ class ShareActivity : ComponentActivity() {
 
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@ShareActivity, "Fehler: ${e.message}", Toast.LENGTH_LONG)
+                    Toast.makeText(this@ShareActivity, getString(R.string.fehler_msg, e.message), Toast.LENGTH_LONG)
                         .show()
                     finish()
                 }
@@ -307,14 +311,14 @@ fun SaveToPrivateStorageScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "🔒 Datei speichern",
+                    text = stringResource(R.string.datei_speichern),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
 
                 Text(
-                    text = if (fileCount == 1) "1 Datei" else "$fileCount Dateien",
+                    text = if (fileCount == 1) stringResource(R.string.s_1_datei) else stringResource(R.string.dateien, fileCount),
                     fontSize = 16.sp,
                     color = Color.LightGray
                 )
@@ -335,7 +339,7 @@ fun SaveToPrivateStorageScreen(
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(
-                                "💻 An Laptop senden",
+                                stringResource(R.string.an_laptop_senden),
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -349,7 +353,7 @@ fun SaveToPrivateStorageScreen(
                                 .height(56.dp),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Text("💻 Laptop nicht verbunden", fontSize = 16.sp, color = Color.White)
+                            Text(stringResource(R.string.laptop_nicht_verbunden), fontSize = 16.sp, color = Color.White)
                         }
                     }
                 }
@@ -362,11 +366,11 @@ fun SaveToPrivateStorageScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("📁 Lokal speichern", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.lokal_speichern), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
 
                 TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
-                    Text("Abbrechen", color = Color.Red, fontSize = 16.sp)
+                    Text(stringResource(R.string.abbrechen), color = Color.Red, fontSize = 16.sp)
                 }
             }
         }
@@ -403,14 +407,14 @@ fun ProcessingScreen(fileCount: Int) {
                 )
 
                 Text(
-                    text = "Speichere...",
+                    text = stringResource(R.string.speichere),
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
 
                 Text(
-                    text = if (fileCount == 1) "1 Datei wird gespeichert" else "$fileCount Dateien werden gespeichert",
+                    text = if (fileCount == 1) stringResource(R.string.s_1_datei_wird_gespeichert) else stringResource(R.string.dateien_werden_gespeichert, fileCount),
                     fontSize = 14.sp,
                     color = Color.LightGray
                 )
