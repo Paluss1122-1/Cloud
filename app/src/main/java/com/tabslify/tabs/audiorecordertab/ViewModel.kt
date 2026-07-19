@@ -17,6 +17,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.content.PermissionChecker
 import androidx.lifecycle.AndroidViewModel
+import com.tabslify.R
 import com.tabslify.core.functions.errorInsert
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -244,12 +245,12 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
                 context.startActivity(shareIntent)
                 onComplete()
             } catch (_: Exception) {
-                val chooser = Intent.createChooser(shareIntent.apply { setPackage(null) }, "Teilen")
+                val chooser = Intent.createChooser(shareIntent.apply { setPackage(null) }, context.getString(R.string.teilen))
                 context.startActivity(chooser)
                 onComplete()
             }
         } catch (e: Exception) {
-            onError(e.message ?: "Unbekannter Fehler")
+            onError(e.message ?: context.getString(R.string.unbekannter_fehler))
         }
     }
 
@@ -265,7 +266,7 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
             val trackIndex = (0 until extractor.trackCount).find {
                 extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)
                     ?.startsWith("audio/") == true
-            } ?: throw IllegalArgumentException("Kein Audio-Track")
+            } ?: throw IllegalArgumentException(getApplication<Application>().getString(R.string.kein_audio_track))
 
             extractor.selectTrack(trackIndex)
             val format = extractor.getTrackFormat(trackIndex)
