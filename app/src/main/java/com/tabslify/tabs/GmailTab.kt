@@ -44,12 +44,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
+import com.tabslify.R
 import com.tabslify.core.objects.Config.MAIL_NOTIFY_PORT
 import com.tabslify.core.objects.prvt
 import com.tabslify.quiethoursnotificationhelper.laptopIp
@@ -89,6 +91,7 @@ private fun saveLocalSummary(context: android.content.Context, id: String, summa
 }
 
 private suspend fun fetchEmailsStreaming(
+    context: android.content.Context,
     serverIp: String,
     onEmailReceived: suspend (EmailItem) -> Unit,
     onSummaryUpdate: suspend (id: String, summary: String) -> Unit = { _, _ -> }
@@ -114,8 +117,8 @@ private suspend fun fetchEmailsStreaming(
                         onEmailReceived(
                             EmailItem(
                                 id = obj.optString("id"),
-                                subject = obj.optString("subject", "(Kein Betreff)"),
-                                from = obj.optString("from", "Unbekannt"),
+                                subject = obj.optString("subject", context.getString(R.string.kein_betreff_2)),
+                                from = obj.optString("from", context.getString(R.string.unbekannt)),
                                 date = obj.optString("date", ""),
                                 timestamp = obj.optLong("timestamp", 0L),
                                 body = obj.optString("body", ""),
@@ -131,7 +134,7 @@ private suspend fun fetchEmailsStreaming(
         conn.disconnect()
         null
     } catch (e: Exception) {
-        "Verbindungsfehler: ${e.message}"
+        context.getString(R.string.verbindungsfehler, e.message)
     }
 }
 
@@ -139,7 +142,7 @@ private suspend fun fetchEmailsStreaming(
 fun GmailTabContent() {
     val context = androidx.compose.ui.platform.LocalContext.current
     if (!prvt()) {
-        Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.forbidden), Toast.LENGTH_SHORT).show()
         return
     }
     val scope = rememberCoroutineScope()
@@ -162,6 +165,7 @@ fun GmailTabContent() {
             emails = emptyList()
 
             val error = fetchEmailsStreaming(
+                context,
                 serverIp,
                 onEmailReceived = { emailItem ->
                     val enriched = when {
@@ -229,7 +233,7 @@ fun GmailTabContent() {
 
             else -> Column(Modifier.fillMaxSize()) {
                 EmailTopBar(
-                    cacheInfo = if (isLoading) "Lädt... (${emails.size} bisher)" else "${emails.size} Emails",
+                    cacheInfo = if (isLoading) stringResource(R.string.ladt_bisher, emails.size) else stringResource(R.string.emails, emails.size),
                     isLoading = isLoading,
                     onReload = { loadEmails() },
                     onSettings = { showIpDialog = true }
@@ -441,7 +445,7 @@ fun EmailDetailView(email: EmailItem, onBack: () -> Unit) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
             }
             Text(
-                text = "E-Mail",
+                text = stringResource(R.string.e_mail),
                 color = Color.White,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -475,8 +479,8 @@ fun EmailDetailView(email: EmailItem, onBack: () -> Unit) {
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    MetaRow("Von", email.from)
-                    MetaRow("Datum", email.date)
+                    MetaRow(stringResource(R.string.von), email.from)
+                    MetaRow(stringResource(R.string.datum), email.date)
                 }
             }
 
@@ -495,7 +499,7 @@ fun EmailDetailView(email: EmailItem, onBack: () -> Unit) {
                             Text("🤖", fontSize = 16.sp)
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                "KI-Zusammenfassung",
+                                stringResource(R.string.ki_zusammenfassung),
                                 color = Color(0xFF4285F4),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -557,19 +561,19 @@ fun ServerIpDialog(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF1E1E2A),
         title = {
-            Text("Server-IP eingeben", color = Color.White, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.server_ip_eingeben), color = Color.White, fontWeight = FontWeight.Bold)
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "IP-Adresse des Laptops (ohne Port):",
+                    stringResource(R.string.ip_adresse_des_laptops_ohne),
                     color = Color(0xFF9999AA),
                     fontSize = 13.sp
                 )
                 OutlinedTextField(
                     value = ip,
                     onValueChange = { ip = it },
-                    placeholder = { Text("z.B. 192.168.1.100", color = Color(0xFF555568)) },
+                    placeholder = { Text(stringResource(R.string.z_b_192_168_1), color = Color(0xFF555568)) },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
@@ -583,12 +587,12 @@ fun ServerIpDialog(
         },
         confirmButton = {
             TextButton(onClick = { if (ip.isNotBlank()) onConfirm(ip.trim()) }) {
-                Text("Speichern", color = Color(0xFF4285F4), fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.speichern), color = Color(0xFF4285F4), fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Abbrechen", color = Color(0xFF555568))
+                Text(stringResource(R.string.abbrechen), color = Color(0xFF555568))
             }
         }
     )
@@ -602,7 +606,7 @@ fun LoadingPlaceholder() {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             CircularProgressIndicator(color = Color(0xFF4285F4))
-            Text("Emails werden geladen...", color = Color(0xFF555568), fontSize = 14.sp)
+            Text(stringResource(R.string.emails_werden_geladen), color = Color(0xFF555568), fontSize = 14.sp)
         }
     }
 }
@@ -617,7 +621,7 @@ fun ErrorPlaceholder(error: String, onRetry: () -> Unit) {
         ) {
             Text("⚠️", fontSize = 40.sp)
             Text(
-                "Fehler beim Laden",
+                stringResource(R.string.fehler_beim_laden_2),
                 color = Color.White,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
@@ -631,7 +635,7 @@ fun ErrorPlaceholder(error: String, onRetry: () -> Unit) {
                     .padding(horizontal = 24.dp, vertical = 10.dp)
             ) {
                 Text(
-                    "Erneut versuchen",
+                    stringResource(R.string.erneut_versuchen),
                     color = Color.White,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold
@@ -650,7 +654,7 @@ fun EmptyPlaceholder(onRefresh: () -> Unit) {
         ) {
             Text("📭", fontSize = 48.sp)
             Text(
-                "Keine Emails",
+                stringResource(R.string.keine_emails),
                 color = Color.White,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
@@ -663,7 +667,7 @@ fun EmptyPlaceholder(onRefresh: () -> Unit) {
                     .padding(horizontal = 24.dp, vertical = 10.dp)
             ) {
                 Text(
-                    "Laden",
+                    stringResource(R.string.laden),
                     color = Color.White,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold
