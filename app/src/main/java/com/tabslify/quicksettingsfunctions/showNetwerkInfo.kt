@@ -11,6 +11,7 @@ import android.net.wifi.WifiManager
 import android.telephony.TelephonyManager
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
+import com.tabslify.R
 import com.tabslify.core.objects.Config.cms
 import com.tabslify.core.objects.tNotify
 import com.tabslify.services.QuietHoursNotificationService.Companion.SSN_CHANNEL_ID
@@ -37,7 +38,7 @@ fun showNetworkInfo(context: Context) {
     } else null
 
     if (networkCapabilities == null) {
-        info.append("🌐 Keine aktive Netzwerkverbindung\n\n")
+        info.append(context.getString(R.string.keine_aktive_netzwerkverbindung))
     } else {
         val transport = when {
             networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "WLAN"
@@ -47,13 +48,27 @@ fun showNetworkInfo(context: Context) {
             else -> "Unbekannt"
         }
 
+        val transportLabel = when (transport) {
+            "Mobilfunk" -> context.getString(R.string.mobilfunk)
+            "Ethernet" -> context.getString(R.string.ethernet)
+            "Bluetooth" -> context.getString(R.string.bluetooth)
+            "Unbekannt" -> context.getString(R.string.unbekannt)
+            else -> transport
+        }
+
         val isInternet =
             networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
         val isValidated =
             networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
 
-        info.append("📡 Aktive Verbindung: $transport\n")
-        info.append("✅ Internet verfügbar: ${if (isInternet && isValidated) "Ja" else "Nein (kein Zugriff)"}\n\n")
+        info.append(context.getString(R.string.aktive_verbindung, transportLabel))
+        info.append(
+            context.getString(
+                R.string.internet_verfugbar,
+                if (isInternet && isValidated) context.getString(R.string.internet_ja)
+                else context.getString(R.string.internet_nein)
+            ) + "\n\n"
+        )
 
         if (transport == "WLAN") {
             var ssid: String
@@ -69,9 +84,9 @@ fun showNetworkInfo(context: Context) {
                 val wifiInfo = networkCapabilities.transportInfo as? WifiInfo
                 ssid = wifiInfo?.ssid?.trim()?.removeSurrounding("\"") ?: ""
             } else {
-                ssid = "<Standortberechtigung fehlt>"
+                ssid = context.getString(R.string.standortberechtigung_fehlt)
             }
-            info.append("📶 WLAN-Name (SSID): $ssid\n")
+            info.append(context.getString(R.string.wlan_name_ssid, ssid))
 
             val connectivityManager =
                 context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -80,7 +95,7 @@ fun showNetworkInfo(context: Context) {
                     ?: 0
             val level = wifiManager.calculateSignalLevel(rssi)
             val bars = "▂▄▆█".substring(0, level.coerceIn(0, 4))
-            info.append("📡 Signalstärke: $rssi dBm ($bars)\n\n")
+            info.append(context.getString(R.string.signalstarke_dbm, rssi, bars))
         }
 
         if (transport == "Mobilfunk") {
@@ -92,11 +107,11 @@ fun showNetworkInfo(context: Context) {
                     TelephonyManager.NETWORK_TYPE_NR -> "5G"
                     TelephonyManager.NETWORK_TYPE_UMTS -> "3G"
                     TelephonyManager.NETWORK_TYPE_GSM -> "2G"
-                    else -> "Mobil (${telephonyManager.dataNetworkType})"
+                    else -> context.getString(R.string.mobil, telephonyManager.dataNetworkType)
                 }
-                info.append("📶 Mobilfunktyp: $networkType\n")
+                info.append(context.getString(R.string.mobilfunktyp, networkType))
             } catch (_: Exception) {
-                info.append("📶 Mobilfunktyp: N/A\n")
+                info.append(context.getString(R.string.mobilfunktyp_n_a))
             }
             info.append("\n")
         }
@@ -117,12 +132,12 @@ fun showNetworkInfo(context: Context) {
             }
             if (localIp != "N/A") break
         }
-        info.append("🏠 Lokale IP: $localIp\n")
+        info.append(context.getString(R.string.lokale_ip, localIp))
     } catch (_: Exception) {
-        info.append("🏠 Lokale IP: N/A\n")
+        info.append(context.getString(R.string.lokale_ip_n_a))
     }
 
-    info.append("🌍 Öffentliche IP: Wird abgerufen…\n")
+    info.append(context.getString(R.string.offentliche_ip_wird_abgerufen))
 
     val notId = cms()
 
@@ -134,15 +149,18 @@ fun showNetworkInfo(context: Context) {
             conn.connectTimeout = 3000
             conn.readTimeout = 3000
             val reader = BufferedReader(InputStreamReader(conn.inputStream))
-            publicIp = reader.readLine() ?: "Fehler"
+            publicIp = reader.readLine() ?: context.getString(R.string.fehler)
             reader.close()
             conn.disconnect()
         } catch (_: Exception) {
-            publicIp = "Offline / Timeout"
+            publicIp = context.getString(R.string.offline_timeout)
         }
 
         val updatedInfo = info.toString()
-            .replace("🌍 Öffentliche IP: Wird abgerufen…", "🌍 Öffentliche IP: $publicIp")
+            .replace(
+                context.getString(R.string.offentliche_ip_wird_abgerufen_2),
+                context.getString(R.string.offentliche_ip, publicIp)
+            )
         showNetworkNotificationNow(context, updatedInfo, notId)
     }
 }
@@ -150,8 +168,8 @@ fun showNetworkInfo(context: Context) {
 fun showNetworkNotificationNow(context: Context, content: String, notId: Int) {
     val builder = NotificationCompat.Builder(context, SSN_CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_menu_compass)
-        .setContentTitle("📡 Netzwerk-Info")
-        .setContentText(content.lines().firstOrNull() ?: "Netzwerkinfo")
+        .setContentTitle(context.getString(R.string.netzwerk_info))
+        .setContentText(content.lines().firstOrNull() ?: context.getString(R.string.netzwerkinfo))
         .setStyle(NotificationCompat.BigTextStyle().bigText(content))
         .setPriority(NotificationCompat.PRIORITY_LOW)
 
