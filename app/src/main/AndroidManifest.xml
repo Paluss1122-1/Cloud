@@ -14,7 +14,6 @@
         tools:ignore="RequestInstallPackagesPolicy" />
 
     <!--
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" /> connected? (ssid?) signal strenth?
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" /> dis/enable, start scan, trigger connection
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" /> prioritize Network Requests / use specific Network Capabilities
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" /> allows receiving Multicast-Daten in wifi (z. B. mDNS, Discovery, Chromecast/Local Device Discovery)
@@ -58,9 +57,9 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <!--<uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.MANAGE_MEDIA" /> -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
@@ -79,6 +78,7 @@
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/app_icon_foreground"
         android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
         android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@drawable/app_icon_foreground"
         android:supportsRtl="true"
