@@ -75,6 +75,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -90,6 +91,7 @@ import coil.ImageLoader
 import coil.compose.rememberAsyncImagePainter
 import coil.disk.DiskCache
 import coil.memory.MemoryCache.Builder
+import com.tabslify.R
 import com.tabslify.core.TabNavigationViewModel
 import com.tabslify.core.objects.prvt
 import com.tabslify.core.ui.PloppingButton
@@ -124,8 +126,20 @@ fun OtherBucketViewer(
     viewModel: TabNavigationViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    
+    val forbiddenMsg = stringResource(R.string.forbidden)
+    val fehlerBeimLadenMsg = stringResource(R.string.fehler_beim_laden)
+    val dateiGeloeschtMsg = stringResource(R.string.datei_geloscht)
+    val fehlerBeimLoeschenMsg = stringResource(R.string.fehler_beim_loschen)
+    val dateienExportiert = stringResource(R.string.dateien_nach_downloads_other_exportiert)
+    val exportFehlgeschlagen = stringResource(R.string.export_fehlgeschlagen)
+    val exportiertFehlgeschlagen = stringResource(R.string.exportiert_fehlgeschlagen)
+    val alleDateienGespeichertMsg = stringResource(R.string.alle_dateien_gespeichert)
+    val speichernFehlgeschlagenMsg = stringResource(R.string.speichern_fehlgeschlagen)
+    val gespeichertFehlgeschlagenMsg = stringResource(R.string.gespeichert_fehlgeschlagen)
+    
     if (!prvt()) {
-        Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, forbiddenMsg, Toast.LENGTH_SHORT).show()
         return
     }
     var fileList by remember { mutableStateOf<List<LocalFileInfo>>(emptyList()) }
@@ -201,7 +215,7 @@ fun OtherBucketViewer(
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT)
+                    Toast.makeText(context, fehlerBeimLadenMsg.format(e.message), Toast.LENGTH_SHORT)
                         .show()
                 }
             }
@@ -270,16 +284,16 @@ fun OtherBucketViewer(
                     }
 
                     val message = when {
-                        failCount == 0 -> "✅ Alle $successCount Dateien gespeichert!"
-                        successCount == 0 -> "❌ Speichern fehlgeschlagen"
-                        else -> "⚠️ $successCount gespeichert, $failCount fehlgeschlagen"
+                        failCount == 0 -> alleDateienGespeichertMsg.format(successCount)
+                        successCount == 0 -> speichernFehlgeschlagenMsg
+                        else -> gespeichertFehlgeschlagenMsg.format(successCount, failCount)
                     }
 
                     Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                     loadFilesFromPrivateStorage()
 
                 } catch (e: Exception) {
-                    Toast.makeText(context, "Fehler: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, fehlerBeimLadenMsg.format(e.message), Toast.LENGTH_LONG).show()
                 } finally {
                     isUploading = false
                     uploadProgress = null
@@ -297,14 +311,14 @@ fun OtherBucketViewer(
             fileList = fileList.filter { it.file.absolutePath != fileInfo.file.absolutePath }
 
             withContext(Dispatchers.Main) {
-                Toast.makeText(context, "✅ Datei gelöscht", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, dateiGeloeschtMsg, Toast.LENGTH_SHORT).show()
             }
 
             delay(300.milliseconds)
             loadFilesFromPrivateStorage()
         } catch (e: Exception) {
             withContext(Dispatchers.Main) {
-                Toast.makeText(context, "Fehler beim Löschen: ${e.message}", Toast.LENGTH_LONG)
+                Toast.makeText(context, fehlerBeimLoeschenMsg.format(e.message), Toast.LENGTH_LONG)
                     .show()
             }
             e.printStackTrace()
@@ -334,7 +348,12 @@ fun OtherBucketViewer(
                     .padding(bottom = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                listOf("Alle", "Videos", "Bilder", "Favoriten").forEach { filter ->
+                listOf(
+                    "Alle" to stringResource(R.string.alle),
+                    "Videos" to stringResource(R.string.videos),
+                    "Bilder" to stringResource(R.string.bilder),
+                    "Favoriten" to stringResource(R.string.favoriten)
+                ).forEach { (filter, filterLabel) ->
                     val suffix = when (filter) {
                         "Alle" -> fileList.size
                         "Videos" -> fileList.count { it.isVideo }
@@ -361,7 +380,7 @@ fun OtherBucketViewer(
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
                     ) {
                         Text(
-                            "$filter ($suffix)",
+                            "$filterLabel ($suffix)",
                             fontSize = 13.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -381,12 +400,12 @@ fun OtherBucketViewer(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            "📁 Keine Dateien vorhanden",
+                            stringResource(R.string.keine_dateien_vorhanden),
                             style = MaterialTheme.typography.titleLarge,
                             color = Color.White
                         )
                         Text(
-                            "Tippe auf + um Dateien hinzuzufügen",
+                            stringResource(R.string.tippe_auf_um_dateien_hinzuzufugen),
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color.White.copy(alpha = 0.7f)
                         )
@@ -489,7 +508,7 @@ fun OtherBucketViewer(
                                             if (thumbnail != null) {
                                                 Image(
                                                     bitmap = thumbnail!!.asImageBitmap(),
-                                                    contentDescription = "Video Thumbnail",
+                                                    contentDescription = stringResource(R.string.video_thumbnail),
                                                     contentScale = ContentScale.Crop,
                                                     modifier = Modifier.fillMaxSize()
                                                 )
@@ -512,7 +531,7 @@ fun OtherBucketViewer(
                                                         }
                                                         Icon(
                                                             imageVector = Icons.Default.PlayArrow,
-                                                            contentDescription = "Video",
+                                                            contentDescription = stringResource(R.string.video),
                                                             tint = Color.White.copy(alpha = 0.5f),
                                                             modifier = Modifier.size(48.dp)
                                                         )
@@ -578,7 +597,7 @@ fun OtherBucketViewer(
                                                 ) {
                                                     Icon(
                                                         imageVector = Icons.Default.Delete,
-                                                        contentDescription = "Löschen",
+                                                        contentDescription = stringResource(R.string.loschen),
                                                         tint = Color.Red,
                                                         modifier = Modifier.size(24.dp)
                                                     )
@@ -599,7 +618,7 @@ fun OtherBucketViewer(
                                                         Icon(
                                                             imageVector = if (fileInfo.isFavorite)
                                                                 Icons.Default.Star else Icons.Default.StarBorder,
-                                                            contentDescription = "Favorit",
+                                                            contentDescription = stringResource(R.string.favorit),
                                                             tint = if (fileInfo.isFavorite) Color.Yellow else Color.White,
                                                             modifier = Modifier.size(24.dp)
                                                         )
@@ -632,9 +651,9 @@ fun OtherBucketViewer(
                         scope.launch {
                             val (success, fail) = exportAllFiles(context, fileList)
                             val msg = when {
-                                fail == 0 -> "✅ $success Dateien nach Downloads/Other exportiert"
-                                success == 0 -> "❌ Export fehlgeschlagen"
-                                else -> "⚠️ $success exportiert, $fail fehlgeschlagen"
+                                fail == 0 -> dateienExportiert.format(success)
+                                success == 0 -> exportFehlgeschlagen
+                                else -> exportiertFehlgeschlagen.format(success, fail)
                             }
                             Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                         }
@@ -643,7 +662,7 @@ fun OtherBucketViewer(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = "Alle exportieren",
+                        contentDescription = stringResource(R.string.alle_exportieren),
                         tint = Color.White
                     )
                 }
@@ -658,7 +677,7 @@ fun OtherBucketViewer(
                 } else {
                     Icon(
                         imageVector = Icons.Default.Add,
-                        contentDescription = "Datei hinzufügen",
+                        contentDescription = stringResource(R.string.datei_hinzufugen),
                         tint = Color.White
                     )
                 }
@@ -683,11 +702,11 @@ fun OtherBucketViewer(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
-                            text = "Dateien werden gespeichert",
+                            text = stringResource(R.string.dateien_werden_gespeichert_2),
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            text = "$current von $total",
+                            text = stringResource(R.string.fortschritt_von, current, total),
                             style = MaterialTheme.typography.bodyLarge
                         )
                         LinearProgressIndicator(
