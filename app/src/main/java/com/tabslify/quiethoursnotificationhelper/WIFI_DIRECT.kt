@@ -3,6 +3,10 @@ package com.tabslify.quiethoursnotificationhelper
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.NotificationManager
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
+import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -11,6 +15,7 @@ import android.content.Context.WINDOW_SERVICE
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.database.ContentObserver
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.media.AudioManager
@@ -20,12 +25,16 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.Uri
+import android.net.wifi.WifiManager
 import android.os.BatteryManager
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.AlarmClock
 import android.provider.ContactsContract
 import android.provider.MediaStore
 import android.provider.Settings
+import android.telephony.TelephonyManager
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
@@ -145,11 +154,61 @@ private data class Cache(
     var batteryLevel: String = "0",
     var temperature: String = "0",
     var plugged: Boolean = false,
-    var lastSync: Long = 0
+    var mobileData: Boolean? = null,
+    var wifi: Boolean? = null,
+    var hotspot: String? = null,
+    var bluetoothOn: Boolean? = null,
+    var bluetoothConnectedCount: Int? = null,
+    var volume: Int? = null
 )
 
 private var cache = Cache()
+private var reportDebounceJob: Job? = null
+private var pendingReportIntent: Intent? = null
 private val akkuReceiver = AkkuReceiver()
+private val bluetoothReceiver = BluetoothReceiver()
+private val connectedBluetoothDevices = mutableSetOf<String>()
+private var deviceInfoNetworkCallback: ConnectivityManager.NetworkCallback? = null
+private var deviceInfoBroadcastReceiver: BroadcastReceiver? = null
+private var mobileDataObserver: ContentObserver? = null
+
+val bluetoothIntentFilter: IntentFilter = IntentFilter().apply {
+    addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+    addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+    addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+}
+
+fun handleBluetoothBroadcast(context: Context, intent: Intent) {
+    try {
+        when (intent.action) {
+            BluetoothDevice.ACTION_ACL_CONNECTED ->
+                intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                    ?.address?.let { connectedBluetoothDevices.add(it) }
+
+            BluetoothDevice.ACTION_ACL_DISCONNECTED ->
+                intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                    ?.address?.let { connectedBluetoothDevices.remove(it) }
+
+            BluetoothAdapter.ACTION_STATE_CHANGED -> {
+                val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1)
+                if (state == BluetoothAdapter.STATE_OFF || state == BluetoothAdapter.STATE_TURNING_OFF) {
+                    connectedBluetoothDevices.clear()
+                }
+            }
+        }
+    } catch (_: SecurityException) {
+    }
+    reportDeviceInformation(context, intent)
+}
+
+private fun isBluetoothOn(context: Context): Boolean {
+    return try {
+        val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+        bm?.adapter?.isEnabled == true
+    } catch (_: Exception) {
+        false
+    }
+}
 
 val isLaptopConnectedFlow = MutableStateFlow(false)
 val aiResponseFlow = MutableStateFlow<AiResponseEntry?>(null)
@@ -192,6 +251,7 @@ private var clipboardJob: Job? = null
 private var mailNotifyJob: Job? = null
 private var executeJob: Job? = null
 private var smsJob: Job? = null
+private var spotifyHistoryJob: Job? = null
 
 private val activeServers = mutableListOf<ServerSocket>()
 
@@ -208,6 +268,7 @@ private var networkCallback: ConnectivityManager.NetworkCallback? = null
 private var pendingSyncJob: Job? = null
 private var lastTriggerTime = 0L
 private const val MIN_TRIGGER_INTERVAL = 15_000L
+private const val WIFI_AP_STATE_CHANGED_ACTION = "android.net.wifi.WIFI_AP_STATE_CHANGED"
 
 private val syncInProgress = AtomicBoolean(false)
 
@@ -292,6 +353,7 @@ fun shutdownAllWifiDirectServices(context: Context) {
     }
 
     unregisterWifiReconnectReceiver(context)
+    unregisterDeviceInfoNetworkListeners(context)
     cpuWakeLock.safeRelease(); cpuWakeLock = null
     syncInProgress.set(false)
     isLaptopConnected = false
@@ -433,8 +495,7 @@ suspend fun callNvidiaVisionApi(
                 provider = AiProvider.NVIDIA,
                 onToken = { chunk ->
                     sb.append(chunk)
-                    // Post to main thread so progress updates UI smoothly
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    Handler(Looper.getMainLooper()).post {
                         onProgress(sb.toString())
                     }
                 }
@@ -744,7 +805,10 @@ fun restoreSyncIfNeeded(context: Context) {
         startMediaStateServer(context)
         startClipboardListener(context)
         startSmsListener(context)
+        startSpotifyHistoryListener(context)
         context.registerReceiver(akkuReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        context.registerReceiver(bluetoothReceiver, bluetoothIntentFilter)
+        registerDeviceInfoNetworkListeners(context)
         syncScope.launch {
             delay(5_000.milliseconds)
             syncTodosWithLaptop(context)
@@ -805,7 +869,13 @@ fun stopAllSyncServices(context: Context) {
         context.unregisterReceiver(akkuReceiver)
     } catch (_: IllegalArgumentException) {
     }
+    try {
+        context.unregisterReceiver(bluetoothReceiver)
+    } catch (_: IllegalArgumentException) {
+    }
+    unregisterDeviceInfoNetworkListeners(context)
     cache = Cache()
+    connectedBluetoothDevices.clear()
 
     isLaptopConnected = false
 
@@ -941,6 +1011,7 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                     startMediaStateServer(context)
                     startClipboardListener(context)
                     startSmsListener(context)
+                    startSpotifyHistoryListener(context)
                     if (listenerJob == null || listenerJob?.isActive == false) {
                         startUpdateListener(context)
                     }
@@ -953,10 +1024,13 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                     }
                     pushMediaStateToLaptop(context)
                     cache = Cache()
+                    connectedBluetoothDevices.clear()
                     context.registerReceiver(
                         akkuReceiver,
                         IntentFilter(Intent.ACTION_BATTERY_CHANGED)
                     )
+                    context.registerReceiver(bluetoothReceiver, bluetoothIntentFilter)
+                    registerDeviceInfoNetworkListeners(context)
                 }
 
                 "EMPTY" -> throw IOException("Server erhielt leere Daten")
@@ -1632,6 +1706,46 @@ fun startMediaStateServer(context: Context) {
         }
 }
 
+fun startSpotifyHistoryListener(context: Context) {
+    if (spotifyHistoryJob?.isActive == true) return
+    spotifyHistoryJob =
+        launchServer(mediaScope, Config.SPOTIFY_HISTORY_PORT, "startSpotifyHistoryListener") { client ->
+            val sb = StringBuilder()
+            val reader = BufferedReader(InputStreamReader(client.getInputStream()))
+            var line: String?
+            while (reader.readLine().also { line = it } != null) sb.append(line)
+            client.close()
+            handleSpotifyHistoryUpload(context, sb.toString())
+        }
+}
+
+private fun handleSpotifyHistoryUpload(context: Context, body: String) {
+    val sessions = try {
+        val arr = JSONArray(body)
+        (0 until arr.length()).mapNotNull { i ->
+            val obj = arr.optJSONObject(i) ?: return@mapNotNull null
+            val label = obj.optString("label", "").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val startedAt = obj.optLong("startedAt", 0L)
+            val listenedMs = obj.optLong("listenedMs", 0L)
+            if (startedAt <= 0L || listenedMs <= 0L) return@mapNotNull null
+            val type = obj.optString("type", "music").takeIf { it == "podcast" } ?: "music"
+            com.tabslify.tabs.mediaplayer.ListenSession(
+                label = label,
+                type = type,
+                listenedMs = listenedMs,
+                startedAt = startedAt,
+                source = "spotify_pc"
+            )
+        }
+    } catch (e: Exception) {
+        logError("handleSpotifyHistoryUpload", e)
+        emptyList()
+    }
+    com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.init(context.applicationContext)
+    val added = com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.mergeSessions(sessions)
+    Log.d("CLOUDSA", "Spotify-PC-Verlauf: ${sessions.size} empfangen, $added neu gemerged")
+}
+
 private fun buildMediaStateJson(context: Context): String {
     val musicPrefs = context.getSharedPreferences("music_player_prefs", MODE_PRIVATE)
 
@@ -1738,8 +1852,8 @@ private fun buildPlaylistsJson(context: Context): String {
     AlgorithmicPlaylistRegistry.all.forEach { source ->
         algoJson.put(JSONObject().apply {
             put("id", source.id)
-            put("name", source.name)
-            put("description", source.description)
+            put("name", context.getString(source.nameRes))
+            put("description", context.getString(source.descriptionRes))
             put("icon", source.icon)
         })
     }
@@ -2413,26 +2527,207 @@ fun getHotspotIp(): String? {
     return null
 }
 
-fun reportDeviceInformation(intent: Intent) {
-    val now = System.currentTimeMillis()
-    if (now - cache.lastSync < 3000) return
-    cache.lastSync = now
-    val level = (intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1).takeIf { it >= 0 } ?: return).toString()
-    val temp =
-        (intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1).takeIf { it != -1 }?.div(10f)
-            ?: return).toString()
-    val plugged =
-        intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0).toString()
+private fun isMobileDataActive(context: Context): Boolean {
+    val hasPhoneState =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) ==
+            PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_BASIC_PHONE_STATE) ==
+            PackageManager.PERMISSION_GRANTED
+    if (hasPhoneState) {
+        try {
+            val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+            return tm.isDataEnabled
+        } catch (_: SecurityException) {
+        }
+    }
+    return try {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        cm.allNetworks.any { network ->
+            cm.getNetworkCapabilities(network)
+                ?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
+        }
+    } catch (_: SecurityException) {
+        false
+    }
+}
 
-    val pluggedb = plugged != "0"
+private fun isWifiConnectedAndActive(context: Context): Boolean {
+    return try {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        cm.allNetworks.any { network ->
+            val caps = cm.getNetworkCapabilities(network) ?: return@any false
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) &&
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        }
+    } catch (_: SecurityException) {
+        false
+    }
+}
+
+@SuppressLint("MissingPermission")
+private fun isHotspotActive(context: Context): Boolean {
+    val wifiManager =
+        context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    try {
+        val method = wifiManager.javaClass.getMethod("isWifiApEnabled")
+        return method.invoke(wifiManager) as Boolean
+    } catch (_: Exception) {
+    }
+    return try {
+        NetworkInterface.getNetworkInterfaces()?.toList()?.any { intf ->
+            intf.isUp && !intf.isLoopback && (
+                intf.name.startsWith("ap") ||
+                    intf.name.startsWith("swlan") ||
+                    intf.name.contains("softap", ignoreCase = true)
+                )
+        } ?: false
+    } catch (_: Exception) {
+        false
+    }
+}
+
+private fun getHotspotState(context: Context): String {
+    if (!isHotspotActive(context)) return "off"
+    return if (isWifiConnectedAndActive(context)) "wifi" else "mobile"
+}
+
+fun getVolume(context: Context): Int {
+    val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    return audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+}
+
+fun registerDeviceInfoNetworkListeners(context: Context) {
+    val appCtx = context.applicationContext
+    unregisterDeviceInfoNetworkListeners(appCtx)
+
+    val cm = appCtx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val callback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            reportDeviceInformation(appCtx)
+        }
+
+        override fun onLost(network: Network) {
+            reportDeviceInformation(appCtx)
+        }
+
+        override fun onCapabilitiesChanged(
+            network: Network,
+            networkCapabilities: NetworkCapabilities
+        ) {
+            reportDeviceInformation(appCtx)
+        }
+    }
+    deviceInfoNetworkCallback = callback
+    cm.registerNetworkCallback(NetworkRequest.Builder().build(), callback)
+
+    val receiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context, intent: Intent?) {
+            reportDeviceInformation(ctx.applicationContext)
+        }
+    }
+    deviceInfoBroadcastReceiver = receiver
+    val filter = IntentFilter().apply {
+        addAction(WifiManager.WIFI_STATE_CHANGED_ACTION)
+        addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION)
+        addAction(WIFI_AP_STATE_CHANGED_ACTION)
+    }
+    appCtx.registerReceiver(receiver, filter)
+
+    val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) {
+            reportDeviceInformation(appCtx)
+        }
+    }
+    mobileDataObserver = observer
+    appCtx.contentResolver.registerContentObserver(
+        Settings.Global.getUriFor("mobile_data"),
+        false,
+        observer
+    )
+}
+
+fun unregisterDeviceInfoNetworkListeners(context: Context) {
+    val appCtx = context.applicationContext
+    val cm = appCtx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    deviceInfoNetworkCallback?.let {
+        try {
+            cm.unregisterNetworkCallback(it)
+        } catch (_: Exception) {
+        }
+    }
+    deviceInfoNetworkCallback = null
+
+    deviceInfoBroadcastReceiver?.let {
+        try {
+            appCtx.unregisterReceiver(it)
+        } catch (_: Exception) {
+        }
+    }
+    deviceInfoBroadcastReceiver = null
+
+    mobileDataObserver?.let {
+        try {
+            appCtx.contentResolver.unregisterContentObserver(it)
+        } catch (_: Exception) {
+        }
+    }
+    mobileDataObserver = null
+}
+
+fun reportDeviceInformation(context: Context, intent: Intent? = null) {
+    val appCtx = context.applicationContext
+    if (intent != null) pendingReportIntent = intent
+
+    reportDebounceJob?.cancel()
+    reportDebounceJob = syncScope.launch {
+        delay(500.milliseconds)
+        val finalIntent = pendingReportIntent
+        pendingReportIntent = null
+        sendDeviceInformation(appCtx, finalIntent)
+    }
+}
+
+private fun sendDeviceInformation(context: Context, intent: Intent? = null) {
+    val mobileData = isMobileDataActive(context)
+    val wifi = isWifiConnectedAndActive(context)
+    val hotspot = getHotspotState(context)
+    val bluetoothOn = isBluetoothOn(context)
+    val bluetoothConnectedCount = connectedBluetoothDevices.size
+    val volume = getVolume(context)
+
     val bl = buildString {
-        if (cache.batteryLevel != level) append("battery_level=$level ")
-        if (cache.temperature != temp) append("temp=$temp ")
-        if (cache.plugged != pluggedb) append("charging=$pluggedb")
+        if (intent != null) {
+            val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+            val tempRaw = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1)
+            val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)
+            if (level >= 0) {
+                val levelStr = level.toString()
+                if (cache.batteryLevel != levelStr) append("battery_level=$levelStr ")
+                cache.batteryLevel = levelStr
+            }
+            if (tempRaw != -1) {
+                val temp = (tempRaw / 10f).toString()
+                if (cache.temperature != temp) append("temp=$temp ")
+                cache.temperature = temp
+            }
+            val pluggedb = plugged != 0
+            if (cache.plugged != pluggedb) append("charging=$pluggedb ")
+            cache.plugged = pluggedb
+        }
+        if (cache.mobileData != mobileData) append("mobile_data=$mobileData ")
+        if (cache.wifi != wifi) append("wifi=$wifi ")
+        if (cache.hotspot != hotspot) append("hotspot=$hotspot ")
+        if (cache.bluetoothOn != bluetoothOn) append("bluetooth_on=$bluetoothOn ")
+        if (cache.bluetoothConnectedCount != bluetoothConnectedCount) append("bluetooth_connected=$bluetoothConnectedCount ")
+        if (cache.volume != volume) append("volume=$bluetoothOn")
     }.trim()
-    cache.batteryLevel = level
-    cache.plugged = pluggedb
-    cache.temperature = temp
+
+    cache.mobileData = mobileData
+    cache.wifi = wifi
+    cache.hotspot = hotspot
+    cache.bluetoothOn = bluetoothOn
+    cache.bluetoothConnectedCount = bluetoothConnectedCount
+    cache.volume = volume
 
     if (bl.isEmpty()) return
 
