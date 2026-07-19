@@ -1,6 +1,4 @@
 <resources>
-    <string name="app_name">Tabslify</string>
-    <string name="app_name_debug">Tabslify</string>
-    <string name="shortcut_weather_short">Wetter</string>
-    <string name="shortcut_weather_long">Wetter öffnen</string>
+    <string name="app_name" translatable="false">Tabslify</string>
+    <string name="app_name_debug" translatable="false">Tabslify</string>
 </resources>
