@@ -10,6 +10,7 @@ import android.media.MediaPlayer
 import android.os.Environment
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.tabslify.R
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config.VOICE_NOTE
 import com.tabslify.core.objects.prvt
@@ -46,8 +47,8 @@ fun playLatestVoiceNote(sender: String, context: Context) {
 
                     if (voiceNoteFiles.isEmpty()) {
                         showSimpleNotificationExtern(
-                            "Keine Sprachnachrichten",
-                            "Keine .opus Dateien gefunden",
+                            context.getString(R.string.keine_sprachnachrichten),
+                            context.getString(R.string.keine_opus_dateien_gefunden),
                             context = context
                         )
                         return@post
@@ -59,8 +60,8 @@ fun playLatestVoiceNote(sender: String, context: Context) {
             } catch (_: Exception) {
                 mainHandler.post {
                     showSimpleNotificationExtern(
-                        "Fehler",
-                        "Sprachnachrichten konnten nicht geladen werden",
+                        context.getString(R.string.fehler),
+                        context.getString(R.string.sprachnachrichten_konnten_nicht_geladen_werden),
                         context = context
                     )
                 }
@@ -68,8 +69,8 @@ fun playLatestVoiceNote(sender: String, context: Context) {
         }
     } catch (_: Exception) {
         showSimpleNotificationExtern(
-            "Fehler",
-            "Sprachnachricht konnte nicht abgespielt werden",
+            context.getString(R.string.fehler),
+            context.getString(R.string.sprachnachricht_konnte_nicht_abgespielt_werden),
             context = context
         )
     }
@@ -80,7 +81,7 @@ fun playVoiceNoteAtIndex(index: Int, context: Context) {
     if (!prvt()) return
     try {
         if (index < 0 || index >= voiceNoteFiles.size) {
-            showSimpleNotificationExtern("Fehler", "Ungültiger Index", context = context)
+            showSimpleNotificationExtern(context.getString(R.string.fehler), context.getString(R.string.ungultiger_index_2), context = context)
             return
         }
 
@@ -102,7 +103,7 @@ fun playVoiceNoteAtIndex(index: Int, context: Context) {
             }
             setOnErrorListener { _, what, extra ->
                 Log.e("QuietHoursService", "MediaPlayer error: what=$what, extra=$extra")
-                showSimpleNotificationExtern("Fehler", "Fehler beim Abspielen", context = context)
+                showSimpleNotificationExtern(context.getString(R.string.fehler), context.getString(R.string.fehler_beim_abspielen), context = context)
                 true
             }
             prepareAsync()
@@ -111,8 +112,8 @@ fun playVoiceNoteAtIndex(index: Int, context: Context) {
     } catch (e: Exception) {
         Log.e("QuietHoursService", "Error playing voice note at index $index", e)
         showSimpleNotificationExtern(
-            "Fehler",
-            "Sprachnachricht konnte nicht abgespielt werden: ${e.message}",
+            context.getString(R.string.fehler),
+            context.getString(R.string.sprachnachricht_konnte_nicht_abgespielt_werden_2, e.message),
             context = context
         )
     }
@@ -233,19 +234,19 @@ private fun showVoiceNotePlayerNotification(file: File, isPlaying: Boolean, cont
             .setSmallIcon(if (isPlaying) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause)
             .setContentTitle("${if (isPlaying) "▶️" else "⏸️"} Sprachnachricht")
             .setContentText("$fileName • $fileDate")
-            .setSubText("${currentVoiceNoteIndex + 1} von ${voiceNoteFiles.size}")
+            .setSubText(context.getString(R.string.fortschritt_von, currentVoiceNoteIndex + 1, voiceNoteFiles.size))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(isPlaying)
             .setAutoCancel(!isPlaying)
             .setGroup("group_media")
             .setGroupSummary(false)
-            .addAction(android.R.drawable.ic_media_previous, "Zurück", prevPendingIntent)
+            .addAction(android.R.drawable.ic_media_previous, context.getString(R.string.zuruck), prevPendingIntent)
             .addAction(
                 if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-                if (isPlaying) "Stop" else "Play",
+                if (isPlaying) context.getString(R.string.stop) else context.getString(R.string.play),
                 playStopPendingIntent
             )
-            .addAction(android.R.drawable.ic_media_next, "Weiter", nextPendingIntent)
+            .addAction(android.R.drawable.ic_media_next, context.getString(R.string.weiter), nextPendingIntent)
             .build()
 
         if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
