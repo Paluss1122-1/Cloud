@@ -60,6 +60,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -70,6 +71,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
+import com.tabslify.R
 import com.tabslify.core.functions.errorInsert
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -153,14 +155,14 @@ fun GalleryTab() {
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    "Zugriff auf Medien benötigt",
+                    stringResource(R.string.zugriff_auf_medien_benotigt),
                     color = Color.White,
                     style = MaterialTheme.typography.titleMedium,
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(onClick = { permissionLauncher.launch(requiredPermissions) }) {
-                    Text("Berechtigung erteilen")
+                    Text(stringResource(R.string.berechtigung_erteilen))
                 }
             }
         }
@@ -180,7 +182,7 @@ fun GalleryTab() {
                 ) {
                     if (mediaItems.value.isEmpty()) {
                         Text(
-                            "Keine Medien gefunden",
+                            stringResource(R.string.keine_medien_gefunden),
                             color = Color.White,
                             modifier = Modifier.align(Alignment.Center)
                         )
@@ -390,7 +392,7 @@ fun SharedTransitionScope.ImageFullscreen(
         ) {
             AsyncImage(
                 model = imageUri,
-                contentDescription = "Fullscreen",
+                contentDescription = stringResource(R.string.fullscreen),
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxSize()
@@ -412,7 +414,7 @@ fun SharedTransitionScope.ImageFullscreen(
             Button(
                 onClick = onDelete
             ) {
-                Text("Löschen")
+                Text(stringResource(R.string.loschen))
             }
         }
     }
@@ -464,7 +466,7 @@ fun VideoPlayerFullscreen(
                 .align(Alignment.BottomCenter)
                 .padding(16.dp)
         ) {
-            Text("Löschen")
+            Text(stringResource(R.string.loschen))
         }
     }
 }
