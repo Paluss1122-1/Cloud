@@ -29,10 +29,12 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight.Companion.Bold
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tabslify.R
 import com.tabslify.core.ui.loadLastUrl
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
@@ -88,7 +90,7 @@ fun BrowserTabContent(
             onValueChange = onUrlChange,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            placeholder = { Text("URL eingeben...", color = Color.Gray) },
+            placeholder = { Text(stringResource(R.string.url_eingeben), color = Color.Gray) },
             colors = TextFieldDefaults.colors(
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White,
@@ -112,7 +114,7 @@ fun BrowserTabContent(
                 .fillMaxWidth()
                 .height(56.dp)
         ) {
-            Text("Öffnen", fontSize = 20.sp, fontWeight = Bold)
+            Text(stringResource(R.string.offnen), fontSize = 20.sp, fontWeight = Bold)
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -160,6 +162,6 @@ fun LastUrlButton(context: Context, onUrlLoad: (String) -> Unit) {
         onClick = { onUrlLoad(lastUrl) },
         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF444444))
     ) {
-        Text("🔙 Letzte URL laden", fontSize = 14.sp)
+        Text(stringResource(R.string.letzte_url_laden), fontSize = 14.sp)
     }
 }
