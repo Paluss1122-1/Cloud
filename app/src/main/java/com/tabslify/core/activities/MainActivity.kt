@@ -26,6 +26,7 @@ import androidx.core.animation.doOnEnd
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
+import com.tabslify.R
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.requestPermission
 import com.tabslify.core.objects.prvt
@@ -53,6 +54,8 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+
+        Config.ensureDefaultLanguage(this)
 
         enableEdgeToEdge()
 
@@ -86,10 +89,14 @@ class MainActivity : FragmentActivity() {
             }
         }
 
-        if (prvt() && Config.realDevice) {
-            requestPermission("all", launcher)
-        } else {
-            requestPermission("not", launcher)
+        val onboardingFinished = getSharedPreferences("app_prefs", MODE_PRIVATE)
+            .getBoolean("has_seen_permission_info", false)
+        if (onboardingFinished) {
+            if (prvt() && Config.realDevice) {
+                requestPermission("all", launcher)
+            } else {
+                requestPermission("not", launcher)
+            }
         }
 
         if (prvt()) {
@@ -206,14 +213,14 @@ class MainActivity : FragmentActivity() {
         try {
             val filePath = when (uri.scheme) {
                 "file" -> {
-                    uri.path ?: throw Exception("Ungültiger Dateipfad")
+                    uri.path ?: throw Exception(getString(R.string.ungultiger_dateipfad))
                 }
 
                 "content" -> {
                     copyContentToTempFile(uri)
                 }
 
-                else -> throw Exception("Nicht unterstütztes URI-Schema: ${uri.scheme}")
+                else -> throw Exception(getString(R.string.nicht_unterstutztes_uri_schema, uri.scheme))
             }
 
             jsonFilePath = filePath
@@ -223,7 +230,7 @@ class MainActivity : FragmentActivity() {
         } catch (e: Exception) {
             Toast.makeText(
                 this,
-                "Fehler beim Laden der JSON-Datei: ${e.message}",
+                getString(R.string.fehler_beim_laden_der_json, e.message),
                 Toast.LENGTH_LONG
             ).show()
             e.printStackTrace()
@@ -232,7 +239,7 @@ class MainActivity : FragmentActivity() {
 
     private fun copyContentToTempFile(uri: Uri): String {
         val inputStream = contentResolver.openInputStream(uri)
-            ?: throw Exception("Datei konnte nicht geöffnet werden")
+            ?: throw Exception(getString(R.string.datei_konnte_nicht_geoffnet_werden_2))
 
         val fileName = try {
             contentResolver.query(uri, null, null, null, null)?.use { cursor ->
