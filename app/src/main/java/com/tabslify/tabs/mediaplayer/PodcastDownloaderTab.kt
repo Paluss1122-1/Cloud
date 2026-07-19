@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,6 +52,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tabslify.R
 import com.tabslify.core.objects.Config
 import com.tabslify.core.ui.AlertDialogTabslify
 import com.tabslify.core.ui.FeedCard
@@ -95,6 +97,12 @@ data class SearchResult(
 fun PodcastTab() {
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val appSignatureInvalidMsg = stringResource(R.string.app_signatur_konnte_nicht_validiert)
+    val apiErrorMsg = stringResource(R.string.api_fehler_code)
+    val noTitleMsg = stringResource(R.string.ohne_titel)
+    val fileExistsMsg = stringResource(R.string.datei_existiert_bereits)
+    val podcastDownloadingMsg = stringResource(R.string.podcast_wird_heruntergeladen)
+    val downloadStartedMsg = stringResource(R.string.download_gestartet)
 
     val httpClient = remember {
         HttpClient(OkHttp) {
@@ -177,7 +185,7 @@ fun PodcastTab() {
             }.toString()
 
             val conn = Config.openApiProxyConnection(context) ?: run {
-                error = "App-Signatur konnte nicht validiert werden"
+                error = appSignatureInvalidMsg
                 return
             }
             withContext(Dispatchers.IO) {
@@ -192,7 +200,7 @@ fun PodcastTab() {
                     "PodcastDownloaderTab",
                     "Podcast Index proxy failed: Code $responseCode, Body: $errorText"
                 )
-                error = "API Fehler: Code $responseCode"
+                error = apiErrorMsg.format(responseCode)
                 return
             }
             val json = withContext(Dispatchers.IO) { conn.inputStream.bufferedReader().readText() }
@@ -269,7 +277,7 @@ fun PodcastTab() {
                             System.currentTimeMillis()
                         }
                     }
-                    Episode(title.ifEmpty { "Ohne Titel" }, audioUrl, timestamp)
+                    Episode(title.ifEmpty { noTitleMsg }, audioUrl, timestamp)
                 }
             }.sortedByDescending { it.publishDate }
             episodes = episodes + (feedUrl to list)
@@ -298,13 +306,13 @@ fun PodcastTab() {
         } ?: false
 
         if (alreadyDone) {
-            Toast.makeText(context, "Datei existiert bereits", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, fileExistsMsg, Toast.LENGTH_SHORT).show()
             return
         }
 
         val request = DownloadManager.Request(audioUrl.toUri()).apply {
             setTitle(filename)
-            setDescription("Podcast wird heruntergeladen…")
+            setDescription(podcastDownloadingMsg)
             setDestinationInExternalPublicDir(Environment.DIRECTORY_PODCASTS, subPath)
             setAllowedOverMetered(true)
             addRequestHeader("User-Agent", "Mozilla/5.0")
@@ -320,7 +328,7 @@ fun PodcastTab() {
             }.toString())
         }
 
-        Toast.makeText(context, "Download gestartet", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, downloadStartedMsg, Toast.LENGTH_SHORT).show()
     }
 
     fun streamEpisode(audioUrl: String) {
@@ -370,9 +378,9 @@ fun PodcastTab() {
                 feedToUnfav = null
             },
             onDismiss = { feedToUnfav = null },
-            title = "Aus Favoriten entfernen?",
-            text = "\"${feed.title}\" wird aus deinen Lieblings-Podcasts entfernt.",
-            confirmText = "Entfernen"
+            title = stringResource(R.string.aus_favoriten_entfernen),
+            text = stringResource(R.string.wird_aus_deinen_lieblings_podcasts, feed.title),
+            confirmText = stringResource(R.string.entfernen)
         )
     }
 
@@ -391,7 +399,7 @@ fun PodcastTab() {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 12.dp),
-            placeholder = { Text("Podcast suchen oder URL eingeben…") },
+            placeholder = { Text(stringResource(R.string.podcast_suchen_oder_url_eingeben)) },
             singleLine = true,
             trailingIcon = {
                 if (isSearching) {
@@ -416,7 +424,7 @@ fun PodcastTab() {
         error?.let {
             if (!hasSearched && !query.isNotBlank()) {
                 Text(
-                    "Fehler: $it",
+                    stringResource(R.string.fehler_msg, it),
                     color = MaterialTheme.colorScheme.error,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -436,28 +444,28 @@ fun PodcastTab() {
                     onClick = { vm.startDownload(query) },
                     enabled = downloadState is DownloadState.Idle || downloadState is DownloadState.Success || downloadState is DownloadState.Error
                 ) {
-                    Text("Download")
+                    Text(stringResource(R.string.download))
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
 
                 when (val state = downloadState) {
-                    is DownloadState.Idle -> Text("URL eingeben und Download starten")
+                    is DownloadState.Idle -> Text(stringResource(R.string.url_eingeben_und_download_starten))
                     is DownloadState.Searching -> CircularProgressIndicator()
                     is DownloadState.Downloading -> {
                         val progress = state.progress
                         LinearProgressIndicator(progress = { progress / 100f })
-                        Text("Downloading: $progress%")
+                        Text(stringResource(R.string.downloading, progress))
                     }
 
                     is DownloadState.Converting -> {
                         CircularProgressIndicator()
-                        Text("Converting to MP3...")
+                        Text(stringResource(R.string.converting_to_mp3))
                     }
 
-                    is DownloadState.Success -> Text("Download Complete!")
+                    is DownloadState.Success -> Text(stringResource(R.string.download_complete))
                     is DownloadState.Error -> Text(
-                        "Error: ${state.message}",
+                        stringResource(R.string.fehler_msg, state.message),
                         color = MaterialTheme.colorScheme.error
                     )
                 }
@@ -468,9 +476,9 @@ fun PodcastTab() {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("🔍", fontSize = 48.sp)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("Keine Podcast Shows gefunden", color = Color.White.copy(0.5f))
+                        Text(stringResource(R.string.keine_podcast_shows_gefunden), color = Color.White.copy(0.5f))
                         Text(
-                            "Versuche es mit einem anderen Suchbegriff",
+                            stringResource(R.string.versuche_es_mit_einem_anderen),
                             fontSize = 12.sp,
                             color = Color.White.copy(0.3f)
                         )
@@ -479,7 +487,7 @@ fun PodcastTab() {
             } else if (favorites.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        "🎙️ Podcast suchen oder URL zum Download eingeben",
+                        stringResource(R.string.podcast_suchen_oder_url_zum),
                         color = Color.White.copy(0.5f)
                     )
                 }
@@ -487,7 +495,7 @@ fun PodcastTab() {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
                         Text(
-                            "Lieblings-Podcasts", fontSize = 13.sp, color = Color(0xFF7A7880),
+                            stringResource(R.string.lieblings_podcasts), fontSize = 13.sp, color = Color(0xFF7A7880),
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
                     }
