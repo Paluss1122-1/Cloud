@@ -52,6 +52,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
+import com.tabslify.R
 import com.tabslify.core.activities.MainActivity
 import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.functions.errorInsert
@@ -317,8 +318,8 @@ class MediaPlayerService : MediaSessionService() {
 
             if (completedPodcasts.isEmpty()) {
                 showSimpleNotificationExtern(
-                    "Keine fertigen Podcasts",
-                    "Es gibt aktuell keine fertigen Podcasts zum Löschen",
+                    context.getString(R.string.keine_fertigen_podcasts),
+                    context.getString(R.string.es_gibt_aktuell_keine_fertigen),
                     10.seconds,
                     context = context
                 )
@@ -337,7 +338,7 @@ class MediaPlayerService : MediaSessionService() {
                     NotificationCompat.Builder(context, "media_player_channel")
                         .setSmallIcon(android.R.drawable.ic_menu_delete)
                         .setContentTitle("🗑️ $name")
-                        .setContentText("Antippen zum Löschen • Fertig angehört")
+                        .setContentText(context.getString(R.string.antippen_zum_loschen_fertig_angehort))
                         .setPriority(NotificationCompat.PRIORITY_HIGH)
                         .setAutoCancel(true)
                         .setContentIntent(deleteIntent)
@@ -350,8 +351,8 @@ class MediaPlayerService : MediaSessionService() {
             val summary =
                 NotificationCompat.Builder(context, "media_player_channel")
                     .setSmallIcon(android.R.drawable.ic_menu_delete)
-                    .setContentTitle("Fertige Podcasts löschen")
-                    .setContentText("${completedPodcasts.size} Podcasts bereit zum Löschen")
+                    .setContentTitle(context.getString(R.string.fertige_podcasts_loschen))
+                    .setContentText(context.getString(R.string.podcasts_bereit_zum_loschen, completedPodcasts.size))
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
                     .setGroup("podcast_delete")
                     .setGroupSummary(true)
@@ -786,8 +787,8 @@ class MediaPlayerService : MediaSessionService() {
                 val type = PlaylistType.valueOf(typeName)
                 createPlaylist(name, type)
                 showSimpleNotificationExtern(
-                    "✓ Playlist erstellt",
-                    "\"$name\" wurde erstellt",
+                    getString(R.string.playlist_erstellt),
+                    getString(R.string.wurde_erstellt, name),
                     10.seconds,
                     context = this
                 )
@@ -804,15 +805,15 @@ class MediaPlayerService : MediaSessionService() {
                 if (id != null && activatePlaylist(id)) {
                     val pl = playlists.find { it.id == id }
                     showSimpleNotificationExtern(
-                        "▶ Playlist aktiviert",
-                        "\"${pl?.name}\" wird abgespielt",
+                        getString(R.string.playlist_aktiviert),
+                        getString(R.string.wird_abgespielt, pl?.name),
                         10.seconds,
                         context = this
                     )
                 } else {
                     showSimpleNotificationExtern(
-                        "❌ Fehler",
-                        "Playlist konnte nicht aktiviert werden",
+                        getString(R.string.fehler_2),
+                        getString(R.string.playlist_konnte_nicht_aktiviert_werden),
                         10.seconds,
                         context = this
                     )
@@ -823,8 +824,8 @@ class MediaPlayerService : MediaSessionService() {
                 val pl = playlists.find { it.id == activePlaylistId }
                 deactivatePlaylist()
                 showSimpleNotificationExtern(
-                    "⏸ Playlist deaktiviert",
-                    if (pl != null) "\"${pl.name}\" beendet" else "Zurück zur normalen Wiedergabe",
+                    getString(R.string.playlist_deaktiviert),
+                    if (pl != null) getString(R.string.beendet, pl.name) else getString(R.string.zuruck_zur_normalen_wiedergabe),
                     10.seconds,
                     context = this
                 )
@@ -845,15 +846,15 @@ class MediaPlayerService : MediaSessionService() {
                             else -> null
                         }
                         showSimpleNotificationExtern(
-                            "✓ Hinzugefügt",
+                            getString(R.string.hinzugefugt),
                             "\"$itemName\" → \"${pl?.name}\"",
                             10.seconds,
                             context = this
                         )
                     } else {
                         showSimpleNotificationExtern(
-                            "❌ Fehler",
-                            "Item konnte nicht hinzugefügt werden",
+                            getString(R.string.fehler_2),
+                            getString(R.string.item_konnte_nicht_hinzugefugt_werden),
                             10.seconds,
                             context = this
                         )
@@ -867,8 +868,8 @@ class MediaPlayerService : MediaSessionService() {
                     val pl = playlists.find { it.id == id }
                     if (deletePlaylist(id)) {
                         showSimpleNotificationExtern(
-                            "🗑 Playlist gelöscht",
-                            "\"${pl?.name}\" wurde gelöscht",
+                            getString(R.string.playlist_geloscht),
+                            getString(R.string.wurde_geloscht, pl?.name),
                             10.seconds,
                             context = this
                         )
@@ -886,8 +887,8 @@ class MediaPlayerService : MediaSessionService() {
                 playlists.add(pl)
                 savePlaylists()
                 showSimpleNotificationExtern(
-                    "✓ Playlist erstellt",
-                    "\"$name\" · ${pl.items.size} Songs",
+                    getString(R.string.playlist_erstellt),
+                    getString(R.string.songs, name, pl.items.size),
                     10.seconds, context = this
                 )
             }
@@ -900,13 +901,13 @@ class MediaPlayerService : MediaSessionService() {
 
             "DEACTIVATE_ALGORITHMIC_PLAYLIST" -> {
                 val name =
-                    AlgorithmicPlaylistRegistry.findById(activeAlgorithmicPlaylistId ?: "")?.name
+                    AlgorithmicPlaylistRegistry.findById(activeAlgorithmicPlaylistId ?: "")?.let { getString(it.nameRes) }
                 activeAlgorithmicPlaylistId = null
                 algorithmicPlaylistSongs = emptyList()
                 saveMusicState()
                 showSimpleNotificationExtern(
-                    "⏸ Playlist deaktiviert",
-                    if (name != null) "\"$name\" beendet" else "Zurück zur normalen Wiedergabe",
+                    getString(R.string.playlist_deaktiviert),
+                    if (name != null) getString(R.string.beendet, name) else getString(R.string.zuruck_zur_normalen_wiedergabe),
                     10.seconds, context = this
                 )
                 updateNotification()
@@ -965,8 +966,8 @@ class MediaPlayerService : MediaSessionService() {
                     if (activatePlaylist(id)) {
                         val pl = playlists.find { it.id == id }
                         showSimpleNotificationExtern(
-                            "▶ Playlist aktiviert",
-                            "\"${pl?.name}\" (${pl?.items?.size ?: 0} Items)",
+                            getString(R.string.playlist_aktiviert),
+                            getString(R.string.items, pl?.name, pl?.items?.size ?: 0),
                             10.seconds,
                             context = this
                         )
@@ -978,7 +979,7 @@ class MediaPlayerService : MediaSessionService() {
                     val pl = playlists.find { it.id == id }
                     if (deletePlaylist(id)) {
                         showSimpleNotificationExtern(
-                            "🗑 Gelöscht",
+                            getString(R.string.geloscht_4),
                             "\"${pl?.name}\"",
                             10.seconds,
                             context = this
@@ -1255,8 +1256,8 @@ class MediaPlayerService : MediaSessionService() {
         val active = getActivePlaylist()
         if (active.isEmpty()) {
             showSimpleNotificationExtern(
-                "❌ Keine Songs",
-                if (favoritesMode) "Keine Favoriten verfügbar" else "Playlist ist leer",
+                getString(R.string.keine_songs),
+                if (favoritesMode) getString(R.string.keine_favoriten_verfugbar) else getString(R.string.playlist_ist_leer),
                 10.seconds,
                 context = this
             )
@@ -1537,10 +1538,10 @@ class MediaPlayerService : MediaSessionService() {
 
         if (favoriteSongs.containsKey(path)) {
             favoriteSongs.remove(path)
-            showSimpleNotificationExtern("💔 Favorit entfernt", name, 10.seconds, context = this)
+            showSimpleNotificationExtern(getString(R.string.favorit_entfernt), name, 10.seconds, context = this)
         } else {
             favoriteSongs[path] = System.currentTimeMillis()
-            showSimpleNotificationExtern("⭐ Favorit hinzugefügt", name, 10.seconds, context = this)
+            showSimpleNotificationExtern(getString(R.string.favorit_hinzugefugt), name, 10.seconds, context = this)
         }
         saveFavorites()
 
@@ -1585,8 +1586,8 @@ class MediaPlayerService : MediaSessionService() {
         val active = getActivePlaylist()
         if (favoritesMode && active.isEmpty()) {
             showSimpleNotificationExtern(
-                "❌ Keine Favoriten",
-                "Füge zuerst Songs zu deinen Favoriten hinzu!",
+                getString(R.string.keine_favoriten),
+                getString(R.string.fuge_zuerst_songs_zu_deinen),
                 10.seconds,
                 context = this
             )
@@ -1601,8 +1602,8 @@ class MediaPlayerService : MediaSessionService() {
         saveMusicState()
         saveFavorites()
         showSimpleNotificationExtern(
-            if (favoritesMode) "⭐ Favoriten-Modus aktiviert" else "📁 Alle Songs",
-            "${active.size} Songs verfügbar",
+            if (favoritesMode) getString(R.string.favoriten_modus_aktiviert) else getString(R.string.alle_songs_2),
+            getString(R.string.songs_verfugbar, active.size),
             10.seconds,
             context = this
         )
@@ -1776,8 +1777,8 @@ class MediaPlayerService : MediaSessionService() {
         } ?: run {
             savePlaybackSpeed(s)
             showSimpleNotificationExtern(
-                "✓ Gespeichert",
-                "Geschwindigkeit ${s}x wird beim nächsten Start verwendet",
+                getString(R.string.gespeichert_2),
+                getString(R.string.geschwindigkeit_x_wird_beim_nachsten, s),
                 5.seconds, this
             )
         }
@@ -1805,12 +1806,12 @@ class MediaPlayerService : MediaSessionService() {
                 p.isCompleted -> "✓"; p.savedPosition > 0 -> "▶"; else -> "⏸"
             }
             val progress = when {
-                p.isCompleted -> " • Fertig"; p.savedPosition > 0 -> " • ${formatTime(p.savedPosition)}"; else -> ""
+                p.isCompleted -> getString(R.string.fertig); p.savedPosition > 0 -> " • ${formatTime(p.savedPosition)}"; else -> ""
             }
             val n = NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_menu_info_details)
                 .setContentTitle("${i + 1} $status ${p.name}")
-                .setContentText("Antippen zum Abspielen$progress")
+                .setContentText(getString(R.string.antippen_zum_abspielen, progress))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setAutoCancel(true)
                 .setContentIntent(pi)
@@ -1821,8 +1822,8 @@ class MediaPlayerService : MediaSessionService() {
         val completedCount = updated.count { it.isCompleted }
         val summary = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
-            .setContentTitle("Podcast auswählen")
-            .setContentText("${podcasts.size} Podcasts${if (completedCount > 0) " ($completedCount fertig)" else ""}")
+            .setContentTitle(getString(R.string.podcast_auswahlen))
+            .setContentText(getString(R.string.podcasts_2, podcasts.size, if (completedCount > 0) " ($completedCount fertig)" else ""))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setGroup("podcast_selection")
             .setGroupSummary(true)
@@ -1849,15 +1850,15 @@ class MediaPlayerService : MediaSessionService() {
             val n = NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_menu_delete)
                 .setContentTitle("🗑️ ${p.name}")
-                .setContentText("Antippen zum Löschen • Fertig angehört")
+                .setContentText(getString(R.string.antippen_zum_loschen_fertig_angehort))
                 .setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true)
                 .setContentIntent(pi).setGroup("podcast_delete").build()
             tNotify(this, COMPLETED_PODCASTS + i, n)
         }
         val summary = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_delete)
-            .setContentTitle("Fertige Podcasts löschen")
-            .setContentText("${completed.size} Podcasts bereit zum Löschen")
+            .setContentTitle(getString(R.string.fertige_podcasts_loschen))
+            .setContentText(getString(R.string.podcasts_bereit_zum_loschen, completed.size))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setGroup("podcast_delete").setGroupSummary(true).setAutoCancel(true).build()
 
@@ -1866,8 +1867,8 @@ class MediaPlayerService : MediaSessionService() {
 
     private fun showNoCompletedPodcastsNotification() {
         showSimpleNotificationExtern(
-            "Keine fertigen Podcasts",
-            "Es gibt aktuell keine fertigen Podcasts zum Löschen",
+            getString(R.string.keine_fertigen_podcasts),
+            getString(R.string.es_gibt_aktuell_keine_fertigen),
             context = this
         )
     }
@@ -1899,11 +1900,11 @@ class MediaPlayerService : MediaSessionService() {
     }
 
     private fun showDeleteSuccessNotification(name: String) =
-        showSimpleNotificationExtern("✓ Gelöscht", name, 5.seconds, context = this)
+        showSimpleNotificationExtern(getString(R.string.geloscht_5), name, 5.seconds, context = this)
 
     private fun showDeleteErrorNotification(name: String) =
         showSimpleNotificationExtern(
-            "✗ Fehler beim Löschen",
+            getString(R.string.fehler_beim_loschen_2),
             name,
             context = this
         )
@@ -1940,7 +1941,7 @@ class MediaPlayerService : MediaSessionService() {
 
     private fun buildMusicNotification(): Notification {
         val active = getActivePlaylist()
-        val songName = active.getOrNull(currentSongIndex)?.name ?: "Keine Playlist"
+        val songName = active.getOrNull(currentSongIndex)?.name ?: getString(R.string.keine_playlist)
         val isFav =
             active.getOrNull(currentSongIndex)?.let { favoriteSongs.containsKey(it.path) } ?: false
 
@@ -1953,7 +1954,7 @@ class MediaPlayerService : MediaSessionService() {
         val playlistLabel = when {
             activeAlgorithmicPlaylistId != null ->
                 AlgorithmicPlaylistRegistry.findById(activeAlgorithmicPlaylistId!!)
-                    ?.let { " [${it.icon}${it.name}]" } ?: ""
+                    ?.let { " [${it.icon}${getString(it.nameRes)}]" } ?: ""
 
             activePlaylistId != null ->
                 playlists.find { it.id == activePlaylistId }?.let { " [${it.name}]" } ?: ""
@@ -1963,7 +1964,7 @@ class MediaPlayerService : MediaSessionService() {
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("🎵 Musik Player")
+            .setContentTitle(getString(R.string.musik_player))
             .setContentText(
                 "$songName (${currentSongIndex + 1}/${active.size})$playlistLabel" +
                         "${if (isFav) " ⭐" else ""}${if (favoritesMode) " 💫" else ""}${if (isRepeatEnabled) " 🔁" else ""}"
@@ -1973,14 +1974,14 @@ class MediaPlayerService : MediaSessionService() {
             .setDeleteIntent(pi(4, ACTION_NOTIFICATION_DELETED))
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(pi(3, ACTION_TOGGLE_REPEAT))
-            .addAction(android.R.drawable.ic_media_previous, "Zurück", pi(0, ACTION_MUSIC_PREVIOUS))
+            .addAction(android.R.drawable.ic_media_previous, getString(R.string.zuruck), pi(0, ACTION_MUSIC_PREVIOUS))
             .setRequestPromotedOngoing(true)
             .addAction(
                 if (isPlayingMusic) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-                if (isPlayingMusic) "Pause" else "Spielen",
+                if (isPlayingMusic) getString(R.string.pause) else getString(R.string.spielen),
                 pi(1, if (isPlayingMusic) ACTION_MUSIC_PAUSE else ACTION_MUSIC_PLAY)
             )
-            .addAction(android.R.drawable.ic_media_next, "Weiter", pi(2, ACTION_MUSIC_NEXT))
+            .addAction(android.R.drawable.ic_media_next, getString(R.string.weiter), pi(2, ACTION_MUSIC_NEXT))
         val dur = musicPlayer?.duration?.takeIf { it > 0 } ?: 0
         val pos = musicPlayer?.currentPosition ?: 0
         if (dur > 0) builder.setProgress(dur, pos, false)
@@ -1988,10 +1989,10 @@ class MediaPlayerService : MediaSessionService() {
     }
 
     private fun buildPodcastNotification(): Notification {
-        val title = currentPodcast?.name ?: currentStreamName.ifEmpty { "Kein Podcast ausgewählt" }
+        val title = currentPodcast?.name ?: currentStreamName.ifEmpty { getString(R.string.kein_podcast_ausgewahlt) }
         val pos = podcastPlayer?.currentPosition?.toLong() ?: 0
         val dur = podcastPlayer?.duration?.toLong() ?: 0
-        val progress = if (dur > 0) "${formatTime(pos)} / ${formatTime(dur)}" else "Bereit"
+        val progress = if (dur > 0) "${formatTime(pos)} / ${formatTime(dur)}" else getString(R.string.bereit_2)
         val speedStr: String = try {
             podcastPlayer?.playbackParams?.speed?.toString() ?: ""
         } catch (_: Exception) {
@@ -2020,7 +2021,7 @@ class MediaPlayerService : MediaSessionService() {
             .addAction(android.R.drawable.ic_media_rew, "-15s", pi(0, ACTION_PODCAST_REWIND))
             .addAction(
                 if (isPlayingPodcast) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-                if (isPlayingPodcast) "Pause" else "Play",
+                if (isPlayingPodcast) getString(R.string.pause) else getString(R.string.play),
                 pi(1, if (isPlayingPodcast) ACTION_PODCAST_PAUSE else ACTION_PODCAST_PLAY)
             )
             .addAction(android.R.drawable.ic_media_ff, "+15s", pi(2, ACTION_PODCAST_FORWARD))
@@ -2307,10 +2308,10 @@ class MediaPlayerService : MediaSessionService() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Media Player",
+            getString(R.string.media_player),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Musik & Podcast Wiedergabe"
+            description = getString(R.string.musik_podcast_wiedergabe)
             setShowBadge(false)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             setSound(null, null)
@@ -2371,8 +2372,8 @@ class MediaPlayerService : MediaSessionService() {
     fun createPlaylist(name: String, type: PlaylistType): String {
         if (type != PlaylistType.MUSIC) {
             showSimpleNotificationExtern(
-                "❌ Nicht unterstützt",
-                "Nur Musik-Playlisten werden unterstützt",
+                getString(R.string.nicht_unterstutzt_2),
+                getString(R.string.nur_musik_playlisten_werden_unterstutzt),
                 10.seconds,
                 context = this
             )
@@ -2389,8 +2390,8 @@ class MediaPlayerService : MediaSessionService() {
 
         if (pl.type != PlaylistType.MUSIC) {
             showSimpleNotificationExtern(
-                "❌ Fehler",
-                "Nur Songs können zu Playlisten hinzugefügt werden",
+                getString(R.string.fehler_2),
+                getString(R.string.nur_songs_konnen_zu_playlisten),
                 10.seconds,
                 context = this
             )
@@ -2421,8 +2422,8 @@ class MediaPlayerService : MediaSessionService() {
 
         if (playlist.type != PlaylistType.MUSIC) {
             showSimpleNotificationExtern(
-                "❌ Nicht unterstützt",
-                "Nur Musik-Playlisten können abgespielt werden",
+                getString(R.string.nicht_unterstutzt_2),
+                getString(R.string.nur_musik_playlisten_konnen_abgespielt),
                 10.seconds, context = this
             )
             return false
@@ -2483,8 +2484,8 @@ class MediaPlayerService : MediaSessionService() {
 
         if (filtered.isEmpty()) {
             showSimpleNotificationExtern(
-                "📂 Keine Playlisten",
-                if (type != null) "Keine ${type.name.lowercase()}-Playlisten vorhanden" else "Keine Playlisten vorhanden",
+                getString(R.string.keine_playlisten),
+                if (type != null) getString(R.string.keine_playlisten_vorhanden, type.name.lowercase()) else getString(R.string.keine_playlisten_vorhanden_2),
                 10.seconds,
                 context = this
             )
@@ -2516,11 +2517,11 @@ class MediaPlayerService : MediaSessionService() {
             val n = NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_menu_view)
                 .setContentTitle("$activeMarker$typeIcon ${pl.name} ${pl.id}")
-                .setContentText("${pl.items.size} Items • Tippen zum Abspielen")
+                .setContentText(getString(R.string.items_tippen_zum_abspielen, pl.items.size))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setAutoCancel(true)
                 .setContentIntent(activatePi)
-                .addAction(android.R.drawable.ic_menu_delete, "Löschen", deletePi)
+                .addAction(android.R.drawable.ic_menu_delete, getString(R.string.loschen), deletePi)
                 .setGroup("playlists")
                 .build()
 
@@ -2529,7 +2530,7 @@ class MediaPlayerService : MediaSessionService() {
 
         val summary = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentTitle("📂 Playlisten")
+            .setContentTitle(getString(R.string.playlisten))
             .setContentText("${filtered.size} ${type?.name?.lowercase() ?: ""} Playlisten")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setGroup("playlists")
@@ -2770,8 +2771,8 @@ class MediaPlayerService : MediaSessionService() {
         MediaAnalyticsManager.init(this)
         val source = AlgorithmicPlaylistRegistry.findById(sourceId) ?: run {
             showSimpleNotificationExtern(
-                "❌ Fehler",
-                "Playlist nicht gefunden",
+                getString(R.string.fehler_2),
+                getString(R.string.playlist_nicht_gefunden),
                 10.seconds,
                 context = this
             )
@@ -2780,8 +2781,8 @@ class MediaPlayerService : MediaSessionService() {
         val songs = source.getSongs(playlist, emptyMap())
         if (songs.isEmpty()) {
             showSimpleNotificationExtern(
-                "❌ Leer",
-                "Keine Songs in \"${source.name}\"",
+                getString(R.string.leer),
+                getString(R.string.keine_songs_in, getString(source.nameRes)),
                 10.seconds,
                 context = this
             )
@@ -2798,8 +2799,8 @@ class MediaPlayerService : MediaSessionService() {
         saveMusicState()
         loadSong(currentSongIndex)
         showSimpleNotificationExtern(
-            "▶ ${source.icon} ${source.name}",
-            "${songs.size} Songs · ab #${currentSongIndex + 1}",
+            "▶ ${source.icon} ${getString(source.nameRes)}",
+            getString(R.string.songs_ab, songs.size, currentSongIndex + 1),
             10.seconds, context = this
         )
     }
