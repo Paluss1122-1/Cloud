@@ -37,7 +37,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -54,6 +53,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -69,13 +69,15 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -111,6 +113,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -157,8 +160,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import kotlin.time.Duration.Companion.milliseconds
-
-const val FORCE_WELCOME_ONBOARDING = false
 
 val inAppNotifications = mutableStateListOf<String>()
 
@@ -220,7 +221,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
 
     val appPrefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
     var showFirstStartPermissionInfo by remember {
-        mutableStateOf(FORCE_WELCOME_ONBOARDING || !appPrefs.getBoolean("has_seen_permission_info", false))
+        mutableStateOf(!appPrefs.getBoolean("has_seen_permission_info", false))
     }
     var onboardingExiting by remember { mutableStateOf(false) }
 
@@ -262,7 +263,9 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                 appPrefs.edit { putBoolean("has_seen_permission_info", true) }
                 showFirstStartPermissionInfo = false
             },
-            onExitStart = { onboardingExiting = true }
+            onExitStart = { onboardingExiting = true },
+            initialPage = appPrefs.getInt("onboarding_page", 0),
+            onPageChanged = { page -> appPrefs.edit { putInt("onboarding_page", page) } }
         )
     }
 
@@ -471,13 +474,13 @@ fun MasterPasswordSetupScreen(modifier: Modifier, onPasswordSaved: (String) -> U
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                "🔑 Master-Passwort einrichten",
+                stringResource(R.string.master_passwort_einrichten),
                 color = Color.White,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                "Wird einmalig gesetzt. Mindestens 20 Zeichen.",
+                stringResource(R.string.wird_einmalig_gesetzt_mindestens_20),
                 color = Color(0xFF8A8A9F),
                 fontSize = 13.sp
             )
@@ -485,32 +488,36 @@ fun MasterPasswordSetupScreen(modifier: Modifier, onPasswordSaved: (String) -> U
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
-                label = { Text("Passwort") },
+                label = { Text(stringResource(R.string.passwort)) },
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
                 value = confirmed,
                 onValueChange = { confirmed = it },
-                label = { Text("Wiederholen") },
+                label = { Text(stringResource(R.string.wiederholen)) },
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth()
             )
 
             if (input.isNotEmpty() && input != confirmed)
                 Text(
-                    "Passwörter stimmen nicht überein",
+                    stringResource(R.string.passworter_stimmen_nicht_uberein),
                     color = Color(0xFFE74C3C),
                     fontSize = 12.sp
                 )
             if (input.isNotEmpty() && input.length < 20)
-                Text("Mindestens 20 Zeichen", color = Color(0xFFE74C3C), fontSize = 12.sp)
+                Text(
+                    stringResource(R.string.mindestens_20_zeichen),
+                    color = Color(0xFFE74C3C),
+                    fontSize = 12.sp
+                )
 
             Button(
                 onClick = { onPasswordSaved(input) },
                 enabled = isValid,
                 modifier = Modifier.fillMaxWidth()
-            ) { Text("Speichern & Starten") }
+            ) { Text(stringResource(R.string.speichern_starten)) }
         }
     }
 }
@@ -535,13 +542,13 @@ fun CoordinatesSetupScreen(modifier: Modifier, onCoordinatesSaved: (Double, Doub
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                "📍 Koordinaten einrichten",
+                stringResource(R.string.koordinaten_einrichten),
                 color = Color.White,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                "Bitte gib deine Standard-Koordinaten (Latitude und Longitude) ein.",
+                stringResource(R.string.bitte_gib_deine_standard_koordinaten),
                 color = Color(0xFF8A8A9F),
                 fontSize = 13.sp
             )
@@ -549,25 +556,25 @@ fun CoordinatesSetupScreen(modifier: Modifier, onCoordinatesSaved: (Double, Doub
             OutlinedTextField(
                 value = latInput,
                 onValueChange = { latInput = it },
-                label = { Text("Breitengrad (Latitude)") },
+                label = { Text(stringResource(R.string.breitengrad_latitude)) },
                 modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
                 value = lonInput,
                 onValueChange = { lonInput = it },
-                label = { Text("Längengrad (Longitude)") },
+                label = { Text(stringResource(R.string.langengrad_longitude)) },
                 modifier = Modifier.fillMaxWidth()
             )
 
             if (latInput.isNotEmpty() && latDouble == null)
                 Text(
-                    "Ungültiger Breitengrad",
+                    stringResource(R.string.ungultiger_breitengrad),
                     color = Color(0xFFE74C3C),
                     fontSize = 12.sp
                 )
             if (lonInput.isNotEmpty() && lonDouble == null)
                 Text(
-                    "Ungültiger Längengrad",
+                    stringResource(R.string.ungultiger_langengrad),
                     color = Color(0xFFE74C3C),
                     fontSize = 12.sp
                 )
@@ -576,7 +583,7 @@ fun CoordinatesSetupScreen(modifier: Modifier, onCoordinatesSaved: (Double, Doub
                 onClick = { onCoordinatesSaved(latDouble!!, lonDouble!!) },
                 enabled = isValid,
                 modifier = Modifier.fillMaxWidth()
-            ) { Text("Speichern & Starten") }
+            ) { Text(stringResource(R.string.speichern_starten)) }
         }
     }
 }
@@ -647,7 +654,7 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    "Tabslify Login",
+                    stringResource(R.string.tabslify_login),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -656,15 +663,25 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
-                    label = { Text("E-Mail") },
+                    label = { Text(stringResource(R.string.e_mail)) },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedPlaceholderColor = Color.White,
+                        unfocusedPlaceholderColor = Color.White,
+                        focusedLabelColor = Color.White,
+                        unfocusedLabelColor = Color.White,
+                    )
                 )
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = { Text("Passwort") },
+                    label = { Text(stringResource(R.string.passwort)) },
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -676,7 +693,7 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
                 ) {
                     error?.let {
                         val formattedError = when {
-                            it.contains("invalid_credentials") -> "Invalid Credentials"
+                            it.contains("invalid_credentials") -> stringResource(R.string.invalid_credentials)
                             else -> it
                         }
                         Text(formattedError, color = MaterialTheme.colorScheme.error)
@@ -687,7 +704,9 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
                     loading = true
                     scope.launch {
                         try {
-                            client.auth.signInWith(Email) { this.email = email; this.password = password }
+                            client.auth.signInWith(Email) {
+                                this.email = email; this.password = password
+                            }
                             onLoggedIn()
                         } catch (e: Exception) {
                             error = e.message
@@ -696,7 +715,7 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
                         }
                     }
                 }, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (loading) "..." else "Anmelden")
+                    Text(if (loading) "..." else stringResource(R.string.anmelden))
                 }
             }
         }
@@ -715,14 +734,17 @@ fun LandingPage(
     val context = LocalContext.current
     var recentTabs by remember { mutableStateOf(loadRecentTabs(context)) }
     var showSettings by remember { mutableStateOf(false) }
+
     LaunchedEffect(reloadTrigger) {
         recentTabs = loadRecentTabs(context)
     }
-    val allTabsSorted = remember {
+    val titleMap = MenuItem.entries.associateWith { stringResource(it.titleRes) }
+
+    val allTabsSorted = remember(titleMap) {
         MenuItem.entries.filter {
             it != MenuItem.APKM_INSTALLER &&
                     (prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD && it != MenuItem.REMOTEDESKTOP && it != MenuItem.PC_MANAGER && it != MenuItem.HEISE_NEWS))
-        }.sortedBy { it.title }
+        }.sortedBy { titleMap[it] }
     }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     val neonOrange = c()
@@ -810,7 +832,7 @@ fun LandingPage(
                         }
                     }
                     Text(
-                        text = "Tabslify",
+                        text = stringResource(R.string.tabslify),
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.align(Alignment.Center),
@@ -827,7 +849,7 @@ fun LandingPage(
                             IconButton(onClick = { showNotifications = true }) {
                                 Icon(
                                     Icons.Default.Notifications,
-                                    contentDescription = "Open notification frame",
+                                    contentDescription = stringResource(R.string.open_notification_frame),
                                     tint = Color.White
                                 )
                             }
@@ -835,7 +857,7 @@ fun LandingPage(
                         IconButton(onClick = { showSettings = true }) {
                             Icon(
                                 Icons.Default.Settings,
-                                contentDescription = "Open settings frame",
+                                contentDescription = stringResource(R.string.open_settings_frame),
                                 tint = Color.White
                             )
                         }
@@ -849,7 +871,7 @@ fun LandingPage(
                         ) {
                             if (inAppNotifications.isEmpty()) {
                                 DropdownMenuItem(
-                                    text = { Text("Keine Benachrichtigungen") },
+                                    text = { Text(stringResource(R.string.keine_benachrichtigungen)) },
                                     onClick = { showNotifications = false }
                                 )
                             } else {
@@ -873,7 +895,7 @@ fun LandingPage(
                     if (recentTabs.isNotEmpty()) {
                         item(key = "recent_header") {
                             Text(
-                                text = "Zuletzt verwendet",
+                                text = stringResource(R.string.zuletzt_verwendet),
                                 style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Default),
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.padding(bottom = 12.dp)
@@ -895,7 +917,7 @@ fun LandingPage(
                                 color = Color.White.copy(alpha = 0.3f)
                             )
                             Text(
-                                text = "Alle Tabs",
+                                text = stringResource(R.string.alle_tabs),
                                 style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Default),
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.padding(bottom = 12.dp)
@@ -919,6 +941,57 @@ fun LandingPage(
     SettingsFrame(
         visible = showSettings,
         onClose = { showSettings = false }
+    )
+}
+
+@Composable
+fun LanguageSelectionDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val current = remember { Config.currentAppLanguage(context) }
+    val options = listOf(
+        "" to stringResource(R.string.language_system),
+        "de" to stringResource(R.string.language_german),
+        "en" to stringResource(R.string.language_english)
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF2A2A2A),
+        title = {
+            Text(
+                text = stringResource(R.string.language_title),
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column {
+                options.forEach { (tag, label) ->
+                    val selected = tag == current
+                    TextButton(
+                        onClick = {
+                            Config.setAppLanguage(context, tag)
+                            onDismiss()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = if (selected) "✓ $label" else label,
+                            color = if (selected) Color(0xFF4CAF50) else Color.White,
+                            fontSize = 16.sp,
+                            textAlign = TextAlign.Start,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.abbrechen), color = Color.Gray)
+            }
+        }
     )
 }
 
@@ -980,7 +1053,7 @@ fun TabCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = menuItem.title.uppercase(),
+                    text = stringResource(menuItem.titleRes).uppercase(),
                     style = MaterialTheme.typography.titleMedium,
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
@@ -1003,51 +1076,107 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
     var selectedPermission by remember { mutableStateOf<String?>(null) }
     var titleDialog by remember { mutableStateOf("") }
     var usagesDialog by remember { mutableStateOf<List<String>>(emptyList()) }
-    val permissionUsages = remember {
+
+    val readMediaAudio1 = stringResource(R.string.mediaplayerservice_tab_songs_podcasts_abspielen)
+    val readMediaAudio2 = stringResource(R.string.spotifydownloader_speichern_von_audiodateien_im)
+    val postNotifications1 =
+        stringResource(R.string.quiethoursnotificationservice_anzeigen_von_quiet_hours)
+    val postNotifications2 = stringResource(R.string.mediaplayerservice_wiedergabenotifikationen)
+    val postNotifications3 = stringResource(R.string.status_updates_fur_laufende_downloads)
+    val postNotifications4 = stringResource(R.string.chargingtrackerservice_ladeinformationen)
+    val postNotifications5 = stringResource(R.string.networkinfo_netzwerkinfos)
+    val postNotifications6 = stringResource(R.string.batteryinfo_batterieinformationen)
+    val location1 = stringResource(R.string.standortbasierte_wettervorhersage_im_weathertab)
+    val location2 =
+        stringResource(R.string.exploretab_explorelocationtracker_standortverfolgung_und_geofencing)
+    val location3 = stringResource(R.string.shownetwerkinfo_anzeige_der_wlan_ssid)
+    val systemAlertWindow1 =
+        stringResource(R.string.quiethoursnotificationservice_test_overlay_fur_youtube)
+    val foregroundService1 =
+        stringResource(R.string.mediaplayerservice_medienwiedergabe_im_vordergrund)
+    val foregroundService2 =
+        stringResource(R.string.quiethoursnotificationservice_dauerhafte_benachrichtigungen)
+    val foregroundService3 = stringResource(R.string.chargingtrackerservice_ladeuberwachung)
+    val foregroundService4 = stringResource(R.string.audioforegroundservice_audioaufnahmen)
+    val readMediaImagesVideo1 = stringResource(R.string.gallerytab_anzeige_von_bildern_und)
+    val contacts1 = stringResource(R.string.contactstab_laden_speichern_und_loschen)
+    val bootCompleted1 =
+        stringResource(R.string.bootreceiver_starten_von_quiethoursnotificationservice_beim)
+    val recordAudio1 =
+        stringResource(R.string.audiorecordertab_audioforegroundservice_audioaufnahmen_mit_mikrofon)
+    val ignoreBattery1 =
+        stringResource(R.string.quiethoursnotificationservice_anfrage_zum_ignorieren_von)
+    val camera1 = stringResource(R.string.authenticator_scannen_von_qr_codes)
+    val keineAngabenHinterlegt = stringResource(R.string.keine_angaben_hinterlegt)
+
+    val permissionUsages = remember(
+        readMediaAudio1,
+        readMediaAudio2,
+        postNotifications1,
+        postNotifications2,
+        postNotifications3,
+        postNotifications4,
+        postNotifications5,
+        postNotifications6,
+        location1,
+        location2,
+        location3,
+        systemAlertWindow1,
+        foregroundService1,
+        foregroundService2,
+        foregroundService3,
+        foregroundService4,
+        readMediaImagesVideo1,
+        contacts1,
+        bootCompleted1,
+        recordAudio1,
+        ignoreBattery1,
+        camera1
+    ) {
         mapOf(
             "READ_MEDIA_AUDIO" to listOf(
-                "MediaPlayerService & Tab: Songs & Podcasts abspielen",
-                "SpotifyDownloader: Speichern von Audiodateien im MediaStore"
+                readMediaAudio1,
+                readMediaAudio2
             ),
             "POST_NOTIFICATIONS" to listOf(
-                "QuietHoursNotificationService: Anzeigen von Quiet-Hours Benachrichtigungen",
-                "MediaPlayerService: Wiedergabenotifikationen",
-                "Status-Updates für laufende Downloads",
-                "ChargingTrackerService: Ladeinformationen",
-                "NetworkInfo: Netzwerkinfos",
-                "BatteryInfo: Batterieinformationen"
+                postNotifications1,
+                postNotifications2,
+                postNotifications3,
+                postNotifications4,
+                postNotifications5,
+                postNotifications6
             ),
             "ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION" to listOf(
-                "Standortbasierte Wettervorhersage im WeatherTab",
-                "ExploreTab & ExploreLocationTracker: Standortverfolgung und Geofencing",
-                "showNetwerkInfo: Anzeige der WLAN-SSID"
+                location1,
+                location2,
+                location3
             ),
             "SYSTEM_ALERT_WINDOW" to listOf(
-                "QuietHoursNotificationService: Test-Overlay für YouTube"
+                systemAlertWindow1
             ),
             "FOREGROUND_SERVICE" to listOf(
-                "MediaPlayerService: Medienwiedergabe im Vordergrund",
-                "QuietHoursNotificationService: Dauerhafte Benachrichtigungen",
-                "ChargingTrackerService: Ladeüberwachung",
-                "AudioForegroundService: Audioaufnahmen"
+                foregroundService1,
+                foregroundService2,
+                foregroundService3,
+                foregroundService4
             ),
             "READ_MEDIA_IMAGES / READ_MEDIA_VIDEO" to listOf(
-                "GalleryTab: Anzeige von Bildern und Videos aus der Galerie"
+                readMediaImagesVideo1
             ),
             "READ_CONTACTS / WRITE_CONTACTS" to listOf(
-                "ContactsTab: Laden, Speichern und Löschen von Kontakten"
+                contacts1
             ),
             "RECEIVE_BOOT_COMPLETED" to listOf(
-                "BootReceiver: Starten von QuietHoursNotificationService beim Gerätestart"
+                bootCompleted1
             ),
             "RECORD_AUDIO" to listOf(
-                "AudioRecorderTab & AudioForegroundService: Audioaufnahmen mit Mikrofon"
+                recordAudio1
             ),
             "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" to listOf(
-                "QuietHoursNotificationService: Anfrage zum Ignorieren von Batterieoptimierungen für zuverlässige Hintergrunddienste"
+                ignoreBattery1
             ),
             "CAMERA" to listOf(
-                "Authenticator: Scannen von QR Codes für 2FA"
+                camera1
             )
         )
     }
@@ -1076,10 +1205,14 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                     onClick = {
                         selectedPermission = txt
                         titleDialog = txt
-                        usagesDialog = permissionUsages[txt] ?: listOf("Keine Angaben hinterlegt")
+                        usagesDialog = permissionUsages[txt] ?: listOf(keineAngabenHinterlegt)
                     },
                     shape = shape,
-                    colors = ButtonDefaults.buttonColors(containerColor = if (isSelected) APP_COLOR.copy(alpha = 0.3f) else Color.Transparent),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isSelected) APP_COLOR.copy(
+                            alpha = 0.3f
+                        ) else Color.Transparent
+                    ),
                     modifier = Modifier
                         .padding(vertical = 5.dp)
                         .fillMaxWidth()
@@ -1103,7 +1236,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                         Text(txt, modifier = Modifier.weight(1f), fontSize = 16.sp)
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowForwardIos,
-                            contentDescription = "Open information",
+                            contentDescription = stringResource(R.string.open_information),
                             tint = Color.White.copy(alpha = 0.8f)
                         )
                     }
@@ -1194,7 +1327,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Tabslify Berechtigungen",
+                        stringResource(R.string.tabslify_berechtigungen),
                         style = MaterialTheme.typography.headlineMedium,
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
@@ -1211,7 +1344,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                         ) {
                             Icon(
                                 Icons.Default.Close,
-                                contentDescription = "Close",
+                                contentDescription = stringResource(R.string.close),
                                 tint = Color.White
                             )
                         }
@@ -1220,9 +1353,18 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
 
                 Spacer(Modifier.height(16.dp))
 
+                val introTabslifyIst = stringResource(R.string.tabslify_ist)
+                val introNichtNurApp = stringResource(R.string.nicht_nur_irgendeine_app)
+                val introSieIstEin = stringResource(R.string.sie_ist_ein)
+                val introMixAusVielen = stringResource(R.string.mix_aus_ganz_vielen)
+                val introAppsUnterAnderem = stringResource(R.string.apps_unter_anderem_fur_die)
+                val introVieleBerechtigungen = stringResource(R.string.jeweils_viele_berechtigungen)
+                val introBenutzererlebnis = stringResource(R.string.um_das_benutzererlebnis)
+                val introUnkompliziert = stringResource(R.string.moglichst_unkompliziert)
+                val introZuHalten = stringResource(R.string.zu_halten)
                 Text(
                     text = buildAnnotatedString {
-                        append("Tabslify ist ")
+                        append(introTabslifyIst)
                         withStyle(
                             SpanStyle(
                                 brush = Brush.linearGradient(
@@ -1233,9 +1375,9 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                                 )
                             )
                         ) {
-                            append("nicht nur irgendeine App")
+                            append(introNichtNurApp)
                         }
-                        append(", sie ist ein ")
+                        append(introSieIstEin)
                         withStyle(
                             SpanStyle(
                                 brush = Brush.linearGradient(
@@ -1246,9 +1388,9 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                                 )
                             )
                         ) {
-                            append("Mix aus ganz vielen")
+                            append(introMixAusVielen)
                         }
-                        append(" Apps, unter anderem für die Schule, zum eigenen Erfolg tracken oder zum Podcast hören. \nDieser Mix aus Funktionen benötigt ")
+                        append(introAppsUnterAnderem)
                         withStyle(
                             SpanStyle(
                                 brush = Brush.linearGradient(
@@ -1259,9 +1401,9 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                                 )
                             )
                         ) {
-                            append("jeweils viele Berechtigungen")
+                            append(introVieleBerechtigungen)
                         }
-                        append(" um das Benutzererlebnis ")
+                        append(introBenutzererlebnis)
                         withStyle(
                             SpanStyle(
                                 brush = Brush.linearGradient(
@@ -1272,9 +1414,9 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                                 )
                             )
                         ) {
-                            append("möglichst unkompliziert")
+                            append(introUnkompliziert)
                         }
-                        append(" zu halten.")
+                        append(introZuHalten)
                     },
                     color = APP_COLOR.copy(
                         red = APP_COLOR.red + .6f,
@@ -1298,7 +1440,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                 onDismiss = { selectedPermission = null },
                 title = titleDialog,
                 text = usagesDialog.joinToString("\n\n") { "•  $it" },
-                confirmText = "Schließen",
+                confirmText = stringResource(R.string.schliesen),
                 oneButton = true,
                 modifier = Modifier.fillMaxWidth(0.9f)
             )
@@ -1318,6 +1460,7 @@ fun SettingsFrame(
     var showPermissionInfo by remember { mutableStateOf(false) }
     var animatePermissionInfo by remember { mutableStateOf(false) }
     var showCoordinatesEdit by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
 
     BackHandler {
         if (showCoordinatesEdit) {
@@ -1400,7 +1543,7 @@ fun SettingsFrame(
 
     LaunchedEffect(Unit) {
         MediaAnalyticsManager.init(context)
-        mediaAnalyticsEnabled = com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.isAnalyticsEnabled()
+        mediaAnalyticsEnabled = MediaAnalyticsManager.isAnalyticsEnabled()
     }
 
     fun applyService(cls: Class<*>, enabled: Boolean) {
@@ -1532,7 +1675,7 @@ fun SettingsFrame(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Einstellungen",
+                        text = stringResource(R.string.einstellungen),
                         style = MaterialTheme.typography.headlineMedium,
                         color = Color.White,
                         fontWeight = FontWeight.Bold
@@ -1543,13 +1686,46 @@ fun SettingsFrame(
                     ) {
                         Icon(
                             Icons.Default.Close,
-                            contentDescription = "Close",
+                            contentDescription = stringResource(R.string.close),
                             tint = Color.White
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_language),
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = stringResource(R.string.language_title),
+                            color = Color.White.copy(alpha = 0.6f),
+                            fontSize = 12.sp
+                        )
+                    }
+                    Button(
+                        onClick = { showLanguageDialog = true },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF2A2A2A),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text(stringResource(R.string.settings_language))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
 
                 NeonBox(
                     modifier = Modifier.fillMaxWidth(),
@@ -1566,13 +1742,13 @@ fun SettingsFrame(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    "Hintergrunddienste",
+                                    stringResource(R.string.hintergrunddienste),
                                     color = Color.White,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    "Alle Hintergrundaktivitäten",
+                                    stringResource(R.string.alle_hintergrundaktivitaten),
                                     color = Color.White.copy(alpha = 0.6f),
                                     fontSize = 12.sp
                                 )
@@ -1599,7 +1775,7 @@ fun SettingsFrame(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                "Einzelne Dienste",
+                                stringResource(R.string.einzelne_dienste),
                                 color = Color.White.copy(alpha = 0.7f),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium
@@ -1621,22 +1797,22 @@ fun SettingsFrame(
                                 val services = listOfNotNull(
                                     Triple(
                                         "QuietHoursNotificationService",
-                                        "Alles rund um Commands",
+                                        stringResource(R.string.alles_rund_um_commands),
                                         serviceQhns
                                     ),
                                     if (prvt()) Triple(
                                         "WhatsAppNotificationListener",
-                                        "Verarbeitet eingehende WhatsApps",
+                                        stringResource(R.string.verarbeitet_eingehende_whatsapps),
                                         serviceWh
                                     ) else null,
                                     Triple(
                                         "ChargingTracker",
-                                        "Verfolgt Ladevorgänge für Ladedauer-Schätzungen",
+                                        stringResource(R.string.verfolgt_ladevorgange_fur_ladedauer_schatzungen),
                                         serviceCharge
                                     ),
                                     Triple(
                                         "BatterySamplingWorker",
-                                        "Hintergrund-Aufzeichnung der Batteriedaten",
+                                        stringResource(R.string.hintergrund_aufzeichnung_der_batteriedaten),
                                         serviceBattery
                                     )
                                 )
@@ -1659,7 +1835,7 @@ fun SettingsFrame(
                                             if (index == 0 && !hasNotificationPermission) {
                                                 Spacer(modifier = Modifier.height(4.dp))
                                                 Text(
-                                                    text = "⚠️ Keine Benachrichtigungsberechtigung!",
+                                                    text = stringResource(R.string.keine_benachrichtigungsberechtigung),
                                                     color = Color(0xFFFF5252),
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.Bold
@@ -1677,12 +1853,15 @@ fun SettingsFrame(
                                                             manualPerm()
                                                         }
                                                     }
+
                                                     "WhatsAppNotificationListener" -> {
                                                         serviceWh = v
                                                     }
+
                                                     "ChargingTracker" -> {
                                                         serviceCharge = v
                                                     }
+
                                                     "BatterySamplingWorker" -> {
                                                         serviceBattery = v
                                                     }
@@ -1709,7 +1888,263 @@ fun SettingsFrame(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(16.dp))
+
+                NeonBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    neonColors = listOf(Color(0xFF00FF00), Color(0xFF00CC00)),
+                    backgroundAlpha = 0.15f
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    stringResource(R.string.media_analytics),
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    stringResource(R.string.tracke_horgewohnheiten_fur_statistiken),
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Switch(
+                                checked = mediaAnalyticsEnabled,
+                                onCheckedChange = { newValue ->
+                                    if (newValue) {
+                                        // Just enable it immediately
+                                        mediaAnalyticsEnabled = true
+                                        MediaAnalyticsManager.setAnalyticsEnabled(true)
+                                    } else {
+                                        // Show confirmation dialog
+                                        showMediaAnalyticsDialog = true
+                                    }
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                    uncheckedThumbColor = Color.Gray,
+                                    uncheckedTrackColor = Color.DarkGray,
+                                    disabledUncheckedTrackColor = Color.DarkGray.copy(alpha = 0.4f)
+                                )
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Spacer(
+                        Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp)
+                            .drawBehind {
+                                drawIntoCanvas { canvas ->
+                                    canvas.nativeCanvas.drawRect(
+                                        0f, 0f, size.width, size.height,
+                                        Paint().apply {
+                                            color = Color(0xFFBEBEBE).copy(alpha = 0.3f).toArgb()
+                                            isAntiAlias = true
+                                            maskFilter = android.graphics.BlurMaskFilter(
+                                                25f,
+                                                android.graphics.BlurMaskFilter.Blur.OUTER
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                            .clip(RoundedCornerShape(5.dp))
+                            .height(5.dp)
+                            .background(Color(0xFFBEBEBE))
+                    )
+                    Text(
+                        stringResource(R.string.transparenz),
+                        modifier = Modifier.weight(2f),
+                        color = Color(0xFFBEBEBE),
+                        fontSize = 17.sp,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(
+                        Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp)
+                            .drawBehind {
+                                drawIntoCanvas { canvas ->
+                                    canvas.nativeCanvas.drawRect(
+                                        0f, 0f, size.width, size.height,
+                                        Paint().apply {
+                                            color = Color(0xFFBEBEBE).copy(alpha = 0.3f).toArgb()
+                                            isAntiAlias = true
+                                            maskFilter = android.graphics.BlurMaskFilter(
+                                                25f,
+                                                android.graphics.BlurMaskFilter.Blur.OUTER
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                            .clip(RoundedCornerShape(5.dp))
+                            .height(5.dp)
+                            .background(Color(0xFFBEBEBE))
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                NeonBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    neonColors = listOf(Color(0xFFE8B92A), Color(0xFFFF0000)),
+                    backgroundAlpha = 0.15f
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showPermissionInfo = true }
+                                .padding(20.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    stringResource(R.string.warum_fordere_ich_so_viele),
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            Box {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                    contentDescription = stringResource(R.string.open_information),
+                                    tint = Color.White.copy(alpha = 0.8f),
+                                    modifier = Modifier
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 if (prvt()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    NeonBox(
+                        modifier = Modifier.fillMaxWidth(),
+                        neonColors = listOf(Color(0xFF00FFAA), Color(0xFF00CCFF)),
+                        backgroundAlpha = 0.15f
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showCoordinatesEdit = true }
+                                    .padding(20.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        stringResource(R.string.zuhause_koordinaten_andern),
+                                        color = Color.White,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+
+                                Box {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                        contentDescription = stringResource(R.string.koordinaten_andern),
+                                        tint = Color.White.copy(alpha = 0.8f),
+                                        modifier = Modifier
+                                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (prvt()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Spacer(
+                            Modifier
+                                .weight(1f)
+                                .padding(horizontal = 8.dp)
+                                .drawBehind {
+                                    drawIntoCanvas { canvas ->
+                                        canvas.nativeCanvas.drawRect(
+                                            0f, 0f, size.width, size.height,
+                                            Paint().apply {
+                                                color =
+                                                    Color(0xFFBEBEBE).copy(alpha = 0.3f).toArgb()
+                                                isAntiAlias = true
+                                                maskFilter = android.graphics.BlurMaskFilter(
+                                                    25f,
+                                                    android.graphics.BlurMaskFilter.Blur.OUTER
+                                                )
+                                            }
+                                        )
+                                    }
+                                }
+                                .clip(RoundedCornerShape(5.dp))
+                                .height(5.dp)
+                                .background(Color(0xFFBEBEBE))
+                        )
+                        Text(
+                            stringResource(R.string.erweitert),
+                            modifier = Modifier.weight(1f),
+                            color = Color(0xFFBEBEBE),
+                            fontSize = 17.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(
+                            Modifier
+                                .weight(1f)
+                                .padding(horizontal = 8.dp)
+                                .drawBehind {
+                                    drawIntoCanvas { canvas ->
+                                        canvas.nativeCanvas.drawRect(
+                                            0f, 0f, size.width, size.height,
+                                            Paint().apply {
+                                                color =
+                                                    Color(0xFFBEBEBE).copy(alpha = 0.3f).toArgb()
+                                                isAntiAlias = true
+                                                maskFilter = android.graphics.BlurMaskFilter(
+                                                    25f,
+                                                    android.graphics.BlurMaskFilter.Blur.OUTER
+                                                )
+                                            }
+                                        )
+                                    }
+                                }
+                                .clip(RoundedCornerShape(5.dp))
+                                .height(5.dp)
+                                .background(Color(0xFFBEBEBE))
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(16.dp))
 
                     NeonBox(
@@ -1727,13 +2162,13 @@ fun SettingsFrame(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        "Bevorzugte AI (Global)",
+                                        stringResource(R.string.bevorzugte_ai_global),
                                         color = Color.White,
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                     Text(
-                                        "Standard-Anbieter für alle Dienste",
+                                        stringResource(R.string.standard_anbieter_fur_alle_dienste),
                                         color = Color.White.copy(alpha = 0.6f),
                                         fontSize = 12.sp
                                     )
@@ -1787,7 +2222,7 @@ fun SettingsFrame(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    "Einzelne Dienste anpassen",
+                                    stringResource(R.string.einzelne_dienste_anpassen),
                                     color = Color.White.copy(alpha = 0.7f),
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium
@@ -1808,19 +2243,19 @@ fun SettingsFrame(
                                 ) {
                                     val aiServices = listOf(
                                         Triple(
-                                            "Befehl 'ai' / Chat",
+                                            stringResource(R.string.befehl_ai_chat),
                                             aiPrefChat
                                         ) { v: String -> aiPrefChat = v },
                                         Triple(
-                                            "Musik-Zusammenfassung",
+                                            stringResource(R.string.musik_zusammenfassung),
                                             aiPrefMusicSummary
                                         ) { v: String -> aiPrefMusicSummary = v },
                                         Triple(
-                                            "Vokabel-Vision",
+                                            stringResource(R.string.vokabel_vision),
                                             aiPrefVision
                                         ) { v: String -> aiPrefVision = v },
                                         Triple(
-                                            "Nachrichten-Antworten",
+                                            stringResource(R.string.nachrichten_antworten),
                                             aiPrefReplies
                                         ) { v: String -> aiPrefReplies = v }
                                     )
@@ -1840,14 +2275,18 @@ fun SettingsFrame(
                                                 modifier = Modifier.weight(1f)
                                             )
 
-                                            var showServiceDropdown by remember { mutableStateOf(false) }
+                                            var showServiceDropdown by remember {
+                                                mutableStateOf(
+                                                    false
+                                                )
+                                            }
                                             Box {
                                                 Text(
                                                     text = when (currentVal) {
-                                                        "default" -> "Standard"
+                                                        "default" -> stringResource(R.string.standard)
                                                         "gemini" -> "Gemini"
                                                         "nvidia" -> "NVIDIA"
-                                                        else -> "Standard"
+                                                        else -> stringResource(R.string.standard)
                                                     },
                                                     color = Color.White.copy(alpha = 0.8f),
                                                     fontSize = 12.sp,
@@ -1858,17 +2297,22 @@ fun SettingsFrame(
                                                             Color.White.copy(alpha = 0.15f),
                                                             RoundedCornerShape(4.dp)
                                                         )
-                                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                                        .padding(
+                                                            horizontal = 10.dp,
+                                                            vertical = 4.dp
+                                                        )
                                                 )
                                                 DropdownMenu(
                                                     expanded = showServiceDropdown,
-                                                    onDismissRequest = { showServiceDropdown = false },
+                                                    onDismissRequest = {
+                                                        showServiceDropdown = false
+                                                    },
                                                     containerColor = Color.Black
                                                 ) {
                                                     DropdownMenuItem(
                                                         text = {
                                                             Text(
-                                                                "Standard (Global)",
+                                                                stringResource(R.string.standard_global),
                                                                 color = Color.White
                                                             )
                                                         },
@@ -1878,14 +2322,24 @@ fun SettingsFrame(
                                                         }
                                                     )
                                                     DropdownMenuItem(
-                                                        text = { Text("Gemini", color = Color.White) },
+                                                        text = {
+                                                            Text(
+                                                                "Gemini",
+                                                                color = Color.White
+                                                            )
+                                                        },
                                                         onClick = {
                                                             setter("gemini"); showServiceDropdown =
                                                             false; save()
                                                         }
                                                     )
                                                     DropdownMenuItem(
-                                                        text = { Text("NVIDIA", color = Color.White) },
+                                                        text = {
+                                                            Text(
+                                                                "NVIDIA",
+                                                                color = Color.White
+                                                            )
+                                                        },
                                                         onClick = {
                                                             setter("nvidia"); showServiceDropdown =
                                                             false; save()
@@ -1902,9 +2356,6 @@ fun SettingsFrame(
                             }
                         }
                     }
-                }
-
-                if (prvt()) {
                     Spacer(modifier = Modifier.height(16.dp))
 
                     NeonBox(
@@ -1923,13 +2374,13 @@ fun SettingsFrame(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        "Eigene API-Schlüssel",
+                                        stringResource(R.string.eigene_api_schlussel),
                                         color = Color.White,
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                     Text(
-                                        "Leer lassen = Standard-Schlüssel des Servers verwenden",
+                                        stringResource(R.string.leer_lassen_standard_schlussel_des),
                                         color = Color.White.copy(alpha = 0.6f),
                                         fontSize = 12.sp
                                     )
@@ -1970,197 +2421,6 @@ fun SettingsFrame(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                NeonBox(
-                    modifier = Modifier.fillMaxWidth(),
-                    neonColors = listOf(Color(0xFF00FF00), Color(0xFF00CC00)),
-                    backgroundAlpha = 0.15f
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(20.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "Media Analytics",
-                                    color = Color.White,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    "Tracke Hörgewohnheiten für Statistiken",
-                                    color = Color.White.copy(alpha = 0.6f),
-                                    fontSize = 12.sp
-                                )
-                            }
-                            Switch(
-                                checked = mediaAnalyticsEnabled,
-                                onCheckedChange = { newValue ->
-                                    if (newValue) {
-                                        // Just enable it immediately
-                                        mediaAnalyticsEnabled = true
-                                        com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.setAnalyticsEnabled(true)
-                                    } else {
-                                        // Show confirmation dialog
-                                        showMediaAnalyticsDialog = true
-                                    }
-                                },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                    uncheckedThumbColor = Color.Gray,
-                                    uncheckedTrackColor = Color.DarkGray,
-                                    disabledUncheckedTrackColor = Color.DarkGray.copy(alpha = 0.4f)
-                                )
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Spacer(
-                        Modifier
-                            .weight(1f)
-                            .padding(horizontal = 5.dp)
-                            .drawBehind {
-                                drawIntoCanvas { canvas ->
-                                    canvas.nativeCanvas.drawRect(
-                                        0f, 0f, size.width, size.height,
-                                        Paint().apply {
-                                            color = Color(0xFFBEBEBE).copy(alpha = 0.5f).toArgb()
-                                            isAntiAlias = true
-                                            maskFilter = android.graphics.BlurMaskFilter(
-                                                25f,
-                                                android.graphics.BlurMaskFilter.Blur.OUTER
-                                            )
-                                        }
-                                    )
-                                }
-                            }
-                            .clip(RoundedCornerShape(5.dp))
-                            .height(5.dp)
-                            .background(Color(0xFFBEBEBE))
-                    )
-                    Text(
-                        "Transparenz",
-                        modifier = Modifier.weight(1f),
-                        color = Color(0xFFBEBEBE),
-                        fontSize = 17.sp
-                    )
-                    Spacer(
-                        Modifier
-                            .weight(1f)
-                            .padding(horizontal = 5.dp)
-                            .drawBehind {
-                                drawIntoCanvas { canvas ->
-                                    canvas.nativeCanvas.drawRect(
-                                        0f, 0f, size.width, size.height,
-                                        Paint().apply {
-                                            color = Color(0xFFBEBEBE).copy(alpha = 0.5f).toArgb()
-                                            isAntiAlias = true
-                                            maskFilter = android.graphics.BlurMaskFilter(
-                                                25f,
-                                                android.graphics.BlurMaskFilter.Blur.OUTER
-                                            )
-                                        }
-                                    )
-                                }
-                            }
-                            .clip(RoundedCornerShape(5.dp))
-                            .height(5.dp)
-                            .background(Color(0xFFBEBEBE))
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                NeonBox(
-                    modifier = Modifier.fillMaxWidth(),
-                    neonColors = listOf(Color(0xFFE8B92A), Color(0xFFFF0000)),
-                    backgroundAlpha = 0.15f
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showPermissionInfo = true }
-                                .padding(20.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "Warum fordere ich so viele Berechtigungen?",
-                                    color = Color.White,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-
-                            Box {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.ArrowForwardIos,
-                                    contentDescription = "Open information",
-                                    tint = Color.White.copy(alpha = 0.8f),
-                                    modifier = Modifier
-                                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                if (prvt()) {
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    NeonBox(
-                        modifier = Modifier.fillMaxWidth(),
-                        neonColors = listOf(Color(0xFF00FFAA), Color(0xFF00CCFF)),
-                        backgroundAlpha = 0.15f
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { showCoordinatesEdit = true }
-                                    .padding(20.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        "📍 Zuhause-Koordinaten ändern",
-                                        color = Color.White,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-
-                                Box {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.ArrowForwardIos,
-                                        contentDescription = "Koordinaten ändern",
-                                        tint = Color.White.copy(alpha = 0.8f),
-                                        modifier = Modifier
-                                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
                 Text(
                     text = BuildConfig.VERSION_NAME,
                     modifier = Modifier
@@ -2192,22 +2452,27 @@ fun SettingsFrame(
 
         // Media Analytics Confirmation Dialog
         if (showMediaAnalyticsDialog) {
-            androidx.compose.material3.AlertDialog(
+            AlertDialog(
                 onDismissRequest = { showMediaAnalyticsDialog = false },
-                title = { Text("Media Analytics deaktivieren?", color = Color.White) },
+                title = {
+                    Text(
+                        stringResource(R.string.media_analytics_deaktivieren),
+                        color = Color.White
+                    )
+                },
                 text = {
                     Column {
                         Text(
-                            "Möchtest du Media Analytics wirklich deaktivieren?",
+                            stringResource(R.string.mochtest_du_media_analytics_wirklich),
                             color = Color.White.copy(alpha = 0.8f)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            "Option 1: Deaktivieren & alle Daten löschen",
+                            stringResource(R.string.option_1_deaktivieren_alle_daten),
                             color = Color.White.copy(alpha = 0.8f)
                         )
                         Text(
-                            "Option 2: Nur deaktivieren, Daten behalten",
+                            stringResource(R.string.option_2_nur_deaktivieren_daten),
                             color = Color.White.copy(alpha = 0.8f)
                         )
                     }
@@ -2218,28 +2483,28 @@ fun SettingsFrame(
                             onClick = {
                                 // Option 1: Disable and clear all data
                                 mediaAnalyticsEnabled = false
-                                com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.setAnalyticsEnabled(false)
-                                com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.clearAllSessions()
+                                MediaAnalyticsManager.setAnalyticsEnabled(false)
+                                MediaAnalyticsManager.clearAllSessions()
                                 showMediaAnalyticsDialog = false
                             }
                         ) {
-                            Text("Deaktivieren & Daten löschen")
+                            Text(stringResource(R.string.deaktivieren_daten_loschen))
                         }
                         Button(
                             onClick = {
                                 // Option 2: Just disable, keep data
                                 mediaAnalyticsEnabled = false
-                                com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.setAnalyticsEnabled(false)
+                                MediaAnalyticsManager.setAnalyticsEnabled(false)
                                 showMediaAnalyticsDialog = false
                             }
                         ) {
-                            Text("Nur deaktivieren")
+                            Text(stringResource(R.string.nur_deaktivieren))
                         }
                     }
                 },
                 dismissButton = {
                     Button(onClick = { showMediaAnalyticsDialog = false }) {
-                        Text("Abbrechen")
+                        Text(stringResource(R.string.abbrechen))
                     }
                 },
                 containerColor = Color(0xFF121212)
@@ -2251,11 +2516,13 @@ fun SettingsFrame(
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically()
         ) {
-            val coordPrefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
+            val coordPrefs =
+                remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
             var latInput by remember {
                 mutableStateOf(
                     if (coordPrefs.contains("lat_key_d"))
-                        java.lang.Double.longBitsToDouble(coordPrefs.getLong("lat_key_d", 0L)).toString()
+                        java.lang.Double.longBitsToDouble(coordPrefs.getLong("lat_key_d", 0L))
+                            .toString()
                     else
                         coordPrefs.getFloat("lat_key", 0f).toString()
                 )
@@ -2263,7 +2530,8 @@ fun SettingsFrame(
             var lonInput by remember {
                 mutableStateOf(
                     if (coordPrefs.contains("lon_key_d"))
-                        java.lang.Double.longBitsToDouble(coordPrefs.getLong("lon_key_d", 0L)).toString()
+                        java.lang.Double.longBitsToDouble(coordPrefs.getLong("lon_key_d", 0L))
+                            .toString()
                     else
                         coordPrefs.getFloat("lon_key", 0f).toString()
                 )
@@ -2293,7 +2561,7 @@ fun SettingsFrame(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "Koordinaten ändern",
+                            stringResource(R.string.koordinaten_andern),
                             style = MaterialTheme.typography.headlineMedium,
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
@@ -2309,14 +2577,14 @@ fun SettingsFrame(
                         ) {
                             Icon(
                                 Icons.Default.Close,
-                                contentDescription = "Close",
+                                contentDescription = stringResource(R.string.close),
                                 tint = Color.White
                             )
                         }
                     }
 
                     Text(
-                        "Diese Koordinaten gelten als \"Zuhause\" für den Explore-Tracker (Geofencing) und als Standard-Standort in der App.",
+                        stringResource(R.string.diese_koordinaten_gelten_als_zuhause),
                         color = APP_COLOR.copy(
                             red = APP_COLOR.red + .6f,
                             green = APP_COLOR.green + .6f,
@@ -2332,27 +2600,27 @@ fun SettingsFrame(
                     OutlinedTextField(
                         value = latInput,
                         onValueChange = { latInput = it; savedHint = false },
-                        label = { Text("Breitengrad (Latitude)") },
+                        label = { Text(stringResource(R.string.breitengrad_latitude)) },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
                         value = lonInput,
                         onValueChange = { lonInput = it; savedHint = false },
-                        label = { Text("Längengrad (Longitude)") },
+                        label = { Text(stringResource(R.string.langengrad_longitude)) },
                         modifier = Modifier.fillMaxWidth()
                     )
 
                     if (latInput.isNotEmpty() && latDouble == null)
                         Text(
-                            "Ungültiger Breitengrad",
+                            stringResource(R.string.ungultiger_breitengrad),
                             color = Color(0xFFE74C3C),
                             fontSize = 12.sp,
                             modifier = Modifier.padding(top = 4.dp)
                         )
                     if (lonInput.isNotEmpty() && lonDouble == null)
                         Text(
-                            "Ungültiger Längengrad",
+                            stringResource(R.string.ungultiger_langengrad),
                             color = Color(0xFFE74C3C),
                             fontSize = 12.sp,
                             modifier = Modifier.padding(top = 4.dp)
@@ -2363,8 +2631,14 @@ fun SettingsFrame(
                     Button(
                         onClick = {
                             coordPrefs.edit {
-                                putLong("lat_key_d", java.lang.Double.doubleToRawLongBits(latDouble!!))
-                                putLong("lon_key_d", java.lang.Double.doubleToRawLongBits(lonDouble!!))
+                                putLong(
+                                    "lat_key_d",
+                                    java.lang.Double.doubleToRawLongBits(latDouble!!)
+                                )
+                                putLong(
+                                    "lon_key_d",
+                                    java.lang.Double.doubleToRawLongBits(lonDouble!!)
+                                )
                                 putBoolean("has_coordinates", true)
                             }
                             Config.LAT = latDouble!!
@@ -2373,11 +2647,11 @@ fun SettingsFrame(
                         },
                         enabled = isValid,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Speichern") }
+                    ) { Text(stringResource(R.string.speichern)) }
 
                     if (savedHint) {
                         Text(
-                            "Gespeichert.",
+                            stringResource(R.string.gespeichert_punkt),
                             color = Color(0xFF00FFAA),
                             fontSize = 13.sp,
                             modifier = Modifier.padding(top = 8.dp)
