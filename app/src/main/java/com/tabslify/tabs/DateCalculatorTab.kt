@@ -25,9 +25,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tabslify.R
 import com.tabslify.core.ui.APP_COLOR
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -48,7 +50,7 @@ fun DateCalculatorContent(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "Tage-Rechner",
+            text = stringResource(R.string.tage_rechner),
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White,
@@ -56,7 +58,7 @@ fun DateCalculatorContent(modifier: Modifier = Modifier) {
         )
 
         DateSelectionCard(
-            label = "Startdatum",
+            label = stringResource(R.string.startdatum),
             selectedDate = startDate,
             onDateSelected = { date ->
                 startDate = date
@@ -69,7 +71,7 @@ fun DateCalculatorContent(modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(16.dp))
 
         DateSelectionCard(
-            label = "Enddatum",
+            label = stringResource(R.string.enddatum),
             selectedDate = endDate,
             onDateSelected = { date ->
                 endDate = date
@@ -97,14 +99,14 @@ fun DateCalculatorContent(modifier: Modifier = Modifier) {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Differenz",
+                        text = stringResource(R.string.differenz),
                         fontSize = 18.sp,
                         color = Color.White,
                         fontWeight = FontWeight.Medium
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "$daysDifference Tage",
+                        text = stringResource(R.string.tage, daysDifference!!),
                         fontSize = 36.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -112,7 +114,11 @@ fun DateCalculatorContent(modifier: Modifier = Modifier) {
 
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "${(daysDifference!! / 7)} Wochen und ${(daysDifference!! % 7)} Tage",
+                        text = stringResource(
+                            R.string.wochen_und_tage,
+                            daysDifference!! / 7,
+                            daysDifference!! % 7
+                        ),
                         fontSize = 14.sp,
                         color = Color.White.copy(alpha = 0.9f)
                     )
@@ -133,7 +139,7 @@ fun DateCalculatorContent(modifier: Modifier = Modifier) {
             ),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Zurücksetzen", fontSize = 16.sp, color = Color.Gray)
+            Text(stringResource(R.string.zurucksetzen), fontSize = 16.sp, color = Color.Gray)
         }
     }
 }
@@ -197,7 +203,7 @@ fun DateSelectionCard(
                             selectedDate.year
                         )
                     } else {
-                        "Datum auswählen"
+                        stringResource(R.string.datum_auswahlen)
                     },
                     fontSize = 18.sp
                 )
