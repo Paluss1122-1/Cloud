@@ -26,6 +26,7 @@ import com.tabslify.R
 import java.util.Calendar
 
 val APP_COLOR = Color(0xFF2A2A2A)
+val APP_BLUE =Color(0xFF001FBB)
 val gruen = Color(0xFF228B22)
 
 val BgDeep = Color(0xFF121212)
