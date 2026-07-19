@@ -14,6 +14,7 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.tabslify.R
 import com.tabslify.core.activities.Tabslify.Companion.serviceScope
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config
@@ -54,8 +55,8 @@ fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?, contex
             if (galleryImages.isEmpty()) {
                 Handler(Looper.getMainLooper()).post {
                     showSimpleNotificationExtern(
-                        "❌ Keine Galerie",
-                        "Öffne zuerst die Galerie mit 'gallery'",
+                        context.getString(R.string.keine_galerie),
+                        context.getString(R.string.offne_zuerst_die_galerie_mit),
                         20.seconds,
                         context
                     )
@@ -66,8 +67,8 @@ fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?, contex
             if (currentGalleryIndex < 0 || currentGalleryIndex >= galleryImages.size) {
                 Handler(Looper.getMainLooper()).post {
                     showSimpleNotificationExtern(
-                        "❌ Fehler",
-                        "Ungültiger Galerie-Index",
+                        context.getString(R.string.fehler_2),
+                        context.getString(R.string.ungultiger_galerie_index),
                         20.seconds,
                         context
                     )
@@ -104,8 +105,8 @@ fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?, contex
             if (imageBytes == null) {
                 Handler(Looper.getMainLooper()).post {
                     showSimpleNotificationExtern(
-                        "❌ Fehler",
-                        "Bild konnte nicht gelesen werden",
+                        context.getString(R.string.fehler_2),
+                        context.getString(R.string.bild_konnte_nicht_gelesen_werden),
                         20.seconds,
                         context
                     )
@@ -149,8 +150,8 @@ fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?, contex
                 in 200..299 -> {
                     Handler(Looper.getMainLooper()).post {
                         showSimpleNotificationExtern(
-                            "✅ Upload erfolgreich",
-                            "Bild '$imagename' wurde hochgeladen",
+                            context.getString(R.string.upload_erfolgreich),
+                            context.getString(R.string.bild_wurde_hochgeladen, imagename),
                             context = context
                         )
                     }
@@ -163,8 +164,8 @@ fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?, contex
                         Log.w("QuietHoursService", "⚠️ Existiert bereits: $imagename")
                         Handler(Looper.getMainLooper()).post {
                             showSimpleNotificationExtern(
-                                "⚠️ Bereits vorhanden",
-                                "Bild '$imagename' existiert bereits",
+                                context.getString(R.string.bereits_vorhanden),
+                                context.getString(R.string.bild_existiert_bereits, imagename),
                                 context = context
                             )
                         }
@@ -172,8 +173,8 @@ fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?, contex
                         Log.e("QuietHoursService", "❌ Fehler 400: $error")
                         Handler(Looper.getMainLooper()).post {
                             showSimpleNotificationExtern(
-                                "❌ Upload fehlgeschlagen",
-                                "Fehler 400: $error",
+                                context.getString(R.string.upload_fehlgeschlagen),
+                                context.getString(R.string.fehler_400_2, error),
                                 20.seconds,
                                 context
                             )
@@ -185,8 +186,8 @@ fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?, contex
                     Log.w("QuietHoursService", "⚠️ Existiert bereits (409): $imagename")
                     Handler(Looper.getMainLooper()).post {
                         showSimpleNotificationExtern(
-                            "⚠️ Bereits vorhanden",
-                            "Bild '$imagename' existiert bereits",
+                            context.getString(R.string.bereits_vorhanden),
+                            context.getString(R.string.bild_existiert_bereits, imagename),
                             context = context
                         )
                     }
@@ -197,8 +198,8 @@ fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?, contex
                     Log.e("QuietHoursService", "❌ Fehler $responseCode: $error")
                     Handler(Looper.getMainLooper()).post {
                         showSimpleNotificationExtern(
-                            "❌ Upload fehlgeschlagen",
-                            "Fehler $responseCode: $error",
+                            context.getString(R.string.upload_fehlgeschlagen),
+                            context.getString(R.string.fehler_4, responseCode, error),
                             20.seconds,
                             context
                         )
@@ -210,8 +211,8 @@ fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?, contex
             Log.e("QuietHoursService", "❌ Upload-Fehler", e)
             Handler(Looper.getMainLooper()).post {
                 showSimpleNotificationExtern(
-                    "❌ Upload fehlgeschlagen",
-                    "Fehler: ${e.message}",
+                    context.getString(R.string.upload_fehlgeschlagen),
+                    context.getString(R.string.fehler_msg, e.message),
                     20.seconds,
                     context
                 )
@@ -274,8 +275,8 @@ fun loadGalleryImages(number: Int, context: Context) {
 
         if (galleryImages.isEmpty()) {
             showSimpleNotificationExtern(
-                "📷 Galerie leer",
-                "Keine Bilder in deiner Galerie gefunden",
+                context.getString(R.string.galerie_leer),
+                context.getString(R.string.keine_bilder_in_deiner_galerie),
                 context = context
             )
             return
@@ -285,8 +286,8 @@ fun loadGalleryImages(number: Int, context: Context) {
         showGalleryImage(number, context)
     } catch (e: Exception) {
         showSimpleNotificationExtern(
-            "❌ Fehler",
-            "Galerie konnte nicht geladen werden: ${e.message}",
+            context.getString(R.string.fehler_2),
+            context.getString(R.string.galerie_konnte_nicht_geladen_werden, e.message),
             20.seconds,
             context = context
         )
@@ -296,7 +297,7 @@ fun loadGalleryImages(number: Int, context: Context) {
 fun showDeleteConfirmation(imageIndex: Int, context: Context) {
     try {
         if (galleryImages.isEmpty() || imageIndex < 0 || imageIndex >= galleryImages.size) {
-            showSimpleNotificationExtern("❌ Fehler", "Ungültiger Bildindex", context = context)
+            showSimpleNotificationExtern(context.getString(R.string.fehler_2), context.getString(R.string.ungultiger_bildindex), context = context)
             return
         }
 
@@ -339,15 +340,15 @@ fun showDeleteConfirmation(imageIndex: Int, context: Context) {
 
         val builder = NotificationCompat.Builder(context, GALLERY_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_delete)
-            .setContentTitle("🗑️ Bild löschen?")
-            .setContentText("Bild ${imageIndex + 1} von ${galleryImages.size} wirklich löschen?")
+            .setContentTitle(context.getString(R.string.bild_loschen))
+            .setContentText(context.getString(R.string.bild_von_wirklich_loschen, imageIndex + 1, galleryImages.size))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setGroup("group_confirmations")
-            .addAction(android.R.drawable.ic_delete, "Löschen", deletePendingIntent)
+            .addAction(android.R.drawable.ic_delete, context.getString(R.string.loschen), deletePendingIntent)
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
-                "Abbrechen",
+                context.getString(R.string.abbrechen),
                 cancelPendingIntent
             )
 
@@ -369,8 +370,8 @@ fun showDeleteConfirmation(imageIndex: Int, context: Context) {
     } catch (e: Exception) {
         Log.e("QuietHoursService", "Error showing delete confirmation", e)
         showSimpleNotificationExtern(
-            "❌ Fehler",
-            "Löschbestätigung konnte nicht angezeigt werden: ${e.message}",
+            context.getString(R.string.fehler_2),
+            context.getString(R.string.loschbestatigung_konnte_nicht_angezeigt_werden, e.message),
             20.seconds,
             context = context
         )
@@ -380,7 +381,7 @@ fun showDeleteConfirmation(imageIndex: Int, context: Context) {
 fun deleteGalleryImage(imageIndex: Int, context: Context) {
     try {
         if (galleryImages.isEmpty() || imageIndex < 0 || imageIndex >= galleryImages.size) {
-            showSimpleNotificationExtern("❌ Fehler", "Ungültiger Bildindex", context = context)
+            showSimpleNotificationExtern(context.getString(R.string.fehler_2), context.getString(R.string.ungultiger_bildindex), context = context)
             return
         }
 
@@ -397,8 +398,8 @@ fun deleteGalleryImage(imageIndex: Int, context: Context) {
             notificationManager.cancel(DEL_GAL_CONF)
 
             showSimpleNotificationExtern(
-                "✅ Gelöscht",
-                "Bild wurde erfolgreich gelöscht (${galleryImages.size} verbleibend)",
+                context.getString(R.string.geloscht_2),
+                context.getString(R.string.bild_wurde_erfolgreich_geloscht_verbleibend, galleryImages.size),
                 context = context
             )
 
@@ -410,16 +411,16 @@ fun deleteGalleryImage(imageIndex: Int, context: Context) {
             } else {
                 notificationManager.cancel(GAL)
                 showSimpleNotificationExtern(
-                    "📷 Galerie leer",
-                    "Alle Bilder wurden gelöscht",
+                    context.getString(R.string.galerie_leer),
+                    context.getString(R.string.alle_bilder_wurden_geloscht),
                     context = context
                 )
             }
 
         } else {
             showSimpleNotificationExtern(
-                "❌ Löschen fehlgeschlagen",
-                "Bild konnte nicht gelöscht werden (keine Berechtigung?)",
+                context.getString(R.string.loschen_fehlgeschlagen),
+                context.getString(R.string.bild_konnte_nicht_geloscht_werden),
                 20.seconds,
                 context = context
             )
@@ -428,8 +429,8 @@ fun deleteGalleryImage(imageIndex: Int, context: Context) {
     } catch (e: Exception) {
         Log.e("QuietHoursService", "Error deleting gallery image", e)
         showSimpleNotificationExtern(
-            "❌ Fehler",
-            "Fehler beim Löschen: ${e.message}",
+            context.getString(R.string.fehler_2),
+            context.getString(R.string.fehler_beim_loschen, e.message),
             20.seconds,
             context = context
         )
@@ -440,8 +441,8 @@ private fun showGalleryImage(index: Int, context: Context) {
     try {
         if (galleryImages.isEmpty() || index < 0 || index >= galleryImages.size) {
             showSimpleNotificationExtern(
-                "❌ Fehler",
-                "Ungültiger Image-Index",
+                context.getString(R.string.fehler_2),
+                context.getString(R.string.ungultiger_image_index),
                 20.seconds,
                 context = context
             )
@@ -475,8 +476,8 @@ private fun showGalleryImage(index: Int, context: Context) {
         } catch (e: Exception) {
             Log.e("QuietHoursService", "Error decoding image at index $index", e)
             showSimpleNotificationExtern(
-                "❌ Fehler",
-                "Bild konnte nicht geladen werden",
+                context.getString(R.string.fehler_2),
+                context.getString(R.string.bild_konnte_nicht_geladen_werden),
                 20.seconds,
                 context = context
             )
@@ -520,14 +521,14 @@ private fun showGalleryImage(index: Int, context: Context) {
 
         val notification = NotificationCompat.Builder(context, GALLERY_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_gallery)
-            .setContentTitle("📷 ${galleryImage.displayName ?: "Galerie"}")
-            .setContentText("Tippen zum Löschen • Wischen für Details")
+            .setContentTitle("📷 ${galleryImage.displayName ?: context.getString(R.string.galerie)}")
+            .setContentText(context.getString(R.string.tippen_zum_loschen_wischen_fur))
             .setStyle(
                 NotificationCompat.BigPictureStyle()
                     .bigPicture(originalBitmap)
                     .bigLargeIcon(null as Bitmap?)
                     .showBigPictureWhenCollapsed(true)
-                    .setSummaryText("Bild ${index + 1}/${galleryImages.size} • $lastModifiedText • $createdAtText")
+                    .setSummaryText(context.getString(R.string.bild, index + 1, galleryImages.size, lastModifiedText, createdAtText))
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setOngoing(true)
@@ -536,7 +537,7 @@ private fun showGalleryImage(index: Int, context: Context) {
             .setGroupSummary(false)
             .setContentIntent(openPendingIntent)
             .addAction(android.R.drawable.ic_media_previous, "◀", prevPendingIntent)
-            .addAction(android.R.drawable.ic_menu_view, "Löschen", confirmDeletePendingIntent)
+            .addAction(android.R.drawable.ic_menu_view, context.getString(R.string.loschen), confirmDeletePendingIntent)
             .addAction(android.R.drawable.ic_media_next, "▶", nextPendingIntent)
             .build()
 
@@ -548,8 +549,8 @@ private fun showGalleryImage(index: Int, context: Context) {
     } catch (e: Exception) {
         Log.e("QuietHoursService", "Error showing gallery image", e)
         showSimpleNotificationExtern(
-            "❌ Fehler",
-            "Galerie konnte nicht angezeigt werden: ${e.message}",
+            context.getString(R.string.fehler_2),
+            context.getString(R.string.galerie_konnte_nicht_angezeigt_werden, e.message),
             20.seconds,
             context = context
         )
@@ -559,8 +560,8 @@ private fun showGalleryImage(index: Int, context: Context) {
 fun showNextGalleryImage(context: Context) {
     if (galleryImages.isEmpty()) {
         showSimpleNotificationExtern(
-            "❌ Galerie leer",
-            "Keine Bilder zum Anzeigen",
+            context.getString(R.string.galerie_leer_2),
+            context.getString(R.string.keine_bilder_zum_anzeigen),
             20.seconds,
             context = context
         )
@@ -574,8 +575,8 @@ fun showNextGalleryImage(context: Context) {
 fun showPreviousGalleryImage(context: Context) {
     if (galleryImages.isEmpty()) {
         showSimpleNotificationExtern(
-            "❌ Galerie leer",
-            "Keine Bilder zum Anzeigen",
+            context.getString(R.string.galerie_leer_2),
+            context.getString(R.string.keine_bilder_zum_anzeigen),
             20.seconds,
             context = context
         )
