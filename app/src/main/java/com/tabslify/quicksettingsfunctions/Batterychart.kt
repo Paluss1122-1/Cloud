@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
@@ -58,6 +59,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.tabslify.R
 import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.objects.Config.client
 import com.tabslify.core.objects.prvt
@@ -143,7 +145,7 @@ object BatteryDataRepository {
     private fun syncToSupabase(samples: List<BatterySample>) = appScope.launch(Dispatchers.IO) {
         runCatching {
             if (!prvt()) {
-                Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.forbidden), Toast.LENGTH_SHORT).show()
                 return@runCatching
             }
             client.from("Tabslify").upsert(buildJsonObject {
@@ -157,7 +159,7 @@ object BatteryDataRepository {
         withContext(Dispatchers.IO) {
             runCatching {
                 if (!prvt()) {
-                    Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.forbidden), Toast.LENGTH_SHORT).show()
                     return@withContext emptyList()
                 }
                 val row = client.from("Tabslify").select().decodeSingle<JsonObject>()
@@ -249,13 +251,14 @@ fun BatteryChartScreen(onDismiss: () -> Unit) {
                             loading = true
                             val minutes = predictChargingTime(context)
                             result =
-                                minutes?.let { "~$it min bis 85%" } ?: "Keine Schätzung möglich"
+                                minutes?.let { context.getString(R.string.min_bis_85, it) }
+                                    ?: context.getString(R.string.keine_schatzung_moglich)
                             loading = false
                         }
                     },
                     enabled = !loading
                 ) {
-                    Text(if (loading) "Berechne..." else "Ladezeit berechnen")
+                    Text(if (loading) stringResource(R.string.berechne) else stringResource(R.string.ladezeit_berechnen))
                 }
                 result?.let { Text(it, color = Color.White) }
             }
@@ -299,7 +302,7 @@ fun BatteryChartScreenContent(onClose: () -> Unit) {
             Modifier
                 .padding(16.dp)
                 .align(Alignment.TopEnd)
-        ) { Icon(Icons.Default.Close, contentDescription = "Schließen", tint = Color.White) }
+        ) { Icon(Icons.Default.Close, contentDescription = stringResource(R.string.schliesen), tint = Color.White) }
     }
 }
 
@@ -314,18 +317,19 @@ fun BatteryChartFilters(
     var showHour by remember { mutableStateOf(false) }
     val samples by BatteryDataRepository.samples.collectAsState()
     val sdf = remember { SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()) }
+    val context = LocalContext.current
 
     Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Box {
-            DropdownButton(selectedDay ?: "Alle Tage") { showDay = true }
+            DropdownButton(selectedDay ?: stringResource(R.string.alle_tage)) { showDay = true }
             if (showDay) SimpleDropdown(
                 samples.map { sdf.format(Date(it.timestamp)) }.distinct().sortedDescending(),
                 { it },
-                "Alle Tage"
+                stringResource(R.string.alle_tage)
             ) { onDaySelected(it); showDay = false }
         }
         if (selectedDay != null) Box {
-            DropdownButton(selectedHour?.let { "$it:00 Uhr" } ?: "Alle Stunden") { showHour = true }
+            DropdownButton(selectedHour?.let { stringResource(R.string.s_00_uhr, it) } ?: stringResource(R.string.alle_stunden)) { showHour = true }
             if (showHour) {
                 SimpleDropdown(
                     samples.filter { sdf.format(Date(it.timestamp)) == selectedDay }
@@ -334,7 +338,7 @@ fun BatteryChartFilters(
                                 .get(Calendar.HOUR_OF_DAY)
                         }
                         .distinct().sorted(),
-                    { "$it:00 Uhr" }, "Alle Stunden"
+                    { context.getString(R.string.s_00_uhr, it) }, stringResource(R.string.alle_stunden)
                 ) { onHourSelected(it); showHour = false }
             }
         }
@@ -410,7 +414,7 @@ fun BatteryLineChart(
     }
 
     if (samples.isEmpty()) {
-        Text("Keine Daten", color = Color.White); return
+        Text(stringResource(R.string.keine_daten), color = Color.White); return
     }
 
     val minY = samples.minOf { it.temperature } - 5f
@@ -549,10 +553,10 @@ fun BatteryInfoPopup(sample: BatterySample, onDismiss: () -> Unit) {
                     )
                     .padding(20.dp)
             ) {
-                Text("Zeitpunkt: $time", color = Color.White)
-                Text("Batteriestand: ${sample.level}%", color = Color.White)
-                Text("Temperatur: ${sample.temperature} °C", color = Color.White)
-                Text("Spannung: ${sample.voltage} mV", color = Color.White)
+                Text(stringResource(R.string.zeitpunkt, time), color = Color.White)
+                Text(stringResource(R.string.batteriestand, sample.level), color = Color.White)
+                Text(stringResource(R.string.temperatur_c, sample.temperature), color = Color.White)
+                Text(stringResource(R.string.spannung_mv, sample.voltage), color = Color.White)
             }
         }
     }
