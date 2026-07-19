@@ -40,11 +40,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.tabslify.R
 import com.tabslify.core.ui.AccentViolet
 import com.tabslify.core.ui.AccentVioletDim
 import com.tabslify.core.ui.BgCard
@@ -117,7 +119,7 @@ fun SchoolHeader(
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Zurück",
+                        contentDescription = stringResource(R.string.zuruck),
                         tint = TextPrimary,
                         modifier = Modifier.size(20.dp)
                     )
@@ -164,7 +166,7 @@ fun SchoolHeader(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Zuletzt genutzt",
+                        stringResource(R.string.zuletzt_genutzt),
                         color = TextSecondary,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
