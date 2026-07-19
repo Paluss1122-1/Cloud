@@ -1,14 +1,18 @@
 package com.tabslify.core.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,7 +35,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Shield
@@ -58,12 +64,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.tabslify.R
+import com.tabslify.core.objects.Config
+import com.tabslify.core.objects.prvt
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
@@ -84,53 +93,68 @@ private val AccentBrush = Brush.linearGradient(AccentColors)
 /*  Page model                                                        */
 /* ------------------------------------------------------------------ */
 
-private enum class PageKind { LOGO, GRID, BULLETS, BULLETS_ALT, PERMISSIONS }
+private enum class PageKind { LOGO, LANGUAGE, GRID, BULLETS, BULLETS_ALT, NOTIFICATION_PERMISSION, PERMISSIONS }
 
 private data class OnboardPage(
     val kind: PageKind,
-    val title: String,
-    val subtitle: String = "",
+    val titleRes: Int,
+    val subtitleRes: Int = 0,
     val icon: ImageVector? = null,
     val iconBrush: Brush = AccentBrush,
-    val bullets: List<String> = emptyList()
+    val bulletsRes: List<Int> = emptyList()
 )
 
 private val pages = listOf(
     OnboardPage(
         kind = PageKind.LOGO,
-        title = "Tabslify",
-        subtitle = "Eine App, die 20+ Tools ersetzt.\nWillkommen an Bord."
+        titleRes = R.string.tabslify,
+        subtitleRes = R.string.eine_app_die_20_tools
+    ),
+    OnboardPage(
+        kind = PageKind.LANGUAGE,
+        titleRes = R.string.language_title,
+        subtitleRes = R.string.language_onboarding_subtitle,
+        icon = Icons.Filled.Public,
+        iconBrush = Brush.linearGradient(listOf(Color(0xFF5C8CFF), Color(0xFFB45CFC)))
     ),
     OnboardPage(
         kind = PageKind.GRID,
-        title = "Alles an einem Ort",
-        subtitle = "KI-Chat, Passwörter, Browser, Notizen, Vokabel Traning, Musik / Podcasts & mehr — kein App-Wechsel mehr nötig."
+        titleRes = R.string.alles_an_einem_ort,
+        subtitleRes = R.string.ki_chat_passworter_browser_notizen
     ),
     OnboardPage(
         kind = PageKind.BULLETS,
-        title = "KI, die wirklich hilft",
+        titleRes = R.string.ki_die_wirklich_hilft,
         icon = Icons.Filled.AutoAwesome,
         iconBrush = Brush.linearGradient(listOf(Color(0xFFB45CFC), Color(0xFF6B4CFC))),
-        bullets = listOf(
-            "Chat mit Text & Bildern",
-            "Vokabeln automatisch aus Fotos",
-            "Optionale Musik-Analyse"
+        bulletsRes = listOf(
+            R.string.chat_mit_text_bildern,
+            R.string.vokabeln_automatisch_aus_fotos,
+            R.string.optionale_musik_analyse
         )
     ),
     OnboardPage(
         kind = PageKind.BULLETS_ALT,
-        title = "Privatsphäre zuerst",
+        titleRes = R.string.privatsphare_zuerst,
         icon = Icons.Filled.Shield,
         iconBrush = Brush.linearGradient(listOf(Color(0xFF5C8CFF), Color(0xFF5C6BFC))),
-        bullets = listOf(
-            "Kein Tracking, keine Werbung",
-            "Tracking-Funktionen nur optional"
+        bulletsRes = listOf(
+            R.string.kein_tracking_keine_werbung,
+            R.string.tracking_funktionen_nur_optional
         )
     ),
-    // Last page — NOT skippable. "Überspringen" on earlier pages jumps straight here.
+    // "Überspringen" on earlier pages jumps straight here.
+    OnboardPage(
+        kind = PageKind.NOTIFICATION_PERMISSION,
+        titleRes = R.string.notification_permission_title,
+        subtitleRes = R.string.notification_permission_subtitle,
+        icon = Icons.Filled.Notifications,
+        iconBrush = Brush.linearGradient(listOf(Color(0xFFFF8A4C), Color(0xFFFF5C7A)))
+    ),
+    // Last page — NOT skippable.
     OnboardPage(
         kind = PageKind.PERMISSIONS,
-        title = "Tabslify Berechtigungen"
+        titleRes = R.string.tabslify_berechtigungen
     )
 )
 
@@ -158,6 +182,9 @@ fun WelcomeOnboardingScreen(
     val pagerState = rememberPagerState(initialPage = safeInitialPage, pageCount = { pages.size })
     val scope = rememberCoroutineScope()
     val isLast = pagerState.currentPage == pages.lastIndex
+    val skipTargetPage = remember {
+        pages.indexOfFirst { it.kind == PageKind.NOTIFICATION_PERMISSION }.let { if (it >= 0) it else pages.lastIndex }
+    }
 
     val exitProgress = remember { Animatable(0f) }
     var finishing by remember { mutableStateOf(false) }
@@ -229,14 +256,14 @@ fun WelcomeOnboardingScreen(
             ) {
                 if (!isLast) {
                     Text(
-                        text = "Überspringen",
+                        text = stringResource(R.string.uberspringen),
                         color = Color(0x8CFFFFFF),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .clickable {
-                                scope.launch { pagerState.animateScrollToPage(pages.lastIndex) }
+                                scope.launch { pagerState.animateScrollToPage(skipTargetPage) }
                             }
                             .padding(6.dp)
                     )
@@ -266,7 +293,7 @@ fun WelcomeOnboardingScreen(
 
             // Primary action
             GradientButton(
-                label = if (isLast) "Los geht's" else "Weiter",
+                label = if (isLast) stringResource(R.string.los_geht_s) else stringResource(R.string.weiter),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 28.dp)
@@ -334,7 +361,7 @@ private fun PageContent(page: OnboardPage, isActive: Boolean) {
                 ) {
                     Image(
                         painter = painterResource(id = R.mipmap.app_icon_foreground_rounded_corners),
-                        contentDescription = "Tabslify",
+                        contentDescription = stringResource(R.string.tabslify),
                         modifier = Modifier.size(96.dp)
                     )
                 }
@@ -364,17 +391,17 @@ private fun PageContent(page: OnboardPage, isActive: Boolean) {
         Spacer(Modifier.height(34.dp))
 
         Text(
-            text = page.title,
+            text = stringResource(page.titleRes),
             color = TextPrimaryOnboarding,
             fontSize = if (page.kind == PageKind.LOGO) 34.sp else 26.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
 
-        if (page.subtitle.isNotEmpty()) {
+        if (page.subtitleRes != 0) {
             Spacer(Modifier.height(14.dp))
             Text(
-                text = page.subtitle,
+                text = stringResource(page.subtitleRes),
                 color = TextSecondaryOnboarding,
                 fontSize = 16.sp,
                 lineHeight = 24.sp,
@@ -382,12 +409,21 @@ private fun PageContent(page: OnboardPage, isActive: Boolean) {
             )
         }
 
-        if (page.bullets.isNotEmpty()) {
+        if (page.bulletsRes.isNotEmpty()) {
             Spacer(Modifier.height(22.dp))
-            page.bullets.forEach { line ->
-                BulletRow(text = line)
+            page.bulletsRes.forEach { lineRes ->
+                BulletRow(text = stringResource(lineRes))
                 Spacer(Modifier.height(14.dp))
             }
+        }
+
+        if (page.kind == PageKind.LANGUAGE) {
+            Spacer(Modifier.height(22.dp))
+            LanguageOptions()
+        }
+
+        if (page.kind == PageKind.NOTIFICATION_PERMISSION) {
+            NotificationPermissionEffect(isActive = isActive)
         }
 
         if (page.kind == PageKind.BULLETS_ALT) {
@@ -401,15 +437,15 @@ private fun PageContent(page: OnboardPage, isActive: Boolean) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column {
+                Column(Modifier.weight(3f)) {
                     Text(
-                        "Media Analytics",
+                        stringResource(R.string.media_analytics),
                         color = TextPrimaryOnboarding,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        "Tracke Hörgewohnheiten für Statistiken",
+                        stringResource(R.string.tracke_horgewohnheiten_fur_statistiken),
                         color = TextSecondaryOnboarding,
                         fontSize = 12.sp
                     )
@@ -426,8 +462,83 @@ private fun PageContent(page: OnboardPage, isActive: Boolean) {
                         uncheckedThumbColor = Color.Gray,
                         uncheckedTrackColor = Color.DarkGray,
                         disabledUncheckedTrackColor = Color.DarkGray.copy(alpha = 0.4f)
-                    )
+                    ),
+                    modifier = Modifier.weight(1f)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationPermissionEffect(isActive: Boolean) {
+    var requested by remember { mutableStateOf(false) }
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { }
+
+    LaunchedEffect(isActive) {
+        if (isActive && !requested) {
+            requested = true
+            if (prvt() && Config.realDevice) {
+                Config.requestPermission("all", launcher)
+            } else {
+                Config.requestPermission("not", launcher)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LanguageOptions() {
+    val context = LocalContext.current
+    var selected by remember { mutableStateOf(Config.currentAppLanguage(context)) }
+    val options = listOf(
+        "de" to stringResource(R.string.language_german),
+        "en" to stringResource(R.string.language_english)
+    )
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        options.forEach { (tag, label) ->
+            LanguageOptionRow(
+                label = label,
+                isSelected = selected == tag,
+                onClick = {
+                    selected = tag
+                    Config.setAppLanguage(context, tag)
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun LanguageOptionRow(label: String, isSelected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(ChipBg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(text = label, color = TextPrimaryOnboarding, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .clip(CircleShape)
+                .then(
+                    if (isSelected) Modifier.background(AccentBrush)
+                    else Modifier.border(BorderStroke(1.dp, Color(0x59FFFFFF)), CircleShape)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isSelected) {
+                Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
             }
         }
     }
