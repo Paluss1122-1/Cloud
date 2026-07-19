@@ -477,7 +477,7 @@ private fun getAvailableCommands(context: Context): List<Command> {
             description = "Spielt algorithmische Playlist ab (algplay [id|name])"
         ) {
             val playlists = AlgorithmicPlaylistRegistry.all
-            val text = playlists.joinToString("\n") { "${it.icon} ${it.id} – ${it.name}" }
+            val text = playlists.joinToString("\n") { "${it.icon} ${it.id} – ${context.getString(it.nameRes)}" }
             showSimpleNotificationExtern("🎵 Smart Playlists", text, context = context)
         },
         Command(
@@ -1774,14 +1774,14 @@ fun executeCommand(commandText: String, context: Context) {
                 val query = commandText.substringAfter(" ").trim().lowercase()
                 val source = AlgorithmicPlaylistRegistry.all.find {
                     it.id.equals(query, ignoreCase = true) ||
-                            it.name.lowercase().contains(query) ||
+                            context.getString(it.nameRes).lowercase().contains(query) ||
                             it.id.lowercase().contains(query)
                 }
                 if (source != null) {
                     MediaPlayerService.activateAlgorithmicPlaylist(context, source.id, 0)
                 } else {
                     val list =
-                        AlgorithmicPlaylistRegistry.all.joinToString("\n") { "${it.icon} ${it.id} – ${it.name}" }
+                        AlgorithmicPlaylistRegistry.all.joinToString("\n") { "${it.icon} ${it.id} – ${context.getString(it.nameRes)}" }
                     showSimpleNotificationExtern(
                         "❌ Nicht gefunden",
                         "Verfügbare Playlists:\n$list",
