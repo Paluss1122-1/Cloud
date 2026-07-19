@@ -11,6 +11,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
+import com.tabslify.R
 import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config.COMPLETED_PODCASTS
@@ -33,15 +34,15 @@ fun clearPodcastSelectionNotifications(context: Context) {
             .forEach { notificationManager.cancel(it.id) }
 
         showSimpleNotificationExtern(
-            "✅ Notifications gelöscht",
-            "Alle Podcast-Auswahl Notifications wurden entfernt",
+            context.getString(R.string.notifications_geloscht),
+            context.getString(R.string.alle_podcast_auswahl_notifications_wurden),
             Duration.ZERO,
             context
         )
     } catch (e: Exception) {
         showSimpleNotificationExtern(
-            "❌ Fehler",
-            "Konnte Notifications nicht löschen: ${e.message}",
+            context.getString(R.string.fehler_2),
+            context.getString(R.string.konnte_notifications_nicht_loschen, e.message),
             Duration.ZERO,
             context
         )
@@ -138,8 +139,8 @@ fun showPodcastQueue(context: Context) {
 
             if (queuePaths.isEmpty()) {
                 showSimpleNotificationExtern(
-                    "📋 Queue leer",
-                    "Keine Podcasts in der Warteschlange",
+                    context.getString(R.string.queue_leer),
+                    context.getString(R.string.keine_podcasts_in_der_warteschlange),
                     Duration.ZERO,
                     context
                 )
@@ -153,7 +154,7 @@ fun showPodcastQueue(context: Context) {
 
             val notification = NotificationCompat.Builder(context, "quiet_hours_channel")
                 .setSmallIcon(android.R.drawable.ic_menu_info_details)
-                .setContentTitle("📋 Podcast Queue (${queuePaths.size})")
+                .setContentTitle(context.getString(R.string.podcast_queue, queuePaths.size))
                 .setContentText(
                     queuePaths.firstOrNull()?.substringAfterLast("/")?.substringBeforeLast(".")
                         ?: ""
@@ -175,8 +176,8 @@ fun showPodcastQueue(context: Context) {
 
     } catch (_: Exception) {
         showSimpleNotificationExtern(
-            "❌ Fehler",
-            "Queue konnte nicht angezeigt werden",
+            context.getString(R.string.fehler_2),
+            context.getString(R.string.queue_konnte_nicht_angezeigt_werden),
             Duration.ZERO,
             context
         )
@@ -189,8 +190,8 @@ fun addPodcastToQueue(index: Int, context: Context) {
 
         if (index < 0 || index >= allPodcasts.size) {
             showSimpleNotificationExtern(
-                "❌ Ungültiger Index",
-                "Podcast ${index - 1} existiert nicht (1-${allPodcasts.size})",
+                context.getString(R.string.ungultiger_index),
+                context.getString(R.string.podcast_existiert_nicht_1, index - 1, allPodcasts.size),
                 20.seconds,
                 context
             )
@@ -201,7 +202,7 @@ fun addPodcastToQueue(index: Int, context: Context) {
         addToQueueViaService(podcast.path, context)
 
         showSimpleNotificationExtern(
-            "✅ Zur Queue hinzugefügt",
+            context.getString(R.string.zur_queue_hinzugefugt),
             "${index + 1}. ${podcast.name}",
             Duration.ZERO,
             context
@@ -210,8 +211,8 @@ fun addPodcastToQueue(index: Int, context: Context) {
     } catch (e: Exception) {
         Log.e("QuietHoursService", "Error adding to queue", e)
         showSimpleNotificationExtern(
-            "❌ Fehler",
-            "Konnte nicht zur Queue hinzufügen",
+            context.getString(R.string.fehler_2),
+            context.getString(R.string.konnte_nicht_zur_queue_hinzufugen),
             Duration.ZERO,
             context
         )
@@ -224,8 +225,8 @@ fun removePodcastFromQueue(position: Int, context: Context) {
 
         if (position < 0 || position >= queuePaths.size) {
             showSimpleNotificationExtern(
-                "❌ Ungültige Position",
-                "Position ${position + 1} existiert nicht (1-${queuePaths.size})",
+                context.getString(R.string.ungultige_position),
+                context.getString(R.string.position_existiert_nicht_1, position + 1, queuePaths.size),
                 20.seconds,
                 context
             )
@@ -237,7 +238,7 @@ fun removePodcastFromQueue(position: Int, context: Context) {
 
         val name = path.substringAfterLast("/").substringBeforeLast(".")
         showSimpleNotificationExtern(
-            "✅ Aus Queue entfernt",
+            context.getString(R.string.aus_queue_entfernt),
             "${position + 1}. $name",
             Duration.ZERO,
             context
@@ -246,8 +247,8 @@ fun removePodcastFromQueue(position: Int, context: Context) {
     } catch (e: Exception) {
         Log.e("QuietHoursService", "Error removing from queue", e)
         showSimpleNotificationExtern(
-            "❌ Fehler",
-            "Konnte nicht aus Queue entfernen",
+            context.getString(R.string.fehler_2),
+            context.getString(R.string.konnte_nicht_aus_queue_entfernen),
             Duration.ZERO,
             context
         )
@@ -262,8 +263,8 @@ fun clearPodcastQueue(context: Context) {
         }
 
         showSimpleNotificationExtern(
-            "✅ Queue geleert",
-            "Alle Podcasts aus der Warteschlange entfernt",
+            context.getString(R.string.queue_geleert),
+            context.getString(R.string.alle_podcasts_aus_der_warteschlange),
             Duration.ZERO,
             context
         )
@@ -271,8 +272,8 @@ fun clearPodcastQueue(context: Context) {
     } catch (e: Exception) {
         Log.e("QuietHoursService", "Error clearing queue", e)
         showSimpleNotificationExtern(
-            "❌ Fehler",
-            "Queue konnte nicht geleert werden",
+            context.getString(R.string.fehler_2),
+            context.getString(R.string.queue_konnte_nicht_geleert_werden),
             Duration.ZERO,
             context
         )
