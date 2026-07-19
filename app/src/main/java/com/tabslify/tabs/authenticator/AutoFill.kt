@@ -24,6 +24,7 @@ import android.widget.RemoteViews
 import android.widget.inline.InlinePresentationSpec
 import androidx.autofill.inline.v1.InlineSuggestionUi
 import androidx.core.net.toUri
+import com.tabslify.R
 import kotlinx.coroutines.runBlocking
 
 class TabslifyAutofillService : AutofillService() {
@@ -272,7 +273,7 @@ class TabslifyAutofillService : AutofillService() {
             )
             val content = InlineSuggestionUi.newContentBuilder(pendingIntent)
                 .setTitle(entry.name)
-                .setSubtitle(entry.username.ifEmpty { "Kein Benutzername" })
+                .setSubtitle(entry.username.ifEmpty { getString(R.string.kein_benutzername) })
                 .setStartIcon(Icon.createWithResource(this, android.R.drawable.ic_lock_lock))
                 .build()
             InlinePresentation(content.slice, spec, false)
@@ -289,7 +290,7 @@ class TabslifyAutofillService : AutofillService() {
     ): Presentations {
         val remoteView = RemoteViews(packageName, android.R.layout.simple_list_item_2).apply {
             setTextViewText(android.R.id.text1, "☁️ ${entry.name}")
-            setTextViewText(android.R.id.text2, entry.username.ifEmpty { "(kein Benutzername)" })
+            setTextViewText(android.R.id.text2, entry.username.ifEmpty { getString(R.string.kein_benutzername_2) })
         }
         val builder = Presentations.Builder().setMenuPresentation(remoteView)
         inlineRequest?.let {
