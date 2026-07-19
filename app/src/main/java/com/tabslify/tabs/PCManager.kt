@@ -33,10 +33,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Color.Companion.Transparent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
+import com.tabslify.R
 import com.tabslify.core.objects.prvt
 import com.tabslify.quiethoursnotificationhelper.laptopIp
 import com.tabslify.quiethoursnotificationhelper.laptopName
@@ -69,8 +71,17 @@ data class PendingPc(
 @Composable
 fun PCManagerTab() {
     val context = LocalContext.current
+    
+    val forbiddenMsg = stringResource(R.string.forbidden)
+    val unknownMsg = stringResource(R.string.unknown)
+    val pcAbgelehntMsg = stringResource(R.string.pc_abgelehnt)
+    val registriertAmMsg = stringResource(R.string.registriert_am)
+    val erfolgreichFreigegebenMsg = stringResource(R.string.erfolgreich_freigegeben)
+    val pcEntferntMsg = stringResource(R.string.pc_entfernt)
+    val alleAltenVerbindungenGeloeschtMsg = stringResource(R.string.alle_alten_verbindungen_geloscht)
+    
     if (!prvt()) {
-        Toast.makeText(context, "Forbidden", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, forbiddenMsg, Toast.LENGTH_SHORT).show()
         return
     }
 
@@ -105,7 +116,7 @@ fun PCManagerTab() {
                 val data = value.toString().split("|")
                 PendingPc(
                     name = name,
-                    ip = data.getOrNull(0) ?: "Unknown",
+                    ip = data.getOrNull(0) ?: unknownMsg,
                     uuid = data.getOrNull(1) ?: "NO_UUID"
                 )
             }
@@ -141,7 +152,7 @@ fun PCManagerTab() {
                     val displayName = currentConnectedName.ifEmpty { currentConnectedIp }
 
                     Text(
-                        text = "Aktiv verbunden mit",
+                        text = stringResource(R.string.aktiv_verbunden_mit),
                         fontSize = 12.sp,
                         color = Color.LightGray
                     )
@@ -160,7 +171,7 @@ fun PCManagerTab() {
                     }
                 } else {
                     Text(
-                        text = "Kein PC aktiv verbunden",
+                        text = stringResource(R.string.kein_pc_aktiv_verbunden),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFFE57373)
@@ -170,7 +181,7 @@ fun PCManagerTab() {
                 Spacer(modifier = Modifier.height(8.dp))
                 
                 Text(
-                    text = "Trigger Listener: $triggerStatus",
+                    text = stringResource(R.string.trigger_listener_2, triggerStatus),
                     fontSize = 11.sp,
                     color = Color.LightGray
                 )
@@ -187,7 +198,7 @@ fun PCManagerTab() {
             if (pendingList.isNotEmpty()) {
                 item {
                     Text(
-                        text = "Ausstehende Anfragen (${pendingList.size})",
+                        text = stringResource(R.string.ausstehende_anfragen, pendingList.size),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFFFB74D),
@@ -207,7 +218,7 @@ fun PCManagerTab() {
                             modifier = Modifier.padding(12.dp)
                         ) {
                             Text(
-                                text = "PC Name: ${pc.name}",
+                                text = stringResource(R.string.pc_name, pc.name),
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -218,7 +229,7 @@ fun PCManagerTab() {
                                 color = Color.LightGray
                             )
                             Text(
-                                text = "Hardware-ID: ${pc.uuid.take(16)}...",
+                                text = stringResource(R.string.hardware_id, pc.uuid.take(16)),
                                 fontSize = 11.sp,
                                 color = Color.Gray
                             )
@@ -230,19 +241,19 @@ fun PCManagerTab() {
                                 Button(
                                     onClick = {
                                         pendingPrefs.edit { remove(pc.name) }
-                                        Toast.makeText(context, "${pc.name} abgelehnt", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, pcAbgelehntMsg.format(pc.name), Toast.LENGTH_SHORT).show()
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFCF6679)),
                                     shape = RoundedCornerShape(8.dp),
                                     modifier = Modifier.padding(end = 8.dp)
                                 ) {
-                                    Text("Ablehnen", color = Color.White)
+                                    Text(stringResource(R.string.ablehnen), color = Color.White)
                                 }
 
                                 Button(
                                     onClick = {
                                         val nowStr = SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault()).format(Date())
-                                        prefs.edit().putString(pc.name, "Registriert am $nowStr").apply()
+                                        prefs.edit().putString(pc.name, registriertAmMsg.format(nowStr)).apply()
                                         uuidPrefs.edit().putString(pc.name, pc.uuid).apply()
 
                                         pendingPrefs.edit {remove(pc.name)}
@@ -252,12 +263,12 @@ fun PCManagerTab() {
 
                                         syncTodosWithLaptop(context, true)
                                         
-                                        Toast.makeText(context, "${pc.name} erfolgreich freigegeben!", Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, erfolgreichFreigegebenMsg.format(pc.name), Toast.LENGTH_LONG).show()
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
                                     shape = RoundedCornerShape(8.dp)
                                 ) {
-                                    Text("Erlauben", color = Color.White)
+                                    Text(stringResource(R.string.erlauben), color = Color.White)
                                 }
                             }
                         }
@@ -268,7 +279,7 @@ fun PCManagerTab() {
             // 2. Registered PCs Section
             item {
                 Text(
-                    text = "Registrierte Geräte",
+                    text = stringResource(R.string.registrierte_gerate),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
@@ -279,7 +290,7 @@ fun PCManagerTab() {
             if (pcDetailsList.isEmpty()) {
                 item {
                     Text(
-                        text = "Keine PCs registriert",
+                        text = stringResource(R.string.keine_pcs_registriert),
                         fontSize = 14.sp,
                         color = Color.Gray,
                         modifier = Modifier.padding(vertical = 8.dp)
@@ -315,13 +326,13 @@ fun PCManagerTab() {
                                         if (pc.name == laptopName) {
                                             stopAllSyncServices(context)
                                         }
-                                        Toast.makeText(context, "${pc.name} entfernt", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, pcEntferntMsg.format(pc.name), Toast.LENGTH_SHORT).show()
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0x33CF6679)),
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
-                                    Text("Entfernen", color = Color(0xFFEF5350), fontSize = 11.sp)
+                                    Text(stringResource(R.string.entfernen), color = Color(0xFFEF5350), fontSize = 11.sp)
                                 }
                             }
                             Text(
@@ -331,13 +342,13 @@ fun PCManagerTab() {
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "TOTP Key: ${pc.secret}",
+                                text = stringResource(R.string.totp_key, pc.secret),
                                 fontSize = 12.sp,
                                 color = Color(0xFFFFB74D),
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Aktueller Code: ${pc.liveCode}",
+                                text = stringResource(R.string.aktueller_code, pc.liveCode),
                                 fontSize = 14.sp,
                                 color = Color.White
                             )
@@ -354,13 +365,13 @@ fun PCManagerTab() {
                         pendingPrefs.edit().clear().apply()
                         uuidPrefs.edit().clear().apply()
                         stopAllSyncServices(context)
-                        Toast.makeText(context, "Alle alten Verbindungen gelöscht!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, alleAltenVerbindungenGeloeschtMsg, Toast.LENGTH_SHORT).show()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0x1ACF6679)),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Alte Verbindungen & Prefs löschen", color = Color(0xFFEF5350), fontSize = 13.sp)
+                    Text(stringResource(R.string.alte_verbindungen_prefs_loschen), color = Color(0xFFEF5350), fontSize = 13.sp)
                 }
             }
         }
