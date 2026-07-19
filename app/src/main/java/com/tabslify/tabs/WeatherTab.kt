@@ -75,6 +75,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -86,6 +87,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.tabslify.R
 import com.tabslify.core.TabNavigationViewModel
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.client
@@ -408,14 +410,7 @@ fun WeatherTabContent(
                 data = Uri.fromParts("package", ctx.packageName, null)
             }
             ctx.startActivity(intent)
-            val locale = Resources.getSystem().configuration.locales[0]
-            val language = locale.language
-
-            if (language == "de") {
-                toast(ctx, "Berechtigungen -> Standort -> Immer erlauben")
-            } else {
-                toast(ctx, "Permissions -> Location -> Allow all the time")
-            }
+            toast(ctx, ctx.getString(R.string.berechtigungen_standort_immer_erlauben))
             directedToSettings = true
         }
     }
@@ -461,7 +456,7 @@ fun WeatherTabContent(
                     apiKey = Config.userApiKey(ctx, "weatherapi")
                 )
             } catch (e: Exception) {
-                error = "Fehler: ${e.message}"
+                error = ctx.getString(R.string.fehler_msg, e.message)
             } finally {
                 isLoading = false
                 animIconbgColor.animateTo(
@@ -484,7 +479,7 @@ fun WeatherTabContent(
             try {
                 val coords = fetchCoordsForCity(query)
                 if (coords == null) {
-                    error = "Ort nicht gefunden: $query"
+                    error = ctx.getString(R.string.ort_nicht_gefunden, query)
                 } else {
                     weather = fetchWeatherForecast(
                         coords.first,
@@ -494,7 +489,7 @@ fun WeatherTabContent(
                     )
                 }
             } catch (e: Exception) {
-                error = "Fehler: ${e.message}"
+                error = ctx.getString(R.string.fehler_msg, e.message)
             } finally {
                 isLoading = false
             }
@@ -558,7 +553,7 @@ fun WeatherTabContent(
                         value = searchText,
                         onValueChange = { searchText = it },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("Ort suchen...", color = Color.Gray) },
+                        placeholder = { Text(stringResource(R.string.ort_suchen), color = Color.Gray) },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color(0xFF6B6BFF),
@@ -575,7 +570,7 @@ fun WeatherTabContent(
                     IconButton(onClick = { searchWeather(searchText) }) {
                         Icon(
                             Icons.Default.Search,
-                            contentDescription = "Search",
+                            contentDescription = stringResource(R.string.search),
                             tint = Color.White
                         )
                     }
@@ -626,7 +621,7 @@ fun WeatherTabContent(
                             contentAlignment = Alignment.Center
                         ) {
                             if (!isLoading) {
-                                Text("Keine Daten verfügbar", color = Color.LightGray)
+                                Text(stringResource(R.string.keine_daten_verfugbar), color = Color.LightGray)
                             }
                         }
                     } else {
@@ -760,7 +755,7 @@ fun BackHintOverlay(onDismiss: () -> Unit) {
                     Text("💡", fontSize = 12.sp)
                     Spacer(Modifier.width(7.dp))
                     Text(
-                        "TIPP",
+                        stringResource(R.string.tipp),
                         color = Color(0xFFC9BEF7),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
@@ -768,14 +763,14 @@ fun BackHintOverlay(onDismiss: () -> Unit) {
                 }
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "Zurück zur Übersicht",
+                    stringResource(R.string.zuruck_zur_ubersicht),
                     color = Color(0xFFF7F5FB),
                     fontSize = 23.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "Du hast einen Tag geöffnet. Wische vom linken Rand nach rechts – oder nutze die Zurück-Geste deines Handys – um wieder zur Wetter-Übersicht zu gelangen.",
+                    stringResource(R.string.du_hast_einen_tag_geoffnet),
                     color = Color(0xA8FFFFFF),
                     fontSize = 15.sp,
                     lineHeight = 22.sp
@@ -791,7 +786,7 @@ fun BackHintOverlay(onDismiss: () -> Unit) {
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        "Verstanden",
+                        stringResource(R.string.verstanden),
                         color = Color.White,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold
@@ -818,7 +813,7 @@ fun MainView(data: WeatherData, onDaySelected: (Int) -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        "Heute",
+                        stringResource(R.string.heute),
                         color = Color(0xFF8B8B9F),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
@@ -853,8 +848,8 @@ fun MainView(data: WeatherData, onDaySelected: (Int) -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        QuickInfoItem("Gefühlt", "${data.currentFeelsLike.toInt()}°C")
-                        QuickInfoItem("Ø Tag", "${today.avgTemp.toInt()}°C")
+                        QuickInfoItem(stringResource(R.string.gefuhlt), "${data.currentFeelsLike.toInt()}°C")
+                        QuickInfoItem(stringResource(R.string.tag), "${today.avgTemp.toInt()}°C")
                     }
                 }
             }
@@ -863,7 +858,7 @@ fun MainView(data: WeatherData, onDaySelected: (Int) -> Unit) {
         Spacer(Modifier.height(24.dp))
 
         Text(
-            "Vorschau",
+            stringResource(R.string.vorschau),
             color = Color.White,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
@@ -948,11 +943,12 @@ fun DayCard(day: DayData, dayIndex: Int, onClick: () -> Unit) {
     }
 }
 
+@Composable
 fun getDayName(index: Int): String {
     return when (index) {
-        1 -> "Morgen"
-        2 -> "Übermorgen"
-        else -> "Tag ${index + 1}"
+        1 -> stringResource(R.string.morgen)
+        2 -> stringResource(R.string.ubermorgen_2)
+        else -> stringResource(R.string.tag_2, index + 1)
     }
 }
 
@@ -960,7 +956,7 @@ fun getDayName(index: Int): String {
 fun DayHoursView(day: DayData, onHourSelected: (HourData) -> Unit) {
     Column {
         Text(
-            "Stunden für ${day.date}",
+            stringResource(R.string.stunden_fur, day.date),
             color = Color.White,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
@@ -1070,15 +1066,15 @@ fun SelectedHourView(hour: HourData) {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    WeatherDetailBox("Gefühlt", "${hour.feelsLike.toInt()}°C")
-                    WeatherDetailBox("Luftfeuchtigkeit", "${hour.humidity}%")
+                    WeatherDetailBox(stringResource(R.string.gefuhlt), "${hour.feelsLike.toInt()}°C")
+                    WeatherDetailBox(stringResource(R.string.luftfeuchtigkeit), "${hour.humidity}%")
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    WeatherDetailBox("Wind", "${hour.wind.toInt()} km/h")
-                    WeatherDetailBox("Luftdruck", "${hour.pressure} hPa")
+                    WeatherDetailBox(stringResource(R.string.wind), "${hour.wind.toInt()} km/h")
+                    WeatherDetailBox(stringResource(R.string.luftdruck), "${hour.pressure} hPa")
                 }
             }
         }
@@ -1102,7 +1098,7 @@ fun WeatherDetailBox(label: String, value: String) {
             verticalArrangement = Arrangement.Center
         ) {
             //Text(icon, fontSize = 24.sp)
-            Icon(Icons.Default.Thermostat, contentDescription = "Thermostat")
+            Icon(Icons.Default.Thermostat, contentDescription = stringResource(R.string.thermostat))
             Spacer(Modifier.height(4.dp))
             Text(
                 label,
@@ -1161,29 +1157,30 @@ private fun createWeatherNotification(context: Context, dayName: String, hourDat
 
     val channel = NotificationChannel(
         channelId,
-        "Wetter Benachrichtigungen",
+        context.getString(R.string.wetter_benachrichtigungen),
         NotificationManager.IMPORTANCE_DEFAULT
     ).apply {
-        description = "Benachrichtigungen für Wettervorhersagen"
+        description = context.getString(R.string.benachrichtigungen_fur_wettervorhersagen)
     }
     notificationManager.createNotificationChannel(channel)
 
     val notification = NotificationCompat.Builder(context, channelId)
         .setSmallIcon(android.R.drawable.ic_dialog_info)
-        .setContentTitle("☁️ Wetter für $dayName um ${hourData.time} Uhr")
-        .setContentText("${hourData.temp.toInt()}°C - ${hourData.condition}")
+        .setContentTitle(context.getString(R.string.wetter_fur_um_uhr, dayName, hourData.time))
+        .setContentText(context.getString(R.string.c, hourData.temp.toInt(), hourData.condition))
         .setStyle(
             NotificationCompat.BigTextStyle()
                 .bigText(
-                    """
-                    ${iconToEmoji(hourData.icon)} ${hourData.condition}
-                    
-                    🌡️ Temperatur: ${hourData.temp.toInt()}°C
-                    🌡️ Gefühlt: ${hourData.feelsLike.toInt()}°C
-                    💧 Luftfeuchtigkeit: ${hourData.humidity}%
-                    💨 Wind: ${hourData.wind.toInt()} km/h
-                    🔽 Luftdruck: ${hourData.pressure} hPa
-                    """.trimIndent()
+                    context.getString(
+                        R.string.wetter_notification_body,
+                        iconToEmoji(hourData.icon),
+                        hourData.condition,
+                        hourData.temp.toInt(),
+                        hourData.feelsLike.toInt(),
+                        hourData.humidity,
+                        hourData.wind.toInt(),
+                        hourData.pressure
+                    )
                 )
         )
         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
