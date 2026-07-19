@@ -82,6 +82,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -96,6 +97,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.edit
 import androidx.core.net.toUri
+import com.tabslify.R
 import com.tabslify.core.objects.Config.realDevice
 import com.tabslify.core.objects.prvt
 import kotlinx.coroutines.Dispatchers
@@ -121,6 +123,13 @@ fun PasswordManagerScreen(
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    
+    val keinNetzwerkVerfuegbarMsg = stringResource(R.string.kein_netzwerk_verfugbar)
+    val syncFehlgeschlagenMsg = stringResource(R.string.sync_fehlgeschlagen)
+    val eintragGespeichertMsg = stringResource(R.string.eintrag_gespeichert)
+    val aktualisiertMsg = stringResource(R.string.aktualisiert_2)
+    val passwortMsg = stringResource(R.string.passwort)
+    val kopiertMsg = stringResource(R.string.kopiert)
 
     var entries by remember { mutableStateOf<List<PasswordEntry>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
@@ -169,7 +178,7 @@ fun PasswordManagerScreen(
             Column(modifier = Modifier.weight(1f)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(
-                        "🔒 Passwörter",
+                        stringResource(R.string.passworter),
                         color = TextP,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold
@@ -179,19 +188,19 @@ fun PasswordManagerScreen(
                             onClick = { showAddDialog = true },
                             modifier = Modifier.size(32.dp)
                         ) {
-                            Icon(Icons.Default.Add, "Hinzufügen", tint = AccentBlue)
+                            Icon(Icons.Default.Add, stringResource(R.string.hinzufugen), tint = AccentBlue)
                         }
                         IconButton(
                             onClick = { showImportDialog = true },
                             modifier = Modifier.size(32.dp)
                         ) {
-                            Icon(Icons.Default.FileUpload, "Import", tint = AccentBlue)
+                            Icon(Icons.Default.FileUpload, stringResource(R.string.import_action_secondary), tint = AccentBlue)
                         }
                         IconButton(
                             onClick = onSettingsClick,
                             modifier = Modifier.size(32.dp)
                         ) {
-                            Icon(Icons.Default.Settings, "Einstellungen", tint = AccentBlue)
+                            Icon(Icons.Default.Settings, stringResource(R.string.einstellungen), tint = AccentBlue)
                         }
                         if (prvt()) {
                             var clickcount by remember { mutableIntStateOf(0) }
@@ -205,7 +214,7 @@ fun PasswordManagerScreen(
                                 },
                                 modifier = Modifier.size(32.dp)
                             ) {
-                                Icon(Icons.Default.Delete, "Import", tint = AccentBlue)
+                                Icon(Icons.Default.Delete, stringResource(R.string.import_action_secondary), tint = AccentBlue)
                             }
                             IconButton(
                                 onClick = {
@@ -230,7 +239,7 @@ fun PasswordManagerScreen(
                                                     ) {
                                                         Toast.makeText(
                                                             context,
-                                                            "Kein Netzwerk verfügbar",
+                                                            keinNetzwerkVerfuegbarMsg,
                                                             Toast.LENGTH_LONG
                                                         ).show()
                                                         return@launch
@@ -245,7 +254,7 @@ fun PasswordManagerScreen(
                                                 } catch (e: Exception) {
                                                     Toast.makeText(
                                                         context,
-                                                        "Sync fehlgeschlagen: ${e.message}",
+                                                        syncFehlgeschlagenMsg.format(e.message),
                                                         Toast.LENGTH_LONG
                                                     ).show()
                                                 } finally {
@@ -257,13 +266,13 @@ fun PasswordManagerScreen(
                                 },
                                 modifier = Modifier.size(32.dp)
                             ) {
-                                Icon(Icons.Default.Refresh, "Import", tint = AccentBlue)
+                                Icon(Icons.Default.Refresh, stringResource(R.string.import_action_secondary), tint = AccentBlue)
                             }
                         }
                     }
                 }
                 Text(
-                    "${entries.size} Einträge",
+                    stringResource(R.string.eintrage, entries.size),
                     color = TextS,
                     fontSize = 12.sp
                 )
@@ -276,7 +285,7 @@ fun PasswordManagerScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
-            placeholder = { Text("Suche...", color = TextT) },
+            placeholder = { Text(stringResource(R.string.suche_platzhalter), color = TextT) },
             leadingIcon = { Icon(Icons.Default.Search, null, tint = TextS) },
             trailingIcon = {
                 if (searchQuery.isNotEmpty()) {
@@ -343,7 +352,7 @@ fun PasswordManagerScreen(
                         },
                         onCopy = {
                             scope.launch {
-                                copyToClipboard(context, "Passwort", entry.password)
+                                copyToClipboard(context, passwortMsg, entry.password, kopiertMsg)
                             }
                         }
                     )
@@ -363,7 +372,7 @@ fun PasswordManagerScreen(
                     db.passwordDao().insert(newEntry)
                     showAddDialog = false
                     reload()
-                    Toast.makeText(context, "✅ Eintrag gespeichert", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, eintragGespeichertMsg, Toast.LENGTH_SHORT).show()
                 }
             }
         )
@@ -379,7 +388,7 @@ fun PasswordManagerScreen(
                     db.passwordDao().update(updated.copy(updatedAt = System.currentTimeMillis()))
                     editEntry = null
                     reload()
-                    Toast.makeText(context, "✅ Aktualisiert", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, aktualisiertMsg, Toast.LENGTH_SHORT).show()
                 }
             }
         )
@@ -473,7 +482,7 @@ private fun PasswordCard(
             IconButton(onClick = onCopy, modifier = Modifier.size(36.dp)) {
                 Icon(
                     Icons.Default.ContentCopy,
-                    "Kopieren",
+                    stringResource(R.string.kopieren),
                     tint = TextS,
                     modifier = Modifier.size(18.dp)
                 )
@@ -486,16 +495,16 @@ private fun PasswordCard(
             modifier = Modifier.background(Surface2)
         ) {
             DropdownMenuItem(
-                text = { Text("✏️  Bearbeiten", color = TextP) },
+                text = { Text(stringResource(R.string.bearbeiten_3), color = TextP) },
                 onClick = { showMenu = false; onEdit() }
             )
             DropdownMenuItem(
-                text = { Text("📋  Passwort kopieren", color = TextP) },
+                text = { Text(stringResource(R.string.passwort_kopieren), color = TextP) },
                 onClick = { showMenu = false; onCopy() }
             )
             HorizontalDivider(color = Surface3)
             DropdownMenuItem(
-                text = { Text("🗑️  Löschen", color = AccentRed) },
+                text = { Text(stringResource(R.string.loschen_2), color = AccentRed) },
                 onClick = { showMenu = false; onDelete() }
             )
         }
@@ -517,6 +526,10 @@ private fun PasswordDetailSheet(
     var matchedTwoFa by remember { mutableStateOf<TwoFAEntry?>(null) }
     var totpCode by remember { mutableStateOf("------") }
     var totpSecondsLeft by remember { mutableIntStateOf(30) }
+
+    val benutzernameMsg = stringResource(R.string.benutzername_2)
+    val passwortMsg = stringResource(R.string.passwort)
+    val kopiertMsg = stringResource(R.string.kopiert)
 
     LaunchedEffect(entry) {
         val allTwoFa = withContext(Dispatchers.IO) { twoFaDb.twoFADao().getAll() }
@@ -580,16 +593,16 @@ private fun PasswordDetailSheet(
                 ) {
                     if (entry.username.isNotEmpty()) {
                         DetailField(
-                            label = "👤 Benutzername",
+                            label = stringResource(R.string.benutzername),
                             value = entry.username,
-                            onCopy = { copyToClipboard(context, "Benutzername", entry.username) }
+                            onCopy = { copyToClipboard(context, benutzernameMsg, entry.username, kopiertMsg) }
                         )
                         Spacer(Modifier.height(12.dp))
                     }
 
                     Column {
                         Text(
-                            "🔒 Passwort",
+                            stringResource(R.string.passwort_2),
                             color = TextS,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold
@@ -622,7 +635,7 @@ private fun PasswordDetailSheet(
                                 )
                             }
                             IconButton(
-                                onClick = { copyToClipboard(context, "Passwort", entry.password) },
+                                onClick = { copyToClipboard(context, passwortMsg, entry.password, kopiertMsg) },
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
@@ -643,7 +656,7 @@ private fun PasswordDetailSheet(
                         Spacer(Modifier.height(12.dp))
                         Column {
                             Text(
-                                "🛡️ 2FA-Code",
+                                stringResource(R.string.s_2fa_code_2),
                                 color = TextS,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -668,13 +681,13 @@ private fun PasswordDetailSheet(
                                         fontFamily = FontFamily.Monospace
                                     )
                                     Text(
-                                        "Gültig noch: ${totpSecondsLeft}s",
+                                        stringResource(R.string.gultig_noch_s, totpSecondsLeft),
                                         color = TextT,
                                         fontSize = 11.sp
                                     )
                                 }
                                 IconButton(
-                                    onClick = { copyToClipboard(context, "2FA-Code", totpCode) },
+                                    onClick = { copyToClipboard(context, "2FA-Code", totpCode, kopiertMsg) },
                                     modifier = Modifier.size(32.dp)
                                 ) {
                                     Icon(
@@ -691,9 +704,9 @@ private fun PasswordDetailSheet(
                     if (entry.url.isNotEmpty()) {
                         Spacer(Modifier.height(12.dp))
                         DetailField(
-                            label = "🌐 URL",
+                            label = stringResource(R.string.url),
                             value = entry.url,
-                            onCopy = { copyToClipboard(context, "URL", entry.url) },
+                            onCopy = { copyToClipboard(context, "URL", entry.url, kopiertMsg) },
                             onOpen = {
                                 val uri =
                                     if (entry.url.startsWith("http://") || entry.url.startsWith("https://"))
@@ -709,7 +722,7 @@ private fun PasswordDetailSheet(
                         Spacer(Modifier.height(12.dp))
                         Column {
                             Text(
-                                "📝 Notizen",
+                                stringResource(R.string.notizen_2),
                                 color = TextS,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -742,13 +755,13 @@ private fun PasswordDetailSheet(
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentRed),
                         border = BorderStroke(1.dp, AccentRed),
                         modifier = Modifier.weight(1f)
-                    ) { Text("Löschen") }
+                    ) { Text(stringResource(R.string.loschen)) }
 
                     Button(
                         onClick = onEdit,
                         colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
                         modifier = Modifier.weight(1f)
-                    ) { Text("Bearbeiten") }
+                    ) { Text(stringResource(R.string.bearbeiten)) }
                 }
             }
         }
@@ -758,16 +771,16 @@ private fun PasswordDetailSheet(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             containerColor = Surface1,
-            title = { Text("Eintrag löschen?", color = TextP) },
-            text = { Text("\"${entry.name}\" wird dauerhaft gelöscht.", color = TextS) },
+            title = { Text(stringResource(R.string.eintrag_loschen), color = TextP) },
+            text = { Text(stringResource(R.string.wird_dauerhaft_geloscht, entry.name), color = TextS) },
             confirmButton = {
                 TextButton(onClick = { showDeleteConfirm = false; onDelete() }) {
-                    Text("Löschen", color = AccentRed, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.loschen), color = AccentRed, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Abbrechen", color = TextS)
+                    Text(stringResource(R.string.abbrechen), color = TextS)
                 }
             }
         )
@@ -891,23 +904,23 @@ fun AddEditPasswordDialog(
                 .padding(24.dp)
         ) {
             Text(
-                if (isEdit) "✏️  Bearbeiten" else "➕  Neuer Eintrag",
+                if (isEdit) stringResource(R.string.bearbeiten_3) else stringResource(R.string.neuer_eintrag_2),
                 color = TextP, fontSize = 18.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
             )
 
             Spacer(Modifier.height(20.dp))
-            PwField(label = "Name *", value = name, onValueChange = { name = it })
+            PwField(label = stringResource(R.string.name_2), value = name, onValueChange = { name = it })
             Spacer(Modifier.height(12.dp))
             PwField(
-                label = "URL / Domain",
+                label = stringResource(R.string.url_domain),
                 value = url,
                 onValueChange = { url = it },
                 keyboardType = KeyboardType.Uri
             )
             Spacer(Modifier.height(12.dp))
             PwField(
-                label = "Benutzername / E-Mail",
+                label = stringResource(R.string.benutzername_e_mail),
                 value = username,
                 onValueChange = { username = it },
                 keyboardType = KeyboardType.Email
@@ -916,7 +929,7 @@ fun AddEditPasswordDialog(
 
             Column {
                 Text(
-                    "Passwort *",
+                    stringResource(R.string.passwort_3),
                     color = TextS,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold
@@ -959,7 +972,7 @@ fun AddEditPasswordDialog(
                     IconButton(onClick = { showGen = true }, modifier = Modifier.size(36.dp)) {
                         Icon(
                             Icons.Default.AutoFixHigh,
-                            "Generieren",
+                            stringResource(R.string.generieren),
                             tint = AccentBlue,
                             modifier = Modifier.size(18.dp)
                         )
@@ -978,7 +991,7 @@ fun AddEditPasswordDialog(
 
             Column {
                 Text(
-                    "🛡️ 2FA-Secret (optional)",
+                    stringResource(R.string.s_2fa_secret_optional),
                     color = TextS,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold
@@ -1016,7 +1029,7 @@ fun AddEditPasswordDialog(
                             Box {
                                 if (twoFaSecret.isEmpty()) {
                                     Text(
-                                        "Base32-Schlüssel oder QR scannen",
+                                        stringResource(R.string.base32_schlussel_oder_qr_scannen),
                                         color = TextT,
                                         fontSize = 13.sp,
                                         fontFamily = FontFamily.Monospace
@@ -1042,7 +1055,7 @@ fun AddEditPasswordDialog(
                     IconButton(onClick = { showScanner = true }, modifier = Modifier.size(36.dp)) {
                         Icon(
                             Icons.Default.QrCodeScanner,
-                            "QR scannen",
+                            stringResource(R.string.qr_scannen),
                             tint = AccentBlue,
                             modifier = Modifier.size(18.dp)
                         )
@@ -1051,8 +1064,8 @@ fun AddEditPasswordDialog(
                 if (twoFaSecret.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        if (existingTwoFaEntry != null) "✅ Vorhandener 2FA-Eintrag wird aktualisiert"
-                        else "✨ Neuer 2FA-Eintrag wird verknüpft",
+                        if (existingTwoFaEntry != null) stringResource(R.string.vorhandener_2fa_eintrag_wird_aktualisiert)
+                        else stringResource(R.string.neuer_2fa_eintrag_wird_verknupft),
                         color = AccentBlue, fontSize = 11.sp
                     )
                 }
@@ -1061,7 +1074,7 @@ fun AddEditPasswordDialog(
             Spacer(Modifier.height(12.dp))
 
             Column {
-                Text("Notizen", color = TextS, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.notizen), color = TextS, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(4.dp))
                 OutlinedTextField(
                     value = notes,
@@ -1083,7 +1096,7 @@ fun AddEditPasswordDialog(
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
-                    Text("Abbrechen", color = TextS)
+                    Text(stringResource(R.string.abbrechen), color = TextS)
                 }
                 Button(
                     onClick = {
@@ -1132,7 +1145,7 @@ fun AddEditPasswordDialog(
                     enabled = isValid,
                     colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
                     modifier = Modifier.weight(1f)
-                ) { Text("Speichern") }
+                ) { Text(stringResource(R.string.speichern)) }
             }
         }
     }
@@ -1152,6 +1165,9 @@ fun PasswordGeneratorSheet(
     var noAmbiguous by remember { mutableStateOf(false) }
     var generated by remember { mutableStateOf("") }
     val context = LocalContext.current
+
+    val passwortMsg = stringResource(R.string.passwort)
+    val kopiertMsg = stringResource(R.string.kopiert)
 
     LaunchedEffect(length, useLower, useUpper, useDigits, useSymbols, noAmbiguous) {
         generated = PasswordGenerator.generate(
@@ -1177,7 +1193,7 @@ fun PasswordGeneratorSheet(
                 .padding(24.dp)
         ) {
             Text(
-                "⚡ Passwort-Generator",
+                stringResource(R.string.passwort_generator),
                 color = TextP,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
@@ -1201,7 +1217,7 @@ fun PasswordGeneratorSheet(
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(
-                        onClick = { copyToClipboard(context, "Passwort", generated) },
+                        onClick = { copyToClipboard(context, passwortMsg, generated, kopiertMsg) },
                         modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
@@ -1241,7 +1257,7 @@ fun PasswordGeneratorSheet(
             Spacer(Modifier.height(20.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Länge:", color = TextS, fontSize = 13.sp, modifier = Modifier.width(60.dp))
+                Text(stringResource(R.string.lange), color = TextS, fontSize = 13.sp, modifier = Modifier.width(60.dp))
                 Slider(
                     value = length,
                     onValueChange = { length = it },
@@ -1263,24 +1279,24 @@ fun PasswordGeneratorSheet(
 
             Spacer(Modifier.height(12.dp))
 
-            ToggleRow("Kleinbuchstaben (a-z)", useLower) { useLower = it }
-            ToggleRow("Großbuchstaben (A-Z)", useUpper) { useUpper = it }
-            ToggleRow("Ziffern (0-9)", useDigits) { useDigits = it }
-            ToggleRow("Sonderzeichen (!@#...)", useSymbols) { useSymbols = it }
-            ToggleRow("Keine ähnl. Zeichen (0Ol1)", noAmbiguous) { noAmbiguous = it }
+            ToggleRow(stringResource(R.string.kleinbuchstaben_a_z), useLower) { useLower = it }
+            ToggleRow(stringResource(R.string.grosbuchstaben_a_z), useUpper) { useUpper = it }
+            ToggleRow(stringResource(R.string.ziffern_0_9), useDigits) { useDigits = it }
+            ToggleRow(stringResource(R.string.sonderzeichen), useSymbols) { useSymbols = it }
+            ToggleRow(stringResource(R.string.keine_ahnl_zeichen_0ol1), noAmbiguous) { noAmbiguous = it }
 
             Spacer(Modifier.height(20.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
-                    Text("Abbrechen", color = TextS)
+                    Text(stringResource(R.string.abbrechen), color = TextS)
                 }
                 Button(
                     onClick = { onAccept(generated) },
                     enabled = generated.isNotEmpty() && (useLower || useUpper || useDigits || useSymbols),
                     colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
                     modifier = Modifier.weight(1f)
-                ) { Text("Übernehmen") }
+                ) { Text(stringResource(R.string.ubernehmen)) }
             }
         }
     }
@@ -1299,9 +1315,9 @@ fun StrengthBar(strength: PasswordStrength) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("Stärke:", color = TextT, fontSize = 11.sp)
+            Text(stringResource(R.string.starke), color = TextT, fontSize = 11.sp)
             Text(
-                strength.label,
+                stringResource(strength.labelRes),
                 color = strength.color,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold
@@ -1381,13 +1397,13 @@ private fun EmptyState(hasEntries: Boolean) {
             Text(if (hasEntries) "🔍" else "🔐", fontSize = 56.sp)
             Spacer(Modifier.height(16.dp))
             Text(
-                if (hasEntries) "Keine Treffer" else "Noch keine Passwörter",
+                if (hasEntries) stringResource(R.string.keine_treffer) else stringResource(R.string.noch_keine_passworter),
                 color = TextP,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                if (hasEntries) "Passe die Suche an" else "Tippe auf + um loszulegen",
+                if (hasEntries) stringResource(R.string.passe_die_suche_an) else stringResource(R.string.tippe_auf_um_loszulegen),
                 color = TextS, fontSize = 14.sp
             )
         }
@@ -1395,8 +1411,8 @@ private fun EmptyState(hasEntries: Boolean) {
 }
 
 
-fun copyToClipboard(context: Context, label: String, value: String) {
+fun copyToClipboard(context: Context, label: String, value: String, kopiertMsg: String) {
     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     cm.setPrimaryClip(ClipData.newPlainText(label, value))
-    Toast.makeText(context, "📋 $label kopiert", Toast.LENGTH_SHORT).show()
+    Toast.makeText(context, kopiertMsg.format(label), Toast.LENGTH_SHORT).show()
 }
