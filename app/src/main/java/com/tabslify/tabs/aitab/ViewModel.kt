@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.tabslify.R
 import com.tabslify.core.objects.prvt
 import com.tabslify.privatetabslifyapp.isOnline
 import com.tabslify.quiethoursnotificationhelper.AiProvider
@@ -126,14 +127,14 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
     fun getUsageResetText(): String {
         val now = System.currentTimeMillis()
         val target = usageResetAt + USAGE_RESET_MS
-        if (target <= now) return "Wird gleich zurückgesetzt"
+        if (target <= now) return getApplication<Application>().getString(R.string.wird_gleich_zuruckgesetzt)
         val remaining = target - now
         val hours = remaining / 3_600_000
         val minutes = (remaining % 3_600_000) / 60_000
         val resetTime = Calendar.getInstance().apply { timeInMillis = target }
         val hh = resetTime.get(Calendar.HOUR_OF_DAY).toString().padStart(2, '0')
         val mm = resetTime.get(Calendar.MINUTE).toString().padStart(2, '0')
-        return "Reset um $hh:$mm (${hours}h ${minutes}m)"
+        return getApplication<Application>().getString(R.string.reset_um_h_m, hh, mm, hours, minutes)
     }
 
     fun setMode(mode: String) {
@@ -179,7 +180,7 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
 
         history.add(
             ChatMessage(
-                text = userText.ifEmpty { "Beschreibe das Bild" },
+                text = userText.ifEmpty { ctx.getString(R.string.beschreibe_das_bild) },
                 ts = System.currentTimeMillis(),
                 own = true
             )
@@ -214,7 +215,7 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
                 val response = withContext(Dispatchers.IO) {
                     send(
                         ctx,
-                        userText.ifEmpty { "Beschreibe das Bild" },
+                        userText.ifEmpty { ctx.getString(R.string.beschreibe_das_bild) },
                         effectivePic,
                         onToken
                     )
@@ -224,13 +225,13 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
 
                 sendAITabBackgroundNotification(
                     ctx,
-                    title = "AITab answer",
+                    title = ctx.getString(R.string.aitab_answer),
                     message = response
                 )
             } catch (e: Exception) {
                 if (placeholderIndex < history.size) {
                     history[placeholderIndex] = ChatMessage(
-                        "Fehler: ${e.message}",
+                        ctx.getString(R.string.fehler_msg, e.message),
                         placeholderTs,
                         false,
                         modeAtSend
@@ -249,7 +250,7 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
         pic: String?,
         onToken: (String) -> Unit
     ): String {
-        if (!isOnline(ctx)) return "Kein Netzwerk"
+        if (!isOnline(ctx)) return ctx.getString(R.string.kein_netzwerk)
         return when (currentMode) {
             "Nvidia" -> sendAiRequest(
                 ctx,
@@ -259,7 +260,7 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
                 model = selectedModel.realname,
                 provider = AiProvider.NVIDIA,
                 onToken = onToken
-            ) ?: "Fehler"
+            ) ?: ctx.getString(R.string.fehler)
 
             "Server" -> askServer(history, txt, selectedModel.realname, pic)
             "Gemini" -> sendAiRequest(
@@ -271,9 +272,9 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
                 model = selectedModel.realname,
                 provider = AiProvider.GEMINI,
                 onToken = onToken
-            ) ?: "Fehler"
+            ) ?: ctx.getString(R.string.fehler)
 
-            else -> "Wähle einen Modus"
+            else -> ctx.getString(R.string.wahle_einen_modus)
         }
     }
 
