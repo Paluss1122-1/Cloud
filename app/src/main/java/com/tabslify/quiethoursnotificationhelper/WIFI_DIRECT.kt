@@ -145,6 +145,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.milliseconds
@@ -167,6 +168,7 @@ private var reportDebounceJob: Job? = null
 private var pendingReportIntent: Intent? = null
 private val akkuReceiver = AkkuReceiver()
 private val bluetoothReceiver = BluetoothReceiver()
+private val volumeChangeReceiver = VolumeChangeReceiver()
 private val connectedBluetoothDevices = mutableSetOf<String>()
 private var deviceInfoNetworkCallback: ConnectivityManager.NetworkCallback? = null
 private var deviceInfoBroadcastReceiver: BroadcastReceiver? = null
@@ -177,6 +179,7 @@ val bluetoothIntentFilter: IntentFilter = IntentFilter().apply {
     addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
     addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
 }
+val volumeChangeIntentFilter = IntentFilter("android.media.VOLUME_CHANGED_ACTION")
 
 fun handleBluetoothBroadcast(context: Context, intent: Intent) {
     try {
@@ -808,6 +811,7 @@ fun restoreSyncIfNeeded(context: Context) {
         startSpotifyHistoryListener(context)
         context.registerReceiver(akkuReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         context.registerReceiver(bluetoothReceiver, bluetoothIntentFilter)
+        context.registerReceiver(volumeChangeReceiver, volumeChangeIntentFilter)
         registerDeviceInfoNetworkListeners(context)
         syncScope.launch {
             delay(5_000.milliseconds)
@@ -871,6 +875,10 @@ fun stopAllSyncServices(context: Context) {
     }
     try {
         context.unregisterReceiver(bluetoothReceiver)
+    } catch (_: IllegalArgumentException) {
+    }
+    try {
+        context.unregisterReceiver(volumeChangeReceiver)
     } catch (_: IllegalArgumentException) {
     }
     unregisterDeviceInfoNetworkListeners(context)
@@ -1030,6 +1038,7 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                         IntentFilter(Intent.ACTION_BATTERY_CHANGED)
                     )
                     context.registerReceiver(bluetoothReceiver, bluetoothIntentFilter)
+                    context.registerReceiver(volumeChangeReceiver, volumeChangeIntentFilter)
                     registerDeviceInfoNetworkListeners(context)
                 }
 
@@ -1937,8 +1946,8 @@ fun checkIfNearLocation(
     radiusMeters: Float = 550f,
     callback: (Boolean) -> Unit
 ) {
-    if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
-        != PackageManager.PERMISSION_GRANTED
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
     ) {
         callback(true)
         return
@@ -2593,7 +2602,9 @@ private fun getHotspotState(context: Context): String {
 
 fun getVolume(context: Context): Int {
     val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    return audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+    val current = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+    val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+    return if (max > 0) ((current * 100f) / max).roundToInt().coerceIn(0, 100) else 0
 }
 
 fun registerDeviceInfoNetworkListeners(context: Context) {
@@ -2719,7 +2730,7 @@ private fun sendDeviceInformation(context: Context, intent: Intent? = null) {
         if (cache.hotspot != hotspot) append("hotspot=$hotspot ")
         if (cache.bluetoothOn != bluetoothOn) append("bluetooth_on=$bluetoothOn ")
         if (cache.bluetoothConnectedCount != bluetoothConnectedCount) append("bluetooth_connected=$bluetoothConnectedCount ")
-        if (cache.volume != volume) append("volume=$bluetoothOn")
+        if (cache.volume != volume) append("volume=$volume")
     }.trim()
 
     cache.mobileData = mobileData

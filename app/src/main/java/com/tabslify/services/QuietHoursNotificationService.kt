@@ -94,6 +94,7 @@ import com.tabslify.core.objects.Config.realDevice
 import com.tabslify.core.objects.prvt
 import com.tabslify.core.objects.tNotify
 import com.tabslify.core.ui.getDeviceName
+import com.tabslify.quiethoursnotificationhelper.AiProvider
 import com.tabslify.quiethoursnotificationhelper.AiResponseEntry
 import com.tabslify.quiethoursnotificationhelper.CleanupWorker
 import com.tabslify.quiethoursnotificationhelper.DailySummaryReceiver
@@ -509,8 +510,8 @@ class QuietHoursNotificationService : Service() {
             reportServiceError("onCreate:registerReceiver markReadReceiver", e)
         }
 
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-            == PackageManager.PERMISSION_GRANTED
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         ) {
             exploreTracker.start(this)
         }
@@ -758,7 +759,7 @@ class QuietHoursNotificationService : Service() {
                             if (sessions.isEmpty()) return@launch
 
                             val stats = buildSessionStatsText(sessions)
-                            val result = sendAiRequest(this@QuietHoursNotificationService, userMessage = stats, anlytic = true, serviceKey = "music_summary")
+                            val result = sendAiRequest(this@QuietHoursNotificationService, userMessage = stats, anlytic = true, serviceKey = "music_summary", provider = AiProvider.NVIDIA, model = "openai/gpt-oss-20b")
                                 ?: return@launch
                             val musicMs =
                                 sessions.filter { it.type == "music" }.sumOf { it.listenedMs }

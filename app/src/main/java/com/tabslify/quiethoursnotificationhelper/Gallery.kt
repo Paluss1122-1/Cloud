@@ -14,6 +14,7 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.tabslify.R
 import com.tabslify.core.activities.Tabslify.Companion.serviceScope
 import com.tabslify.core.functions.showSimpleNotificationExtern
@@ -223,6 +224,21 @@ fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?, contex
 
 fun loadGalleryImages(number: Int, context: Context) {
     Log.d("CURRENTINDEX", "$number")
+    
+    val hasFullAccess = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
+    val hasPartialAccess = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE && 
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) == PackageManager.PERMISSION_GRANTED
+            
+    if (!hasFullAccess && !hasPartialAccess) {
+        showSimpleNotificationExtern(
+            context.getString(R.string.fehler_2),
+            context.getString(R.string.zugriff_auf_medien_benotigt),
+            20.seconds,
+            context = context
+        )
+        return
+    }
+
     try {
         galleryImages = emptyList()
         val images = mutableListOf<GalleryImage>()

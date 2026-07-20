@@ -194,7 +194,7 @@ private suspend fun sendNvidiaChatMessageAITab(
 
     return withContext(Dispatchers.IO) {
         val connection = Config.openApiProxyConnection(ctx, if (onToken != null) 0 else 60_000)
-            ?: return@withContext null
+            ?: return@withContext "Proxy Connection Setup Failed (Signature NULL)"
         try {
             connection.outputStream.use { it.write(requestBody.toByteArray(Charsets.UTF_8)) }
 
@@ -205,18 +205,45 @@ private suspend fun sendNvidiaChatMessageAITab(
                     "AI",
                     "Nvidia proxy failed with code ${connection.responseCode}: $errorText"
                 )
-                return@withContext null
+                
+                try {
+                    val jsonObj = JSONObject(errorText)
+                    if (jsonObj.has("error")) {
+                        val err = jsonObj.get("error")
+                        if (err is JSONObject && err.has("message")) {
+                            return@withContext "API Error: " + err.getString("message")
+                        } else if (err is String) {
+                            return@withContext "API Error: $err"
+                        }
+                    }
+                } catch (_: Exception) {}
+                
+                return@withContext "Error ${connection.responseCode}: $errorText"
             }
 
             if (onToken != null) {
                 val sb = StringBuilder()
+                var apiError: String? = null
                 connection.inputStream.bufferedReader().useLines { lines ->
                     for (line in lines) {
                         if (!line.startsWith("data:")) continue
                         val data = line.removePrefix("data:").trim()
                         if (data == "[DONE]") break
                         try {
-                            val delta = JSONObject(data)
+                            val jsonObj = JSONObject(data)
+                            if (jsonObj.has("error")) {
+                                val err = jsonObj.get("error")
+                                apiError = if (err is JSONObject && err.has("message")) {
+                                    err.getString("message")
+                                } else if (err is String) {
+                                    err
+                                } else {
+                                    err.toString()
+                                }
+                                break
+                            }
+                            
+                            val delta = jsonObj
                                 .getJSONArray("choices")
                                 .getJSONObject(0)
                                 .getJSONObject("delta")
@@ -229,12 +256,13 @@ private suspend fun sendNvidiaChatMessageAITab(
                         }
                     }
                 }
-                sb.toString()
+                if (apiError != null) return@withContext "API Error: $apiError"
+                sb.toString().ifBlank { "Stream returned 200 OK but was empty." }
             } else {
                 val response = JSONObject(connection.inputStream.bufferedReader().readText())
                     .getJSONArray("choices").getJSONObject(0)
                     .getJSONObject("message").getString("content").trim()
-                    .ifBlank { null }
+                    .ifBlank { "Response was 200 OK but empty." }
                 response
             }
         } finally {

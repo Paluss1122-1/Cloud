@@ -7,8 +7,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.content.Intent
+import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
@@ -246,5 +248,22 @@ class AkkuReceiver : BroadcastReceiver() {
 class BluetoothReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         handleBluetoothBroadcast(ctx, intent)
+    }
+}
+
+class VolumeChangeReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val streamType = intent.getIntExtra(
+            "android.media.EXTRA_VOLUME_STREAM_TYPE",
+            -1
+        )
+
+        if (streamType == AudioManager.STREAM_MUSIC) {
+            val volume = intent.getIntExtra(
+                "android.media.EXTRA_VOLUME_STREAM_VALUE",
+                -1
+            )
+            reportDeviceInformation(context, intent)
+        }
     }
 }
