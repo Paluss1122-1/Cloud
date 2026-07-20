@@ -24,10 +24,10 @@ object SpotifyPlaybackTracker {
     private var controllerCallback: MediaController.Callback? = null
 
     private var currentLabel: String? = null
+    private var currentArtist: String? = null
     private var sessionStartedAt = 0L
     private var accumulatedMs = 0L
     private var playingSinceMs: Long? = null
-    private var lastState: PlaybackState? = null
 
     @Volatile
     private var started = false
@@ -83,6 +83,7 @@ object SpotifyPlaybackTracker {
             override fun onMetadataChanged(metadata: MediaMetadata?) {
                 finalizeSession()
                 currentLabel = labelFor(metadata)
+                currentArtist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)
             }
 
             override fun onSessionDestroyed() {
@@ -94,6 +95,7 @@ object SpotifyPlaybackTracker {
         controllerCallback = callback
 
         currentLabel = labelFor(activeController?.metadata)
+        currentArtist = activeController?.metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)
         onStateChanged(activeController?.playbackState)
     }
 
@@ -102,10 +104,10 @@ object SpotifyPlaybackTracker {
         controllerCallback?.let { cb -> activeController?.unregisterCallback(cb) }
         controllerCallback = null
         currentLabel = null
+        currentArtist = null
     }
 
     private fun onStateChanged(state: PlaybackState?) {
-        lastState = state
         val isPlaying = state?.state == PlaybackState.STATE_PLAYING
         val now = System.currentTimeMillis()
         if (isPlaying) {
@@ -129,7 +131,7 @@ object SpotifyPlaybackTracker {
             MediaAnalyticsManager.addSession(
                 ListenSession(
                     label = label,
-                    type = classify(lastState),
+                    type = classify(),
                     listenedMs = accumulatedMs,
                     startedAt = sessionStartedAt,
                     source = "spotify"
@@ -138,7 +140,6 @@ object SpotifyPlaybackTracker {
         }
         accumulatedMs = 0L
         sessionStartedAt = 0L
-        lastState = null
     }
 
     private fun labelFor(metadata: MediaMetadata?): String? {
@@ -148,16 +149,14 @@ object SpotifyPlaybackTracker {
         return if (!artist.isNullOrBlank()) "$artist - $title" else title
     }
 
-    private fun classify(state: PlaybackState?): String {
-        val hasSkipSecondsAction = state?.customActions?.any { action ->
-            val name = action.name?.toString()?.lowercase() ?: ""
-            val actionId = action.action.lowercase()
-            val mentionsSeconds = listOf("15", "30").any { name.contains(it) || actionId.contains(it) }
-            val mentionsSkip = listOf("skip", "forward", "back", "rewind").any {
-                name.contains(it) || actionId.contains(it)
-            }
-            mentionsSeconds && mentionsSkip
-        } == true
-        return if (hasSkipSecondsAction) "podcast" else "music"
+    private fun classify(): String {
+        val metadata = activeController?.metadata
+        val spotifyUri = metadata?.getString(MediaMetadata.METADATA_KEY_MEDIA_URI)
+            ?: metadata?.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)
+        return when {
+            spotifyUri?.contains(":episode:") == true -> "podcast"
+            spotifyUri?.contains(":track:") == true -> "music"
+            else -> if (currentArtist.isNullOrBlank()) "podcast" else "music"
+        }
     }
 }
