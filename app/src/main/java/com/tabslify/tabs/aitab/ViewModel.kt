@@ -223,6 +223,15 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
                 selectedImageUri = null
                 selectedAudioUri = null
 
+                if (placeholderIndex < history.size && history[placeholderIndex].text.isBlank()) {
+                    history[placeholderIndex] = ChatMessage(
+                        text = response.ifBlank { ctx.getString(R.string.fehler) },
+                        ts = placeholderTs,
+                        own = false,
+                        mode = modeAtSend
+                    )
+                }
+
                 sendAITabBackgroundNotification(
                     ctx,
                     title = ctx.getString(R.string.aitab_answer),
