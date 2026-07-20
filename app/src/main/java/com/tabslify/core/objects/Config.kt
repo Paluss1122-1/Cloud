@@ -171,7 +171,9 @@ object Config {
     fun ensureDefaultLanguage(context: Context) {
         val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         if (prefs.getBoolean("language_initialized", false)) return
-        setAppLanguage(context, "en")
+        val systemLanguage = java.util.Locale.getDefault().language
+        val defaultLang = if (systemLanguage == "de") "de" else "en"
+        setAppLanguage(context, defaultLang)
         prefs.edit().putBoolean("language_initialized", true).apply()
     }
 
