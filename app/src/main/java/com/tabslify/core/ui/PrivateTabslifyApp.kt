@@ -816,6 +816,12 @@ fun PrivateTabslifyApp(
                             Context.RECEIVER_NOT_EXPORTED
                         )
 
+                        context.registerReceiver(
+                            receiver,
+                            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+                            Context.RECEIVER_NOT_EXPORTED
+                        )
+
                         Toast.makeText(context, downloadGestartMsg, Toast.LENGTH_SHORT).show()
                     }
 
