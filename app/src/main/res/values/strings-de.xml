@@ -204,7 +204,7 @@
     <string name="notizen">Notizen</string> <!-- app/src/main/java/com/tabslify/core/ui/PrivateTabslifyApp.kt:301 | Passwordmanagerscreen.kt:1064 -->
     <string name="media_player">Media Player</string> <!-- app/src/main/java/com/tabslify/core/ui/PrivateTabslifyApp.kt:306 | Mediaplayerservice.kt:2310 -->
     <string name="gmail">Gmail</string> <!-- app/src/main/java/com/tabslify/core/ui/PrivateTabslifyApp.kt:311 | BrowserTab.kt:127 -->
-    <string name="vokabeln">Vokabeln</string> <!-- app/src/main/java/com/tabslify/core/ui/PrivateTabslifyApp.kt:316 | VocabTab.kt:541 | VocabTab.kt:644 -->
+    <string name="vokabeln">Schule</string> <!-- app/src/main/java/com/tabslify/core/ui/PrivateTabslifyApp.kt:316 | VocabTab.kt:541 | VocabTab.kt:644 -->
     <string name="explore">Explore</string> <!-- app/src/main/java/com/tabslify/core/ui/PrivateTabslifyApp.kt:321 -->
     <string name="kalender">Kalender</string> <!-- app/src/main/java/com/tabslify/core/ui/PrivateTabslifyApp.kt:328 -->
     <string name="remote_desktop">Remote Desktop</string> <!-- app/src/main/java/com/tabslify/core/ui/PrivateTabslifyApp.kt:333 -->
