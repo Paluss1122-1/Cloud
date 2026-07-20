@@ -684,7 +684,17 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
                     label = { Text(stringResource(R.string.passwort)) },
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedPlaceholderColor = Color.White,
+                        unfocusedPlaceholderColor = Color.White,
+                        focusedLabelColor = Color.White,
+                        unfocusedLabelColor = Color.White,
+                    )
                 )
                 Box(
                     modifier = Modifier
@@ -1071,8 +1081,66 @@ fun TabCard(
     }
 }
 
+fun isPermissionGranted(context: Context, key: String): Boolean {
+    fun granted(p: String) =
+        ContextCompat.checkSelfPermission(context, p) == PackageManager.PERMISSION_GRANTED
+    return when (key) {
+        "READ_MEDIA_AUDIO" ->
+            granted(Manifest.permission.READ_MEDIA_AUDIO)
+
+        "POST_NOTIFICATIONS" -> canNotify(context)
+
+        "ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION" ->
+            granted(Manifest.permission.ACCESS_COARSE_LOCATION) ||
+                    granted(Manifest.permission.ACCESS_FINE_LOCATION)
+
+        "ACCESS_BACKGROUND_LOCATION" -> granted(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+
+        "SYSTEM_ALERT_WINDOW" -> Settings.canDrawOverlays(context)
+
+        "FOREGROUND_SERVICE" -> granted(Manifest.permission.FOREGROUND_SERVICE)
+
+        "READ_MEDIA_IMAGES / READ_MEDIA_VIDEO" ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+                granted(Manifest.permission.READ_MEDIA_IMAGES) ||
+                        granted(Manifest.permission.READ_MEDIA_VIDEO) ||
+                        granted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+            else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                granted(Manifest.permission.READ_MEDIA_IMAGES) ||
+                        granted(Manifest.permission.READ_MEDIA_VIDEO)
+            else granted(Manifest.permission.READ_EXTERNAL_STORAGE)
+
+        "READ_CONTACTS / WRITE_CONTACTS" ->
+            granted(Manifest.permission.READ_CONTACTS) &&
+                    granted(Manifest.permission.WRITE_CONTACTS)
+
+        "CAMERA" -> granted(Manifest.permission.CAMERA)
+
+        "RECEIVE_BOOT_COMPLETED" -> granted(Manifest.permission.RECEIVE_BOOT_COMPLETED)
+
+        "RECORD_AUDIO" -> granted(Manifest.permission.RECORD_AUDIO)
+
+        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" ->
+            (context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager)
+                .isIgnoringBatteryOptimizations(context.packageName)
+
+        else -> false
+    }
+}
+
 @Composable
 fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = null) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    // Recompute granted-state whenever the screen resumes (e.g. back from system settings)
+    var permRefreshKey by remember { mutableIntStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) permRefreshKey++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     var selectedPermission by remember { mutableStateOf<String?>(null) }
     var titleDialog by remember { mutableStateOf("") }
     var usagesDialog by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -1150,6 +1218,9 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                 location1,
                 location2,
                 location3
+            ),
+            "ACCESS_BACKGROUND_LOCATION" to listOf(
+                location2
             ),
             "SYSTEM_ALERT_WINDOW" to listOf(
                 systemAlertWindow1
@@ -1233,7 +1304,28 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                         )
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(txt, modifier = Modifier.weight(1f), fontSize = 16.sp)
+                        Text(txt, modifier = Modifier.weight(1f), fontSize = 13.sp)
+                        val granted = remember(permRefreshKey, txt) {
+                            isPermissionGranted(context, txt)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 8.dp)
+                                .clip(RoundedCornerShape(100))
+                                .background(
+                                    if (granted) Color(0xFF00C853).copy(alpha = 0.22f)
+                                    else Color.White.copy(alpha = 0.10f)
+                                )
+                                .padding(horizontal = 9.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                if (granted) "● Erteilt" else "○ Nicht erteilt",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (granted) Color(0xFF69F0AE)
+                                else Color.White.copy(alpha = 0.55f)
+                            )
+                        }
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowForwardIos,
                             contentDescription = stringResource(R.string.open_information),
@@ -1255,6 +1347,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                 PermissionButton("READ_MEDIA_AUDIO")
                 PermissionButton("POST_NOTIFICATIONS")
                 PermissionButton("ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION")
+                PermissionButton("ACCESS_BACKGROUND_LOCATION")
                 PermissionButton("SYSTEM_ALERT_WINDOW")
                 PermissionButton("FOREGROUND_SERVICE")
                 PermissionButton("READ_MEDIA_IMAGES / READ_MEDIA_VIDEO")
@@ -1694,34 +1787,45 @@ fun SettingsFrame(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                NeonBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    neonColors = listOf(Color(0xFF00FFAA), Color(0xFF00CCFF)),
+                    backgroundAlpha = 0.15f
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.settings_language),
-                            color = Color.White,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = stringResource(R.string.language_title),
-                            color = Color.White.copy(alpha = 0.6f),
-                            fontSize = 12.sp
-                        )
-                    }
-                    Button(
-                        onClick = { showLanguageDialog = true },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF2A2A2A),
-                            contentColor = Color.White
-                        )
-                    ) {
-                        Text(stringResource(R.string.settings_language))
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showLanguageDialog = true }
+                                .padding(20.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.settings_language),
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = stringResource(R.string.language_title),
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    fontSize = 12.sp
+                                )
+                            }
+
+                            Box {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                    contentDescription = stringResource(R.string.koordinaten_andern),
+                                    tint = Color.White.copy(alpha = 0.8f),
+                                    modifier = Modifier
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -2661,6 +2765,14 @@ fun SettingsFrame(
                     Spacer(Modifier.height(32.dp))
                 }
             }
+        }
+
+        AnimatedVisibility(
+            visible = showLanguageDialog,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            LanguageSelectionDialog { showCoordinatesEdit = false }
         }
     }
 }

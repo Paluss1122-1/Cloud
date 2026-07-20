@@ -203,34 +203,49 @@ object Config {
         target: String,
         launcher: ActivityResultLauncher<Array<String>>
     ): Boolean {
-        val permission = when (target) {
-            "audio" -> Manifest.permission.READ_MEDIA_AUDIO
-            "img" -> Manifest.permission.READ_MEDIA_IMAGES
-            "loc" -> Manifest.permission.ACCESS_FINE_LOCATION
-            "cam" -> Manifest.permission.CAMERA
-            "con" -> Manifest.permission.READ_CONTACTS
-            "not" -> Manifest.permission.POST_NOTIFICATIONS
-            "mic" -> Manifest.permission.RECORD_AUDIO
-            "bt" -> Manifest.permission.BLUETOOTH_CONNECT
-            "all" -> {
-                launcher.launch(
-                    arrayOf(
-                        Manifest.permission.READ_MEDIA_AUDIO,
-                        Manifest.permission.READ_MEDIA_IMAGES,
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        Manifest.permission.CAMERA,
-                        Manifest.permission.READ_CONTACTS,
-                        Manifest.permission.POST_NOTIFICATIONS,
-                        Manifest.permission.BLUETOOTH_CONNECT
-                    )
-                )
-                return true
+        when (target) {
+            "audio" -> launcher.launch(arrayOf(Manifest.permission.READ_MEDIA_AUDIO))
+            "img" -> {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    launcher.launch(arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED))
+                } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    launcher.launch(arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO))
+                } else {
+                    launcher.launch(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE))
+                }
             }
-
+            "loc" -> launcher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+            "loc_bg" -> launcher.launch(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
+            "cam" -> launcher.launch(arrayOf(Manifest.permission.CAMERA))
+            "con" -> launcher.launch(arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS))
+            "not" -> launcher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+            "mic" -> launcher.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
+            "bt" -> launcher.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT))
+            "all" -> {
+                val permissions = mutableListOf(
+                    Manifest.permission.READ_MEDIA_AUDIO,
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.CAMERA,
+                    Manifest.permission.READ_CONTACTS,
+                    Manifest.permission.WRITE_CONTACTS,
+                    Manifest.permission.POST_NOTIFICATIONS,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                )
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
+                    permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
+                    permissions.add(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+                } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
+                    permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
+                } else {
+                    permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+                }
+                launcher.launch(permissions.toTypedArray())
+            }
             else -> return false
         }
-
-        launcher.launch(arrayOf(permission))
         return true
     }
 
@@ -254,12 +269,16 @@ object Config {
                     val digest = md.digest()
                     val toRet = digest.fold("") { str, it -> str + "%02x".format(it) }.replace(":", "")
                         .lowercase()
+                    
                     if (allowedHashes.contains(toRet)) {
                         return toRet
+                    } else {
+                        android.util.Log.e("Config", "Invalid App Signature SHA256: $toRet. Please add this hash to BuildConfig if it is valid.")
                     }
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            android.util.Log.e("Config", "Error getting signature: ${e.message}")
         }
         return null
     }
