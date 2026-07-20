@@ -809,9 +809,13 @@ fun restoreSyncIfNeeded(context: Context) {
         startClipboardListener(context)
         startSmsListener(context)
         startSpotifyHistoryListener(context)
-        context.registerReceiver(akkuReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        context.registerReceiver(bluetoothReceiver, bluetoothIntentFilter)
-        context.registerReceiver(volumeChangeReceiver, volumeChangeIntentFilter)
+        context.registerReceiver(
+            akkuReceiver,
+            IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+            Context.RECEIVER_NOT_EXPORTED
+        )
+        context.registerReceiver(bluetoothReceiver, bluetoothIntentFilter, Context.RECEIVER_NOT_EXPORTED)
+        context.registerReceiver(volumeChangeReceiver, volumeChangeIntentFilter, Context.RECEIVER_NOT_EXPORTED)
         registerDeviceInfoNetworkListeners(context)
         syncScope.launch {
             delay(5_000.milliseconds)
@@ -1035,10 +1039,11 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                     connectedBluetoothDevices.clear()
                     context.registerReceiver(
                         akkuReceiver,
-                        IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+                        IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+                        Context.RECEIVER_NOT_EXPORTED
                     )
-                    context.registerReceiver(bluetoothReceiver, bluetoothIntentFilter)
-                    context.registerReceiver(volumeChangeReceiver, volumeChangeIntentFilter)
+                    context.registerReceiver(bluetoothReceiver, bluetoothIntentFilter, Context.RECEIVER_NOT_EXPORTED)
+                    context.registerReceiver(volumeChangeReceiver, volumeChangeIntentFilter, Context.RECEIVER_NOT_EXPORTED)
                     registerDeviceInfoNetworkListeners(context)
                 }
 
@@ -1738,7 +1743,7 @@ private fun handleSpotifyHistoryUpload(context: Context, body: String) {
             val listenedMs = obj.optLong("listenedMs", 0L)
             if (startedAt <= 0L || listenedMs <= 0L) return@mapNotNull null
             val type = obj.optString("type", "music").takeIf { it == "podcast" } ?: "music"
-            com.tabslify.tabs.mediaplayer.ListenSession(
+            ListenSession(
                 label = label,
                 type = type,
                 listenedMs = listenedMs,
@@ -1750,8 +1755,8 @@ private fun handleSpotifyHistoryUpload(context: Context, body: String) {
         logError("handleSpotifyHistoryUpload", e)
         emptyList()
     }
-    com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.init(context.applicationContext)
-    val added = com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.mergeSessions(sessions)
+    MediaAnalyticsManager.init(context.applicationContext)
+    val added = MediaAnalyticsManager.mergeSessions(sessions)
     Log.d("CLOUDSA", "Spotify-PC-Verlauf: ${sessions.size} empfangen, $added neu gemerged")
 }
 
