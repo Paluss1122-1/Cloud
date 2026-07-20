@@ -110,18 +110,28 @@ fun GalleryTab() {
     var isFullscreenVideo by remember { mutableStateOf(false) }
     val thumbnailCache = remember { mutableStateMapOf<String, Bitmap>() }
 
-    val requiredPermissions = arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
-
-    fun hasAllPermissions() = requiredPermissions.all {
-        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+    val requiredPermissions = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        arrayOf(
+            Manifest.permission.READ_MEDIA_IMAGES,
+            Manifest.permission.READ_MEDIA_VIDEO,
+            Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+        )
+    } else {
+        arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
     }
 
-    var hasPermission by remember { mutableStateOf(hasAllPermissions()) }
+    fun hasRequiredPermissions(): Boolean {
+        return requiredPermissions.any {
+            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    var hasPermission by remember { mutableStateOf(hasRequiredPermissions()) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
-        hasPermission = grants.values.all { it }
+        hasPermission = grants.values.any { it } || hasRequiredPermissions()
     }
 
     val deleteLauncher = rememberLauncherForActivityResult(

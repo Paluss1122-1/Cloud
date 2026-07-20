@@ -75,29 +75,31 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
     var initialCenterDone by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true || permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true) {
             ExploreLocationTracker.start(ctx)
             if (!initialCenterDone) {
-                LocationServices.getFusedLocationProviderClient(ctx).lastLocation
-                    .addOnSuccessListener { loc ->
-                        if (loc != null) {
-                            mapView?.controller?.animateTo(GeoPoint(loc.latitude, loc.longitude))
-                            initialCenterDone = true
+                try {
+                    LocationServices.getFusedLocationProviderClient(ctx).lastLocation
+                        .addOnSuccessListener { loc ->
+                            if (loc != null) {
+                                mapView?.controller?.animateTo(GeoPoint(loc.latitude, loc.longitude))
+                                initialCenterDone = true
+                            }
                         }
-                    }
+                } catch (e: SecurityException) {
+                    // Ignore
+                }
             }
         }
     }
 
     LaunchedEffect(Unit) {
-        if (ContextCompat.checkSelfPermission(
-                ctx,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
+        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
         ) {
-            permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         }
     }
 
@@ -107,11 +109,8 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                 Lifecycle.Event.ON_PAUSE -> mapView?.onPause()
                 Lifecycle.Event.ON_RESUME -> {
                     mapView?.onResume()
-                    if (ContextCompat.checkSelfPermission(
-                            ctx,
-                            Manifest.permission.ACCESS_FINE_LOCATION
-                        )
-                        == PackageManager.PERMISSION_GRANTED
+                    if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                        ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
                     ) {
                         ExploreLocationTracker.start(ctx)
                     }
@@ -194,9 +193,8 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
             ) {
                 AndroidView(
                     factory = { context ->
-                        val loc = if (ContextCompat.checkSelfPermission(
-                                context, Manifest.permission.ACCESS_FINE_LOCATION
-                            ) == PackageManager.PERMISSION_GRANTED
+                        val loc = if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
                         ) {
                             try {
                                 Tasks.await(
