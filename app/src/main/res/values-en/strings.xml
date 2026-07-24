@@ -23,7 +23,7 @@
     <string name="installation_erfolgreich_abgeschlossen">✅ Installation completed successfully.</string>
     <string name="installation_fehlgeschlagen_status">❌ Installation failed (status %1$d): %2$s</string>
     <string name="session_verworfen_keine_teilinstallation_zuruckgeblieben">↩ Session discarded – no partial installation left behind (rollback).</string>
-    <string name="session_erstellt_apks">Session #%1$d created (%2$d APKs, %3$s)</string>
+    <string name="session_erstellt_apks" tools:ignore="PluralsCandidate">Session #%1$d created (%2$d APKs, %3$s)</string>
     <string name="eintrag_fehlt">Entry missing: %1$s</string>
     <string name="schreibe">Writing %1$s (%2$s)…</string>
     <string name="alle_apks_geschrieben_committe">All APKs written (%1$s). Committing…</string>
@@ -39,27 +39,35 @@
     <string name="ungultiger_share_intent">Invalid share intent</string>
     <string name="keine_datei_gefunden">No file found</string>
     <string name="keine_dateien_gefunden">No files found</string>
-    <string name="bild_an_laptop_gesendet">📲 Image sent to laptop!</string>
-    <string name="bilder_an_laptop_gesendet">📲 %1$d images sent to laptop!</string>
+    <plurals name="bilder_an_laptop_gesendet">
+        <item quantity="one">📲 %1$d image sent to laptop!</item>
+        <item quantity="other">📲 %1$d images sent to laptop!</item>
+    </plurals>
     <string name="senden_fehlgeschlagen">❌ Sending failed</string>
     <string name="gespeichert">Saved!</string>
-    <string name="datei_gespeichert_2">✅ File saved!</string>
-    <string name="dateien_gespeichert">✅ %1$d files saved!</string>
+    <plurals name="dateien_gespeichert">
+        <item quantity="one">✅ %1$d file saved!</item>
+        <item quantity="other">✅ %1$d files saved!</item>
+    </plurals>
     <string name="speichere">Saving…</string>
     <string name="fehler_msg">Error: %1$s</string>
     <string name="pc_abgelehnt">%1$s rejected</string>
     <string name="pc_entfernt">%1$s removed</string>
     <string name="speichern_fehlgeschlagen">❌ Saving failed</string>
-    <string name="erfolgreich_fehlgeschlagen">⚠️ %1$d succeeded, %2$d failed</string>
+    <string name="erfolgreich_fehlgeschlagen" tools:ignore="PluralsCandidate">⚠️ %1$d succeeded, %2$d failed</string>
     <string name="datei_speichern">🔒 Save file</string>
-    <string name="s_1_datei">1 file</string>
-    <string name="dateien">%1$d files</string>
+    <plurals name="dateien">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
     <string name="an_laptop_senden">💻 Send to laptop</string>
     <string name="laptop_nicht_verbunden">💻 Laptop not connected</string>
     <string name="lokal_speichern">📁 Save locally</string>
     <string name="abbrechen">Cancel</string>
-    <string name="s_1_datei_wird_gespeichert">1 file is being saved</string>
-    <string name="dateien_werden_gespeichert">%1$d files are being saved</string>
+    <plurals name="dateien_werden_gespeichert">
+        <item quantity="one">%1$d file is being saved</item>
+        <item quantity="other">%1$d files are being saved</item>
+    </plurals>
     <string name="js_event_geloggt">JS event logged: %1$s</string>
     <string name="tabslify">Tabslify</string>
     <string name="js_execution_error">JS Execution Error: %1$s</string>
@@ -147,6 +155,12 @@
     <string name="audiorecordertab_audioforegroundservice_audioaufnahmen_mit_mikrofon">AudioRecorderTab &amp; AudioForegroundService: audio recordings with the microphone</string>
     <string name="quiethoursnotificationservice_anfrage_zum_ignorieren_von">QuietHoursNotificationService: request to ignore battery optimizations for reliable background services</string>
     <string name="authenticator_scannen_von_qr_codes">Authenticator: scanning QR codes for 2FA</string>
+    <string name="reportdeviceinformation_bluetooth_verbindungsstatus">reportDeviceInformation: Bluetooth connection status for the paired laptop</string>
+    <string name="reportdeviceinformation_ismobiledataactive_mobilfunk_datenstatus">reportDeviceInformation &amp; isMobileDataActive: mobile data status for the paired laptop</string>
+    <string name="startsmslistener_abruf_des_sms_posteingangs">startSmsListener &amp; readAllSms: fetching the SMS inbox for the paired laptop</string>
+    <string name="wifi_direct_set_alarm_befehl_vom_notebook">WIFI_DIRECT: set_alarm command from the paired laptop to set an alarm</string>
+    <string name="reportdeviceinformation_wlan_status_hotspot">reportDeviceInformation: Wi-Fi connection and hotspot status for the paired laptop</string>
+    <string name="reportdeviceinformation_netzwerkstatus_konnektivitat">reportDeviceInformation: network and connectivity status for the paired laptop</string>
     <string name="keine_angaben_hinterlegt">No details provided</string>
     <string name="open_information">Open information</string>
     <string name="tabslify_berechtigungen">Tabslify Permissions</string>
@@ -161,6 +175,8 @@
     <string name="moglichst_unkompliziert">as hassle-free as possible</string>
     <string name="zu_halten">.</string>
     <string name="schliesen">Close</string>
+    <string name="erteilen">Grant</string>
+    <string name="alle_berechtigungen_anfragen">Request all permissions</string>
     <string name="nvidia_api_key">NVIDIA API key</string>
     <string name="tmdb_api_key">TMDB API key</string>
     <string name="rapidapi_key_spotify">RapidAPI key (Spotify)</string>
@@ -309,9 +325,15 @@
     <string name="uberspringen">Skip</string>
     <string name="los_geht_s">Let\'s go</string>
     <string name="weiter">Next</string>
-    <string name="notification_removed_after_reply">🗑️ Notification %1$d removed after reply</string>
-    <string name="history_angefordert_nachrichten">History requested: %1$d messages</string>
-    <string name="loaded_seen_messages">✅ Loaded %1$d seen messages</string>
+    <string name="notification_removed_after_reply" tools:ignore="PluralsCandidate">🗑️ Notification %1$d removed after reply</string>
+    <plurals name="history_angefordert_nachrichten">
+        <item quantity="one">History requested: %1$d message</item>
+        <item quantity="other">History requested: %1$d messages</item>
+    </plurals>
+    <plurals name="loaded_seen_messages">
+        <item quantity="one">✅ Loaded %1$d seen message</item>
+        <item quantity="other">✅ Loaded %1$d seen messages</item>
+    </plurals>
     <string name="nachricht_schreiben">Write a message…</string>
     <string name="schreiben">Write</string>
     <string name="letzte_5">Last 5</string>
@@ -320,7 +342,10 @@
     <string name="services">Services</string>
     <string name="str_2">[%1$s] %2$s:\n%3$s</string>
     <string name="letzte_nachrichten">📜 Last messages</string>
-    <string name="nachrichten">%1$d messages</string>
+    <plurals name="nachrichten">
+        <item quantity="one">%1$d message</item>
+        <item quantity="other">%1$d messages</item>
+    </plurals>
     <string name="no_nachrichten">No messages</string>
     <string name="setting_up_realtime_listener">Setting up Realtime listener…</string>
     <string name="new_message">📩 New message: %1$s</string>
@@ -614,9 +639,15 @@
     <string name="nicht_gefunden">❌ Not found</string>
     <string name="kein_song_mit_in_der">No song with \"%1$s\" in the statistics</string>
     <string name="max_wiederholt"> · max %1$d× repeated</string>
-    <string name="sessions_gehort_zuletzt">▶ %1$d sessions · ⏱ %2$s listened\n🕐 Last: %3$s%4$s</string>
+    <plurals name="sessions_gehort_zuletzt">
+        <item quantity="one">▶ %1$d session · ⏱ %2$s listened\n🕐 Last: %3$s%4$s</item>
+        <item quantity="other">▶ %1$d sessions · ⏱ %2$s listened\n🕐 Last: %3$s%4$s</item>
+    </plurals>
     <string name="kein_podcast_mit_in_der">No podcast with \"%1$s\" in the statistics</string>
-    <string name="sessions_gehort_zuletzt_2">▶ %1$d sessions · ⏱ %2$s listened\n🕐 Last: %3$s</string>
+    <plurals name="sessions_gehort_zuletzt_2">
+        <item quantity="one">▶ %1$d session · ⏱ %2$s listened\n🕐 Last: %3$s</item>
+        <item quantity="other">▶ %1$d sessions · ⏱ %2$s listened\n🕐 Last: %3$s</item>
+    </plurals>
     <string name="verwende_song_oder_podcast">Use \'song\' or \'podcast\'</string>
     <string name="syntax_statsreset_song_podcast_all">Syntax: statsreset [song|podcast|all] [search]\nstatsreset all → delete everything</string>
     <string name="reset">✓ Reset</string>
@@ -634,12 +665,21 @@
     <string name="unbekannter_befehl_2">❌ Unknown command</string>
     <string name="nicht_gefunden_verwende_help_fur">\'%1$s\' not found. Use \'help\' for all commands.</string>
     <string name="verfugbare_befehle_seite">📋 Available commands (page %1$d/%2$d)</string>
-    <string name="befehle">%1$d commands</string>
+    <plurals name="befehle">
+        <item quantity="one">%1$d command</item>
+        <item quantity="other">%1$d commands</item>
+    </plurals>
     <string name="alle_commands">All commands</string>
-    <string name="commands">%1$d commands</string>
+    <plurals name="commands">
+        <item quantity="one">%1$d command</item>
+        <item quantity="other">%1$d commands</item>
+    </plurals>
     <string name="geltendorf">Geltendorf</string>
     <string name="buchloe">Buchloe</string>
-    <string name="in_tagen">in %1$d days</string>
+    <plurals name="in_tagen">
+        <item quantity="one">in %1$d day</item>
+        <item quantity="other">in %1$d days</item>
+    </plurals>
     <string name="bahn_api_fehler">❌ Bahn API error</string>
     <string name="kein_07_05_zug">ℹ️ No 07:05 train</string>
     <string name="in_den_plan_daten_wurde">No matching train at 07:05 to %1$s in %2$s %3$s was found in the schedule data.</string>
@@ -654,7 +694,10 @@
     <string name="keine_nachrichten_von_friend_gefunden">No messages from friend found</string>
     <string name="nachrichten_konnten_nicht_geladen_werden">Messages could not be loaded: %1$s</string>
     <string name="str_3">🕐 %1$s\n%2$s</string>
-    <string name="letzte_nachrichten_von_friend">💬 Last %1$d messages from friend</string>
+    <plurals name="letzte_nachrichten_von_friend">
+        <item quantity="one">💬 Last %1$d message from friend</item>
+        <item quantity="other">💬 Last %1$d messages from friend</item>
+    </plurals>
     <string name="chat_verlauf_mit_friend">💬 Chat history with friend</string>
     <string name="benachrichtigung_konnte_nicht_angezeigt_werden">Notification could not be shown: %1$s</string>
     <string name="keine_berechtigung">❌ No permission</string>
@@ -695,11 +738,11 @@
     <string name="galerie_konnte_nicht_geladen_werden">Gallery could not be loaded: %1$s</string>
     <string name="ungultiger_bildindex">Invalid image index</string>
     <string name="bild_loschen">🗑️ Delete image?</string>
-    <string name="bild_von_wirklich_loschen">Really delete image %1$d of %2$d?</string>
+    <string name="bild_von_wirklich_loschen" tools:ignore="PluralsCandidate">Really delete image %1$d of %2$d?</string>
     <string name="error_showing_delete_confirmation">Error showing delete confirmation</string>
     <string name="loschbestatigung_konnte_nicht_angezeigt_werden">Delete confirmation could not be shown: %1$s</string>
     <string name="geloscht_2">✅ Deleted</string>
-    <string name="bild_wurde_erfolgreich_geloscht_verbleibend">Image was deleted successfully (%1$d remaining)</string>
+    <string name="bild_wurde_erfolgreich_geloscht_verbleibend" tools:ignore="PluralsCandidate">Image was deleted successfully (%1$d remaining)</string>
     <string name="alle_bilder_wurden_geloscht">All images have been deleted</string>
     <string name="loschen_fehlgeschlagen">❌ Deletion failed</string>
     <string name="bild_konnte_nicht_geloscht_werden">Image could not be deleted (no permission?)</string>
@@ -718,7 +761,10 @@
     <string name="teil">%1$s · %2$s (part %3$d/%4$d)</string>
     <string name="als_gelesen_markieren">Mark as read</string>
     <string name="lange_nachricht_von">%1$s · Long message from %2$s</string>
-    <string name="teile">%1$d parts</string>
+    <plurals name="teile">
+        <item quantity="one">%1$d part</item>
+        <item quantity="other">%1$d parts</item>
+    </plurals>
     <string name="messages">Messages</string>
     <string name="postchatnotification_failed">postChatNotification failed: %1$s</string>
     <string name="no_key_for_sender">No key for sender: %1$s</string>
@@ -792,11 +838,11 @@
     <string name="podcast_queue">📋 Podcast Queue (%1$d)</string>
     <string name="queue_konnte_nicht_angezeigt_werden">Queue could not be shown</string>
     <string name="ungultiger_index">❌ Invalid index</string>
-    <string name="podcast_existiert_nicht_1">Podcast %1$d does not exist (1-%2$d)</string>
+    <string name="podcast_existiert_nicht_1" tools:ignore="PluralsCandidate">Podcast %1$d does not exist (1-%2$d)</string>
     <string name="zur_queue_hinzugefugt">✅ Added to queue</string>
     <string name="error_adding_to_queue">Error adding to queue</string>
     <string name="konnte_nicht_zur_queue_hinzufugen">Could not add to queue</string>
-    <string name="position_existiert_nicht_1">Position %1$d does not exist (1-%2$d)</string>
+    <string name="position_existiert_nicht_1" tools:ignore="PluralsCandidate">Position %1$d does not exist (1-%2$d)</string>
     <string name="aus_queue_entfernt">✅ Removed from queue</string>
     <string name="error_removing_from_queue">Error removing from queue</string>
     <string name="konnte_nicht_aus_queue_entfernen">Could not remove from queue</string>
@@ -831,7 +877,7 @@
     <string name="error_handling_client">%1$s: Error handling client</string>
     <string name="socket_exception_restarting_server">%1$s: Socket exception, restarting server</string>
     <string name="unexpected_error_accepting_client">%1$s: Unexpected error accepting client</string>
-    <string name="port_already_bound_retrying_failures">%1$s: Port %2$d already bound, retrying… (failures: %3$d)</string>
+    <string name="port_already_bound_retrying_failures" tools:ignore="PluralsCandidate">%1$s: Port %2$d already bound, retrying… (failures: %3$d)</string>
     <string name="server_error_restarting_failures">%1$s: Server error, restarting… (failures: %2$d)</string>
     <string name="look_at_this_vocabulary_list">
         Look at this vocabulary list image carefully.
@@ -895,14 +941,17 @@
     <string name="to_do_hinzugefugt">✅ To-do added</string>
     <string name="gesamt_to_dos">\"%1$s\"\n\nTotal: %2$d to-dos</string>
     <string name="erledigt">✓ Done</string>
-    <string name="to_do_existiert_nicht">To-do #%1$d does not exist</string>
+    <string name="to_do_existiert_nicht" tools:ignore="PluralsCandidate">To-do #%1$d does not exist</string>
     <string name="geloscht_3">🗑️ Deleted</string>
     <string name="offen">📌 OPEN (%1$d):\n</string>
     <string name="str_4">%1$s. %2$s\n</string>
     <string name="erledigt_2">✓ DONE (%1$d):\n</string>
     <string name="to_do_liste">📝 To-do list (%1$d)</string>
     <string name="alle_todos">All to-dos</string>
-    <string name="todos">%1$d to-dos</string>
+    <plurals name="todos">
+        <item quantity="one">%1$d to-do</item>
+        <item quantity="other">%1$d to-dos</item>
+    </plurals>
     <string name="ai_antwort">🤖 AI answer</string>
     <string name="alle_songs">All songs</string>
     <string name="keine_laptopip_is_vorhanden">No laptopIp present</string>
@@ -936,7 +985,10 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="es_gibt_aktuell_keine_fertigen">There are currently no finished podcasts to delete</string>
     <string name="antippen_zum_loschen_fertig_angehort">Tap to delete • Finished listening</string>
     <string name="fertige_podcasts_loschen">Delete finished podcasts</string>
-    <string name="podcasts_bereit_zum_loschen">%1$d podcasts ready to delete</string>
+    <plurals name="podcasts_bereit_zum_loschen">
+        <item quantity="one">%1$d podcast ready to delete</item>
+        <item quantity="other">%1$d podcasts ready to delete</item>
+    </plurals>
     <string name="neue_playlist">New playlist</string>
     <string name="playlist_erstellt">✓ Playlist created</string>
     <string name="wurde_erstellt">\"%1$s\" was created</string>
@@ -950,8 +1002,14 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="item_konnte_nicht_hinzugefugt_werden">Item could not be added</string>
     <string name="playlist_geloscht">🗑 Playlist deleted</string>
     <string name="wurde_geloscht">\"%1$s\" was deleted</string>
-    <string name="songs">\"%1$s\" · %2$d songs</string>
-    <string name="items">\"%1$s\" (%2$d items)</string>
+    <plurals name="songs">
+        <item quantity="one">\"%1$s\" · %2$d song</item>
+        <item quantity="other">\"%1$s\" · %2$d songs</item>
+    </plurals>
+    <plurals name="items">
+        <item quantity="one">\"%1$s\" (%2$d item)</item>
+        <item quantity="other">\"%1$s\" (%2$d items)</item>
+    </plurals>
     <string name="geloscht_4">🗑 Deleted</string>
     <string name="failed_to_decode_bitmap">Failed to decode bitmap</string>
     <string name="no_embedded_picture_found">No embedded picture found</string>
@@ -966,13 +1024,19 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="fuge_zuerst_songs_zu_deinen">First add songs to your favorites!</string>
     <string name="favoriten_modus_aktiviert">⭐ Favorites mode enabled</string>
     <string name="alle_songs_2">📁 All songs</string>
-    <string name="songs_verfugbar">%1$d songs available</string>
+    <plurals name="songs_verfugbar">
+        <item quantity="one">%1$d song available</item>
+        <item quantity="other">%1$d songs available</item>
+    </plurals>
     <string name="gespeichert_2">✓ Saved</string>
     <string name="geschwindigkeit_x_wird_beim_nachsten">Speed %1$sx will be used on the next start</string>
     <string name="fertig"> • Done</string>
     <string name="antippen_zum_abspielen">Tap to play%1$s</string>
     <string name="podcast_auswahlen">Select podcast</string>
-    <string name="podcasts_2">%1$d podcasts%2$s</string>
+    <plurals name="podcasts_2">
+        <item quantity="one">%1$d podcast%2$s</item>
+        <item quantity="other">%1$d podcasts%2$s</item>
+    </plurals>
     <string name="geloscht_5">✓ Deleted</string>
     <string name="fehler_beim_loschen_2">✗ Error deleting</string>
     <string name="keine_playlist">No playlist</string>
@@ -990,14 +1054,20 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="keine_playlisten">📂 No playlists</string>
     <string name="keine_playlisten_vorhanden">No %1$s playlists available</string>
     <string name="keine_playlisten_vorhanden_2">No playlists available</string>
-    <string name="items_tippen_zum_abspielen">%1$d items • Tap to play</string>
+    <plurals name="items_tippen_zum_abspielen">
+        <item quantity="one">%1$d item • Tap to play</item>
+        <item quantity="other">%1$d items • Tap to play</item>
+    </plurals>
     <string name="playlisten">📂 Playlists</string>
     <string name="playlisten_2">} playlists</string>
     <string name="deprecated_in_java">Deprecated in Java</string>
     <string name="playlist_nicht_gefunden">Playlist not found</string>
     <string name="leer">❌ Empty</string>
     <string name="keine_songs_in">No songs in \"%1$s\"</string>
-    <string name="songs_ab">%1$d songs · from #%2$d</string>
+    <plurals name="songs_ab">
+        <item quantity="one">%1$d song · from #%2$d</item>
+        <item quantity="other">%1$d songs · from #%2$d</item>
+    </plurals>
     <string name="location">Location</string>
     <string name="mozilla_5_0_linux_android_2">Mozilla/5.0 (Linux; Android)</string>
     <string name="mediaplayer_error">MediaPlayer error %1$s/%2$s</string>
@@ -1025,7 +1095,10 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="einstellungen_konnten_nicht_geoffnet_werden">Settings could not be opened</string>
     <string name="podcast_check">Podcast Check</string>
     <string name="neue_folge">New episode: %1$s</string>
-    <string name="neue_folgen_verfugbar">%1$d new episodes available</string>
+    <plurals name="neue_folgen_verfugbar">
+        <item quantity="one">%1$d new episode available</item>
+        <item quantity="other">%1$d new episodes available</item>
+    </plurals>
     <string name="neue_podcast_folgen_gefunden">New podcast episodes found</string>
     <string name="podcast_wird_heruntergeladen">Podcast is downloading…</string>
     <string name="musik_player_konnte_nicht_geoffnet">Music player could not be opened</string>
@@ -1080,13 +1153,16 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="logs">Logs</string>
     <string name="technische_details">Technical details</string>
     <string name="enthaltene_apks">Included APKs</string>
-    <string name="dateien_ausgewahlt">%1$d files · %2$d selected</string>
+    <string name="dateien_ausgewahlt" tools:ignore="PluralsCandidate">%1$d files · %2$d selected</string>
     <string name="signatur_version">Signature &amp; version</string>
     <string name="gerateabgleich">Device match</string>
     <string name="abis_sprachen_auflosung">ABIs · languages · resolution</string>
     <string name="rohe_bundle_metadaten">Raw bundle metadata</string>
     <string name="logs_live">Logs (live)</string>
-    <string name="eintrage">%1$d entries</string>
+    <plurals name="eintrage">
+        <item quantity="one">%1$d entry</item>
+        <item quantity="other">%1$d entries</item>
+    </plurals>
     <string name="erst_quelle_erlauben">Allow source first</string>
     <string name="signaturrisiko_bestatigen">Confirm signature risk</string>
     <string name="trotz_signaturkonflikt_installieren">Install despite signature conflict</string>
@@ -1173,8 +1249,11 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="startdatum">Start date</string>
     <string name="enddatum">End date</string>
     <string name="differenz">Difference</string>
-    <string name="tage">%1$d days</string>
-    <string name="wochen_und_tage">%1$d weeks and %2$d days</string>
+    <plurals name="tage">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <string name="wochen_und_tage" tools:ignore="PluralsCandidate">%1$d weeks and %2$d days</string>
     <string name="zurucksetzen">Reset</string>
     <string name="datum_auswahlen">Select date</string>
     <string name="zugriff_auf_medien_benotigt">Media access required</string>
@@ -1186,8 +1265,11 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="kein_betreff_2">(No subject)</string>
     <string name="ki_zusammenfassung">AI summary</string>
     <string name="verbindungsfehler">Connection error: %1$s</string>
-    <string name="ladt_bisher">Loading… (%1$d so far)</string>
-    <string name="emails">%1$d emails</string>
+    <string name="ladt_bisher" tools:ignore="PluralsCandidate">Loading… (%1$d so far)</string>
+    <plurals name="emails">
+        <item quantity="one">%1$d email</item>
+        <item quantity="other">%1$d emails</item>
+    </plurals>
     <string name="datum">Date</string>
     <string name="server_ip_eingeben">Enter server IP</string>
     <string name="ip_adresse_des_laptops_ohne">IP address of the laptop (without port):</string>
@@ -1197,6 +1279,10 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="erneut_versuchen">Try again</string>
     <string name="keine_emails">No emails</string>
     <string name="laden">Load</string>
+    <string name="email_loschen_titel">Delete email?</string>
+    <string name="email_loschen_text">This email will be permanently removed.</string>
+    <string name="email_geloscht">Email deleted</string>
+    <string name="email_loschen_fehlgeschlagen">Delete failed</string>
     <string name="artikeltext_konnte_nicht_geladen_werden">Article text could not be loaded</string>
     <string name="du_bekommst_den_volltext_eines">You are given the full text of a heise article. Create a crisp, easy-to-read English summary from it.</string>
     <string name="format_der_zusammenfassung">Format of the summary:</string>
@@ -1225,7 +1311,10 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="artikel_konnte_nicht_geoffnet_werden">Article could not be opened</string>
     <string name="heise_developer_news">heise developer News</string>
     <string name="aktuelle_news_per_atom_feed">Latest news via Atom feed</string>
-    <string name="meldungen_geladen">%1$d reports loaded</string>
+    <plurals name="meldungen_geladen">
+        <item quantity="one">%1$d report loaded</item>
+        <item quantity="other">%1$d reports loaded</item>
+    </plurals>
     <string name="news_aktualisieren">Refresh news</string>
     <string name="original_offnen">Open original</string>
     <string name="ai_summary">AI Summary</string>
@@ -1292,7 +1381,10 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="notiz_erstellen">Create note</string>
     <string name="keine_notizen_vorhanden">No notes available</string>
     <string name="mochtest_du_diese_notiz_wirklich">Do you really want to delete this note?</string>
-    <string name="weitere">+%1$d more</string>
+    <plurals name="weitere">
+        <item quantity="one">+%1$d more</item>
+        <item quantity="other">+%1$d more</item>
+    </plurals>
     <string name="notiztyp_auswahlen">Select note type</string>
     <string name="textnotiz">Text note</string>
     <string name="normale_notiz_mit_text">Normal note with text</string>
@@ -1305,8 +1397,11 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="neuer_punkt">New item</string>
     <string name="hinzufugen">Add</string>
     <string name="willst_du_die_notiz_wirklich">Do you really want to delete the note \"%1$s\"?</string>
-    <string name="alle_dateien_gespeichert">✅ All %1$d files saved!</string>
-    <string name="gespeichert_fehlgeschlagen">⚠️ %1$d saved, %2$d failed</string>
+    <plurals name="alle_dateien_gespeichert">
+        <item quantity="one">✅ File saved!</item>
+        <item quantity="other">✅ All %1$d files saved!</item>
+    </plurals>
+    <string name="gespeichert_fehlgeschlagen" tools:ignore="PluralsCandidate">⚠️ %1$d saved, %2$d failed</string>
     <string name="datei_geloscht">✅ File deleted</string>
     <string name="videos">Videos</string>
     <string name="keine_dateien_vorhanden">📁 No files available</string>
@@ -1350,8 +1445,14 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="hdpi_240_dpi">hdpi (240 dpi)</string>
     <string name="xhdpi_320_dpi">xhdpi (320 dpi)</string>
     <string name="xxhdpi_480_dpi">xxhdpi (480 dpi)</string>
-    <string name="xxxhdpi_dpi">xxxhdpi (≥ %1$d dpi)</string>
-    <string name="dichte_dpi">🔍 Density: %1$d dpi (%2$s)\n</string>
+    <plurals name="xxxhdpi_dpi">
+        <item quantity="one">xxxhdpi (≥ %1$d dpi)</item>
+        <item quantity="other">xxxhdpi (≥ %1$d dpi)</item>
+    </plurals>
+    <plurals name="dichte_dpi">
+        <item quantity="one">🔍 Density: %1$d dpi (%2$s)\n</item>
+        <item quantity="other">🔍 Density: %1$d dpi (%2$s)\n</item>
+    </plurals>
     <string name="bildschirmgrose">📐 Screen size: %1$s inches\n</string>
     <string name="bildschirmgrose_n_a">📐 Screen size: N/A\n</string>
     <string name="refresh_rate">🔄 Refresh Rate: %1$s Hz\n</string>
@@ -1420,7 +1521,10 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="verbindung_abgelehnt_falscher_pin">Connection refused – wrong PIN?</string>
     <string name="denied">Denied</string>
     <string name="ws_text_parse_fehler">[WS-TEXT] Parse error</string>
-    <string name="ws_bin_frame_empfangen_bytes">[WS-BIN] Frame received: %1$d bytes</string>
+    <plurals name="ws_bin_frame_empfangen_bytes">
+        <item quantity="one">[WS-BIN] Frame received: %1$d bytes</item>
+        <item quantity="other">[WS-BIN] Frame received: %1$d bytes</item>
+    </plurals>
     <string name="flow_ubersprungen_laufende_decodes">[FLOW] Skipped – %1$s ongoing decodes</string>
     <string name="decode_ms_x">[DECODE] ✓ %1$dms (%2$dx%3$d)</string>
     <string name="decode_dekodierung_fehlgeschlagen">[DECODE] ✗ Decoding failed</string>
@@ -1733,12 +1837,18 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="alle_statistiken">All statistics</string>
     <string name="fur_dich">For you</string>
     <string name="meine_playlists">My playlists</string>
-    <string name="songs_2">%1$d songs</string>
+    <plurals name="songs_2">
+        <item quantity="one">%1$d song</item>
+        <item quantity="other">%1$d songs</item>
+    </plurals>
     <string name="weiter_horen">Continue listening</string>
     <string name="zuletzt_gehort">Recently listened</string>
     <string name="lege_musik_in_cloud_ab">Put music in /Cloud/</string>
     <string name="statistiken">📊 Statistics</string>
-    <string name="sessions">%1$d sessions</string>
+    <plurals name="sessions">
+        <item quantity="one">%1$d session</item>
+        <item quantity="other">%1$d sessions</item>
+    </plurals>
     <string name="musik_gesamt">Music total</string>
     <string name="podcast_gesamt">Podcast total</string>
     <string name="alles">Everything</string>
@@ -1756,17 +1866,26 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="reset_2">Reset</string>
     <string name="meine_playlists_2">My playlists (%1$d)</string>
     <string name="alle_songs_3">All songs (%1$d)</string>
-    <string name="ausgewahlt">%1$d selected</string>
+    <plurals name="ausgewahlt">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
     <string name="playlist_erstellen_2">Create playlist</string>
     <string name="playlist_loschen_2">Delete playlist?</string>
     <string name="playlist_erstellen_3">🎵 Create playlist</string>
     <string name="songs_suchen">🔍 Search songs…</string>
-    <string name="playlist_erstellen_songs">✓ Create playlist (%1$d songs)</string>
+    <plurals name="playlist_erstellen_songs">
+        <item quantity="one">✓ Create playlist (%1$d song)</item>
+        <item quantity="other">✓ Create playlist (%1$d songs)</item>
+    </plurals>
     <string name="show_zuweisen">Assign show</string>
     <string name="neue_show_erstellen">Create new show</string>
     <string name="erstellen_zuweisen">Create &amp; assign</string>
     <string name="gehort">played %1$d×</string>
-    <string name="folgen">%1$d episodes%2$s</string>
+    <plurals name="folgen">
+        <item quantity="one">%1$d episode%2$s</item>
+        <item quantity="other">%1$d episodes%2$s</item>
+    </plurals>
     <string name="keine_folgen">No episodes</string>
     <string name="songs_podcasts_shows_suchen" tools:ignore="TypographyEllipsis">🔍  Search songs, podcasts, shows...</string>
     <string name="noch_nicht_gespielt">Not played yet</string>
@@ -1919,13 +2038,16 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="erkennung_abbrechen">Cancel recognition?</string>
     <string name="die_ki_erkennt_noch_vokabeln">The AI is still recognizing vocabulary. Really cancel?</string>
     <string name="neue_vokabeln">New vocabulary</string>
-    <string name="vokabeln_2">%1$d vocabulary items</string>
+    <plurals name="vokabeln_2">
+        <item quantity="one">%1$d vocabulary item</item>
+        <item quantity="other">%1$d vocabulary items</item>
+    </plurals>
     <string name="bestatigen">Confirm (%1$s)</string>
     <string name="umbenennen">Rename</string>
     <string name="erkenne_platzhalter">Recognizing…</string>
     <string name="fertig_ausruf">Done!</string>
     <string name="lernen">Learn →</string>
-    <string name="ki_erkennt_vokabeln_bisher">AI is recognizing vocabulary… (%1$d so far)</string>
+    <string name="ki_erkennt_vokabeln_bisher" tools:ignore="PluralsCandidate">AI is recognizing vocabulary… (%1$d so far)</string>
     <string name="latein">Latin</string>
     <string name="deutsch">German</string>
     <string name="de_la">DE → LA </string>
@@ -1934,7 +2056,10 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="tippe_zum_aufdecken">Tap to reveal</string>
     <string name="falsch">Wrong</string>
     <string name="richtig">Correct</string>
-    <string name="vokabeln_abgefragt">%1$d vocabulary items tested</string>
+    <plurals name="vokabeln_abgefragt">
+        <item quantity="one">%1$d vocabulary item tested</item>
+        <item quantity="other">%1$d vocabulary items tested</item>
+    </plurals>
     <string name="nochmal">Again</string>
     <string name="falsche_wiederholen">✗ Repeat wrong ones (%1$d)</string>
     <string name="set_speichern">Save set</string>
@@ -1958,4 +2083,19 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="guck_wie_du">See how you did today:</string>
     <string name="fur_diesen_bereich">There is no help for this area yet.</string>
     <string name="erweitert">Advanced</string>
+    <string name="virustotal">VirusTotal</string>
+    <string name="virustotal_modus_url">URL</string>
+    <string name="virustotal_modus_hash">Hash</string>
+    <string name="virustotal_modus_datei">File</string>
+    <string name="virustotal_url_label">Enter URL</string>
+    <string name="virustotal_hash_label">Enter MD5 / SHA1 / SHA256 hash</string>
+    <string name="virustotal_prufen">Check</string>
+    <string name="virustotal_datei_auswahlen">Select file</string>
+    <string name="virustotal_hochladen_prufen">Upload &amp; check</string>
+    <string name="virustotal_ergebnis">%1$d of %2$d engines flag this file as malicious</string>
+    <string name="virustotal_bosartig">Malicious</string>
+    <string name="virustotal_verdachtig">Suspicious</string>
+    <string name="virustotal_harmlos">Harmless</string>
+    <string name="virustotal_unentdeckt">Undetected</string>
+    <string name="virustotal_bericht_offnen">Open full report</string>
 </resources>
