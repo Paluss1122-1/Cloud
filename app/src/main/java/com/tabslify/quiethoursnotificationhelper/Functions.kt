@@ -104,13 +104,13 @@ private fun showFriendMessagesNotification(messages: List<ChatService.Message>, 
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_email)
-            .setContentTitle(context.getString(R.string.letzte_nachrichten_von_friend, messages.size))
+            .setContentTitle(context.resources.getQuantityString(R.plurals.letzte_nachrichten_von_friend, messages.size, messages.size))
             .setContentText(messages.lastOrNull()?.content ?: "")
             .setStyle(
                 NotificationCompat.BigTextStyle()
                     .bigText(messageText)
                     .setBigContentTitle(context.getString(R.string.chat_verlauf_mit_friend))
-                    .setSummaryText(context.getString(R.string.nachrichten, messages.size))
+                    .setSummaryText(context.resources.getQuantityString(R.plurals.nachrichten, messages.size, messages.size))
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
