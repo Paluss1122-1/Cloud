@@ -10,6 +10,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.BatteryManager
 import android.os.PowerManager
 import android.provider.Settings
@@ -144,7 +145,8 @@ object ChargeSessionRepository {
     private suspend fun loadSessions(): List<ChargingSession> = withContext(Dispatchers.IO) {
         runCatching {
             if (!prvt()) {
-                Toast.makeText(context, context.getString(R.string.forbidden), Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.forbidden), Toast.LENGTH_SHORT)
+                    .show()
                 return@withContext emptyList()
             }
             val local = context.getSharedPreferences("charge_sessions", Context.MODE_PRIVATE)
@@ -163,7 +165,11 @@ object ChargeSessionRepository {
         appScope.launch(Dispatchers.IO) {
             runCatching {
                 if (!prvt()) {
-                    Toast.makeText(context, context.getString(R.string.forbidden), Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.forbidden),
+                        Toast.LENGTH_SHORT
+                    ).show()
                     return@runCatching
                 }
                 client.from("Tabslify").upsert(buildJsonObject {
@@ -318,6 +324,7 @@ class ChargingPowerReceiver : BroadcastReceiver() {
     }
 }
 
+@SuppressLint("MissingPermission")
 suspend fun predictChargingTime(context: Context): Int? {
     val sample = readBatterySample(context) ?: return null
     if (sample.level >= 85) return 0
@@ -373,7 +380,7 @@ suspend fun predictChargingTime(context: Context): Int? {
     val usageStats = runCatching {
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val now = System.currentTimeMillis()
-        if (context.checkSelfPermission(android.Manifest.permission.PACKAGE_USAGE_STATS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        if (context.checkSelfPermission(android.Manifest.permission.PACKAGE_USAGE_STATS) == PackageManager.PERMISSION_GRANTED) {
             return@runCatching "Berechtigung fehlt (PACKAGE_USAGE_STATS)"
         } else {
             usm.queryUsageStats(UsageStatsManager.INTERVAL_WEEKLY, now - 28L * 86400000, now)
