@@ -99,6 +99,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -724,7 +725,7 @@ private fun HomeTab(
                                     )
                                     Spacer(Modifier.height(4.dp))
                                     Text(
-                                        stringResource(R.string.songs_2, songCount),
+                                        pluralStringResource(R.plurals.songs_2, songCount, songCount),
                                         color = TextSecondary,
                                         fontSize = 12.sp
                                     )
@@ -891,7 +892,7 @@ private fun AllStatsBottomSheet(onDismiss: () -> Unit) {
                     modifier = Modifier.weight(1f)
                 )
                 Text(
-                    stringResource(R.string.sessions, allSessions.size),
+                    pluralStringResource(R.plurals.sessions, allSessions.size, allSessions.size),
                     color = TextTertiary,
                     fontSize = 12.sp
                 )
@@ -1048,7 +1049,7 @@ private fun StatsRow(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    stringResource(R.string.sessions, sessionCount),
+                    pluralStringResource(R.plurals.sessions, sessionCount, sessionCount),
                     color = TextTertiary,
                     fontSize = 11.sp
                 )
@@ -1305,7 +1306,7 @@ private fun MusicTab(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                stringResource(R.string.songs_2, songCount),
+                                pluralStringResource(R.plurals.songs_2, songCount, songCount),
                                 color = TextTertiary,
                                 fontSize = 11.sp
                             )
@@ -1407,7 +1408,7 @@ private fun MusicTab(
                         .padding(horizontal = 14.dp, vertical = 8.dp)
                 ) {
                     Text(
-                        stringResource(R.string.ausgewahlt, selectedSongs.size),
+                        pluralStringResource(R.plurals.ausgewahlt, selectedSongs.size, selectedSongs.size),
                         color = AccentViolet,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
@@ -1589,7 +1590,7 @@ private fun CreatePlaylistBottomSheet(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
-                Text(stringResource(R.string.songs_2, selectedPaths.size), color = AccentViolet, fontSize = 13.sp)
+                Text(pluralStringResource(R.plurals.songs_2, selectedPaths.size, selectedPaths.size), color = AccentViolet, fontSize = 13.sp)
             }
 
             Box(
@@ -1715,7 +1716,7 @@ private fun CreatePlaylistBottomSheet(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    stringResource(R.string.playlist_erstellen_songs, selectedPaths.size),
+                    pluralStringResource(R.plurals.playlist_erstellen_songs, selectedPaths.size, selectedPaths.size),
                     color = if (playlistName.isNotBlank() && selectedPaths.isNotEmpty())
                         TextPrimary else TextTertiary,
                     fontSize = 15.sp,
@@ -1970,7 +1971,7 @@ private fun AlgorithmicPlaylistCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.height(4.dp))
-                Text(stringResource(R.string.songs_2, songCount), color = TextSecondary, fontSize = 12.sp)
+                Text(pluralStringResource(R.plurals.songs_2, songCount, songCount), color = TextSecondary, fontSize = 12.sp)
                 Text(
                     stringResource(source.descriptionRes), color = TextTertiary, fontSize = 11.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis
@@ -2143,8 +2144,9 @@ private fun ShowCard(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    stringResource(
-                        R.string.folgen,
+                    pluralStringResource(
+                        R.plurals.folgen,
+                        episodeCount,
                         episodeCount,
                         (if (unheard > 0) stringResource(R.string.neu_suffix, unheard) else "") +
                                 (if (totalListenedMs > 0) stringResource(
@@ -2869,7 +2871,7 @@ private fun PlaylistDetailSheet(
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    Text(stringResource(R.string.songs_2, songs.size), color = TextTertiary, fontSize = 12.sp)
+                    Text(pluralStringResource(R.plurals.songs_2, songs.size, songs.size), color = TextTertiary, fontSize = 12.sp)
                 }
             }
 
@@ -3936,7 +3938,7 @@ fun AiResponseHistorySheet(
                     modifier = Modifier.weight(1f)
                 )
                 Text(
-                    stringResource(R.string.eintrage, entries.size),
+                    pluralStringResource(R.plurals.eintrage, entries.size, entries.size),
                     color = TextTertiary,
                     fontSize = 12.sp
                 )
