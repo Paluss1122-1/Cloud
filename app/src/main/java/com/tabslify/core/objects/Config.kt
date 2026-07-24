@@ -7,11 +7,14 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.LocaleList
+import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.core.app.NotificationCompat
+import androidx.core.net.toUri
 import com.tabslify.BuildConfig
 import com.tabslify.R
 import com.tabslify.core.functions.canNotify
@@ -249,6 +252,117 @@ object Config {
             else -> return false
         }
         return true
+    }
+
+    private val settingsBasedPermissionKeys = setOf(
+        "SYSTEM_ALERT_WINDOW",
+        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+        "MANAGE_EXTERNAL_STORAGE",
+        "ACCESS_NOTIFICATION_POLICY"
+    )
+
+    fun isPermissionRequestable(key: String): Boolean =
+        key != "ACCESS_SUPERUSER" && key != "SET_ALARM" &&
+                key != "ACCESS_WIFI_STATE" && key != "ACCESS_NETWORK_STATE"
+
+    fun requestPermissionForKey(
+        context: Context,
+        key: String,
+        launcher: ActivityResultLauncher<Array<String>>
+    ) {
+        when (key) {
+            "READ_MEDIA_AUDIO" -> launcher.launch(arrayOf(Manifest.permission.READ_MEDIA_AUDIO))
+            "POST_NOTIFICATIONS" -> launcher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+            "ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION" -> launcher.launch(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            )
+
+            "ACCESS_BACKGROUND_LOCATION" -> launcher.launch(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
+            "FOREGROUND_SERVICE" -> launcher.launch(arrayOf(Manifest.permission.FOREGROUND_SERVICE))
+            "READ_MEDIA_IMAGES / READ_MEDIA_VIDEO" -> requestPermission("img", launcher)
+            "READ_CONTACTS / WRITE_CONTACTS" -> launcher.launch(
+                arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS)
+            )
+
+            "CAMERA" -> launcher.launch(arrayOf(Manifest.permission.CAMERA))
+            "RECEIVE_BOOT_COMPLETED" -> launcher.launch(arrayOf(Manifest.permission.RECEIVE_BOOT_COMPLETED))
+            "RECORD_AUDIO" -> launcher.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
+            "BLUETOOTH_CONNECT" -> launcher.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT))
+            "READ_PHONE_STATE / READ_BASIC_PHONE_STATE" -> launcher.launch(arrayOf(Manifest.permission.READ_PHONE_STATE))
+            "READ_SMS" -> launcher.launch(arrayOf(Manifest.permission.READ_SMS))
+
+            "SYSTEM_ALERT_WINDOW" -> context.startActivity(
+                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, "package:${context.packageName}".toUri())
+                    .apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+            )
+
+            "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" -> context.startActivity(
+                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, "package:${context.packageName}".toUri())
+                    .apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+            )
+
+            "MANAGE_EXTERNAL_STORAGE" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                context.startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        "package:${context.packageName}".toUri()
+                    ).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+                )
+            }
+
+            "ACCESS_NOTIFICATION_POLICY" -> context.startActivity(
+                Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+                    .apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+            )
+        }
+    }
+
+    private fun mediaImagesVideoPermissions(): List<String> = when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> listOf(
+            Manifest.permission.READ_MEDIA_IMAGES,
+            Manifest.permission.READ_MEDIA_VIDEO,
+            Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+        )
+
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> listOf(
+            Manifest.permission.READ_MEDIA_IMAGES,
+            Manifest.permission.READ_MEDIA_VIDEO
+        )
+
+        else -> listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+
+    fun requestAllRuntimePermissions(
+        keys: List<String>,
+        launcher: ActivityResultLauncher<Array<String>>
+    ) {
+        val permissions = mutableListOf<String>()
+        keys.filter { isPermissionRequestable(it) && it !in settingsBasedPermissionKeys }
+            .forEach { key ->
+                when (key) {
+                    "READ_MEDIA_AUDIO" -> permissions += Manifest.permission.READ_MEDIA_AUDIO
+                    "POST_NOTIFICATIONS" -> permissions += Manifest.permission.POST_NOTIFICATIONS
+                    "ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION" -> permissions += listOf(
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    )
+
+                    "FOREGROUND_SERVICE" -> permissions += Manifest.permission.FOREGROUND_SERVICE
+                    "READ_MEDIA_IMAGES / READ_MEDIA_VIDEO" -> permissions += mediaImagesVideoPermissions()
+                    "READ_CONTACTS / WRITE_CONTACTS" -> permissions += listOf(
+                        Manifest.permission.READ_CONTACTS,
+                        Manifest.permission.WRITE_CONTACTS
+                    )
+
+                    "CAMERA" -> permissions += Manifest.permission.CAMERA
+                    "RECEIVE_BOOT_COMPLETED" -> permissions += Manifest.permission.RECEIVE_BOOT_COMPLETED
+                    "RECORD_AUDIO" -> permissions += Manifest.permission.RECORD_AUDIO
+                    "BLUETOOTH_CONNECT" -> permissions += Manifest.permission.BLUETOOTH_CONNECT
+                    "READ_PHONE_STATE / READ_BASIC_PHONE_STATE" -> permissions += Manifest.permission.READ_PHONE_STATE
+                    "READ_SMS" -> permissions += Manifest.permission.READ_SMS
+                }
+            }
+        if (permissions.isNotEmpty()) launcher.launch(permissions.distinct().toTypedArray())
     }
 
     fun getAppSignatureSha256(context: Context): String? {
