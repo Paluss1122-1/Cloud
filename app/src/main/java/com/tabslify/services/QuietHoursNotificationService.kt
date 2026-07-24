@@ -142,7 +142,10 @@ import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.getSessions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -203,7 +206,7 @@ class QuietHoursNotificationService : Service() {
             showSimpleNotificationExtern(
                 getString(R.string.eingeschrankte_hintergrundaktivitaten),
                 getString(R.string.services_laufen_evtl_verzogert_oder),
-                10.seconds,
+                Duration.ZERO,
                 context = this,
                 onClick = "requestIgnoreBatteryOptimizations"
             )
@@ -806,7 +809,13 @@ class QuietHoursNotificationService : Service() {
                 ACTION_PODCAST_CHECK -> {
                     try {
                         if (isWifiConnected()) {
-                            checkPodcastsAndNotify(this)
+                            appScope.launch(Dispatchers.IO) {
+                                try {
+                                    checkPodcastsAndNotify(this@QuietHoursNotificationService)
+                                } catch (e: Exception) {
+                                    reportServiceError("ACTION_PODCAST_CHECK", e)
+                                }
+                            }
                         } else {
                             showPodcastRetryNotification()
                         }
@@ -819,7 +828,13 @@ class QuietHoursNotificationService : Service() {
                 ACTION_PODCAST_RETRY -> {
                     try {
                         if (isWifiConnected()) {
-                            checkPodcastsAndNotify(this)
+                            appScope.launch(Dispatchers.IO) {
+                                try {
+                                    checkPodcastsAndNotify(this@QuietHoursNotificationService)
+                                } catch (e: Exception) {
+                                    reportServiceError("ACTION_PODCAST_RETRY", e)
+                                }
+                            }
                         } else {
                             showPodcastRetryNotification()
                         }
@@ -1267,7 +1282,7 @@ class QuietHoursNotificationService : Service() {
     }
 
     @SuppressLint("LaunchActivityFromNotification")
-    fun checkPodcastsAndNotify(context: Context, forGui: Boolean = false): List<JSONObject> {
+    suspend fun checkPodcastsAndNotify(context: Context, forGui: Boolean = false): List<JSONObject> {
         val found = mutableListOf<JSONObject>()
         try {
             val prefs = context.getSharedPreferences("podcast_favs", MODE_PRIVATE)
@@ -1289,77 +1304,84 @@ class QuietHoursNotificationService : Service() {
             )
             destDir.mkdirs()
 
-            for (i in 0 until favsArr.length()) {
-                try {
-                    val o = favsArr.getJSONObject(i)
-                    val feedTitle = o.optString("title")
-                    val feedUrl = o.optString("feedUrl")
-                    if (feedUrl.isEmpty()) continue
-
-                    val xml = URL(feedUrl).readText()
-                    val doc = DocumentBuilderFactory.newInstance()
-                        .apply {
-                            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-                            setFeature("http://xml.org/sax/features/external-general-entities", false)
-                            setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-                            isExpandEntityReferences = false
-                        }
-                        .newDocumentBuilder()
-                        .parse(InputSource(StringReader(xml)))
-
-                    val items = doc.getElementsByTagName("item")
-                    for (j in 0 until items.length) {
+            val perFeedResults = coroutineScope {
+                (0 until favsArr.length()).map { i ->
+                    async(Dispatchers.IO) {
+                        val feedFound = mutableListOf<JSONObject>()
                         try {
-                            val item = items.item(j)
-                            val children = item.childNodes
-                            var title = ""
-                            var audioUrl = ""
-                            var pubDateTxt = ""
-                            for (k in 0 until children.length) {
-                                val node = children.item(k)
-                                when (node.nodeName) {
-                                    "title" -> title = node.textContent.trim()
-                                    "enclosure" -> audioUrl =
-                                        node.attributes?.getNamedItem("url")?.nodeValue ?: ""
+                            val o = favsArr.getJSONObject(i)
+                            val feedTitle = o.optString("title")
+                            val feedUrl = o.optString("feedUrl")
+                            if (feedUrl.isEmpty()) return@async feedFound
 
-                                    "pubDate" -> pubDateTxt = node.textContent.trim()
+                            val xml = URL(feedUrl).readText()
+                            val doc = DocumentBuilderFactory.newInstance()
+                                .apply {
+                                    setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+                                    setFeature("http://xml.org/sax/features/external-general-entities", false)
+                                    setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+                                    isExpandEntityReferences = false
                                 }
-                            }
+                                .newDocumentBuilder()
+                                .parse(InputSource(StringReader(xml)))
 
-                            if (audioUrl.isEmpty()) continue
-
-                            val pubInstant = try {
-                                ZonedDateTime.parse(
-                                    pubDateTxt,
-                                    DateTimeFormatter.RFC_1123_DATE_TIME.withLocale(Locale.ENGLISH)
-                                ).toInstant()
-                            } catch (_: Exception) {
+                            val items = doc.getElementsByTagName("item")
+                            for (j in 0 until items.length) {
                                 try {
-                                    Instant.parse(pubDateTxt)
+                                    val item = items.item(j)
+                                    val children = item.childNodes
+                                    var title = ""
+                                    var audioUrl = ""
+                                    var pubDateTxt = ""
+                                    for (k in 0 until children.length) {
+                                        val node = children.item(k)
+                                        when (node.nodeName) {
+                                            "title" -> title = node.textContent.trim()
+                                            "enclosure" -> audioUrl =
+                                                node.attributes?.getNamedItem("url")?.nodeValue ?: ""
+
+                                            "pubDate" -> pubDateTxt = node.textContent.trim()
+                                        }
+                                    }
+
+                                    if (audioUrl.isEmpty()) continue
+
+                                    val pubInstant = try {
+                                        ZonedDateTime.parse(
+                                            pubDateTxt,
+                                            DateTimeFormatter.RFC_1123_DATE_TIME.withLocale(Locale.ENGLISH)
+                                        ).toInstant()
+                                    } catch (_: Exception) {
+                                        try {
+                                            Instant.parse(pubDateTxt)
+                                        } catch (_: Exception) {
+                                            null
+                                        }
+                                    }
+
+                                    if (pubInstant == null) continue
+                                    if (pubInstant <= threshold) continue
+                                    if (prefsDl.getBoolean("dl_$audioUrl", false)) continue
+
+                                    val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_")
+                                    val filename = "$safeTitle.mp3"
+                                    if (File(destDir, filename).exists()) continue
+
+                                    feedFound.add(JSONObject().apply {
+                                        put("audioUrl", audioUrl)
+                                        put("title", title)
+                                        put("showName", feedTitle)
+                                    })
                                 } catch (_: Exception) {
-                                    null
                                 }
                             }
-
-                            if (pubInstant == null) continue
-                            if (pubInstant <= threshold) continue
-                            if (prefsDl.getBoolean("dl_$audioUrl", false)) continue
-
-                            val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_")
-                            val filename = "$safeTitle.mp3"
-                            if (File(destDir, filename).exists()) continue
-
-                            found.add(JSONObject().apply {
-                                put("audioUrl", audioUrl)
-                                put("title", title)
-                                put("showName", feedTitle)
-                            })
                         } catch (_: Exception) {
                         }
+                        feedFound
                     }
-                } catch (_: Exception) {
-                }
+                }.awaitAll()
             }
+            perFeedResults.forEach { found.addAll(it) }
 
             if (found.isNotEmpty() && !forGui) {
                 val arr = JSONArray()
@@ -1387,7 +1409,7 @@ class QuietHoursNotificationService : Service() {
                 val contentText = if (found.size == 1) {
                     context.getString(R.string.neue_folge, found[0].optString("title"))
                 } else {
-                    context.getString(R.string.neue_folgen_verfugbar, found.size)
+                    context.resources.getQuantityString(R.plurals.neue_folgen_verfugbar, found.size, found.size)
                 }
 
                 val bigText = buildString {
