@@ -61,6 +61,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -715,7 +716,7 @@ fun HeiseNewsTabContent(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = if (articles.isEmpty()) stringResource(R.string.aktuelle_news_per_atom_feed) else stringResource(R.string.meldungen_geladen, articles.size),
+                    text = if (articles.isEmpty()) stringResource(R.string.aktuelle_news_per_atom_feed) else pluralStringResource(R.plurals.meldungen_geladen, articles.size, articles.size),
                     color = Color.White.copy(alpha = 0.65f),
                     fontSize = 12.sp
                 )
