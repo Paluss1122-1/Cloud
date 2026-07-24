@@ -77,6 +77,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -193,6 +194,10 @@ fun VocabTab(paddingValues: PaddingValues) {
         )
     }
     var recentMaterialPreviews by remember { mutableStateOf<List<RecentMaterial>>(emptyList()) }
+
+    val lokaleExtraktionLeer = stringResource(R.string.lokale_extraktion_leer)
+    val keineVokabelnErkannt = stringResource(R.string.keine_vokabeln_erkannt)
+    val fehlerMsgPattern = stringResource(R.string.fehler_msg)
 
     fun openSetAndUpdateLastUsed(set: VokabelSet) {
         val updatedSet = set.copy(lastUsed = System.currentTimeMillis())
@@ -384,7 +389,7 @@ fun VocabTab(paddingValues: PaddingValues) {
                                     vokabeln = result ?: emptyList()
                                     if (vokabeln.isNotEmpty()) screen = VokabelTabScreen.REVIEW
                                     else {
-                                        errorMessage = context.getString(R.string.lokale_extraktion_leer)
+                                        errorMessage = lokaleExtraktionLeer
                                     }
                                 } else {
                                     callNvidiaVisionApi(
@@ -418,10 +423,10 @@ fun VocabTab(paddingValues: PaddingValues) {
                                             }
                                         })
                                     if (vokabeln.isNotEmpty()) screen = VokabelTabScreen.REVIEW
-                                    else errorMessage = context.getString(R.string.keine_vokabeln_erkannt)
+                                    else errorMessage = keineVokabelnErkannt
                                 }
                             } catch (e: Exception) {
-                                errorMessage = context.getString(R.string.fehler_msg, e.localizedMessage)
+                                errorMessage = String.format(fehlerMsgPattern, e.localizedMessage)
                             } finally {
                                 isExtracting = false
                             }
@@ -1222,7 +1227,7 @@ fun ReviewScreen(
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text(stringResource(R.string.vokabeln_2, currentVokabeln.size), color = TextTertiary, fontSize = 12.sp)
+                Text(pluralStringResource(R.plurals.vokabeln_2, currentVokabeln.size, currentVokabeln.size), color = TextTertiary, fontSize = 12.sp)
             }
             Box(
                 modifier = Modifier
@@ -1732,7 +1737,7 @@ fun LearnScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        stringResource(R.string.vokabeln_abgefragt, shuffled.size),
+                        pluralStringResource(R.plurals.vokabeln_abgefragt, shuffled.size, shuffled.size),
                         color = TextSecondary,
                         fontSize = 14.sp
                     )
@@ -1975,7 +1980,7 @@ fun MergeVocabSetsDialog(
                                     fontWeight = FontWeight.Medium
                                 )
                                 Text(
-                                    stringResource(R.string.vokabeln_2, set.vokabeln.size),
+                                    pluralStringResource(R.plurals.vokabeln_2, set.vokabeln.size, set.vokabeln.size),
                                     color = TextTertiary,
                                     fontSize = 12.sp
                                 )
