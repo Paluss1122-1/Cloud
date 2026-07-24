@@ -177,6 +177,8 @@ class MainActivity : FragmentActivity() {
         if (apkmUri != null) {
             pendingApkmUri = apkmUri
             startTarget = "apkm"
+        } else {
+            intent.getStringExtra("target")?.let { startTarget = it }
         }
     }
 
