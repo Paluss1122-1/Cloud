@@ -6,8 +6,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Paint
 import android.os.Build
+import android.os.Environment
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
@@ -37,6 +40,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -304,6 +308,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                 "weather" -> MenuItem.WEATHER
                 "aitab" -> MenuItem.AITAB
                 "apkm" -> MenuItem.APKM_INSTALLER
+                "gmail" -> MenuItem.GMAIL
                 else -> null
             }
             if (selectedMenuItem != null && selectedMenuItem != MenuItem.APKM_INSTALLER) {
@@ -344,6 +349,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                 when (target) {
                     "weather" -> MenuItem.WEATHER
                     "apkm" -> MenuItem.APKM_INSTALLER
+                    "gmail" -> MenuItem.GMAIL
                     else -> null
                 }
             }
@@ -1124,6 +1130,28 @@ fun isPermissionGranted(context: Context, key: String): Boolean {
             (context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager)
                 .isIgnoringBatteryOptimizations(context.packageName)
 
+        "BLUETOOTH_CONNECT" -> granted(Manifest.permission.BLUETOOTH_CONNECT)
+
+        "READ_PHONE_STATE / READ_BASIC_PHONE_STATE" ->
+            granted(Manifest.permission.READ_PHONE_STATE) ||
+                    granted(Manifest.permission.READ_BASIC_PHONE_STATE)
+
+        "READ_SMS" -> granted(Manifest.permission.READ_SMS)
+
+        "MANAGE_EXTERNAL_STORAGE" -> Environment.isExternalStorageManager()
+
+        "ACCESS_NOTIFICATION_POLICY" ->
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager)
+                .isNotificationPolicyAccessGranted
+
+        "ACCESS_SUPERUSER" -> granted("android.permission.ACCESS_SUPERUSER")
+
+        "SET_ALARM" -> granted("com.android.alarm.permission.SET_ALARM")
+
+        "ACCESS_WIFI_STATE" -> granted(Manifest.permission.ACCESS_WIFI_STATE)
+
+        "ACCESS_NETWORK_STATE" -> granted(Manifest.permission.ACCESS_NETWORK_STATE)
+
         else -> false
     }
 }
@@ -1132,7 +1160,6 @@ fun isPermissionGranted(context: Context, key: String): Boolean {
 fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = null) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    // Recompute granted-state whenever the screen resumes (e.g. back from system settings)
     var permRefreshKey by remember { mutableIntStateOf(0) }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -1141,6 +1168,9 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permRefreshKey++ }
     var selectedPermission by remember { mutableStateOf<String?>(null) }
     var titleDialog by remember { mutableStateOf("") }
     var usagesDialog by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -1176,6 +1206,14 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
         stringResource(R.string.quiethoursnotificationservice_anfrage_zum_ignorieren_von)
     val camera1 = stringResource(R.string.authenticator_scannen_von_qr_codes)
     val keineAngabenHinterlegt = stringResource(R.string.keine_angaben_hinterlegt)
+    val bluetoothConnect1 =
+        stringResource(R.string.reportdeviceinformation_bluetooth_verbindungsstatus)
+    val phoneState1 =
+        stringResource(R.string.reportdeviceinformation_ismobiledataactive_mobilfunk_datenstatus)
+    val readSms1 = stringResource(R.string.startsmslistener_abruf_des_sms_posteingangs)
+    val setAlarm1 = stringResource(R.string.wifi_direct_set_alarm_befehl_vom_notebook)
+    val wifiState1 = stringResource(R.string.reportdeviceinformation_wlan_status_hotspot)
+    val networkState1 = stringResource(R.string.reportdeviceinformation_netzwerkstatus_konnektivitat)
 
     val permissionUsages = remember(
         readMediaAudio1,
@@ -1199,7 +1237,13 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
         bootCompleted1,
         recordAudio1,
         ignoreBattery1,
-        camera1
+        camera1,
+        bluetoothConnect1,
+        phoneState1,
+        readSms1,
+        setAlarm1,
+        wifiState1,
+        networkState1
     ) {
         mapOf(
             "READ_MEDIA_AUDIO" to listOf(
@@ -1248,6 +1292,24 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
             ),
             "CAMERA" to listOf(
                 camera1
+            ),
+            "BLUETOOTH_CONNECT" to listOf(
+                bluetoothConnect1
+            ),
+            "READ_PHONE_STATE / READ_BASIC_PHONE_STATE" to listOf(
+                phoneState1
+            ),
+            "READ_SMS" to listOf(
+                readSms1
+            ),
+            "SET_ALARM" to listOf(
+                setAlarm1
+            ),
+            "ACCESS_WIFI_STATE" to listOf(
+                wifiState1
+            ),
+            "ACCESS_NETWORK_STATE" to listOf(
+                networkState1
             )
         )
     }
@@ -1303,34 +1365,83 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                             shape
                         )
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(txt, modifier = Modifier.weight(1f), fontSize = 13.sp)
-                        val granted = remember(permRefreshKey, txt) {
-                            isPermissionGranted(context, txt)
-                        }
-                        Box(
-                            modifier = Modifier
-                                .padding(end = 8.dp)
-                                .clip(RoundedCornerShape(100))
-                                .background(
-                                    if (granted) Color(0xFF00C853).copy(alpha = 0.22f)
-                                    else Color.White.copy(alpha = 0.10f)
-                                )
-                                .padding(horizontal = 9.dp, vertical = 3.dp)
+                    val granted = remember(permRefreshKey, txt) {
+                        isPermissionGranted(context, txt)
+                    }
+                    Column(Modifier.fillMaxWidth()) {
+                        Text(txt, fontSize = 13.sp, modifier = Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(6.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                if (granted) "● Erteilt" else "○ Nicht erteilt",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (granted) Color(0xFF69F0AE)
-                                else Color.White.copy(alpha = 0.55f)
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(100))
+                                    .background(
+                                        if (granted) Color(0xFF00C853).copy(alpha = 0.22f)
+                                        else Color.White.copy(alpha = 0.10f)
+                                    )
+                                    .padding(horizontal = 9.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    if (granted) "● Erteilt" else "○ Nicht erteilt",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (granted) Color(0xFF69F0AE)
+                                    else Color.White.copy(alpha = 0.55f)
+                                )
+                            }
+                            Spacer(Modifier.weight(1f))
+                            if (!granted && Config.isPermissionRequestable(txt)) {
+                                TextButton(
+                                    onClick = { Config.requestPermissionForKey(context, txt, permissionLauncher) },
+                                    colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                    modifier = Modifier.padding(end = 4.dp)
+                                ) {
+                                    Text(
+                                        stringResource(R.string.erteilen),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                contentDescription = stringResource(R.string.open_information),
+                                tint = Color.White.copy(alpha = 0.8f),
+                                modifier = Modifier.size(14.dp)
                             )
                         }
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowForwardIos,
-                            contentDescription = stringResource(R.string.open_information),
-                            tint = Color.White.copy(alpha = 0.8f)
-                        )
+                    }
+                }
+            }
+
+            val allPermissionKeys = remember(prvt()) {
+                buildList {
+                    add("READ_MEDIA_AUDIO")
+                    add("POST_NOTIFICATIONS")
+                    add("ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION")
+                    add("ACCESS_BACKGROUND_LOCATION")
+                    add("SYSTEM_ALERT_WINDOW")
+                    add("FOREGROUND_SERVICE")
+                    add("READ_MEDIA_IMAGES / READ_MEDIA_VIDEO")
+                    add("READ_CONTACTS / WRITE_CONTACTS")
+                    add("CAMERA")
+                    add("RECEIVE_BOOT_COMPLETED")
+                    add("RECORD_AUDIO")
+                    add("REQUEST_IGNORE_BATTERY_OPTIMIZATIONS")
+                    if (prvt()) {
+                        add("BLUETOOTH_CONNECT")
+                        add("READ_PHONE_STATE / READ_BASIC_PHONE_STATE")
+                        add("READ_SMS")
+                        add("MANAGE_EXTERNAL_STORAGE")
+                        add("ACCESS_NOTIFICATION_POLICY")
+                        add("ACCESS_SUPERUSER")
+                        add("SET_ALARM")
+                        add("ACCESS_WIFI_STATE")
+                        add("ACCESS_NETWORK_STATE")
                     }
                 }
             }
@@ -1344,6 +1455,19 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
             ) {
                 Spacer(Modifier.height(headerHeightDp))
 
+                Button(
+                    onClick = {
+                        Config.requestAllRuntimePermissions(allPermissionKeys, permissionLauncher)
+                    },
+                    shape = RoundedCornerShape(22.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = APP_COLOR),
+                    modifier = Modifier
+                        .padding(bottom = 10.dp)
+                        .fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.alle_berechtigungen_anfragen), fontWeight = FontWeight.Bold)
+                }
+
                 PermissionButton("READ_MEDIA_AUDIO")
                 PermissionButton("POST_NOTIFICATIONS")
                 PermissionButton("ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION")
@@ -1356,6 +1480,17 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                 PermissionButton("RECEIVE_BOOT_COMPLETED")
                 PermissionButton("RECORD_AUDIO")
                 PermissionButton("REQUEST_IGNORE_BATTERY_OPTIMIZATIONS")
+                if (prvt()) {
+                    PermissionButton("BLUETOOTH_CONNECT")
+                    PermissionButton("READ_PHONE_STATE / READ_BASIC_PHONE_STATE")
+                    PermissionButton("READ_SMS")
+                    PermissionButton("MANAGE_EXTERNAL_STORAGE")
+                    PermissionButton("ACCESS_NOTIFICATION_POLICY")
+                    PermissionButton("ACCESS_SUPERUSER")
+                    PermissionButton("SET_ALARM")
+                    PermissionButton("ACCESS_WIFI_STATE")
+                    PermissionButton("ACCESS_NETWORK_STATE")
+                }
             }
         }
 
@@ -2772,7 +2907,7 @@ fun SettingsFrame(
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically()
         ) {
-            LanguageSelectionDialog { showCoordinatesEdit = false }
+            LanguageSelectionDialog { showLanguageDialog = false }
         }
     }
 }
