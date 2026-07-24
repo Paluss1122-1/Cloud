@@ -45,6 +45,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
@@ -140,6 +141,7 @@ fun PodcastTab() {
     var loadingEpisodes by remember { mutableStateOf<String?>(null) }
     var feedToUnfav by remember { mutableStateOf<PodcastFeed?>(null) }
     var newEpisodesState by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var seenShows by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -229,8 +231,26 @@ fun PodcastTab() {
         loadingEpisodes = feedUrl
         try {
             val doc = withContext(Dispatchers.IO) {
-                val conn = URL(feedUrl).openConnection() as HttpURLConnection
-                conn.setRequestProperty("Accept-Charset", "UTF-8")
+                var url = URL(feedUrl)
+                var conn: HttpURLConnection
+                var redirects = 0
+                while (true) {
+                    conn = url.openConnection() as HttpURLConnection
+                    conn.setRequestProperty("Accept-Charset", "UTF-8")
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+                    conn.connectTimeout = 15000
+                    conn.readTimeout = 15000
+                    conn.instanceFollowRedirects = true
+                    val code = conn.responseCode
+                    if (code in 300..399 && redirects < 5) {
+                        val location = conn.getHeaderField("Location") ?: break
+                        conn.disconnect()
+                        url = URL(url, location)
+                        redirects++
+                        continue
+                    }
+                    break
+                }
                 val factory = DocumentBuilderFactory.newInstance()
                 factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
                 factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
@@ -488,7 +508,9 @@ fun PodcastTab() {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         stringResource(R.string.podcast_suchen_oder_url_zum),
-                        color = Color.White.copy(0.5f)
+                        color = Color.White.copy(0.5f),
+                        modifier = Modifier.fillMaxSize(),
+                        textAlign = TextAlign.Center
                     )
                 }
             } else {
@@ -502,7 +524,11 @@ fun PodcastTab() {
                     items(favorites.values.toList()) { feed ->
                         val isExpanded = expandedFeedUrl == feed.feedUrl
                         val feedEpisodes = episodes[feed.feedUrl]
-                        val hasNew = newEpisodesState.any { it.optString("showName") == feed.title }
+                        val newAudioUrls = remember(newEpisodesState, feed.title) {
+                            newEpisodesState.filter { it.optString("showName") == feed.title }
+                                .map { it.optString("audioUrl") }.toSet()
+                        }
+                        val hasNew = newAudioUrls.isNotEmpty() && feed.title !in seenShows
 
                         Box {
                             FeedCard(
@@ -513,8 +539,7 @@ fun PodcastTab() {
                                     else {
                                         expandedFeedUrl = feed.feedUrl
                                         scope.launch { loadEpisodes(feed.feedUrl) }
-                                        newEpisodesState =
-                                            newEpisodesState.filterNot { it.optString("showName") == feed.title }
+                                        seenShows = seenShows + feed.title
                                     }
                                 },
                                 onToggleFav = { feedToUnfav = feed },
@@ -525,7 +550,8 @@ fun PodcastTab() {
                                         feed.title
                                     )
                                 },
-                                onStream = { url -> streamEpisode(url) }
+                                onStream = { url -> streamEpisode(url) },
+                                newAudioUrls = newAudioUrls,
                             )
                             if (hasNew && !isExpanded) {
                                 Box(
