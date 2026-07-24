@@ -1,8 +1,12 @@
 package com.tabslify.tabs
 
+import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,22 +21,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,26 +45,55 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.edit
 import com.tabslify.R
-import com.tabslify.core.objects.Config.MAIL_NOTIFY_PORT
+import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.prvt
-import com.tabslify.quiethoursnotificationhelper.laptopIp
+import com.tabslify.core.ui.AlertDialogTabslify
+import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.channel
+import io.github.jan.supabase.realtime.postgresChangeFlow
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+@Suppress("PropertyName")
+@Serializable
+data class EmailRow(
+    val account: String = "",
+    val uid: String = "",
+    val subject: String = "",
+    val from_addr: String = "",
+    val date_str: String = "",
+    val timestamp: Long = 0L,
+    val body: String = "",
+    val summary: String? = null,
+    val has_summary: Boolean = false,
+)
 
 data class EmailItem(
     val id: String,
+    val account: String,
     val subject: String,
     val from: String,
     val date: String,
@@ -73,152 +103,159 @@ data class EmailItem(
     val hasSummary: Boolean,
 )
 
-private fun loadServerIp(): String = laptopIp
+private val emailJson = Json { ignoreUnknownKeys = true }
 
-private fun saveServerIp(ip: String) {
-    laptopIp = ip
-}
+private const val EMAIL_COLUMNS = "account,uid,subject,from_addr,date_str,timestamp,body,summary,has_summary"
 
-private fun loadLocalSummaryCache(context: android.content.Context): MutableMap<String, String> {
-    val prefs =
-        context.getSharedPreferences("email_summary_cache", android.content.Context.MODE_PRIVATE)
-    return prefs.all.mapNotNull { (k, v) -> (v as? String)?.let { k to it } }.toMap().toMutableMap()
-}
-
-private fun saveLocalSummary(context: android.content.Context, id: String, summary: String) {
-    context.getSharedPreferences("email_summary_cache", android.content.Context.MODE_PRIVATE)
-        .edit { putString(id, summary) }
-}
-
-private suspend fun fetchEmailsStreaming(
-    context: android.content.Context,
-    serverIp: String,
-    onEmailReceived: suspend (EmailItem) -> Unit,
-    onSummaryUpdate: suspend (id: String, summary: String) -> Unit = { _, _ -> }
-): String? = withContext(Dispatchers.IO) {
-    try {
-        val conn = (URL("http://$serverIp:$MAIL_NOTIFY_PORT/emails/stream")
-            .openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = 8_000
-            readTimeout = 0
-        }
-        if (conn.responseCode != 200) return@withContext "HTTP ${conn.responseCode}"
-
-        conn.inputStream.bufferedReader().use { reader ->
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                val l = line?.takeIf { it.isNotBlank() } ?: continue
-                try {
-                    val obj = JSONObject(l)
-                    if (obj.optString("type") == "summary_update") {
-                        onSummaryUpdate(obj.getString("id"), obj.getString("summary"))
-                    } else {
-                        onEmailReceived(
-                            EmailItem(
-                                id = obj.optString("id"),
-                                subject = obj.optString("subject", context.getString(R.string.kein_betreff_2)),
-                                from = obj.optString("from", context.getString(R.string.unbekannt)),
-                                date = obj.optString("date", ""),
-                                timestamp = obj.optLong("timestamp", 0L),
-                                body = obj.optString("body", ""),
-                                summary = obj.optString("summary", "").takeIf { it.isNotBlank() },
-                                hasSummary = obj.optBoolean("has_summary", false),
-                            )
-                        )
-                    }
-                } catch (_: Exception) {
-                }
-            }
-        }
-        conn.disconnect()
-        null
-    } catch (e: Exception) {
-        context.getString(R.string.verbindungsfehler, e.message)
+private fun formatEmailDate(ts: Long, fallback: String): String {
+    if (ts <= 0L) return fallback.take(16)
+    return try {
+        SimpleDateFormat("dd.MM.yy", Locale.getDefault()).format(Date(ts))
+    } catch (_: Exception) {
+        fallback.take(16)
     }
 }
 
+private fun EmailRow.toItem(context: Context): EmailItem = EmailItem(
+    id = uid,
+    account = account,
+    subject = subject.ifBlank { context.getString(R.string.kein_betreff_2) },
+    from = from_addr.ifBlank { context.getString(R.string.unbekannt) },
+    date = formatEmailDate(timestamp, date_str),
+    timestamp = timestamp,
+    body = body,
+    summary = summary?.takeIf { it.isNotBlank() },
+    hasSummary = !summary.isNullOrBlank(),
+)
+
+private suspend fun loadEmailRows(): List<EmailRow> = Config.safeCall {
+    Config.client.from("emails")
+        .select(Columns.list(EMAIL_COLUMNS)) {
+            order("timestamp", Order.DESCENDING)
+        }
+        .decodeList<EmailRow>()
+}
+
+private suspend fun deleteEmailRow(account: String, uid: String) = Config.safeCall {
+    Config.client.from("emails").delete {
+        filter {
+            eq("account", account)
+            eq("uid", uid)
+        }
+    }
+}
+
+private suspend fun triggerGmailSync() = withContext(Dispatchers.IO) {
+    try {
+        (URL("${Config.SUPABASE_URL}/functions/v1/gmail-sync")
+            .openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            setRequestProperty("Authorization", "Bearer ${Config.SUPABASE_PUBLISHABLE_KEY}")
+            connectTimeout = 8_000
+            readTimeout = 8_000
+            doOutput = true
+            outputStream.use { it.write(ByteArray(0)) }
+            responseCode
+            disconnect()
+        }
+    } catch (_: Exception) {
+    }
+}
+
+@Preview
 @Composable
 fun GmailTabContent() {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     if (!prvt()) {
-        Toast.makeText(context, context.getString(R.string.forbidden), Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, stringResource(R.string.forbidden), Toast.LENGTH_SHORT).show()
         return
     }
     val scope = rememberCoroutineScope()
 
-    val localSummaryCache = remember { loadLocalSummaryCache(context) }
-    var serverIp by remember { mutableStateOf(loadServerIp()) }
-    var emails by remember { mutableStateOf<List<EmailItem>>(emptyList()) }
+    var allEmails by remember { mutableStateOf<List<EmailItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var selectedEmail by remember { mutableStateOf<EmailItem?>(null) }
-    var showIpDialog by remember { mutableStateOf(serverIp.isBlank()) }
+    var accountFilter by remember { mutableStateOf<String?>(null) }
+    var pendingDelete by remember { mutableStateOf<EmailItem?>(null) }
+    val verbindungsfehler = stringResource(R.string.verbindungsfehler)
+    val geloeschtMsg = stringResource(R.string.email_geloscht)
+    val loeschFehlerMsg = stringResource(R.string.email_loschen_fehlgeschlagen)
 
-    fun loadEmails() {
-        if (serverIp.isBlank()) {
-            showIpDialog = true; return
+    suspend fun reload() {
+        isLoading = true
+        errorMsg = null
+        try {
+            allEmails = loadEmailRows().map { it.toItem(context) }
+        } catch (e: Exception) {
+            if (allEmails.isEmpty()) errorMsg = String.format(verbindungsfehler, e.message)
+        } finally {
+            isLoading = false
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        reload()
+        try {
+            val channel = Config.client.channel("emails-tab")
+            channel.postgresChangeFlow<PostgresAction>(schema = "public") { table = "emails" }
+                .onEach { action ->
+                    when (action) {
+                        is PostgresAction.Insert -> {
+                            val item = emailJson.decodeFromString<EmailRow>(action.record.toString()).toItem(context)
+                            allEmails = (listOf(item) + allEmails.filterNot { it.id == item.id && it.account == item.account })
+                                .sortedByDescending { it.timestamp }
+                        }
+
+                        is PostgresAction.Update -> {
+                            val item = emailJson.decodeFromString<EmailRow>(action.record.toString()).toItem(context)
+                            allEmails = allEmails.map {
+                                if (it.id == item.id && it.account == item.account) item else it
+                            }
+                        }
+
+                        is PostgresAction.Delete -> {
+                            val old = emailJson.decodeFromString<EmailRow>(action.oldRecord.toString())
+                            allEmails = allEmails.filterNot { it.id == old.uid && it.account == old.account }
+                            if (selectedEmail?.let { it.id == old.uid && it.account == old.account } == true) {
+                                selectedEmail = null
+                            }
+                        }
+
+                        else -> {}
+                    }
+                }.launchIn(this)
+            channel.subscribe()
+        } catch (_: Exception) {
+        }
+    }
+
+    val accounts = remember(allEmails) { allEmails.map { it.account }.distinct().sorted() }
+    val emails = remember(allEmails, accountFilter) {
+        accountFilter?.let { f -> allEmails.filter { it.account == f } } ?: allEmails
+    }
+
+    fun refresh() {
+        scope.launch { reload() }
+        scope.launch { triggerGmailSync() }
+    }
+
+    fun performDelete(email: EmailItem) {
+        pendingDelete = null
+        val before = allEmails
+        allEmails = allEmails.filterNot { it.id == email.id && it.account == email.account }
+        if (selectedEmail?.let { it.id == email.id && it.account == email.account } == true) {
+            selectedEmail = null
         }
         scope.launch {
-            isLoading = true
-            errorMsg = null
-            emails = emptyList()
-
-            val error = fetchEmailsStreaming(
-                context,
-                serverIp,
-                onEmailReceived = { emailItem ->
-                    val enriched = when {
-                        emailItem.hasSummary && emailItem.summary != null -> {
-                            saveLocalSummary(context, emailItem.id, emailItem.summary)
-                            localSummaryCache[emailItem.id] = emailItem.summary
-                            emailItem
-                        }
-
-                        localSummaryCache.containsKey(emailItem.id) ->
-                            emailItem.copy(
-                                summary = localSummaryCache[emailItem.id],
-                                hasSummary = true
-                            )
-
-                        else -> emailItem
-                    }
-                    withContext(Dispatchers.Main) { emails = emails + enriched }
-                },
-                onSummaryUpdate = { id, summary ->
-                    saveLocalSummary(context, id, summary)
-                    localSummaryCache[id] = summary
-                    withContext(Dispatchers.Main) {
-                        emails = emails.map {
-                            if (it.id == id) it.copy(
-                                summary = summary,
-                                hasSummary = true
-                            ) else it
-                        }
-                    }
-                }
-            )
-
-            isLoading = false
-            if (error != null && emails.isEmpty()) errorMsg = error
+            try {
+                deleteEmailRow(email.account, email.id)
+                Toast.makeText(context, geloeschtMsg, Toast.LENGTH_SHORT).show()
+            } catch (_: Exception) {
+                allEmails = before
+                Toast.makeText(context, loeschFehlerMsg, Toast.LENGTH_SHORT).show()
+            }
         }
-    }
-
-    LaunchedEffect(serverIp) {
-        if (serverIp.isNotBlank()) loadEmails()
-    }
-
-    if (showIpDialog) {
-        ServerIpDialog(
-            current = serverIp,
-            onConfirm = { ip ->
-                serverIp = ip
-                saveServerIp(ip)
-                showIpDialog = false
-                loadEmails()
-            },
-            onDismiss = { if (serverIp.isNotBlank()) showIpDialog = false }
-        )
     }
 
     Box(
@@ -229,19 +266,27 @@ fun GmailTabContent() {
         when {
             selectedEmail != null -> EmailDetailView(
                 email = selectedEmail!!,
-                onBack = { selectedEmail = null })
+                onBack = { selectedEmail = null },
+                onDelete = { pendingDelete = selectedEmail })
 
             else -> Column(Modifier.fillMaxSize()) {
                 EmailTopBar(
-                    cacheInfo = if (isLoading) stringResource(R.string.ladt_bisher, emails.size) else stringResource(R.string.emails, emails.size),
+                    cacheInfo = if (isLoading) stringResource(R.string.ladt_bisher, emails.size)
+                    else pluralStringResource(R.plurals.emails, emails.size, emails.size),
                     isLoading = isLoading,
-                    onReload = { loadEmails() },
-                    onSettings = { showIpDialog = true }
+                    onReload = { refresh() }
                 )
+                if (accounts.size > 1) {
+                    AccountFilterRow(
+                        accounts = accounts,
+                        selected = accountFilter,
+                        onSelect = { accountFilter = it }
+                    )
+                }
                 when {
                     isLoading && emails.isEmpty() -> LoadingPlaceholder()
-                    errorMsg != null && emails.isEmpty() -> ErrorPlaceholder(errorMsg!!) { loadEmails() }
-                    emails.isEmpty() -> EmptyPlaceholder { loadEmails() }
+                    errorMsg != null && emails.isEmpty() -> ErrorPlaceholder(errorMsg!!) { refresh() }
+                    emails.isEmpty() -> EmptyPlaceholder { refresh() }
                     else -> {
                         if (isLoading) {
                             LinearProgressIndicator(
@@ -252,10 +297,23 @@ fun GmailTabContent() {
                                 trackColor = Color.Transparent
                             )
                         }
-                        EmailList(emails = emails, onClick = { selectedEmail = it })
+                        EmailList(
+                            emails = emails,
+                            onClick = { selectedEmail = it },
+                            onLongClick = { pendingDelete = it }
+                        )
                     }
                 }
             }
+        }
+
+        pendingDelete?.let { target ->
+            AlertDialogTabslify(
+                onConfirm = { performDelete(target) },
+                onDismiss = { pendingDelete = null },
+                title = stringResource(R.string.email_loschen_titel),
+                text = stringResource(R.string.email_loschen_text)
+            )
         }
     }
 }
@@ -267,7 +325,6 @@ fun EmailTopBar(
     cacheInfo: String?,
     isLoading: Boolean,
     onReload: () -> Unit,
-    onSettings: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
         Row(
@@ -300,16 +357,47 @@ fun EmailTopBar(
                     modifier = Modifier.size(20.dp)
                 )
             }
-            IconButton(onClick = onSettings) {
-                Icon(
-                    Icons.Default.Settings,
-                    null,
-                    tint = Color(0xFF555568),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
         }
         HorizontalDivider(color = Color(0xFF222230))
+    }
+}
+
+@Composable
+fun AccountFilterRow(
+    accounts: List<String>,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF141420))
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        AccountChip(label = stringResource(R.string.alle), active = selected == null) { onSelect(null) }
+        accounts.forEach { acc ->
+            AccountChip(label = acc.substringBefore("@"), active = selected == acc) { onSelect(acc) }
+        }
+    }
+}
+
+@Composable
+private fun AccountChip(label: String, active: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (active) Color(0xFF1E2A3A) else Color(0xFF1A1A22))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Text(
+            label,
+            color = if (active) Color(0xFF7EB8F7) else Color(0xFF8888AA),
+            fontSize = 12.sp,
+            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal
+        )
     }
 }
 
@@ -318,25 +406,31 @@ fun EmailTopBar(
 @Composable
 fun EmailList(
     emails: List<EmailItem>,
-    onClick: (EmailItem) -> Unit
+    onClick: (EmailItem) -> Unit,
+    onLongClick: (EmailItem) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        items(emails, key = { it.id }) { email ->
-            EmailRow(email = email, onClick = { onClick(email) })
+        items(emails, key = { "${it.account}/${it.id}" }) { email ->
+            EmailRow(
+                email = email,
+                onClick = { onClick(email) },
+                onLongClick = { onLongClick(email) }
+            )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun EmailRow(email: EmailItem, onClick: () -> Unit) {
+fun EmailRow(email: EmailItem, onClick: () -> Unit, onLongClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .background(Color(0xFF161620))
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
@@ -427,7 +521,7 @@ fun EmailRow(email: EmailItem, onClick: () -> Unit) {
 // ─── Email-Detail ─────────────────────────────────────────────────────────────
 
 @Composable
-fun EmailDetailView(email: EmailItem, onBack: () -> Unit) {
+fun EmailDetailView(email: EmailItem, onBack: () -> Unit, onDelete: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -451,6 +545,13 @@ fun EmailDetailView(email: EmailItem, onBack: () -> Unit) {
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f)
             )
+            IconButton(onClick = onDelete) {
+                Icon(
+                    Icons.Default.Delete,
+                    stringResource(R.string.loschen),
+                    tint = Color(0xFFE57373)
+                )
+            }
         }
         HorizontalDivider(color = Color(0xFF222230))
 
@@ -547,56 +648,7 @@ fun MetaRow(label: String, value: String) {
     }
 }
 
-// ─── Dialoge / Platzhalter ────────────────────────────────────────────────────
-
-@Composable
-fun ServerIpDialog(
-    current: String,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var ip by remember { mutableStateOf(current) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = Color(0xFF1E1E2A),
-        title = {
-            Text(stringResource(R.string.server_ip_eingeben), color = Color.White, fontWeight = FontWeight.Bold)
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    stringResource(R.string.ip_adresse_des_laptops_ohne),
-                    color = Color(0xFF9999AA),
-                    fontSize = 13.sp
-                )
-                OutlinedTextField(
-                    value = ip,
-                    onValueChange = { ip = it },
-                    placeholder = { Text(stringResource(R.string.z_b_192_168_1), color = Color(0xFF555568)) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color(0xFFCCCCDD),
-                        focusedBorderColor = Color(0xFF4285F4),
-                        unfocusedBorderColor = Color(0xFF333345),
-                        cursorColor = Color(0xFF4285F4)
-                    )
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { if (ip.isNotBlank()) onConfirm(ip.trim()) }) {
-                Text(stringResource(R.string.speichern), color = Color(0xFF4285F4), fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.abbrechen), color = Color(0xFF555568))
-            }
-        }
-    )
-}
+// ─── Platzhalter ──────────────────────────────────────────────────────────────
 
 @Composable
 fun LoadingPlaceholder() {
