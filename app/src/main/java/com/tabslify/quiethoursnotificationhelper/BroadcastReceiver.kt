@@ -210,6 +210,7 @@ class FinishedPdDownload : BroadcastReceiver() {
             if (cursor.moveToFirst()) {
                 val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
                 if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                    PodcastShowManager.init(context)
                     val show = PodcastShowManager.getShows()
                         .find { it.name.equals(showName, ignoreCase = true) }
                         ?: PodcastShowManager.createShow(showName)
