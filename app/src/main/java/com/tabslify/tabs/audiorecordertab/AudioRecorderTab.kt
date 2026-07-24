@@ -1,8 +1,10 @@
 package com.tabslify.tabs.audiorecordertab
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -186,6 +188,16 @@ private fun AudioRecorderTabContent(
     vm: AudioRecorderTabViewModel
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    val projectionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val data = result.data
+        if (result.resultCode == Activity.RESULT_OK && data != null) {
+            vm.handleButtonClick(scope, true, result.resultCode, data)
+        }
+    }
 
     LaunchedEffect(Unit) {
         vm.refreshFiles()
@@ -246,7 +258,15 @@ private fun AudioRecorderTabContent(
 
         Button(
             onClick = {
-                vm.handleButtonClick(scope, isMediaRecorderMode)
+                if (!vm.isRecording && isMediaRecorderMode) {
+                    val manager = context.getSystemService(MediaProjectionManager::class.java)
+                    val captureIntent = manager?.createScreenCaptureIntent()
+                    if (captureIntent != null) {
+                        projectionLauncher.launch(captureIntent)
+                    }
+                } else {
+                    vm.handleButtonClick(scope, isMediaRecorderMode)
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()
