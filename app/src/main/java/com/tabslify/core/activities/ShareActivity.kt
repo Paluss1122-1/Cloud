@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -139,8 +140,7 @@ class ShareActivity : ComponentActivity() {
 
             withContext(Dispatchers.Main) {
                 val message = when {
-                    successCount == 1 -> getString(R.string.bild_an_laptop_gesendet)
-                    successCount > 1 -> getString(R.string.bilder_an_laptop_gesendet, successCount)
+                    successCount > 0 -> resources.getQuantityString(R.plurals.bilder_an_laptop_gesendet, successCount, successCount)
                     else -> getString(R.string.senden_fehlgeschlagen)
                 }
                 Toast.makeText(this@ShareActivity, message, Toast.LENGTH_LONG).show()
@@ -234,8 +234,7 @@ class ShareActivity : ComponentActivity() {
 
                 withContext(Dispatchers.Main) {
                     val message = when {
-                        failCount == 0 && successCount == 1 -> getString(R.string.datei_gespeichert_2)
-                        failCount == 0 -> getString(R.string.dateien_gespeichert, successCount)
+                        failCount == 0 && successCount > 0 -> resources.getQuantityString(R.plurals.dateien_gespeichert, successCount, successCount)
                         successCount == 0 -> getString(R.string.speichern_fehlgeschlagen)
                         else -> getString(R.string.erfolgreich_fehlgeschlagen, successCount, failCount)
                     }
@@ -318,7 +317,7 @@ fun SaveToPrivateStorageScreen(
                 )
 
                 Text(
-                    text = if (fileCount == 1) stringResource(R.string.s_1_datei) else stringResource(R.string.dateien, fileCount),
+                    text = pluralStringResource(R.plurals.dateien, fileCount, fileCount),
                     fontSize = 16.sp,
                     color = Color.LightGray
                 )
@@ -414,7 +413,7 @@ fun ProcessingScreen(fileCount: Int) {
                 )
 
                 Text(
-                    text = if (fileCount == 1) stringResource(R.string.s_1_datei_wird_gespeichert) else stringResource(R.string.dateien_werden_gespeichert, fileCount),
+                    text = pluralStringResource(R.plurals.dateien_werden_gespeichert, fileCount, fileCount),
                     fontSize = 14.sp,
                     color = Color.LightGray
                 )
