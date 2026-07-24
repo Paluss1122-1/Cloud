@@ -15,10 +15,10 @@
     <string name="installation_erfolgreich_abgeschlossen">✅ Installation erfolgreich abgeschlossen.</string> <!-- app/src/main/java/com/tabslify/apkm/ApkmInstaller.kt:393 -->
     <string name="installation_fehlgeschlagen_status">❌ Installation fehlgeschlagen (Status %1$d): %2$s</string> <!-- app/src/main/java/com/tabslify/apkm/ApkmInstaller.kt:402  ||  %1$s=status, %2$s=message ?: -->
     <string name="session_verworfen_keine_teilinstallation_zuruckgeblieben">↩ Session verworfen – keine Teilinstallation zurückgeblieben (Rollback).</string> <!-- app/src/main/java/com/tabslify/apkm/ApkmInstaller.kt:404 -->
-    <string name="session_erstellt_apks">Session #%1$d erstellt (%2$d APKs, %3$s)</string> <!-- app/src/main/java/com/tabslify/apkm/ApkmInstaller.kt:425  ||  %1$s=sessionId, %2$s=selected.size, %3$s=humanSize(selected.sumOf { it.size }) -->
+    <string name="session_erstellt_apks" tools:ignore="PluralsCandidate">Session #%1$d erstellt (%2$d APKs, %3$s)</string> <!-- app/src/main/java/com/tabslify/apkm/ApkmInstaller.kt:425  ||  %1$s=sessionId, %2$s=selected.size, %3$s=humanSize(selected.sumOf { it.size }) -->
     <string name="eintrag_fehlt">Eintrag fehlt: %1$s</string> <!-- app/src/main/java/com/tabslify/apkm/ApkmInstaller.kt:432  ||  %1$s=apk.entryName -->
     <string name="schreibe">Schreibe %1$s (%2$s)…</string> <!-- app/src/main/java/com/tabslify/apkm/ApkmInstaller.kt:434  ||  %1$s=apk.fileName, %2$s=humanSize(apk.size) -->
-    <string name="alle_apks_geschrieben_committe">Alle APKs geschrieben (%1$s). Committe…</string> <!-- app/src/main/java/com/tabslify/apkm/ApkmInstaller.kt:443  ||  %1$s=humanSize(written) -->
+    <string name="alle_apks_geschrieben_committe" tools:ignore="Typos">Alle APKs geschrieben (%1$s). Committe…</string> <!-- app/src/main/java/com/tabslify/apkm/ApkmInstaller.kt:443  ||  %1$s=humanSize(written) -->
     <string name="fehler_beim_schreiben_der_session">❌ Fehler beim Schreiben der Session: %1$s</string> <!-- app/src/main/java/com/tabslify/apkm/ApkmInstaller.kt:454  ||  %1$s=e.message -->
     <string name="session_verworfen_rollback">↩ Session verworfen (Rollback).</string> <!-- app/src/main/java/com/tabslify/apkm/ApkmInstaller.kt:456 -->
     <string name="s_1f_kb">%.1f KB</string> <!-- app/src/main/java/com/tabslify/apkm/ApkmInstaller.kt:559 | PrivateTabslifyApp.kt:1647 | OtherBucketTab.kt:554 -->
@@ -31,27 +31,35 @@
     <string name="ungultiger_share_intent">Ungültiger Share-Intent</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:68 -->
     <string name="keine_datei_gefunden">Keine Datei gefunden</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:79 -->
     <string name="keine_dateien_gefunden">Keine Dateien gefunden</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:89 -->
-    <string name="bild_an_laptop_gesendet">📲 Bild an Laptop gesendet!</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:140 -->
-    <string name="bilder_an_laptop_gesendet">📲 %1$d Bilder an Laptop gesendet!</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:140  ||  %1$s=successCount -->
+    <plurals name="bilder_an_laptop_gesendet"> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:140  ||  %1$s=successCount -->
+        <item quantity="one">📲 %1$d Bild an Laptop gesendet!</item>
+        <item quantity="other">📲 %1$d Bilder an Laptop gesendet!</item>
+    </plurals>
     <string name="senden_fehlgeschlagen">❌ Senden fehlgeschlagen</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:142 -->
     <string name="gespeichert">Gespeichert!</string> <!-- app/src/main/java/com/tabslify/tabs/JsonEditorTab.kt:101 -->
-    <string name="datei_gespeichert_2">✅ Datei gespeichert!</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:234 -->
-    <string name="dateien_gespeichert">✅ %1$d Dateien gespeichert!</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:234  ||  %1$s=successCount -->
+    <plurals name="dateien_gespeichert"> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:234  ||  %1$s=successCount -->
+        <item quantity="one">✅ %1$d Datei gespeichert!</item>
+        <item quantity="other">✅ %1$d Dateien gespeichert!</item>
+    </plurals>
     <string name="speichere">Speichere…</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:406 -->
     <string name="fehler_msg">Fehler: %1$s</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:244  ||  %1$s=e.message -->
     <string name="pc_abgelehnt">%1$s abgelehnt</string> <!-- app/src/main/java/com/tabslify/tabs/PCManager.kt:233  ||  %1$s=pc.name -->
     <string name="pc_entfernt">%1$s entfernt</string> <!-- app/src/main/java/com/tabslify/tabs/PCManager.kt:318  ||  %1$s=pc.name -->
     <string name="speichern_fehlgeschlagen">❌ Speichern fehlgeschlagen</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:235 | OtherBucketTab.kt:274 -->
-    <string name="erfolgreich_fehlgeschlagen">⚠️ %1$d erfolgreich, %2$d fehlgeschlagen</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:236  ||  %1$s=successCount, %2$s=failCount -->
+    <string name="erfolgreich_fehlgeschlagen" tools:ignore="PluralsCandidate">⚠️ %1$d erfolgreich, %2$d fehlgeschlagen</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:236  ||  %1$s=successCount, %2$s=failCount -->
     <string name="datei_speichern">🔒 Datei speichern</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:310 -->
-    <string name="s_1_datei">1 Datei</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:317 -->
-    <string name="dateien">%1$d Dateien</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:317  ||  %1$s=fileCount -->
+    <plurals name="dateien"> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:317  ||  %1$s=fileCount -->
+        <item quantity="one">%1$d Datei</item>
+        <item quantity="other">%1$d Dateien</item>
+    </plurals>
     <string name="an_laptop_senden">💻 An Laptop senden</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:338 -->
     <string name="laptop_nicht_verbunden">💻 Laptop nicht verbunden</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:352 -->
     <string name="lokal_speichern">📁 Lokal speichern</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:365 -->
     <string name="abbrechen">Abbrechen</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:369 | Composables.kt:534 | Composables.kt:653 | LandingPage.kt:2242 -->
-    <string name="s_1_datei_wird_gespeichert">1 Datei wird gespeichert</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:413 -->
-    <string name="dateien_werden_gespeichert">%1$d Dateien werden gespeichert</string> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:413  ||  %1$s=fileCount -->
+    <plurals name="dateien_werden_gespeichert"> <!-- app/src/main/java/com/tabslify/core/activities/ShareActivity.kt:413  ||  %1$s=fileCount -->
+        <item quantity="one">%1$d Datei wird gespeichert</item>
+        <item quantity="other">%1$d Dateien werden gespeichert</item>
+    </plurals>
     <string name="js_event_geloggt">JS Event geloggt: %1$s</string> <!-- app/src/main/java/com/tabslify/core/activities/Tabslify.kt:151  ||  %1$s=event -->
     <string name="tabslify">Tabslify</string> <!-- app/src/main/java/com/tabslify/core/activities/Tabslify.kt:177 | LandingPage.kt:813 | PrivateTabslifyApp.kt:1460 | PrivateTabslifyApp.kt:1781 -->
     <string name="js_execution_error">JS Execution Error: %1$s</string> <!-- app/src/main/java/com/tabslify/core/activities/Tabslify.kt:183  ||  %1$s=e.message -->
@@ -139,6 +147,12 @@
     <string name="audiorecordertab_audioforegroundservice_audioaufnahmen_mit_mikrofon">AudioRecorderTab &amp; AudioForegroundService: Audioaufnahmen mit Mikrofon</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1044 -->
     <string name="quiethoursnotificationservice_anfrage_zum_ignorieren_von">QuietHoursNotificationService: Anfrage zum Ignorieren von Batterieoptimierungen für zuverlässige Hintergrunddienste</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1047 -->
     <string name="authenticator_scannen_von_qr_codes">Authenticator: Scannen von QR Codes für 2FA</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1050 -->
+    <string name="reportdeviceinformation_bluetooth_verbindungsstatus">reportDeviceInformation: Bluetooth-Verbindungsstatus für das gekoppelte Notebook</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt (nur Debug-Build) -->
+    <string name="reportdeviceinformation_ismobiledataactive_mobilfunk_datenstatus">reportDeviceInformation &amp; isMobileDataActive: Mobilfunk-Datenstatus für das gekoppelte Notebook</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt (nur Debug-Build) -->
+    <string name="startsmslistener_abruf_des_sms_posteingangs">startSmsListener &amp; readAllSms: Abruf des SMS-Posteingangs durch das gekoppelte Notebook</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt (nur Debug-Build) -->
+    <string name="wifi_direct_set_alarm_befehl_vom_notebook">WIFI_DIRECT: set_alarm-Befehl vom gekoppelten Notebook zum Stellen eines Weckers</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt (nur Debug-Build) -->
+    <string name="reportdeviceinformation_wlan_status_hotspot">reportDeviceInformation: WLAN-Verbindungs- und Hotspot-Status für das gekoppelte Notebook</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt (nur Debug-Build) -->
+    <string name="reportdeviceinformation_netzwerkstatus_konnektivitat">reportDeviceInformation: Netzwerk- und Konnektivitätsstatus für das gekoppelte Notebook</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt (nur Debug-Build) -->
     <string name="keine_angaben_hinterlegt">Keine Angaben hinterlegt</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1079 -->
     <string name="open_information">Open information</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1106 | LandingPage.kt:2112 -->
     <string name="tabslify_berechtigungen">Tabslify Berechtigungen</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1197 | WelcomeOnboarding.kt:133 -->
@@ -153,6 +167,8 @@
     <string name="moglichst_unkompliziert">möglichst unkompliziert</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1275 -->
     <string name="zu_halten"> zu halten.</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1277 -->
     <string name="schliesen">Schließen</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1301 | Helpers.kt:219 | Batterychart.kt:302 | Commands.kt:789 -->
+    <string name="erteilen">Erteilen</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt -->
+    <string name="alle_berechtigungen_anfragen">Alle Berechtigungen anfragen</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt -->
     <string name="nvidia_api_key">NVIDIA API-Key</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1378 -->
     <string name="tmdb_api_key">TMDB API-Key</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1379 -->
     <string name="rapidapi_key_spotify">RapidAPI-Key (Spotify)</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1381 -->
@@ -301,9 +317,15 @@
     <string name="uberspringen">Überspringen</string> <!-- app/src/main/java/com/tabslify/core/ui/WelcomeOnboarding.kt:232 -->
     <string name="los_geht_s">Los geht\'s</string> <!-- app/src/main/java/com/tabslify/core/ui/WelcomeOnboarding.kt:269 -->
     <string name="weiter">Weiter</string> <!-- app/src/main/java/com/tabslify/core/ui/WelcomeOnboarding.kt:269 | VoiceNote.kt:248 | Mediaplayerservice.kt:1983 | VocabTab.kt:1191 -->
-    <string name="notification_removed_after_reply">🗑️ Notification %1$d removed after reply</string> <!-- app/src/main/java/com/tabslify/inactive/ChatService.kt:101  ||  %1$s=notificationId -->
-    <string name="history_angefordert_nachrichten">History angefordert: %1$d Nachrichten</string> <!-- app/src/main/java/com/tabslify/inactive/ChatService.kt:111  ||  %1$s=messageHistory.size -->
-    <string name="loaded_seen_messages">✅ Loaded %1$d seen messages</string> <!-- app/src/main/java/com/tabslify/inactive/ChatService.kt:169  ||  %1$s=seenMessageIds.size -->
+    <string name="notification_removed_after_reply" tools:ignore="PluralsCandidate">🗑️ Notification %1$d removed after reply</string> <!-- app/src/main/java/com/tabslify/inactive/ChatService.kt:101  ||  %1$s=notificationId -->
+    <plurals name="history_angefordert_nachrichten"> <!-- app/src/main/java/com/tabslify/inactive/ChatService.kt:111  ||  %1$s=messageHistory.size -->
+        <item quantity="one">History angefordert: %1$d Nachricht</item>
+        <item quantity="other">History angefordert: %1$d Nachrichten</item>
+    </plurals>
+    <plurals name="loaded_seen_messages"> <!-- app/src/main/java/com/tabslify/inactive/ChatService.kt:169  ||  %1$s=seenMessageIds.size -->
+        <item quantity="one">✅ Loaded %1$d seen message</item>
+        <item quantity="other">✅ Loaded %1$d seen messages</item>
+    </plurals>
     <string name="nachricht_schreiben">Nachricht schreiben…</string> <!-- app/src/main/java/com/tabslify/inactive/ChatService.kt:192 -->
     <string name="schreiben">Schreiben</string> <!-- app/src/main/java/com/tabslify/inactive/ChatService.kt:209 -->
     <string name="letzte_5">Letzte 5</string> <!-- app/src/main/java/com/tabslify/inactive/ChatService.kt:229 -->
@@ -312,7 +334,10 @@
     <string name="services">Services</string> <!-- app/src/main/java/com/tabslify/inactive/ChatService.kt:253 -->
     <string name="str_2">[%1$s] %2$s:\n%3$s</string> <!-- app/src/main/java/com/tabslify/inactive/ChatService.kt:295  ||  %1$s=dateTime, %2$s=msg.sender_id, %3$s=msg.content -->
     <string name="letzte_nachrichten">📜 Letzte Nachrichten</string> <!-- app/src/main/java/com/tabslify/inactive/ChatService.kt:300 -->
-    <string name="nachrichten">%1$d Nachrichten</string> <!-- app/src/main/java/com/tabslify/inactive/ChatService.kt:301 | Functions.kt:112  ||  %1$s=messageHistory.size -->
+    <plurals name="nachrichten"> <!-- app/src/main/java/com/tabslify/inactive/ChatService.kt:301 | Functions.kt:112  ||  %1$s=messageHistory.size -->
+        <item quantity="one">%1$d Nachricht</item>
+        <item quantity="other">%1$d Nachrichten</item>
+    </plurals>
     <string name="no_nachrichten">No Nachrichten</string> <!-- app/src/main/java/com/tabslify/inactive/ChatService.kt:304 -->
     <string name="setting_up_realtime_listener">Setting up Realtime listener…</string> <!-- app/src/main/java/com/tabslify/inactive/ChatService.kt:319 -->
     <string name="new_message">📩 New message: %1$s</string> <!-- app/src/main/java/com/tabslify/inactive/ChatService.kt:351  ||  %1$s=message.content -->
@@ -608,9 +633,15 @@
     <string name="nicht_gefunden">❌ Nicht gefunden</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1584 | Commands.kt:1620 | Commands.kt:1685 | Commands.kt:1717 -->
     <string name="kein_song_mit_in_der">Kein Song mit \"%1$s\" in der Statistik</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1585 | Commands.kt:1686  ||  %1$s=query -->
     <string name="max_wiederholt"> · max %1$d× wiederholt</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1603  ||  %1$s=maxRepeat -->
-    <string name="sessions_gehort_zuletzt">▶ %1$d Sessions · ⏱ %2$s gehört\n🕐 Zuletzt: %3$s%4$s</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1606  ||  %1$s=sessionCount, %2$s=formatMs(totalMs), %3$s=lastPlayed, %4$s=repeatInfo -->
+    <plurals name="sessions_gehort_zuletzt"> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1606  ||  %1$s=sessionCount, %2$s=formatMs(totalMs), %3$s=lastPlayed, %4$s=repeatInfo -->
+        <item quantity="one">▶ %1$d Session · ⏱ %2$s gehört\n🕐 Zuletzt: %3$s%4$s</item>
+        <item quantity="other">▶ %1$d Sessions · ⏱ %2$s gehört\n🕐 Zuletzt: %3$s%4$s</item>
+    </plurals>
     <string name="kein_podcast_mit_in_der">Kein Podcast mit \"%1$s\" in der Statistik</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1621 | Commands.kt:1718  ||  %1$s=query -->
-    <string name="sessions_gehort_zuletzt_2">▶ %1$d Sessions · ⏱ %2$s gehört\n🕐 Zuletzt: %3$s</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1635  ||  %1$s=sessionCount, %2$s=formatMs(totalMs), %3$s=lastPlayed -->
+    <plurals name="sessions_gehort_zuletzt_2"> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1635  ||  %1$s=sessionCount, %2$s=formatMs(totalMs), %3$s=lastPlayed -->
+        <item quantity="one">▶ %1$d Session · ⏱ %2$s gehört\n🕐 Zuletzt: %3$s</item>
+        <item quantity="other">▶ %1$d Sessions · ⏱ %2$s gehört\n🕐 Zuletzt: %3$s</item>
+    </plurals>
     <string name="verwende_song_oder_podcast">Verwende \'song\' oder \'podcast\'</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1644 -->
     <string name="syntax_statsreset_song_podcast_all">Syntax: statsreset [song|podcast|all] [suche]\nstatsreset all → alles löschen</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1660 -->
     <string name="reset">✓ Reset</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1670 | Commands.kt:1697 | Commands.kt:1728 -->
@@ -632,12 +663,21 @@
     <string name="unbekannter_befehl_2">❌ Unbekannter Befehl</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1854 -->
     <string name="nicht_gefunden_verwende_help_fur">\'%1$s\' nicht gefunden. Verwende \'help\' für alle Befehle.</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1855  ||  %1$s=commandInput -->
     <string name="verfugbare_befehle_seite">📋 Verfügbare Befehle (Seite %1$d/%2$d)</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1893  ||  %1$s=index + 1, %2$s=chunked.size -->
-    <string name="befehle">%1$d Befehle</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1894  ||  %1$s=chunk.size -->
+    <plurals name="befehle"> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1894  ||  %1$s=chunk.size -->
+        <item quantity="one">%1$d Befehl</item>
+        <item quantity="other">%1$d Befehle</item>
+    </plurals>
     <string name="alle_commands">Alle Commands</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1906 -->
-    <string name="commands">%1$d Commands</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1907  ||  %1$s=chunked.size -->
+    <plurals name="commands"> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1907  ||  %1$s=chunked.size -->
+        <item quantity="one">%1$d Command</item>
+        <item quantity="other">%1$d Commands</item>
+    </plurals>
     <string name="geltendorf">Geltendorf</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1953 -->
     <string name="buchloe">Buchloe</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1956 -->
-    <string name="in_tagen">in %1$d Tagen</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1974  ||  %1$s=daysAhead -->
+    <plurals name="in_tagen"> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:1974  ||  %1$s=daysAhead -->
+        <item quantity="one">in %1$d Tag</item>
+        <item quantity="other">in %1$d Tagen</item>
+    </plurals>
     <string name="bahn_api_fehler">❌ Bahn API Fehler</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:2000 -->
     <string name="kein_07_05_zug">ℹ️ Kein 07:05-Zug</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:2008 -->
     <string name="in_den_plan_daten_wurde">In den Plan-Daten wurde kein passender Zug um 07:05 Uhr nach %1$s in %2$s %3$s gefunden.</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Commands.kt:2009  ||  %1$s=targetDestination, %2$s=stationName, %3$s=dayLabel -->
@@ -652,7 +692,10 @@
     <string name="keine_nachrichten_von_friend_gefunden">Keine Nachrichten von friend gefunden</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Functions.kt:62 -->
     <string name="nachrichten_konnten_nicht_geladen_werden">Nachrichten konnten nicht geladen werden: %1$s</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Functions.kt:77  ||  %1$s=e.message -->
     <string name="str_3">🕐 %1$s\n%2$s</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Functions.kt:101  ||  %1$s=timeStr, %2$s=msg.content -->
-    <string name="letzte_nachrichten_von_friend">💬 Letzte %1$d Nachrichten von friend</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Functions.kt:106  ||  %1$s=messages.size -->
+    <plurals name="letzte_nachrichten_von_friend"> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Functions.kt:106  ||  %1$s=messages.size -->
+        <item quantity="one">💬 Letzte %1$d Nachricht von friend</item>
+        <item quantity="other">💬 Letzte %1$d Nachrichten von friend</item>
+    </plurals>
     <string name="chat_verlauf_mit_friend">💬 Chat-Verlauf mit friend</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Functions.kt:111 -->
     <string name="benachrichtigung_konnte_nicht_angezeigt_werden">Benachrichtigung konnte nicht angezeigt werden: %1$s</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Functions.kt:127  ||  %1$s=e.message -->
     <string name="keine_berechtigung">❌ Keine Berechtigung</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Functions.kt:140 -->
@@ -693,11 +736,11 @@
     <string name="galerie_konnte_nicht_geladen_werden">Galerie konnte nicht geladen werden: %1$s</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Gallery.kt:289  ||  %1$s=e.message -->
     <string name="ungultiger_bildindex">Ungültiger Bildindex</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Gallery.kt:299 | Gallery.kt:383 -->
     <string name="bild_loschen">🗑️ Bild löschen?</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Gallery.kt:342 -->
-    <string name="bild_von_wirklich_loschen">Bild %1$d von %2$d wirklich löschen?</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Gallery.kt:343  ||  %1$d=imageIndex + 1, %2$d=galleryImages.size -->
+    <string name="bild_von_wirklich_loschen" tools:ignore="PluralsCandidate">Bild %1$d von %2$d wirklich löschen?</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Gallery.kt:343  ||  %1$d=imageIndex + 1, %2$d=galleryImages.size -->
     <string name="error_showing_delete_confirmation">Error showing delete confirmation</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Gallery.kt:370 -->
     <string name="loschbestatigung_konnte_nicht_angezeigt_werden">Löschbestätigung konnte nicht angezeigt werden: %1$s</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Gallery.kt:373  ||  %1$s=e.message -->
     <string name="geloscht_2">✅ Gelöscht</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Gallery.kt:400 -->
-    <string name="bild_wurde_erfolgreich_geloscht_verbleibend">Bild wurde erfolgreich gelöscht (%1$d verbleibend)</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Gallery.kt:401  ||  %1$d=galleryImages.size -->
+    <string name="bild_wurde_erfolgreich_geloscht_verbleibend" tools:ignore="PluralsCandidate">Bild wurde erfolgreich gelöscht (%1$d verbleibend)</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Gallery.kt:401  ||  %1$d=galleryImages.size -->
     <string name="alle_bilder_wurden_geloscht">Alle Bilder wurden gelöscht</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Gallery.kt:414 -->
     <string name="loschen_fehlgeschlagen">❌ Löschen fehlgeschlagen</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Gallery.kt:421 -->
     <string name="bild_konnte_nicht_geloscht_werden">Bild konnte nicht gelöscht werden (keine Berechtigung?)</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Gallery.kt:422 -->
@@ -716,7 +759,10 @@
     <string name="teil">%1$s · %2$s (Teil %3$d/%4$d)</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Messages.kt:123 | Messages.kt:128  ||  %1$s=sourceLabel, %2$s=displayName, %3$s=partNum, %4$s=parts.size -->
     <string name="als_gelesen_markieren">Als gelesen markieren</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Messages.kt:136 -->
     <string name="lange_nachricht_von">%1$s · Lange Nachricht von %2$s</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Messages.kt:161  ||  %1$s=sourceLabel, %2$s=displayName -->
-    <string name="teile">%1$d Teile</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Messages.kt:162  ||  %1$s=partIndex -->
+    <plurals name="teile"> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Messages.kt:162  ||  %1$s=partIndex -->
+        <item quantity="one">%1$d Teil</item>
+        <item quantity="other">%1$d Teile</item>
+    </plurals>
     <string name="messages">Messages</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Messages.kt:188 | Messages.kt:194 | Messages.kt:198 | Messages.kt:285 -->
     <string name="postchatnotification_failed">postChatNotification failed: %1$s</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Messages.kt:188  ||  %1$s=e.message -->
     <string name="no_key_for_sender">No key for sender: %1$s</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Messages.kt:194  ||  %1$s=sender -->
@@ -791,11 +837,11 @@
     <string name="podcast_queue">📋 Podcast Queue (%1$d)</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Podcast.kt:156  ||  %1$s=queuePaths.size -->
     <string name="queue_konnte_nicht_angezeigt_werden">Queue konnte nicht angezeigt werden</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Podcast.kt:179 -->
     <string name="ungultiger_index">❌ Ungültiger Index</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Podcast.kt:192 -->
-    <string name="podcast_existiert_nicht_1">Podcast %1$d existiert nicht (1-%2$d)</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Podcast.kt:193  ||  %1$s=index - 1, %2$s=allPodcasts.size -->
+    <string name="podcast_existiert_nicht_1" tools:ignore="PluralsCandidate">Podcast %1$d existiert nicht (1-%2$d)</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Podcast.kt:193  ||  %1$s=index - 1, %2$s=allPodcasts.size -->
     <string name="zur_queue_hinzugefugt">✅ Zur Queue hinzugefügt</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Podcast.kt:204 -->
     <string name="error_adding_to_queue">Error adding to queue</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Podcast.kt:211 -->
     <string name="konnte_nicht_zur_queue_hinzufugen">Konnte nicht zur Queue hinzufügen</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Podcast.kt:214 -->
-    <string name="position_existiert_nicht_1">Position %1$d existiert nicht (1-%2$d)</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Podcast.kt:228  ||  %1$s=position + 1, %2$s=queuePaths.size -->
+    <string name="position_existiert_nicht_1" tools:ignore="PluralsCandidate">Position %1$d existiert nicht (1-%2$d)</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Podcast.kt:228  ||  %1$s=position + 1, %2$s=queuePaths.size -->
     <string name="aus_queue_entfernt">✅ Aus Queue entfernt</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Podcast.kt:240 -->
     <string name="error_removing_from_queue">Error removing from queue</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Podcast.kt:247 -->
     <string name="konnte_nicht_aus_queue_entfernen">Konnte nicht aus Queue entfernen</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/Podcast.kt:250 -->
@@ -830,7 +876,7 @@
     <string name="error_handling_client">%1$s: Error handling client</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:338  ||  %1$s=errorTag -->
     <string name="socket_exception_restarting_server">%1$s: Socket exception, restarting server</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:346  ||  %1$s=errorTag -->
     <string name="unexpected_error_accepting_client">%1$s: Unexpected error accepting client</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:349  ||  %1$s=errorTag -->
-    <string name="port_already_bound_retrying_failures">%1$s: Port %2$d already bound, retrying… (failures: %3$d)</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:356  ||  %1$s=errorTag, %2$s=port, %3$s=consecutiveFailures -->
+    <string name="port_already_bound_retrying_failures" tools:ignore="PluralsCandidate">%1$s: Port %2$d already bound, retrying… (failures: %3$d)</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:356  ||  %1$s=errorTag, %2$s=port, %3$s=consecutiveFailures -->
     <string name="server_error_restarting_failures">%1$s: Server error, restarting… (failures: %2$d)</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:361  ||  %1$s=errorTag, %2$s=consecutiveFailures -->
     <string name="look_at_this_vocabulary_list">
         Look at this vocabulary list image carefully.
@@ -894,14 +940,17 @@
     <string name="to_do_hinzugefugt">✅ To-do hinzugefügt</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1149 -->
     <string name="gesamt_to_dos">\"%1$s\"\n\nGesamt: %2$d To-dos</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1150  ||  %1$s=text, %2$s=todos.size -->
     <string name="erledigt">✓ Erledigt</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1161 -->
-    <string name="to_do_existiert_nicht">To-do #%1$d existiert nicht</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1165 | WIFI_DIRECT.kt:1181  ||  %1$s=index + 1 -->
+    <string name="to_do_existiert_nicht" tools:ignore="PluralsCandidate">To-do #%1$d existiert nicht</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1165 | WIFI_DIRECT.kt:1181  ||  %1$s=index + 1 -->
     <string name="geloscht_3">🗑️ Gelöscht</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1177 -->
     <string name="offen">📌 OFFEN (%1$d):\n</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1207  ||  %1$s=activeTodos.size -->
     <string name="str_4">%1$s. %2$s\n</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1208 | WIFI_DIRECT.kt:1213  ||  %1$s=todoIndexMap[it.id], %2$s=it.text -->
     <string name="erledigt_2">✓ ERLEDIGT (%1$d):\n</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1212  ||  %1$s=completedTodos.size -->
     <string name="to_do_liste">📝 To-do Liste (%1$d)</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1224  ||  %1$s=todos.size -->
     <string name="alle_todos">Alle Todos</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1236 -->
-    <string name="todos">%1$d Todos</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1237  ||  %1$s=chunks.size -->
+    <plurals name="todos"> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1237  ||  %1$s=chunks.size -->
+        <item quantity="one">%1$d Todo</item>
+        <item quantity="other">%1$d Todos</item>
+    </plurals>
     <string name="ai_antwort">🤖 AI Antwort</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1294 -->
     <string name="alle_songs">Alle Songs</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1683 -->
     <string name="keine_laptopip_is_vorhanden">Keine laptopIp is vorhanden</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1873 -->
@@ -935,7 +984,10 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="es_gibt_aktuell_keine_fertigen">Es gibt aktuell keine fertigen Podcasts zum Löschen</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:321 | Mediaplayerservice.kt:1870 -->
     <string name="antippen_zum_loschen_fertig_angehort">Antippen zum Löschen • Fertig angehört</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:340 | Mediaplayerservice.kt:1852 -->
     <string name="fertige_podcasts_loschen">Fertige Podcasts löschen</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:353 | Mediaplayerservice.kt:1859 -->
-    <string name="podcasts_bereit_zum_loschen">%1$d Podcasts bereit zum Löschen</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:354 | Mediaplayerservice.kt:1860  ||  %1$s=completedPodcasts.size -->
+    <plurals name="podcasts_bereit_zum_loschen"> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:354 | Mediaplayerservice.kt:1860  ||  %1$s=completedPodcasts.size -->
+        <item quantity="one">%1$d Podcast bereit zum Löschen</item>
+        <item quantity="other">%1$d Podcasts bereit zum Löschen</item>
+    </plurals>
     <string name="neue_playlist">Neue Playlist</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:783 | Mediaplayerservice.kt:880 | MediaPlayerTab.kt:1425 -->
     <string name="playlist_erstellt">✓ Playlist erstellt</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:789 | Mediaplayerservice.kt:889 -->
     <string name="wurde_erstellt">\"%1$s\" wurde erstellt</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:790  ||  %1$s=name -->
@@ -949,8 +1001,14 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="item_konnte_nicht_hinzugefugt_werden">Item konnte nicht hinzugefügt werden</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:856 -->
     <string name="playlist_geloscht">🗑 Playlist gelöscht</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:870 -->
     <string name="wurde_geloscht">\"%1$s\" wurde gelöscht</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:871  ||  %1$s=pl?.name -->
-    <string name="songs">\"%1$s\" · %2$d Songs</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:890  ||  %1$s=name, %2$s=pl.items.size -->
-    <string name="items">\"%1$s\" (%2$d Items)</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:969  ||  %1$s=pl?.name, %2$s=pl?.items?.size ?: 0 -->
+    <plurals name="songs"> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:890  ||  %1$s=name, %2$s=pl.items.size -->
+        <item quantity="one">\"%1$s\" · %2$d Song</item>
+        <item quantity="other">\"%1$s\" · %2$d Songs</item>
+    </plurals>
+    <plurals name="items"> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:969  ||  %1$s=pl?.name, %2$s=pl?.items?.size ?: 0 -->
+        <item quantity="one">\"%1$s\" (%2$d Item)</item>
+        <item quantity="other">\"%1$s\" (%2$d Items)</item>
+    </plurals>
     <string name="geloscht_4">🗑 Gelöscht</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:981 -->
     <string name="failed_to_decode_bitmap">Failed to decode bitmap</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:1153 | Mediaplayerservice.kt:1176 -->
     <string name="no_embedded_picture_found">No embedded picture found</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:1156 -->
@@ -965,13 +1023,19 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="fuge_zuerst_songs_zu_deinen">Füge zuerst Songs zu deinen Favoriten hinzu!</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:1589 -->
     <string name="favoriten_modus_aktiviert">⭐ Favoriten-Modus aktiviert</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:1604 -->
     <string name="alle_songs_2">📁 Alle Songs</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:1604 -->
-    <string name="songs_verfugbar">%1$d Songs verfügbar</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:1605  ||  %1$s=active.size -->
+    <plurals name="songs_verfugbar"> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:1605  ||  %1$s=active.size -->
+        <item quantity="one">%1$d Song verfügbar</item>
+        <item quantity="other">%1$d Songs verfügbar</item>
+    </plurals>
     <string name="gespeichert_2">✓ Gespeichert</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:1779 -->
     <string name="geschwindigkeit_x_wird_beim_nachsten">Geschwindigkeit %1$sx wird beim nächsten Start verwendet</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:1780  ||  %1$s=s -->
     <string name="fertig"> • Fertig</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:1808 -->
     <string name="antippen_zum_abspielen">Antippen zum Abspielen%1$s</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:1813  ||  %1$s=progress -->
     <string name="podcast_auswahlen">Podcast auswählen</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:1824 -->
-    <string name="podcasts_2">%1$d Podcasts%2$s</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:1825  ||  %1$s=podcasts.size, %2$s=if (completedCount > 0) -->
+    <plurals name="podcasts_2"> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:1825  ||  %1$s=podcasts.size, %2$s=if (completedCount > 0) -->
+        <item quantity="one">%1$d Podcast%2$s</item>
+        <item quantity="other">%1$d Podcasts%2$s</item>
+    </plurals>
     <string name="geloscht_5">✓ Gelöscht</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:1902 -->
     <string name="fehler_beim_loschen_2">✗ Fehler beim Löschen</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:1906 -->
     <string name="keine_playlist">Keine Playlist</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:1943 -->
@@ -989,14 +1053,20 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="keine_playlisten">📂 Keine Playlisten</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:2486 -->
     <string name="keine_playlisten_vorhanden">Keine %1$s-Playlisten vorhanden</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:2487  ||  %1$s=type.name.lowercase() -->
     <string name="keine_playlisten_vorhanden_2">Keine Playlisten vorhanden</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:2487 -->
-    <string name="items_tippen_zum_abspielen">%1$d Items • Tippen zum Abspielen</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:2519  ||  %1$s=pl.items.size -->
+    <plurals name="items_tippen_zum_abspielen"> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:2519  ||  %1$s=pl.items.size -->
+        <item quantity="one">%1$d Item • Tippen zum Abspielen</item>
+        <item quantity="other">%1$d Items • Tippen zum Abspielen</item>
+    </plurals>
     <string name="playlisten">📂 Playlisten</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:2532 -->
     <string name="playlisten_2">} Playlisten</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:2533 -->
     <string name="deprecated_in_java">Deprecated in Java</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:2637 | Mediaplayerservice.kt:2641 | Mediaplayerservice.kt:2645 | Mediaplayerservice.kt:2657 -->
     <string name="playlist_nicht_gefunden">Playlist nicht gefunden</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:2774 -->
     <string name="leer">❌ Leer</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:2783 -->
     <string name="keine_songs_in">Keine Songs in \"%1$s\"</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:2784  ||  %1$s=source.name -->
-    <string name="songs_ab">%1$d Songs · ab #%2$d</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:2802  ||  %1$s=songs.size, %2$s=currentSongIndex + 1 -->
+    <plurals name="songs_ab"> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:2802  ||  %1$s=songs.size, %2$s=currentSongIndex + 1 -->
+        <item quantity="one">%1$d Song · ab #%2$d</item>
+        <item quantity="other">%1$d Songs · ab #%2$d</item>
+    </plurals>
     <string name="location">Location</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:2819 | Mediaplayerservice.kt:2848 -->
     <string name="mozilla_5_0_linux_android_2">Mozilla/5.0 (Linux; Android)</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:2925 -->
     <string name="mediaplayer_error">MediaPlayer error %1$s/%2$s</string> <!-- app/src/main/java/com/tabslify/services/Mediaplayerservice.kt:2949  ||  %1$s=what, %2$s=extra -->
@@ -1024,7 +1094,10 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="einstellungen_konnten_nicht_geoffnet_werden">Einstellungen konnten nicht geöffnet werden</string> <!-- app/src/main/java/com/tabslify/services/QuietHoursNotificationService.kt:1262 -->
     <string name="podcast_check">Podcast Check</string> <!-- app/src/main/java/com/tabslify/services/QuietHoursNotificationService.kt:1369 | QuietHoursNotificationService.kt:1547 -->
     <string name="neue_folge">Neue Folge: %1$s</string> <!-- app/src/main/java/com/tabslify/services/QuietHoursNotificationService.kt:1385  ||  %1$s=found[0].optString -->
-    <string name="neue_folgen_verfugbar">%1$d neue Folgen verfügbar</string> <!-- app/src/main/java/com/tabslify/services/QuietHoursNotificationService.kt:1387  ||  %1$s=found.size -->
+    <plurals name="neue_folgen_verfugbar"> <!-- app/src/main/java/com/tabslify/services/QuietHoursNotificationService.kt:1387  ||  %1$s=found.size -->
+        <item quantity="one">%1$d neue Folge verfügbar</item>
+        <item quantity="other">%1$d neue Folgen verfügbar</item>
+    </plurals>
     <string name="neue_podcast_folgen_gefunden">Neue Podcast-Folgen gefunden</string> <!-- app/src/main/java/com/tabslify/services/QuietHoursNotificationService.kt:1399 -->
     <string name="podcast_wird_heruntergeladen">Podcast wird heruntergeladen…</string> <!-- app/src/main/java/com/tabslify/services/QuietHoursNotificationService.kt:1431 | PodcastDownloaderTab.kt:307 -->
     <string name="musik_player_konnte_nicht_geoffnet">Musik Player konnte nicht geöffnet werden</string> <!-- app/src/main/java/com/tabslify/services/QuietHoursNotificationService.kt:1488 -->
@@ -1079,13 +1152,16 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="logs">Logs</string> <!-- app/src/main/java/com/tabslify/tabs/ApkmInstallerTab.kt:281 | ApkmInstallerTab.kt:688 -->
     <string name="technische_details">Technische Details</string> <!-- app/src/main/java/com/tabslify/tabs/ApkmInstallerTab.kt:281 -->
     <string name="enthaltene_apks">Enthaltene APKs</string> <!-- app/src/main/java/com/tabslify/tabs/ApkmInstallerTab.kt:326 -->
-    <string name="dateien_ausgewahlt">%1$d Dateien · %2$d ausgewählt</string> <!-- app/src/main/java/com/tabslify/tabs/ApkmInstallerTab.kt:327  ||  %1$s=pkg.apks.size, %2$s=selectedApks.size -->
+    <string name="dateien_ausgewahlt" tools:ignore="PluralsCandidate">%1$d Dateien · %2$d ausgewählt</string> <!-- app/src/main/java/com/tabslify/tabs/ApkmInstallerTab.kt:327  ||  %1$s=pkg.apks.size, %2$s=selectedApks.size -->
     <string name="signatur_version">Signatur &amp; Version</string> <!-- app/src/main/java/com/tabslify/tabs/ApkmInstallerTab.kt:337 -->
     <string name="gerateabgleich">Geräteabgleich</string> <!-- app/src/main/java/com/tabslify/tabs/ApkmInstallerTab.kt:347 -->
     <string name="abis_sprachen_auflosung">ABIs · Sprachen · Auflösung</string> <!-- app/src/main/java/com/tabslify/tabs/ApkmInstallerTab.kt:348 -->
     <string name="rohe_bundle_metadaten">Rohe Bundle-Metadaten</string> <!-- app/src/main/java/com/tabslify/tabs/ApkmInstallerTab.kt:356 -->
     <string name="logs_live">Logs (live)</string> <!-- app/src/main/java/com/tabslify/tabs/ApkmInstallerTab.kt:363 -->
-    <string name="eintrage">%1$d Einträge</string> <!-- app/src/main/java/com/tabslify/tabs/ApkmInstallerTab.kt:363 | ApkmInstallerTab.kt:689 | CalenderTab.kt:546 | Passwordmanagerscreen.kt:266  ||  %1$s=installer.logs.size -->
+    <plurals name="eintrage"> <!-- app/src/main/java/com/tabslify/tabs/ApkmInstallerTab.kt:363 | ApkmInstallerTab.kt:689 | CalenderTab.kt:546 | Passwordmanagerscreen.kt:266  ||  %1$s=installer.logs.size -->
+        <item quantity="one">%1$d Eintrag</item>
+        <item quantity="other">%1$d Einträge</item>
+    </plurals>
     <string name="erst_quelle_erlauben">Erst Quelle erlauben</string> <!-- app/src/main/java/com/tabslify/tabs/ApkmInstallerTab.kt:375 -->
     <string name="signaturrisiko_bestatigen">Signaturrisiko bestätigen</string> <!-- app/src/main/java/com/tabslify/tabs/ApkmInstallerTab.kt:376 -->
     <string name="trotz_signaturkonflikt_installieren">Trotz Signaturkonflikt installieren</string> <!-- app/src/main/java/com/tabslify/tabs/ApkmInstallerTab.kt:377 -->
@@ -1172,8 +1248,11 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="startdatum">Startdatum</string> <!-- app/src/main/java/com/tabslify/tabs/DateCalculatorTab.kt:59 -->
     <string name="enddatum">Enddatum</string> <!-- app/src/main/java/com/tabslify/tabs/DateCalculatorTab.kt:72 -->
     <string name="differenz">Differenz</string> <!-- app/src/main/java/com/tabslify/tabs/DateCalculatorTab.kt:100 -->
-    <string name="tage">%1$d Tage</string> <!-- app/src/main/java/com/tabslify/tabs/DateCalculatorTab.kt:107  ||  %1$s=daysDifference -->
-    <string name="wochen_und_tage">%1$d Wochen und %2$d Tage</string> <!-- app/src/main/java/com/tabslify/tabs/DateCalculatorTab.kt:115  ||  %1$s=(daysDifference!! / 7), %2$s=(daysDifference!! % 7) -->
+    <plurals name="tage"> <!-- app/src/main/java/com/tabslify/tabs/DateCalculatorTab.kt:107  ||  %1$s=daysDifference -->
+        <item quantity="one">%1$d Tag</item>
+        <item quantity="other">%1$d Tage</item>
+    </plurals>
+    <string name="wochen_und_tage" tools:ignore="PluralsCandidate">%1$d Wochen und %2$d Tage</string> <!-- app/src/main/java/com/tabslify/tabs/DateCalculatorTab.kt:115  ||  %1$s=(daysDifference!! / 7), %2$s=(daysDifference!! % 7) -->
     <string name="zurucksetzen">Zurücksetzen</string> <!-- app/src/main/java/com/tabslify/tabs/DateCalculatorTab.kt:136 -->
     <string name="datum_auswahlen">Datum auswählen</string> <!-- app/src/main/java/com/tabslify/tabs/DateCalculatorTab.kt:200 -->
     <string name="zugriff_auf_medien_benotigt">Zugriff auf Medien benötigt</string> <!-- app/src/main/java/com/tabslify/tabs/GalleryTab.kt:156 -->
@@ -1185,8 +1264,11 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="kein_betreff_2">(Kein Betreff)</string> <!-- app/src/main/java/com/tabslify/tabs/GmailTab.kt:117 -->
     <string name="ki_zusammenfassung">KI-Zusammenfassung</string> <!-- app/src/main/java/com/tabslify/tabs/GmailTab.kt:498 -->
     <string name="verbindungsfehler">Verbindungsfehler: %1$s</string> <!-- app/src/main/java/com/tabslify/tabs/GmailTab.kt:134  ||  %1$s=e.message -->
-    <string name="ladt_bisher">Lädt… (%1$d bisher)</string> <!-- app/src/main/java/com/tabslify/tabs/GmailTab.kt:232  ||  %1$s=emails.size -->
-    <string name="emails">%1$d Emails</string> <!-- app/src/main/java/com/tabslify/tabs/GmailTab.kt:232  ||  %1$s=emails.size -->
+    <string name="ladt_bisher" tools:ignore="PluralsCandidate">Lädt… (%1$d bisher)</string> <!-- app/src/main/java/com/tabslify/tabs/GmailTab.kt:232  ||  %1$s=emails.size -->
+    <plurals name="emails"> <!-- app/src/main/java/com/tabslify/tabs/GmailTab.kt:232  ||  %1$s=emails.size -->
+        <item quantity="one">%1$d Email</item>
+        <item quantity="other">%1$d Emails</item>
+    </plurals>
     <string name="datum">Datum</string> <!-- app/src/main/java/com/tabslify/tabs/GmailTab.kt:479 -->
     <string name="server_ip_eingeben">Server-IP eingeben</string> <!-- app/src/main/java/com/tabslify/tabs/GmailTab.kt:560 -->
     <string name="ip_adresse_des_laptops_ohne">IP-Adresse des Laptops (ohne Port):</string> <!-- app/src/main/java/com/tabslify/tabs/GmailTab.kt:565 -->
@@ -1196,6 +1278,10 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="erneut_versuchen">Erneut versuchen</string> <!-- app/src/main/java/com/tabslify/tabs/GmailTab.kt:634 | HeiseNewsTab.kt:1166 | RemoteDesktopTab.kt:1152 | AuthenticatorTabContent.kt:326 -->
     <string name="keine_emails">Keine Emails</string> <!-- app/src/main/java/com/tabslify/tabs/GmailTab.kt:653 -->
     <string name="laden">Laden</string> <!-- app/src/main/java/com/tabslify/tabs/GmailTab.kt:666 -->
+    <string name="email_loschen_titel">E-Mail löschen?</string> <!-- app/src/main/java/com/tabslify/tabs/GmailTab.kt -->
+    <string name="email_loschen_text">Diese E-Mail wird endgültig entfernt.</string> <!-- app/src/main/java/com/tabslify/tabs/GmailTab.kt -->
+    <string name="email_geloscht">E-Mail gelöscht</string> <!-- app/src/main/java/com/tabslify/tabs/GmailTab.kt -->
+    <string name="email_loschen_fehlgeschlagen">Löschen fehlgeschlagen</string> <!-- app/src/main/java/com/tabslify/tabs/GmailTab.kt -->
     <string name="artikeltext_konnte_nicht_geladen_werden">Artikeltext konnte nicht geladen werden</string> <!-- app/src/main/java/com/tabslify/tabs/HeiseNewsTab.kt:495 -->
     <string name="du_bekommst_den_volltext_eines">Du bekommst den Volltext eines heise-Artikels. Erstelle daraus eine knackige, gut lesbare deutsche Zusammenfassung.</string> <!-- app/src/main/java/com/tabslify/tabs/HeiseNewsTab.kt:510 -->
     <string name="format_der_zusammenfassung">Format der Zusammenfassung:</string> <!-- app/src/main/java/com/tabslify/tabs/HeiseNewsTab.kt:512 -->
@@ -1224,7 +1310,10 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="artikel_konnte_nicht_geoffnet_werden">Artikel konnte nicht geöffnet werden</string> <!-- app/src/main/java/com/tabslify/tabs/HeiseNewsTab.kt:674 -->
     <string name="heise_developer_news">heise developer News</string> <!-- app/src/main/java/com/tabslify/tabs/HeiseNewsTab.kt:699 -->
     <string name="aktuelle_news_per_atom_feed">Aktuelle News per Atom-Feed</string> <!-- app/src/main/java/com/tabslify/tabs/HeiseNewsTab.kt:705 -->
-    <string name="meldungen_geladen">%1$d Meldungen geladen</string> <!-- app/src/main/java/com/tabslify/tabs/HeiseNewsTab.kt:705  ||  %1$s=articles.size -->
+    <plurals name="meldungen_geladen"> <!-- app/src/main/java/com/tabslify/tabs/HeiseNewsTab.kt:705  ||  %1$s=articles.size -->
+        <item quantity="one">%1$d Meldung geladen</item>
+        <item quantity="other">%1$d Meldungen geladen</item>
+    </plurals>
     <string name="news_aktualisieren">News aktualisieren</string> <!-- app/src/main/java/com/tabslify/tabs/HeiseNewsTab.kt:720 -->
     <string name="original_offnen">Original öffnen</string> <!-- app/src/main/java/com/tabslify/tabs/HeiseNewsTab.kt:854 -->
     <string name="ai_summary">AI Summary</string> <!-- app/src/main/java/com/tabslify/tabs/HeiseNewsTab.kt:896 | MaterialScreen.kt:1071 -->
@@ -1291,7 +1380,10 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="notiz_erstellen">Notiz erstellen</string> <!-- app/src/main/java/com/tabslify/tabs/NotesTab.kt:125 -->
     <string name="keine_notizen_vorhanden">Keine Notizen vorhanden</string> <!-- app/src/main/java/com/tabslify/tabs/NotesTab.kt:147 -->
     <string name="mochtest_du_diese_notiz_wirklich">Möchtest du diese Notiz wirklich löschen?</string> <!-- app/src/main/java/com/tabslify/tabs/NotesTab.kt:205 -->
-    <string name="weitere">+%1$d weitere</string> <!-- app/src/main/java/com/tabslify/tabs/NotesTab.kt:325  ||  %1$s=type.items.size - 3 -->
+    <plurals name="weitere"> <!-- app/src/main/java/com/tabslify/tabs/NotesTab.kt:325  ||  %1$s=type.items.size - 3 -->
+        <item quantity="one">+%1$d weitere</item>
+        <item quantity="other">+%1$d weitere</item>
+    </plurals>
     <string name="notiztyp_auswahlen">Notiztyp auswählen</string> <!-- app/src/main/java/com/tabslify/tabs/NotesTab.kt:374 -->
     <string name="textnotiz">Textnotiz</string> <!-- app/src/main/java/com/tabslify/tabs/NotesTab.kt:401 -->
     <string name="normale_notiz_mit_text">Normale Notiz mit Text</string> <!-- app/src/main/java/com/tabslify/tabs/NotesTab.kt:403 -->
@@ -1304,8 +1396,11 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="neuer_punkt">Neuer Punkt</string> <!-- app/src/main/java/com/tabslify/tabs/NotesTab.kt:681 -->
     <string name="hinzufugen">Hinzufügen</string> <!-- app/src/main/java/com/tabslify/tabs/NotesTab.kt:694 | Passwordmanagerscreen.kt:182 -->
     <string name="willst_du_die_notiz_wirklich">Willst du die Notiz \"%1$s\" wirklich löschen?</string> <!-- app/src/main/java/com/tabslify/tabs/NotesTab.kt:724  ||  %1$s=note.title -->
-    <string name="alle_dateien_gespeichert">✅ Alle %1$d Dateien gespeichert!</string> <!-- app/src/main/java/com/tabslify/tabs/OtherBucketTab.kt:273  ||  %1$s=successCount -->
-    <string name="gespeichert_fehlgeschlagen">⚠️ %1$d gespeichert, %2$d fehlgeschlagen</string> <!-- app/src/main/java/com/tabslify/tabs/OtherBucketTab.kt:275  ||  %1$s=successCount, %2$s=failCount -->
+    <plurals name="alle_dateien_gespeichert"> <!-- app/src/main/java/com/tabslify/tabs/OtherBucketTab.kt:273  ||  %1$s=successCount -->
+        <item quantity="one">✅ Datei gespeichert!</item>
+        <item quantity="other">✅ Alle %1$d Dateien gespeichert!</item>
+    </plurals>
+    <string name="gespeichert_fehlgeschlagen" tools:ignore="PluralsCandidate">⚠️ %1$d gespeichert, %2$d fehlgeschlagen</string> <!-- app/src/main/java/com/tabslify/tabs/OtherBucketTab.kt:275  ||  %1$s=successCount, %2$s=failCount -->
     <string name="datei_geloscht">✅ Datei gelöscht</string> <!-- app/src/main/java/com/tabslify/tabs/OtherBucketTab.kt:300 -->
     <string name="videos">Videos</string> <!-- app/src/main/java/com/tabslify/tabs/OtherBucketTab.kt:337 | OtherBucketTab.kt:340 | OtherBucketTab.kt:397 | OtherBucketTab.kt:713 -->
     <string name="keine_dateien_vorhanden">📁 Keine Dateien vorhanden</string> <!-- app/src/main/java/com/tabslify/tabs/OtherBucketTab.kt:384 -->
@@ -1349,8 +1444,14 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="hdpi_240_dpi">hdpi (240 dpi)</string> <!-- app/src/main/java/com/tabslify/tabs/QuickSettingsTab.kt:234 -->
     <string name="xhdpi_320_dpi">xhdpi (320 dpi)</string> <!-- app/src/main/java/com/tabslify/tabs/QuickSettingsTab.kt:235 -->
     <string name="xxhdpi_480_dpi">xxhdpi (480 dpi)</string> <!-- app/src/main/java/com/tabslify/tabs/QuickSettingsTab.kt:236 -->
-    <string name="xxxhdpi_dpi">xxxhdpi (≥ %1$d dpi)</string> <!-- app/src/main/java/com/tabslify/tabs/QuickSettingsTab.kt:237  ||  %1$s=densityDpi -->
-    <string name="dichte_dpi">🔍 Dichte: %1$d dpi (%2$s)\n</string> <!-- app/src/main/java/com/tabslify/tabs/QuickSettingsTab.kt:239  ||  %1$s=densityDpi, %2$s=densityStr -->
+    <plurals name="xxxhdpi_dpi"> <!-- app/src/main/java/com/tabslify/tabs/QuickSettingsTab.kt:237  ||  %1$s=densityDpi -->
+        <item quantity="one">xxxhdpi (≥ %1$d dpi)</item>
+        <item quantity="other">xxxhdpi (≥ %1$d dpi)</item>
+    </plurals>
+    <plurals name="dichte_dpi"> <!-- app/src/main/java/com/tabslify/tabs/QuickSettingsTab.kt:239  ||  %1$s=densityDpi, %2$s=densityStr -->
+        <item quantity="one">🔍 Dichte: %1$d dpi (%2$s)\n</item>
+        <item quantity="other">🔍 Dichte: %1$d dpi (%2$s)\n</item>
+    </plurals>
     <string name="bildschirmgrose">📐 Bildschirmgröße: %1$s Zoll\n</string> <!-- app/src/main/java/com/tabslify/tabs/QuickSettingsTab.kt:246  ||  %1$s=String.format(Locale.US, "%.1f", diagonalInches) -->
     <string name="bildschirmgrose_n_a">📐 Bildschirmgröße: N/A\n</string> <!-- app/src/main/java/com/tabslify/tabs/QuickSettingsTab.kt:248 -->
     <string name="refresh_rate">🔄 Refresh Rate: %1$s Hz\n</string> <!-- app/src/main/java/com/tabslify/tabs/QuickSettingsTab.kt:253  ||  %1$s=String.format(Locale.US, "%.1f", refreshRate) -->
@@ -1424,7 +1525,10 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="verbindung_abgelehnt_falscher_pin">Verbindung abgelehnt – falscher PIN?</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:361 -->
     <string name="denied">Denied</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:365 -->
     <string name="ws_text_parse_fehler">[WS-TEXT] Parse-Fehler</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:369 -->
-    <string name="ws_bin_frame_empfangen_bytes">[WS-BIN] Frame empfangen: %1$d bytes</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:376  ||  %1$s=byteArray.size -->
+    <plurals name="ws_bin_frame_empfangen_bytes"> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:376  ||  %1$s=byteArray.size -->
+        <item quantity="one">[WS-BIN] Frame empfangen: %1$d bytes</item>
+        <item quantity="other">[WS-BIN] Frame empfangen: %1$d bytes</item>
+    </plurals>
     <string name="flow_ubersprungen_laufende_decodes">[FLOW] Übersprungen – %1$s laufende Decodes</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:379  ||  %1$s=pendingDecodes -->
     <string name="decode_ms_x">[DECODE] ✓ %1$dms (%2$dx%3$d)</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:418  ||  %1$s=decodeTime, %2$s=bitmap.width, %3$s=bitmap.height -->
     <string name="decode_dekodierung_fehlgeschlagen">[DECODE] ✗ Dekodierung fehlgeschlagen</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:443 -->
@@ -1737,12 +1841,18 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="alle_statistiken">Alle Statistiken</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:635 -->
     <string name="fur_dich">Für dich</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:656 | MediaPlayerTab.kt:1219 -->
     <string name="meine_playlists">Meine Playlists</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:682 -->
-    <string name="songs_2">%1$d Songs</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:725 | MediaPlayerTab.kt:1275 | MediaPlayerTab.kt:1559 | MediaPlayerTab.kt:1940  ||  %1$s=songCount -->
+    <plurals name="songs_2"> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:725 | MediaPlayerTab.kt:1275 | MediaPlayerTab.kt:1559 | MediaPlayerTab.kt:1940  ||  %1$s=songCount -->
+        <item quantity="one">%1$d Song</item>
+        <item quantity="other">%1$d Songs</item>
+    </plurals>
     <string name="weiter_horen">Weiter hören</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:738 -->
     <string name="zuletzt_gehort">Zuletzt gehört</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:749 -->
     <string name="lege_musik_in_cloud_ab">Lege Musik in /Cloud/ ab</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:764 -->
     <string name="statistiken">📊 Statistiken</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:870 -->
-    <string name="sessions">%1$d Sessions</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:877 | MediaPlayerTab.kt:1018  ||  %1$s=allSessions.size -->
+    <plurals name="sessions"> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:877 | MediaPlayerTab.kt:1018  ||  %1$s=allSessions.size -->
+        <item quantity="one">%1$d Session</item>
+        <item quantity="other">%1$d Sessions</item>
+    </plurals>
     <string name="musik_gesamt">Musik gesamt</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:892 -->
     <string name="podcast_gesamt">Podcast gesamt</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:894 -->
     <string name="alles">Alles</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:899 -->
@@ -1760,17 +1870,26 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="reset_2">Reset</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:1145 -->
     <string name="meine_playlists_2">Meine Playlists (%1$d)</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:1243  ||  %1$s=state.userPlaylists.size -->
     <string name="alle_songs_3">Alle Songs (%1$d)</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:1296  ||  %1$s=state.songs.size -->
-    <string name="ausgewahlt">%1$d ausgewählt</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:1377  ||  %1$s=selectedSongs.size -->
+    <plurals name="ausgewahlt"> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:1377  ||  %1$s=selectedSongs.size -->
+        <item quantity="one">%1$d ausgewählt</item>
+        <item quantity="other">%1$d ausgewählt</item>
+    </plurals>
     <string name="playlist_erstellen_2">Playlist erstellen</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:1425 -->
     <string name="playlist_loschen_2">Playlist löschen?</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:1463 -->
     <string name="playlist_erstellen_3">🎵 Playlist erstellen</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:1553 -->
     <string name="songs_suchen">🔍 Songs suchen…</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:1593 -->
-    <string name="playlist_erstellen_songs">✓ Playlist erstellen (%1$d Songs)</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:1685  ||  %1$s=selectedPaths.size -->
+    <plurals name="playlist_erstellen_songs"> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:1685  ||  %1$s=selectedPaths.size -->
+        <item quantity="one">✓ Playlist erstellen (%1$d Song)</item>
+        <item quantity="other">✓ Playlist erstellen (%1$d Songs)</item>
+    </plurals>
     <string name="show_zuweisen">Show zuweisen</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:1723 -->
     <string name="neue_show_erstellen">Neue Show erstellen</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:1802 -->
     <string name="erstellen_zuweisen">Erstellen &amp; Zuweisen</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:1859 -->
     <string name="gehort">%1$d× gehört</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:1987  ||  %1$s=sessionCount -->
-    <string name="folgen">%1$d Folgen%2$s</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:2113  ||  %1$s=episodeCount, %2$s=if (unheard > 0) -->
+    <plurals name="folgen"> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:2113  ||  %1$s=episodeCount, %2$s=if (unheard > 0) -->
+        <item quantity="one">%1$d Folge%2$s</item>
+        <item quantity="other">%1$d Folgen%2$s</item>
+    </plurals>
     <string name="keine_folgen">Keine Folgen</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:2145 -->
     <string name="songs_podcasts_shows_suchen">🔍  Songs, Podcasts, Shows suchen…</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:2190 -->
     <string name="noch_nicht_gespielt">Noch nicht gespielt</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:2237 -->
@@ -1923,13 +2042,16 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="erkennung_abbrechen">Erkennung abbrechen?</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1164 -->
     <string name="die_ki_erkennt_noch_vokabeln">Die KI erkennt noch Vokabeln. Wirklich abbrechen?</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1171 -->
     <string name="neue_vokabeln">Neue Vokabeln</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1218 -->
-    <string name="vokabeln_2">%1$d Vokabeln</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1223 | VocabTab.kt:1975  ||  %1$s=currentVokabeln.size -->
+    <plurals name="vokabeln_2"> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1223 | VocabTab.kt:1975  ||  %1$s=currentVokabeln.size -->
+        <item quantity="one">%1$d Vokabel</item>
+        <item quantity="other">%1$d Vokabeln</item>
+    </plurals>
     <string name="bestatigen">Bestätigen (%1$s)</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1241  ||  %1$s=changes -->
     <string name="umbenennen">Umbenennen</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1241 -->
     <string name="erkenne_platzhalter">Erkenne…</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1060 -->
     <string name="fertig_ausruf">Fertig!</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1727 -->
     <string name="lernen">Lernen →</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1262 -->
-    <string name="ki_erkennt_vokabeln_bisher">KI erkennt Vokabeln… (%1$d bisher)</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1286  ||  %1$s=vokabeln.size -->
+    <string name="ki_erkennt_vokabeln_bisher" tools:ignore="PluralsCandidate">KI erkennt Vokabeln… (%1$d bisher)</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1286  ||  %1$s=vokabeln.size -->
     <string name="latein">Latein</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1320 -->
     <string name="deutsch">Deutsch</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1326 -->
     <string name="de_la">DE → LA </string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1515 -->
@@ -1938,7 +2060,10 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="tippe_zum_aufdecken">Tippe zum Aufdecken</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1598 -->
     <string name="falsch">Falsch</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1669 | VocabTab.kt:1754 -->
     <string name="richtig">Richtig</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1701 | VocabTab.kt:1745 -->
-    <string name="vokabeln_abgefragt">%1$d Vokabeln abgefragt</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1733  ||  %1$s=shuffled.size -->
+    <plurals name="vokabeln_abgefragt"> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1733  ||  %1$s=shuffled.size -->
+        <item quantity="one">%1$d Vokabel abgefragt</item>
+        <item quantity="other">%1$d Vokabeln abgefragt</item>
+    </plurals>
     <string name="nochmal">Nochmal</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1773 -->
     <string name="falsche_wiederholen">✗ Falsche wiederholen (%1$d)</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1794  ||  %1$s=wrongVokabeln.size -->
     <string name="set_speichern">Set speichern</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1840 -->
@@ -1972,4 +2097,19 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="language_onboarding_subtitle">Du kannst das später jederzeit in den Einstellungen ändern.</string>
     <string name="notification_permission_title">Benachrichtigungen erlauben</string>
     <string name="notification_permission_subtitle">Tabslify nutzt Benachrichtigungen für Quiet Hours, Musik- und Download-Status und mehr. Ohne diese Berechtigung funktionieren viele Funktionen nicht richtig.</string>
+    <string name="virustotal">VirusTotal</string> <!-- app/src/main/java/com/tabslify/core/ui/PrivateTabslifyApp.kt -->
+    <string name="virustotal_modus_url">URL</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_modus_hash">Hash</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_modus_datei">Datei</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_url_label">URL eingeben</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_hash_label">MD5 / SHA1 / SHA256 Hash eingeben</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_prufen">Prüfen</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_datei_auswahlen">Datei auswählen</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_hochladen_prufen">Hochladen &amp; prüfen</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_ergebnis">%1$d von %2$d Engines melden diese Datei als bösartig</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_bosartig">Bösartig</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_verdachtig">Verdächtig</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_harmlos">Harmlos</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_unentdeckt">Unentdeckt</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_bericht_offnen">Vollständigen Bericht öffnen</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
 </resources>
