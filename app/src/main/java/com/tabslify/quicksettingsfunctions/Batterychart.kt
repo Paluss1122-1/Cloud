@@ -67,6 +67,7 @@ import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -98,20 +99,26 @@ object BatteryDataRepository {
     @Suppress("ObjectPropertyName")
     internal val _samples = MutableStateFlow<List<BatterySample>>(emptyList())
     val samples = _samples.asStateFlow()
+    @Volatile
+    private var initialized = false
 
     fun init(ctx: Context) {
         context = ctx.applicationContext
+        if (initialized) return
+        initialized = true
         appScope.launch {
             val local = loadSamples()
             if (local.isEmpty()) {
                 val remote = fetchSamplesFromSupabase()
-                _samples.value = remote
-                if (remote.isNotEmpty()) saveSamplesLocal(remote)
+                if (remote.isNotEmpty()) {
+                    _samples.value = remote
+                    saveSamplesLocal(remote)
+                }
             } else {
                 _samples.value = local
                 appScope.launch(Dispatchers.IO) {
                     val remote = fetchSamplesFromSupabase()
-                    if (remote.size > local.size) {
+                    if (remote.size > _samples.value.size) {
                         _samples.value = remote
                         saveSamplesLocal(remote)
                     }
@@ -121,12 +128,17 @@ object BatteryDataRepository {
     }
 
     fun addSample(sample: BatterySample) {
-        _samples.value.lastOrNull()?.let {
-            if ((sample.temperature - it.temperature).absoluteValue < 1f) return
+        var updated: List<BatterySample>? = null
+        _samples.update { current ->
+            val last = current.lastOrNull()
+            if (last != null && (sample.temperature - last.temperature).absoluteValue < 1f) {
+                updated = null
+                current
+            } else {
+                (current + sample).also { updated = it }
+            }
         }
-        val updated = _samples.value + sample
-        _samples.value = updated
-        saveSamples(updated)
+        updated?.let { saveSamples(it) }
     }
 
     private fun saveSamples(samples: List<BatterySample>) = appScope.launch {
@@ -239,29 +251,33 @@ fun BatteryChartScreen(onDismiss: () -> Unit) {
                 .clickable { onDismiss() }
                 .padding(10.dp)
         ) {
-            val scope = rememberCoroutineScope()
-            var loading by remember { mutableStateOf(false) }
-            val context = LocalContext.current
-            var result by remember { mutableStateOf<String?>(null) }
-
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Button(
-                    onClick = {
-                        scope.launch {
-                            loading = true
-                            val minutes = predictChargingTime(context)
-                            result =
-                                minutes?.let { context.getString(R.string.min_bis_85, it) }
-                                    ?: context.getString(R.string.keine_schatzung_moglich)
-                            loading = false
-                        }
-                    },
-                    enabled = !loading
-                ) {
-                    Text(if (loading) stringResource(R.string.berechne) else stringResource(R.string.ladezeit_berechnen))
+            if (prvt()) {
+                val scope = rememberCoroutineScope()
+                var loading by remember { mutableStateOf(false) }
+                val context = LocalContext.current
+                var result by remember { mutableStateOf<String?>(null) }
+                val minBis85Pattern = stringResource(R.string.min_bis_85)
+                val keineSchatzungMoglich = stringResource(R.string.keine_schatzung_moglich)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                loading = true
+                                val minutes = predictChargingTime(context)
+                                result =
+                                    minutes?.let { String.format(minBis85Pattern, it) }
+                                        ?: keineSchatzungMoglich
+                                loading = false
+                            }
+                        },
+                        enabled = !loading
+                    ) {
+                        Text(if (loading) stringResource(R.string.berechne) else stringResource(R.string.ladezeit_berechnen))
+                    }
+                    result?.let { Text(it, color = Color.White) }
                 }
-                result?.let { Text(it, color = Color.White) }
             }
+
             Box(
                 Modifier
                     .align(Alignment.Center)
@@ -317,7 +333,6 @@ fun BatteryChartFilters(
     var showHour by remember { mutableStateOf(false) }
     val samples by BatteryDataRepository.samples.collectAsState()
     val sdf = remember { SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()) }
-    val context = LocalContext.current
 
     Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Box {
@@ -329,7 +344,8 @@ fun BatteryChartFilters(
             ) { onDaySelected(it); showDay = false }
         }
         if (selectedDay != null) Box {
-            DropdownButton(selectedHour?.let { stringResource(R.string.s_00_uhr, it) } ?: stringResource(R.string.alle_stunden)) { showHour = true }
+            val sUhrPattern = stringResource(R.string.s_00_uhr)
+            DropdownButton(selectedHour?.let { String.format(sUhrPattern, it) } ?: stringResource(R.string.alle_stunden)) { showHour = true }
             if (showHour) {
                 SimpleDropdown(
                     samples.filter { sdf.format(Date(it.timestamp)) == selectedDay }
@@ -338,7 +354,7 @@ fun BatteryChartFilters(
                                 .get(Calendar.HOUR_OF_DAY)
                         }
                         .distinct().sorted(),
-                    { context.getString(R.string.s_00_uhr, it) }, stringResource(R.string.alle_stunden)
+                    { String.format(sUhrPattern, it) }, stringResource(R.string.alle_stunden)
                 ) { onHourSelected(it); showHour = false }
             }
         }
