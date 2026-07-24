@@ -69,7 +69,12 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
         }
     }
 
-    fun handleButtonClick(scope: CoroutineScope, isMediaRecorderMode: Boolean) {
+    fun handleButtonClick(
+        scope: CoroutineScope,
+        isMediaRecorderMode: Boolean,
+        projectionResultCode: Int = 0,
+        projectionData: Intent? = null
+    ) {
         if (isRecording) {
             stopAudioService(getApplication<Application>().applicationContext)
             isRecording = false
@@ -82,7 +87,9 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
             startAudioService(
                 getApplication<Application>().applicationContext,
                 file.absolutePath,
-                isMediaRecorderMode
+                isMediaRecorderMode,
+                projectionResultCode,
+                projectionData
             )
             isRecording = true
         }
@@ -190,11 +197,22 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
         return File(context.getExternalFilesDir(null), "audio_$timestamp.m4a")
     }
 
-    fun startAudioService(context: Context, path: String, isMediaRecorderMode: Boolean) {
+    fun startAudioService(
+        context: Context,
+        path: String,
+        isMediaRecorderMode: Boolean,
+        projectionResultCode: Int = 0,
+        projectionData: Intent? = null
+    ) {
+        if (isMediaRecorderMode && projectionData == null) return
         try {
             val intent = Intent(context, AudioForegroundService::class.java).apply {
                 putExtra("filePath", path)
                 putExtra("isMediaRecorderMode", isMediaRecorderMode)
+                if (isMediaRecorderMode) {
+                    putExtra("resultCode", projectionResultCode)
+                    putExtra("data", projectionData)
+                }
             }
             ContextCompat.startForegroundService(context, intent)
         } catch (_: Exception) {
