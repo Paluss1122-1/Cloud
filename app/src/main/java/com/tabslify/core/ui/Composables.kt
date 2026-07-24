@@ -355,6 +355,7 @@ fun FeedCard(
     onToggleFav: () -> Unit,
     onDownload: (String, String) -> Unit,
     onStream: (String) -> Unit,
+    newAudioUrls: Set<String> = emptySet(),
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -448,12 +449,24 @@ fun FeedCard(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Text(
-                                "${idx + 1}",
-                                fontSize = 11.sp,
-                                color = Color(0xFF4A4850),
-                                modifier = Modifier.width(24.dp)
-                            )
+                            Box(modifier = Modifier.width(24.dp)) {
+                                Text(
+                                    "${idx + 1}",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF4A4850),
+                                )
+                                if (ep.audioUrl in newAudioUrls) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .size(6.dp)
+                                            .background(
+                                                Color.Red,
+                                                androidx.compose.foundation.shape.CircleShape
+                                            )
+                                    )
+                                }
+                            }
                             Text(
                                 ep.title,
                                 modifier = Modifier.weight(1f),
