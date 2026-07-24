@@ -558,7 +558,7 @@ class RemoteDesktopViewModel : ViewModel() {
 fun RemoteDesktopTabContent() {
     val context = LocalContext.current
     if (!prvt()) {
-        Toast.makeText(context, context.getString(R.string.forbidden), Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, stringResource(R.string.forbidden), Toast.LENGTH_SHORT).show()
         return
     }
     val viewModel: RemoteDesktopViewModel = viewModel()
