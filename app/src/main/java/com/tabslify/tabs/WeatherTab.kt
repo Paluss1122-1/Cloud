@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.content.res.Resources
 import android.location.Location
 import android.net.Uri
 import android.provider.Settings
@@ -79,6 +78,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
@@ -112,6 +112,7 @@ import java.net.URL
 import java.net.URLEncoder
 import java.util.concurrent.CountDownLatch
 import kotlin.time.Duration.Companion.milliseconds
+import androidx.core.content.edit
 
 @Serializable
 data class WeatherRequest(
@@ -372,7 +373,7 @@ fun WeatherTabContent(
     LaunchedEffect(selectionState.dayIndex) {
         if (selectionState.dayIndex != null && !backHintPrefs.getBoolean("seen_back_hint", false)) {
             showBackHint = true
-            backHintPrefs.edit().putBoolean("seen_back_hint", true).apply()
+            backHintPrefs.edit { putBoolean("seen_back_hint", true) }
         }
     }
 
@@ -394,6 +395,10 @@ fun WeatherTabContent(
         }
     }
 
+    val berechtigungenStandortImmerErlauben = stringResource(R.string.berechtigungen_standort_immer_erlauben)
+    val fehlerMsgPattern = stringResource(R.string.fehler_msg)
+    val ortNichtGefundenPattern = stringResource(R.string.ort_nicht_gefunden)
+
     var refreshWeather: () -> Unit = {}
     val manualLoc = {
         if (ActivityCompat.checkSelfPermission(
@@ -410,7 +415,7 @@ fun WeatherTabContent(
                 data = Uri.fromParts("package", ctx.packageName, null)
             }
             ctx.startActivity(intent)
-            toast(ctx, ctx.getString(R.string.berechtigungen_standort_immer_erlauben))
+            toast(ctx, berechtigungenStandortImmerErlauben)
             directedToSettings = true
         }
     }
@@ -456,7 +461,7 @@ fun WeatherTabContent(
                     apiKey = Config.userApiKey(ctx, "weatherapi")
                 )
             } catch (e: Exception) {
-                error = ctx.getString(R.string.fehler_msg, e.message)
+                error = String.format(fehlerMsgPattern, e.message)
             } finally {
                 isLoading = false
                 animIconbgColor.animateTo(
@@ -479,7 +484,7 @@ fun WeatherTabContent(
             try {
                 val coords = fetchCoordsForCity(query)
                 if (coords == null) {
-                    error = ctx.getString(R.string.ort_nicht_gefunden, query)
+                    error = String.format(ortNichtGefundenPattern, query)
                 } else {
                     weather = fetchWeatherForecast(
                         coords.first,
@@ -489,7 +494,7 @@ fun WeatherTabContent(
                     )
                 }
             } catch (e: Exception) {
-                error = ctx.getString(R.string.fehler_msg, e.message)
+                error = String.format(fehlerMsgPattern, e.message)
             } finally {
                 isLoading = false
             }
@@ -721,11 +726,15 @@ fun BackHintOverlay(onDismiss: () -> Unit) {
                 )
         )
 
-        // animated swipe finger travelling from the left edge
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .offset(x = (14 + swipe * 160).dp, y = (-40).dp)
+                .offset {
+                    IntOffset(
+                        (14 + swipe * 160).dp.roundToPx(),
+                        (-40).dp.roundToPx()
+                    )
+                }
                 .size(52.dp)
                 .alpha(fingerAlpha)
                 .background(
