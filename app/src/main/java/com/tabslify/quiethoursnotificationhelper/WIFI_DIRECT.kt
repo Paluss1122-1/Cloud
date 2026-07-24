@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -95,6 +96,7 @@ import com.tabslify.services.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.tabslify.services.WhatsAppNotificationListener
 import com.tabslify.tabs.aitab.ChatMessage
 import com.tabslify.tabs.authenticator.PasswordDatabase
+import com.tabslify.tabs.authenticator.TotpGenerator.base32Encode
 import com.tabslify.tabs.authenticator.TotpGenerator.deriveTotpSecretFromUuid
 import com.tabslify.tabs.authenticator.TotpGenerator.generateTOTP
 import com.tabslify.tabs.authenticator.TwoFADatabase
@@ -105,6 +107,7 @@ import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.getSessions
 import com.tabslify.tabs.school.Vokabel
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -135,6 +138,7 @@ import java.net.Socket
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.nio.ByteBuffer
+import java.security.SecureRandom
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.util.Calendar
@@ -210,6 +214,86 @@ private fun isBluetoothOn(context: Context): Boolean {
         bm?.adapter?.isEnabled == true
     } catch (_: Exception) {
         false
+    }
+}
+
+@SuppressLint("MissingPermission")
+fun connectBluetoothDevice(
+    context: Context,
+    nameOrAddress: String,
+    onResult: ((Boolean, String) -> Unit)? = null
+) {
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
+        != PackageManager.PERMISSION_GRANTED
+    ) {
+        onResult?.invoke(false, "Keine BLUETOOTH_CONNECT-Berechtigung")
+        return
+    }
+
+    val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+    val adapter = bm?.adapter
+    if (adapter == null || !adapter.isEnabled) {
+        onResult?.invoke(false, "Bluetooth ist ausgeschaltet")
+        return
+    }
+
+    val target = try {
+        adapter.bondedDevices.firstOrNull {
+            it.address.equals(nameOrAddress, ignoreCase = true) ||
+                it.name?.equals(nameOrAddress, ignoreCase = true) == true
+        }
+    } catch (e: SecurityException) {
+        Log.e("CLOUDSA", "[BT] Zugriff auf gekoppelte Geräte verweigert", e)
+        null
+    }
+
+    if (target == null) {
+        onResult?.invoke(false, "Gerät \"$nameOrAddress\" nicht gekoppelt")
+        return
+    }
+
+    if (connectedBluetoothDevices.contains(target.address)) {
+        onResult?.invoke(true, "\"${target.name}\" ist bereits verbunden")
+        return
+    }
+
+    var handled = false
+    val profiles = intArrayOf(BluetoothProfile.A2DP, BluetoothProfile.HEADSET)
+    val remaining = profiles.toMutableList()
+
+    val listener = object : BluetoothProfile.ServiceListener {
+        override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
+            try {
+                val method = proxy.javaClass.getMethod("connect", BluetoothDevice::class.java)
+                method.isAccessible = true
+                val started = method.invoke(proxy, target) as? Boolean == true
+                if (started && !handled) {
+                    handled = true
+                    onResult?.invoke(true, "Verbindung zu \"${target.name}\" gestartet")
+                }
+            } catch (e: Exception) {
+                Log.e("CLOUDSA", "[BT] connect() fehlgeschlagen für Profil $profile", e)
+            } finally {
+                adapter.closeProfileProxy(profile, proxy)
+                remaining.remove(profile)
+                if (remaining.isEmpty() && !handled) {
+                    handled = true
+                    onResult?.invoke(false, "Verbindung zu \"${target.name}\" fehlgeschlagen")
+                }
+            }
+        }
+
+        override fun onServiceDisconnected(profile: Int) {}
+    }
+
+    for (profile in profiles) {
+        if (!adapter.getProfileProxy(context, listener, profile)) {
+            remaining.remove(profile)
+        }
+    }
+
+    if (remaining.isEmpty() && !handled) {
+        onResult?.invoke(false, "Kein passendes Bluetooth-Profil verfügbar")
     }
 }
 
@@ -435,6 +519,25 @@ private fun launchServer(
             if (isActive) delay((2000L * consecutiveFailures.coerceAtMost(15)).milliseconds)
         }
     }
+}
+
+private const val PREFS_PC_SECRETS = "pc_secrets"
+
+fun resolveSyncSecret(context: Context, pcName: String): String? {
+    if (pcName.isEmpty()) return null
+    val secretsPrefs = context.getSharedPreferences(PREFS_PC_SECRETS, MODE_PRIVATE)
+    secretsPrefs.getString(pcName, null)?.let { return it }
+    val uuidPrefs = context.getSharedPreferences("pc_uuids", MODE_PRIVATE)
+    return uuidPrefs.getString(pcName, null)?.let { deriveTotpSecretFromUuid(it) }
+}
+
+fun ensureRandomSyncSecret(context: Context, pcName: String): String {
+    val secretsPrefs = context.getSharedPreferences(PREFS_PC_SECRETS, MODE_PRIVATE)
+    secretsPrefs.getString(pcName, null)?.let { return it }
+    val randomBytes = ByteArray(20).also { SecureRandom().nextBytes(it) }
+    val secret = base32Encode(randomBytes)
+    secretsPrefs.edit { putString(pcName, secret) }
+    return secret
 }
 
 private fun todosToJsonArray(todos: List<TodoItem>): JSONArray = JSONArray().apply {
@@ -687,7 +790,6 @@ fun startTriggerListener(context: Context) {
 
                     if (pcName.isNotEmpty()) {
                         val prefs = context.getSharedPreferences("registered_pcs", MODE_PRIVATE)
-                        val uuidPrefs = context.getSharedPreferences("pc_uuids", MODE_PRIVATE)
 
                         if (!prefs.contains(pcName)) {
                             val pendingPrefs = context.getSharedPreferences("pending_pcs", MODE_PRIVATE)
@@ -702,8 +804,7 @@ fun startTriggerListener(context: Context) {
                             writer.println("PENDING")
                             stopAllSyncServices(context)
                         } else {
-                            val storedUuid = uuidPrefs.getString(pcName, null)
-                            val secret = storedUuid?.let { deriveTotpSecretFromUuid(it) }
+                            val secret = resolveSyncSecret(context, pcName)
                             val now = System.currentTimeMillis()
                             val totpValid = secret != null && listOf(
                                 generateTOTP(secret, now - 30000),
@@ -712,6 +813,7 @@ fun startTriggerListener(context: Context) {
                             ).contains(totpCode)
 
                             if (totpValid) {
+                                ensureRandomSyncSecret(context, pcName)
                                 laptopIp = pcIp
                                 laptopName = pcName
 
@@ -787,7 +889,37 @@ private fun startTriggerWatchdog(context: Context) {
                 )
                 startTriggerListener(context)
             }
+            if (isLaptopConnected) {
+                ensureSyncListenersAlive(context)
+            }
         }
+    }
+}
+
+private fun ensureSyncListenersAlive(context: Context) {
+    if (mediaCommandJob?.isActive != true) {
+        Log.w("CLOUDSA", "Media command listener not active, restarting...")
+        startMediaCommandListener(context)
+    }
+    if (mediaStateJob?.isActive != true) {
+        Log.w("CLOUDSA", "Media state listener not active, restarting...")
+        startMediaStateServer(context)
+    }
+    if (clipboardJob?.isActive != true) {
+        Log.w("CLOUDSA", "Clipboard listener not active, restarting...")
+        startClipboardListener(context)
+    }
+    if (executeJob?.isActive != true) {
+        Log.w("CLOUDSA", "Execute listener not active, restarting...")
+        startExecuteListener(context)
+    }
+    if (smsJob?.isActive != true) {
+        Log.w("CLOUDSA", "SMS listener not active, restarting...")
+        startSmsListener(context)
+    }
+    if (spotifyHistoryJob?.isActive != true) {
+        Log.w("CLOUDSA", "Spotify history listener not active, restarting...")
+        startSpotifyHistoryListener(context)
     }
 }
 
@@ -974,14 +1106,19 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                     .getString(KEY_LAST_LAPTOP, "").orEmpty()
                     .ifEmpty { uuidPrefs.all.keys.firstOrNull().orEmpty() }
             }
-            val keyToUse = uuidPrefs.getString(laptopName, null)
-            if (keyToUse == null) {
+            if (!uuidPrefs.contains(laptopName)) {
                 showSimpleNotificationExtern(
                     "❌ Keine UUID gefunden", "PC $laptopName ist nicht in pc_uuids registriert", 10.seconds, context
                 )
                 return@launch
             }
-            val totpKey = deriveTotpSecretFromUuid(keyToUse)
+            val totpKey = resolveSyncSecret(context, laptopName)
+            if (totpKey == null) {
+                showSimpleNotificationExtern(
+                    "❌ Kein Secret gefunden", "PC $laptopName hat kein TOTP-Secret", 10.seconds, context
+                )
+                return@launch
+            }
 
             val todos = getTodos(context)
             val response = Socket().use { socket ->
@@ -996,7 +1133,8 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
 
                 val payloadObj = JSONObject().apply {
                     put("todos", todosToJsonArray(todos))
-                    put("totp_key", totpKey)
+                    put("totp", generateTOTP(totpKey))
+                    if (connected) put("totp_key", totpKey)
                 }
 
                 writer.println(payloadObj.toString())
@@ -1050,6 +1188,7 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                 "EMPTY" -> throw IOException("Server erhielt leere Daten")
                 "TIMEOUT" -> throw IOException("Server-Timeout beim Lesen")
                 "ERROR" -> throw IOException("Server konnte Daten nicht verarbeiten")
+                "UNAUTHORIZED" -> throw IOException("Server hat Sync abgelehnt (ungültiger TOTP-Code)")
                 else -> throw IOException("Unbekannte Antwort: $response")
             }
         } catch (e: ConnectException) {
@@ -2110,8 +2249,7 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                     .getString(KEY_LAST_LAPTOP, "").orEmpty()
                     .ifEmpty { uuidPrefs.all.keys.firstOrNull().orEmpty() }
             }
-            val keyToUse = uuidPrefs.getString(laptopName, null)
-            val totpKey = keyToUse?.let { deriveTotpSecretFromUuid(it) }
+            val totpKey = resolveSyncSecret(context, laptopName)
             val now = System.currentTimeMillis()
             val valid = totpKey != null && listOf(
                 generateTOTP(totpKey, now - 30000),
@@ -2321,6 +2459,34 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
             }
         }
 
+        "connect_bluetooth" -> {
+            val devices = mutableListOf<String>()
+            args.optJSONArray("devices")?.let { arr ->
+                for (i in 0 until arr.length()) {
+                    arr.optString(i).takeIf { it.isNotBlank() }?.let { devices.add(it) }
+                }
+            }
+            args.optString("device").takeIf { it.isNotBlank() }?.let { devices.add(it) }
+
+            syncScope.launch(Dispatchers.IO) {
+                for (device in devices.distinct()) {
+                    if (connectedBluetoothDevices.isNotEmpty()) break
+                    val result = CompletableDeferred<Boolean>()
+                    connectBluetoothDevice(context, device) { ok, msg ->
+                        Log.d("CLOUDSA", "[BT] $device -> $msg")
+                        result.complete(ok)
+                    }
+                    val ok = withTimeoutOrNull(8000) { result.await() } ?: false
+                    if (ok) {
+                        withTimeoutOrNull(10000) {
+                            while (connectedBluetoothDevices.isEmpty()) delay(500)
+                        }
+                        if (connectedBluetoothDevices.isNotEmpty()) break
+                    }
+                }
+            }
+        }
+
         else -> {}
     }
 }
@@ -2512,10 +2678,8 @@ private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
                         filter { eq("device_id", "handy") }
                     }
             }
-            Log.d("CLOUDSA", "Mobile IP updated: $ipAddress")
             true
         } catch (e: Exception) {
-            Log.e("CLOUDSA", "Error updating mobile IP: ${e.message}", e)
             logError("SupabaseInsert", e)
             false
         }
