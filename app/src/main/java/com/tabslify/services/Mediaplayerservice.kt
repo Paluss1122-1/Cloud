@@ -352,7 +352,7 @@ class MediaPlayerService : MediaSessionService() {
                 NotificationCompat.Builder(context, "media_player_channel")
                     .setSmallIcon(android.R.drawable.ic_menu_delete)
                     .setContentTitle(context.getString(R.string.fertige_podcasts_loschen))
-                    .setContentText(context.getString(R.string.podcasts_bereit_zum_loschen, completedPodcasts.size))
+                    .setContentText(context.resources.getQuantityString(R.plurals.podcasts_bereit_zum_loschen, completedPodcasts.size, completedPodcasts.size))
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
                     .setGroup("podcast_delete")
                     .setGroupSummary(true)
@@ -888,7 +888,7 @@ class MediaPlayerService : MediaSessionService() {
                 savePlaylists()
                 showSimpleNotificationExtern(
                     getString(R.string.playlist_erstellt),
-                    getString(R.string.songs, name, pl.items.size),
+                    resources.getQuantityString(R.plurals.songs, pl.items.size, name, pl.items.size),
                     10.seconds, context = this
                 )
             }
@@ -967,7 +967,7 @@ class MediaPlayerService : MediaSessionService() {
                         val pl = playlists.find { it.id == id }
                         showSimpleNotificationExtern(
                             getString(R.string.playlist_aktiviert),
-                            getString(R.string.items, pl?.name, pl?.items?.size ?: 0),
+                            resources.getQuantityString(R.plurals.items, pl?.items?.size ?: 0, pl?.name, pl?.items?.size ?: 0),
                             10.seconds,
                             context = this
                         )
@@ -1603,7 +1603,7 @@ class MediaPlayerService : MediaSessionService() {
         saveFavorites()
         showSimpleNotificationExtern(
             if (favoritesMode) getString(R.string.favoriten_modus_aktiviert) else getString(R.string.alle_songs_2),
-            getString(R.string.songs_verfugbar, active.size),
+            resources.getQuantityString(R.plurals.songs_verfugbar, active.size, active.size),
             10.seconds,
             context = this
         )
@@ -1823,7 +1823,7 @@ class MediaPlayerService : MediaSessionService() {
         val summary = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle(getString(R.string.podcast_auswahlen))
-            .setContentText(getString(R.string.podcasts_2, podcasts.size, if (completedCount > 0) " ($completedCount fertig)" else ""))
+            .setContentText(resources.getQuantityString(R.plurals.podcasts_2, podcasts.size, podcasts.size, if (completedCount > 0) " ($completedCount fertig)" else ""))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setGroup("podcast_selection")
             .setGroupSummary(true)
@@ -1858,7 +1858,7 @@ class MediaPlayerService : MediaSessionService() {
         val summary = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_delete)
             .setContentTitle(getString(R.string.fertige_podcasts_loschen))
-            .setContentText(getString(R.string.podcasts_bereit_zum_loschen, completed.size))
+            .setContentText(resources.getQuantityString(R.plurals.podcasts_bereit_zum_loschen, completed.size, completed.size))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setGroup("podcast_delete").setGroupSummary(true).setAutoCancel(true).build()
 
@@ -2517,7 +2517,7 @@ class MediaPlayerService : MediaSessionService() {
             val n = NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_menu_view)
                 .setContentTitle("$activeMarker$typeIcon ${pl.name} ${pl.id}")
-                .setContentText(getString(R.string.items_tippen_zum_abspielen, pl.items.size))
+                .setContentText(resources.getQuantityString(R.plurals.items_tippen_zum_abspielen, pl.items.size, pl.items.size))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setAutoCancel(true)
                 .setContentIntent(activatePi)
@@ -2800,7 +2800,7 @@ class MediaPlayerService : MediaSessionService() {
         loadSong(currentSongIndex)
         showSimpleNotificationExtern(
             "▶ ${source.icon} ${getString(source.nameRes)}",
-            getString(R.string.songs_ab, songs.size, currentSongIndex + 1),
+            resources.getQuantityString(R.plurals.songs_ab, songs.size, songs.size, currentSongIndex + 1),
             10.seconds, context = this
         )
     }
