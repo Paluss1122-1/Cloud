@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -106,7 +107,8 @@ fun DateCalculatorContent(modifier: Modifier = Modifier) {
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = stringResource(R.string.tage, daysDifference!!),
+                        text = pluralStringResource(R.plurals.tage,
+                            daysDifference!!.toInt(), daysDifference!!),
                         fontSize = 36.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
