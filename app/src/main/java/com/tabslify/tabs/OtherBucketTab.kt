@@ -134,7 +134,6 @@ fun OtherBucketViewer(
     val dateienExportiert = stringResource(R.string.dateien_nach_downloads_other_exportiert)
     val exportFehlgeschlagen = stringResource(R.string.export_fehlgeschlagen)
     val exportiertFehlgeschlagen = stringResource(R.string.exportiert_fehlgeschlagen)
-    val alleDateienGespeichertMsg = stringResource(R.string.alle_dateien_gespeichert)
     val speichernFehlgeschlagenMsg = stringResource(R.string.speichern_fehlgeschlagen)
     val gespeichertFehlgeschlagenMsg = stringResource(R.string.gespeichert_fehlgeschlagen)
     
@@ -284,7 +283,7 @@ fun OtherBucketViewer(
                     }
 
                     val message = when {
-                        failCount == 0 -> alleDateienGespeichertMsg.format(successCount)
+                        failCount == 0 -> context.resources.getQuantityString(R.plurals.alle_dateien_gespeichert, successCount, successCount)
                         successCount == 0 -> speichernFehlgeschlagenMsg
                         else -> gespeichertFehlgeschlagenMsg.format(successCount, failCount)
                     }
