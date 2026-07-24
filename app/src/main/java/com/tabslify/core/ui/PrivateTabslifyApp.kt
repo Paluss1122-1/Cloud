@@ -190,6 +190,7 @@ import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
 import com.tabslify.tabs.mediaplayer.MediaTab
 import com.tabslify.tabs.mediaplayer.PodcastTab
 import com.tabslify.tabs.school.VocabTab
+import com.tabslify.tabs.virustotal.VirusTotalTabContent
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -355,6 +356,11 @@ enum class MenuItem(
         R.string.apkm_installer,
         "📦",
         {}
+    ),
+    VIRUSTOTAL(
+        R.string.virustotal,
+        "🛡️",
+        { VirusTotalTabContent() }
     ),
 }
 
@@ -2179,6 +2185,7 @@ fun MainTabslifyScreen(storage: Storage) {
             OtherBucketViewer(
                 onBackPressed = {
                     shouldshow = false
+                    showOtherBucket = false
                 }
             )
         }
