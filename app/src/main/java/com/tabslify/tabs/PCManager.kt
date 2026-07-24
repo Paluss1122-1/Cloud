@@ -40,8 +40,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import com.tabslify.R
 import com.tabslify.core.objects.prvt
+import com.tabslify.quiethoursnotificationhelper.ensureRandomSyncSecret
 import com.tabslify.quiethoursnotificationhelper.laptopIp
 import com.tabslify.quiethoursnotificationhelper.laptopName
+import com.tabslify.quiethoursnotificationhelper.resolveSyncSecret
 import com.tabslify.quiethoursnotificationhelper.stopAllSyncServices
 import com.tabslify.quiethoursnotificationhelper.syncTodosWithLaptop
 import com.tabslify.quiethoursnotificationhelper.getTriggerListenerStatus
@@ -99,7 +101,7 @@ fun PCManagerTab() {
         while (true) {
             val allPcs = prefs.all.map { (name, regInfo) ->
                 val uuid = uuidPrefs.getString(name, null) ?: "NO_UUID"
-                val secret = if (uuid != "NO_UUID") TotpGenerator.deriveTotpSecretFromUuid(uuid) else ""
+                val secret = resolveSyncSecret(context, name).orEmpty()
                 val liveCode = if (secret.isNotEmpty()) TotpGenerator.generateTOTP(secret) else "?"
                 PcDetails(
                     name = name,
@@ -255,6 +257,7 @@ fun PCManagerTab() {
                                         val nowStr = SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault()).format(Date())
                                         prefs.edit().putString(pc.name, registriertAmMsg.format(nowStr)).apply()
                                         uuidPrefs.edit().putString(pc.name, pc.uuid).apply()
+                                        ensureRandomSyncSecret(context, pc.name)
 
                                         pendingPrefs.edit {remove(pc.name)}
 
@@ -323,6 +326,7 @@ fun PCManagerTab() {
                                     onClick = {
                                         prefs.edit().remove(pc.name).apply()
                                         uuidPrefs.edit().remove(pc.name).apply()
+                                        secretsPrefs.edit().remove(pc.name).apply()
                                         if (pc.name == laptopName) {
                                             stopAllSyncServices(context)
                                         }
@@ -364,6 +368,7 @@ fun PCManagerTab() {
                         prefs.edit().clear().apply()
                         pendingPrefs.edit().clear().apply()
                         uuidPrefs.edit().clear().apply()
+                        secretsPrefs.edit().clear().apply()
                         stopAllSyncServices(context)
                         Toast.makeText(context, alleAltenVerbindungenGeloeschtMsg, Toast.LENGTH_SHORT).show()
                     },
