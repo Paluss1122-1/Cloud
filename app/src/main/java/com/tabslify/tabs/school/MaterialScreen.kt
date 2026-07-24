@@ -138,7 +138,7 @@ fun MaterialienScreen(
 ) {
     val context = LocalContext.current
     if (!prvt()) {
-        Toast.makeText(context, context.getString(R.string.forbidden), Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, stringResource(R.string.forbidden), Toast.LENGTH_SHORT).show()
         return
     }
     val scope = rememberCoroutineScope()
@@ -167,6 +167,11 @@ fun MaterialienScreen(
     var showAiSummaryToRefresh by remember { mutableStateOf(false) }
 
     var recentMaterialPreviews by remember { mutableStateOf<List<RecentMaterial>>(emptyList()) }
+
+    val dateiNichtLesbar = stringResource(R.string.datei_nicht_lesbar_2)
+    val dateiNichtErreichbar = stringResource(R.string.datei_nicht_erreichbar)
+    val ocrFehlgeschlagen = stringResource(R.string.ocr_fehlgeschlagen)
+    val summaryFehlgeschlagen = stringResource(R.string.summary_fehlgeschlagen)
 
     var aiSummaryStates by remember { mutableStateOf<Map<String, AiSummaryState>>(emptyMap()) }
 
@@ -315,7 +320,7 @@ fun MaterialienScreen(
                 try {
                     val rawBytes =
                         context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                            ?: throw Exception(context.getString(R.string.datei_nicht_lesbar_2))
+                            ?: throw Exception(dateiNichtLesbar)
                     val (uploadBytes, uploadName) = compressToJpgIfImage(rawBytes, state.fileName)
                     val path = "$selectedSubject/$uploadName"
                     Config.client.storage.from("school").upload(path, uploadBytes) { upsert = true }
@@ -365,7 +370,7 @@ fun MaterialienScreen(
 
         try {
             val localUri = resolveFileUrl(context, subject, fileName)
-                ?: throw Exception(context.getString(R.string.datei_nicht_erreichbar))
+                ?: throw Exception(dateiNichtErreichbar)
 
             val imgBytes = withContext(Dispatchers.IO) {
                 if (localUri.startsWith("file:")) {
@@ -407,7 +412,7 @@ fun MaterialienScreen(
                 pic = base64,
                 model = MAX_GEMINI,
                 provider = AiProvider.GEMINI
-            ) ?: throw Exception(context.getString(R.string.ocr_fehlgeschlagen))
+            ) ?: throw Exception(ocrFehlgeschlagen)
 
             val summary = sendAiRequest(
                 context = context,
@@ -442,7 +447,7 @@ fun MaterialienScreen(
                     Tonfall: Motivierend, klar, verständlich, auf Augenhöhe, fehlerfrei auf Deutsch. Vermeide verschachtelte Sätze und kognitive Überlastung.
                 """.trimIndent(),
                 provider = AiProvider.GEMINI
-            ) ?: throw Exception(context.getString(R.string.summary_fehlgeschlagen))
+            ) ?: throw Exception(summaryFehlgeschlagen)
 
             aiSummaryStates = aiSummaryStates + (fileKey to AiSummaryState(
                 summary = summary,
