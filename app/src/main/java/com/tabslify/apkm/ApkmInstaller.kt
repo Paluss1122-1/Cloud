@@ -1,5 +1,6 @@
 package com.tabslify.apkm
 
+import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -355,6 +356,7 @@ class ApkmInstaller(private val context: Context) {
      * Bei [PackageInstaller.STATUS_PENDING_USER_ACTION] wird [onNeedUserAction] mit dem
      * System-Bestätigungs-Intent aufgerufen. Bei jedem Fehler wird die Session verworfen (Rollback).
      */
+    @SuppressLint("RequestInstallPackagesPolicy")
     suspend fun install(
         pkg: ApkmPackage,
         selected: List<ApkEntryInfo>,
