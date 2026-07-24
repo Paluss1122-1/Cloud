@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -371,7 +372,7 @@ private fun ReadyContent(
 
             Spacer(Modifier.height(12.dp))
 
-            ExpandableNeonSection(stringResource(R.string.logs_live), stringResource(R.string.eintrage, installer.logs.size), listOf(AccentViolet, AccentCyan)) {
+            ExpandableNeonSection(stringResource(R.string.logs_live), pluralStringResource(R.plurals.eintrage, installer.logs.size, installer.logs.size), listOf(AccentViolet, AccentCyan)) {
                 LogView(installer)
             }
 
@@ -695,7 +696,7 @@ private fun ResultContent(
         Spacer(Modifier.height(16.dp))
         ExpandableNeonSection(
             stringResource(R.string.logs),
-            stringResource(R.string.eintrage, installer.logs.size),
+            pluralStringResource(R.plurals.eintrage, installer.logs.size, installer.logs.size),
             listOf(AccentViolet, AccentCyan),
             initiallyExpanded = !success
         ) {
