@@ -57,7 +57,6 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import com.tabslify.R
-import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.cms
 import com.tabslify.core.objects.tNotify
 import com.tabslify.core.ui.PloppingButton
@@ -231,7 +230,7 @@ fun showDisplayInfo(context: Context) {
         densityDpi <= 480 -> "xxhdpi (480 dpi)"
         else -> "xxxhdpi (≥ $densityDpi dpi)"
     }
-    info.append(context.getString(R.string.dichte_dpi, densityDpi, densityStr))
+    info.append(context.resources.getQuantityString(R.plurals.dichte_dpi, densityDpi, densityDpi, densityStr))
 
     try {
         val widthInches = realWidth / xdpi.toDouble()
@@ -452,53 +451,3 @@ fun NumberInputDialog(
     )
 }
 
-@Composable
-fun LanguageDialog(onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    val current = remember { Config.currentAppLanguage(context) }
-    val options = listOf(
-        "" to stringResource(R.string.language_system),
-        "de" to stringResource(R.string.language_german),
-        "en" to stringResource(R.string.language_english)
-    )
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = Color(0xFF2A2A2A),
-        title = {
-            Text(
-                text = stringResource(R.string.language_title),
-                color = Color.White,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column {
-                options.forEach { (tag, label) ->
-                    val selected = tag == current
-                    TextButton(
-                        onClick = {
-                            Config.setAppLanguage(context, tag)
-                            onDismiss()
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = if (selected) "✓ $label" else label,
-                            color = if (selected) Color(0xFF4CAF50) else Color.White,
-                            fontSize = 16.sp,
-                            textAlign = TextAlign.Start,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.abbrechen), color = Color.Gray)
-            }
-        }
-    )
-}
