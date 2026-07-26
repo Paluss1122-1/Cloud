@@ -54,6 +54,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tabslify.R
+import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.objects.Config
 import com.tabslify.core.ui.AlertDialogTabslify
 import com.tabslify.core.ui.FeedCard
@@ -72,6 +73,7 @@ import kotlinx.serialization.json.Json
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.time.Instant
 import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 
@@ -252,16 +254,16 @@ fun PodcastTab() {
                     break
                 }
                 val factory = DocumentBuilderFactory.newInstance()
-                factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-                factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
-                factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-                factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+                runCatching { factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
+                runCatching { factory.setFeature("http://xml.org/sax/features/external-general-entities", false) }
+                runCatching { factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
+                runCatching { factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true) }
                 runCatching {
                     factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "")
                     factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "")
                 }
-                factory.isXIncludeAware = false
-                factory.isExpandEntityReferences = false
+                runCatching { factory.isXIncludeAware = false }
+                runCatching { factory.isExpandEntityReferences = false }
                 val builder = factory.newDocumentBuilder()
                 builder.parse(conn.inputStream)
             }
@@ -301,8 +303,14 @@ fun PodcastTab() {
                 }
             }.sortedByDescending { it.publishDate }
             episodes = episodes + (feedUrl to list)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             episodes = episodes + (feedUrl to emptyList())
+            errorInsert(
+                "loadPodcastEpisodes",
+                "Fehler beim Laden der Episoden für $feedUrl: ${e.message}",
+                Instant.now().toString(),
+                "ERROR"
+            )
         } finally {
             loadingEpisodes = null
         }
