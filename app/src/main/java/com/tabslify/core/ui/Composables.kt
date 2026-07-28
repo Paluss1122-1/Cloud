@@ -6,6 +6,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,6 +15,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -68,6 +70,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -85,6 +88,55 @@ import com.tabslify.R
 import com.tabslify.tabs.mediaplayer.Episode
 import com.tabslify.tabs.mediaplayer.PodcastFeed
 import kotlinx.coroutines.launch
+import java.util.Calendar
+
+enum class AppBgScrim { STRONG, MEDIUM, LIGHT }
+
+@Composable
+fun AppBackground(
+    modifier: Modifier = Modifier,
+    scrim: AppBgScrim = AppBgScrim.MEDIUM,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val isDay = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) in 11..16 }
+    val bgPicture = if (isDay) R.drawable.day else R.drawable.night
+    val scrimBrush = remember(scrim, isDay) {
+        when (scrim) {
+            AppBgScrim.STRONG -> if (isDay) {
+                Brush.verticalGradient(listOf(BgScrimTop.copy(alpha = 0.92f), BgScrimBottom.copy(alpha = 0.92f)))
+            } else {
+                Brush.verticalGradient(listOf(BgScrimTop.copy(alpha = 0.70f), BgScrimBottom.copy(alpha = 0.85f)))
+            }
+
+            AppBgScrim.MEDIUM -> if (isDay) {
+                Brush.verticalGradient(listOf(APP_COLOR.copy(alpha = 0.85f), APP_BLUE.copy(alpha = 0.45f)))
+            } else {
+                Brush.verticalGradient(listOf(APP_COLOR.copy(alpha = 0.70f), Color(0xFF001A93).copy(alpha = 0.70f)))
+            }
+
+            AppBgScrim.LIGHT -> if (isDay) {
+                Brush.verticalGradient(listOf(APP_COLOR.copy(alpha = 0.75f), Color(0xFF001A93).copy(alpha = 0.75f)))
+            } else {
+                Brush.verticalGradient(listOf(APP_COLOR.copy(alpha = 0.55f), Color(0xFF001A93).copy(alpha = 0.75f)))
+            }
+        }
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(id = bgPicture),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(scrimBrush)
+        )
+        content()
+    }
+}
 
 fun parseCalloutType(content: String): Pair<CalloutType?, String> {
     val calloutPattern = Regex("^\\s*\\[!(\\w+)]\\s*(.*)$", RegexOption.DOT_MATCHES_ALL)
