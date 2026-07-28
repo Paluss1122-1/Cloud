@@ -480,10 +480,8 @@ fun PrivateTabslifyApp(
             }
         }
     } else {
-        Box(
+        AppBackground(
             modifier = Modifier
-                .fillMaxSize()
-                .background(APP_COLOR.copy(0.8f))
                 .then(
                     if (gesturesEnabled) {
                         Modifier.pointerInput(navigationState.canNavigateBack) {
@@ -507,26 +505,9 @@ fun PrivateTabslifyApp(
                     } else {
                         Modifier
                     }
-                )
+                ),
+            scrim = AppBgScrim.STRONG
         ) {
-            val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
-            val bgpicture = remember {
-                when (currentHour) {
-                    in 11..16 -> R.drawable.day
-                    else -> R.drawable.night
-                }
-            }
-            Image(
-                painter = painterResource(id = bgpicture),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(APP_COLOR.copy(0.5f))
-            )
             Scaffold(
                 modifier = Modifier
                     .fillMaxSize()
@@ -603,7 +584,7 @@ fun PrivateTabslifyApp(
                     modifier = Modifier
                         .padding(
                             when (selectedMenuItem) {
-                                MenuItem.Vocabs, MenuItem.MEDIAPLAYERTAB -> PaddingValues(0.dp)
+                                MenuItem.Vocabs, MenuItem.MEDIAPLAYERTAB, MenuItem.HEISE_NEWS, MenuItem.AITAB -> PaddingValues(0.dp)
                                 MenuItem.AUTHENTICATOR -> PaddingValues(top = paddingValues.calculateTopPadding())
                                 else -> paddingValues
                             }
@@ -612,7 +593,13 @@ fun PrivateTabslifyApp(
                 ) {
                     when (selectedMenuItem) {
                         MenuItem.WEATHER -> WeatherTabContent(viewModel)
-                        MenuItem.HEISE_NEWS -> HeiseNewsTabContent(viewModel = viewModel)
+                        MenuItem.HEISE_NEWS -> HeiseNewsTabContent(
+                            viewModel = viewModel,
+                            paddingValues = paddingValues
+                        )
+                        MenuItem.AITAB -> AITabContent(
+                            paddingValues = paddingValues
+                        )
                         MenuItem.BROWSER -> BrowserTabContent(
                             url = webViewUrl,
                             onUrlChange = { webViewUrl = it },
