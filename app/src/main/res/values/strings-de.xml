@@ -133,6 +133,7 @@
     <string name="access_coarse_location_access_fine">ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1020 | LandingPage.kt:1124 -->
     <string name="standortbasierte_wettervorhersage_im_weathertab">Standortbasierte Wettervorhersage im WeatherTab</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1021 -->
     <string name="exploretab_explorelocationtracker_standortverfolgung_und_geofencing">ExploreTab &amp; ExploreLocationTracker: Standortverfolgung und Geofencing</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1022 -->
+    <string name="exploretab_activityrecognition_erkennung_des_verkehrsmittels">ExploreTab &amp; ActivityRecognition: Erkennung des Verkehrsmittels (zu Fuß/Rad/Auto)</string>
     <string name="shownetwerkinfo_anzeige_der_wlan_ssid">showNetwerkInfo: Anzeige der WLAN-SSID</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1023 -->
     <string name="quiethoursnotificationservice_test_overlay_fur_youtube">QuietHoursNotificationService: Test-Overlay für YouTube</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1026 -->
     <string name="mediaplayerservice_medienwiedergabe_im_vordergrund">MediaPlayerService: Medienwiedergabe im Vordergrund</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1029 -->
@@ -1623,6 +1624,8 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="wahle_einen_modus">Wähle einen Modus</string> <!-- app/src/main/java/com/tabslify/tabs/aitab/ViewModel.kt:276 -->
     <string name="aufnahme_lauft">🎙️ Aufnahme läuft</string> <!-- app/src/main/java/com/tabslify/tabs/audiorecordertab/AudioForegroundService.kt:75 -->
     <string name="audio_aufnahme">Audio Aufnahme</string> <!-- app/src/main/java/com/tabslify/tabs/audiorecordertab/AudioForegroundService.kt:88 -->
+    <string name="explore_tracking_lauft">🗺️ Tabslify verfolgt deinen Tag</string>
+    <string name="explore_tracking_kanal">Standort-Tracking</string>
     <string name="mikrofonzugriff_benotigt">Mikrofonzugriff benötigt</string> <!-- app/src/main/java/com/tabslify/tabs/audiorecordertab/AudioRecorderTab.kt:68 -->
     <string name="dieser_tab_benotigt_zugriff_auf">Dieser Tab benötigt Zugriff auf das Mikrofon, um Aufnahmen erstellen zu können.\n\n</string> <!-- app/src/main/java/com/tabslify/tabs/audiorecordertab/AudioRecorderTab.kt:69 -->
     <string name="bitte_erlaube_den_zugriff_in">Bitte erlaube den Zugriff in den App-Einstellungen:\n</string> <!-- app/src/main/java/com/tabslify/tabs/audiorecordertab/AudioRecorderTab.kt:70 -->
@@ -1813,6 +1816,16 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="erkundet">🌍 Erkundet</string> <!-- app/src/main/java/com/tabslify/tabs/exploretab/ExploreTabContent.kt:161 -->
     <string name="heute_2">📅 Heute</string> <!-- app/src/main/java/com/tabslify/tabs/exploretab/ExploreTabContent.kt:162 -->
     <string name="tracker_status">📡 Tracker Status</string> <!-- app/src/main/java/com/tabslify/tabs/exploretab/ExploreTabContent.kt:173 -->
+    <string name="gestern">Gestern</string>
+    <string name="strecke">🛣️ Strecke</string>
+    <string name="unterwegs">🚗 Unterwegs</string>
+    <string name="stopps">📍 Stopps</string>
+    <string name="modus_auto">Auto</string>
+    <string name="modus_fahrrad">Fahrrad</string>
+    <string name="modus_zu_fuss">Zu Fuß</string>
+    <string name="modus_unbekannt">Unbekannt</string>
+    <string name="modus_aufenthalt">Aufenthalt</string>
+    <string name="aktivitaet">Aktivität</string>
     <string name="tile_loschen">Tile löschen</string> <!-- app/src/main/java/com/tabslify/tabs/exploretab/ExploreTabContent.kt:245 -->
     <string name="diesen_bereich_als_unbesucht_markieren">Diesen Bereich als unbesucht markieren?</string> <!-- app/src/main/java/com/tabslify/tabs/exploretab/ExploreTabContent.kt:246 -->
     <string name="letzte_position">Letzte Position</string> <!-- app/src/main/java/com/tabslify/tabs/exploretab/ExploreTabContent.kt:303 -->
@@ -2112,4 +2125,18 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="virustotal_harmlos">Harmlos</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
     <string name="virustotal_unentdeckt">Unentdeckt</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
     <string name="virustotal_bericht_offnen">Vollständigen Bericht öffnen</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_scan_abgeschlossen">VirusTotal Scan abgeschlossen</string>
+    <string name="virustotal_scan_ergebnis">Scan für %1$s beendet. %2$d/%3$d als bösartig eingestuft.</string>
+    <string name="cloud_backup_title">☁️ Cloud-Backup (verschlüsselt)</string>
+    <string name="cloud_backup_now">Jetzt sichern</string>
+    <string name="cloud_backup_restore">Wiederherstellen</string>
+    <string name="cloud_backup_last">Letztes Backup:</string>
+    <string name="cloud_backup_never">Noch kein Backup vorhanden</string>
+    <string name="cloud_backup_done">Backup gesichert</string>
+    <string name="cloud_backup_failed">Backup fehlgeschlagen</string>
+    <string name="cloud_backup_no_master">Erst Masterpasswort festlegen</string>
+    <string name="cloud_backup_wrong_pw">Falsches Masterpasswort oder beschädigtes Backup</string>
+    <string name="cloud_backup_restore_confirm">Dieses Backup wird über die aktuellen Einstellungen gelegt. Vorher wird automatisch eine Sicherheitskopie angelegt. Fortfahren?</string>
+    <string name="cloud_backup_restored">Wiederhergestellt – App ggf. neu starten</string>
+    <string name="cloud_backup_shrink_warn">Backup übersprungen: verdächtig wenige Daten</string>
 </resources>
