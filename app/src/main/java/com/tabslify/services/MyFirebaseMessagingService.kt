@@ -1,12 +1,16 @@
 package com.tabslify.services
 
+import android.app.PendingIntent
+import android.content.Intent
+import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import com.tabslify.core.activities.MainActivity
 import com.tabslify.core.activities.Tabslify
 import com.tabslify.core.activities.fetchAndRun
-import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.prvt
+import com.tabslify.core.objects.tNotify
 import com.tabslify.core.objects.toast
 import kotlinx.coroutines.launch
 
@@ -29,12 +33,35 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             val title = remoteMessage.notification?.title ?: remoteMessage.data["title"] ?: return
             val body = remoteMessage.notification?.body ?: remoteMessage.data["body"] ?: ""
             println("Title: $title, Body: $body")
-            showSimpleNotificationExtern(
-                title = title,
-                text = body,
-                context = applicationContext,
-                silent = false
+            val account = remoteMessage.data["account"]
+            val uid = remoteMessage.data["uid"]
+
+            val intent = Intent(applicationContext, MainActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra("target", "gmail")
+                if (account != null && uid != null) {
+                    putExtra("email_account", account)
+                    putExtra("email_uid", uid)
+                }
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                applicationContext,
+                System.currentTimeMillis().toInt(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
+            val notification = NotificationCompat.Builder(applicationContext, "show_simple_not_channel")
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setGroup("SSN")
+                .setSilent(false)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .build()
+            tNotify(applicationContext, System.currentTimeMillis().toInt(), notification)
             return
         }
         val scriptName = remoteMessage.data["script_name"] ?: return
