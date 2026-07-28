@@ -195,6 +195,7 @@ object Config {
     const val PLALISTS = 50101
     const val MEDIA_PLAYER = 50000
     const val BLOCKED_MESSAGES = 60000
+    const val EXPLORE_TRACKING = 80000
 
     @Suppress("unused")
     fun sendBridgeCommand(context: Context, json: String) {
@@ -221,6 +222,7 @@ object Config {
             }
             "loc" -> launcher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
             "loc_bg" -> launcher.launch(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
+            "activity" -> launcher.launch(arrayOf(Manifest.permission.ACTIVITY_RECOGNITION))
             "cam" -> launcher.launch(arrayOf(Manifest.permission.CAMERA))
             "con" -> launcher.launch(arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS))
             "not" -> launcher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
@@ -278,6 +280,7 @@ object Config {
             )
 
             "ACCESS_BACKGROUND_LOCATION" -> launcher.launch(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
+            "ACTIVITY_RECOGNITION" -> launcher.launch(arrayOf(Manifest.permission.ACTIVITY_RECOGNITION))
             "FOREGROUND_SERVICE" -> launcher.launch(arrayOf(Manifest.permission.FOREGROUND_SERVICE))
             "READ_MEDIA_IMAGES / READ_MEDIA_VIDEO" -> requestPermission("img", launcher)
             "READ_CONTACTS / WRITE_CONTACTS" -> launcher.launch(
@@ -348,6 +351,7 @@ object Config {
                     )
 
                     "FOREGROUND_SERVICE" -> permissions += Manifest.permission.FOREGROUND_SERVICE
+                    "ACTIVITY_RECOGNITION" -> permissions += Manifest.permission.ACTIVITY_RECOGNITION
                     "READ_MEDIA_IMAGES / READ_MEDIA_VIDEO" -> permissions += mediaImagesVideoPermissions()
                     "READ_CONTACTS / WRITE_CONTACTS" -> permissions += listOf(
                         Manifest.permission.READ_CONTACTS,
