@@ -14,6 +14,7 @@ import android.service.autofill.FillResponse
 import android.service.autofill.InlinePresentation
 import android.service.autofill.Presentations
 import android.service.autofill.SaveCallback
+import android.service.autofill.SaveInfo
 import android.service.autofill.SaveRequest
 import android.text.InputType
 import android.util.Log
@@ -25,6 +26,7 @@ import android.widget.inline.InlinePresentationSpec
 import androidx.autofill.inline.v1.InlineSuggestionUi
 import androidx.core.net.toUri
 import com.tabslify.R
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 
 class TabslifyAutofillService : AutofillService() {
@@ -47,28 +49,38 @@ class TabslifyAutofillService : AutofillService() {
         }
 
         val domain = extractRequestDomain(structure)
+        val targetPackageName = structure.activityComponent.packageName
         Log.d(
             TAG,
-            "AutoFill request – domain: $domain  pkg: ${structure.activityComponent.packageName}"
+            "AutoFill request – domain: $domain  pkg: $targetPackageName"
         )
 
         val inlineRequest = request.inlineSuggestionsRequest
         val responseBuilder = FillResponse.Builder()
         var hasDataset = false
+        var presentationIndex = 0
 
         if (loginFields.usernameId != null || loginFields.passwordId != null) {
             val db = PasswordDatabase.getDatabase(applicationContext)
-            val entries = runBlocking {
-                if (domain.isNotEmpty()) db.passwordDao().findByDomain(domain)
-                else db.passwordDao().search(structure.activityComponent.packageName)
+            val entries = runBlocking(Dispatchers.IO) {
+                if (domain.isNotEmpty()) {
+                    db.passwordDao().findByDomain(domain)
+                } else {
+                    val tokens = packageTokens(targetPackageName)
+                    if (tokens.isEmpty()) {
+                        db.passwordDao().search(targetPackageName)
+                    } else {
+                        tokens.flatMap { db.passwordDao().search(it) }.distinctBy { it.id }
+                    }
+                }
             }
-            entries.take(5).forEachIndexed { index, entry ->
+            entries.take(5).forEach { entry ->
                 val ds = Dataset.Builder()
 
                 loginFields.usernameId?.let { id ->
                     val field = Field.Builder()
                         .setValue(AutofillValue.forText(entry.username))
-                        .setPresentations(buildPresentations(entry, index, inlineRequest))
+                        .setPresentations(buildPresentations(entry, presentationIndex, inlineRequest))
                         .build()
                     ds.setField(id, field)
                 }
@@ -76,28 +88,37 @@ class TabslifyAutofillService : AutofillService() {
                 loginFields.passwordId?.let { id ->
                     val field = Field.Builder()
                         .setValue(AutofillValue.forText(entry.password))
-                        .setPresentations(buildPresentations(entry, index, inlineRequest))
+                        .setPresentations(buildPresentations(entry, presentationIndex, inlineRequest))
                         .build()
                     ds.setField(id, field)
                 }
 
                 responseBuilder.addDataset(ds.build())
                 hasDataset = true
+                presentationIndex++
             }
         }
 
         loginFields.otpId?.let { otpFieldId ->
             val twoFaDb = TwoFADatabase.getDatabase(applicationContext)
-            val twoFaEntries = runBlocking { twoFaDb.twoFADao().getAll() }
+            val twoFaEntries = runBlocking(Dispatchers.IO) { twoFaDb.twoFADao().getAll() }
+            val tokens = packageTokens(targetPackageName)
             val matched = twoFaEntries.filter { entry ->
-                domain.isNotEmpty() && (
-                        entry.url.contains(domain, ignoreCase = true) ||
-                                entry.name.lowercase().contains(domain.substringBefore(".")) ||
-                                domain.contains(entry.name.lowercase().replace(" ", ""))
-                        )
+                if (entry.secret.isBlank() || entry.name.isBlank()) return@filter false
+                val nameKey = entry.name.lowercase().replace(" ", "")
+                if (domain.isNotEmpty()) {
+                    entry.url.contains(domain, ignoreCase = true) ||
+                            nameKey.contains(domain.substringBefore(".")) ||
+                            domain.contains(nameKey)
+                } else {
+                    tokens.any { token ->
+                        entry.url.contains(token, ignoreCase = true) || nameKey.contains(token)
+                    }
+                }
             }
-            matched.take(3).forEachIndexed { index, entry ->
+            matched.take(3).forEach { entry ->
                 val code = TotpGenerator.generateTOTP(entry.secret)
+                if (code == "ERROR" || code.isBlank()) return@forEach
                 val field = Field.Builder()
                     .setValue(AutofillValue.forText(code))
                     .setPresentations(
@@ -108,24 +129,88 @@ class TabslifyAutofillService : AutofillService() {
                                 password = "",
                                 totpSecret = null
                             ),
-                            index, inlineRequest
+                            presentationIndex, inlineRequest
                         )
                     )
                     .build()
                 val ds = Dataset.Builder().setField(otpFieldId, field)
                 responseBuilder.addDataset(ds.build())
                 hasDataset = true
+                presentationIndex++
             }
         }
 
-        if (!hasDataset) {
+        val saveIds = listOfNotNull(loginFields.usernameId, loginFields.passwordId)
+        var hasSaveInfo = false
+        if (loginFields.passwordId != null && saveIds.isNotEmpty()) {
+            var saveType = SaveInfo.SAVE_DATA_TYPE_PASSWORD
+            if (loginFields.usernameId != null) saveType = saveType or SaveInfo.SAVE_DATA_TYPE_USERNAME
+            responseBuilder.setSaveInfo(
+                SaveInfo.Builder(saveType, saveIds.toTypedArray()).build()
+            )
+            hasSaveInfo = true
+        }
+
+        if (!hasDataset && !hasSaveInfo) {
             callback.onSuccess(null); return
         }
         callback.onSuccess(responseBuilder.build())
     }
 
     override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
+        val structure = request.fillContexts.last().structure
+        val fields = findLoginFields(structure)
+        val values = collectValues(structure, setOfNotNull(fields.usernameId, fields.passwordId))
+        val username = fields.usernameId?.let { values[it] }?.trim().orEmpty()
+        val password = fields.passwordId?.let { values[it] }?.trim().orEmpty()
+        if (password.isEmpty()) {
+            callback.onSuccess(); return
+        }
+
+        val domain = extractRequestDomain(structure)
+        val targetPackageName = structure.activityComponent.packageName
+        val tokens = packageTokens(targetPackageName)
+        val label = if (domain.isNotEmpty()) domain else tokens.firstOrNull() ?: targetPackageName
+        val urlValue = if (domain.isNotEmpty()) domain else targetPackageName
+
+        runBlocking(Dispatchers.IO) {
+            val dao = PasswordDatabase.getDatabase(applicationContext).passwordDao()
+            val existing = (
+                    if (domain.isNotEmpty()) dao.findByDomain(domain)
+                    else tokens.flatMap { dao.search(it) }.distinctBy { it.id }
+                    ).firstOrNull { it.username.equals(username, ignoreCase = true) }
+            if (existing != null) {
+                dao.update(existing.copy(password = password, updatedAt = System.currentTimeMillis()))
+            } else {
+                dao.insert(
+                    PasswordEntry(
+                        name = label,
+                        url = urlValue,
+                        username = username,
+                        password = password,
+                        totpSecret = null
+                    )
+                )
+            }
+        }
         callback.onSuccess()
+    }
+
+    private fun collectValues(
+        structure: AssistStructure,
+        ids: Set<AutofillId>
+    ): Map<AutofillId, String> {
+        val out = HashMap<AutofillId, String>()
+        fun walk(node: AssistStructure.ViewNode) {
+            val id = node.autofillId
+            val v = node.autofillValue
+            if (id != null && id in ids && v != null && v.isText) {
+                out[id] = v.textValue.toString()
+            }
+            for (i in 0 until node.childCount) walk(node.getChildAt(i))
+        }
+        for (i in 0 until structure.windowNodeCount) walk(structure.getWindowNodeAt(i).rootViewNode)
+        return out
     }
 
     data class LoginFields(
@@ -145,26 +230,6 @@ class TabslifyAutofillService : AutofillService() {
             val hint = node.hint?.lowercase() ?: ""
             val idEntry = node.idEntry?.lowercase() ?: ""
 
-            val isPassword = (
-                    hints?.any { h ->
-                        h.contains(
-                            "password",
-                            true
-                        ) || h == "current-password" || h == "new-password"
-                    } == true
-                            || (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_PASSWORD
-                            || (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
-                            || (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
-                            || hint.contains("passwort") || hint.contains("password") || hint.contains(
-                        "pin"
-                    )
-                            || idEntry.contains("password") || idEntry.contains("passwd") || idEntry.contains(
-                        "pwd"
-                    )
-                    )
-
-            if (isPassword && node.autofillId != null) passwordId = node.autofillId
-
             val isOtp = (
                     hints?.any { h ->
                         h.contains("one-time-code", true) || h.contains(
@@ -174,15 +239,29 @@ class TabslifyAutofillService : AutofillService() {
                     } == true
                             || hint.contains("otp") || hint.contains("einmal") || hint.contains("token") || hint.contains(
                         "authenticator"
-                    )
+                    ) || hint.contains("pin")
                             || idEntry.contains("otp") || idEntry.contains("totp") || idEntry.contains(
                         "token"
-                    ) || idEntry.contains("mfa") || idEntry.contains("tfa")
+                    ) || idEntry.contains("mfa") || idEntry.contains("tfa") || idEntry.contains("pin")
                     )
 
-            if (isOtp && !isPassword && node.autofillId != null) otpId = node.autofillId
+            val isPassword = !isOtp && (
+                    hints?.any { h ->
+                        h.contains(
+                            "password",
+                            true
+                        ) || h == "current-password" || h == "new-password"
+                    } == true
+                            || (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_PASSWORD
+                            || (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+                            || (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                            || hint.contains("passwort") || hint.contains("password")
+                            || idEntry.contains("password") || idEntry.contains("passwd") || idEntry.contains(
+                        "pwd"
+                    )
+                    )
 
-            val isUsername = (
+            val isUsername = !isOtp && !isPassword && (
                     hints?.any { h ->
                         h.contains("username", true) || h.contains(
                             "email",
@@ -198,8 +277,11 @@ class TabslifyAutofillService : AutofillService() {
                             || (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS
                     )
 
-            if (isUsername && !isPassword && !isOtp && node.autofillId != null) usernameId =
-                node.autofillId
+            if (node.autofillId != null) {
+                if (isOtp && otpId == null) otpId = node.autofillId
+                if (isPassword && passwordId == null) passwordId = node.autofillId
+                if (isUsername && usernameId == null) usernameId = node.autofillId
+            }
 
             for (i in 0 until node.childCount) searchNode(node.getChildAt(i))
         }
@@ -211,14 +293,38 @@ class TabslifyAutofillService : AutofillService() {
         return LoginFields(usernameId, passwordId, otpId)
     }
 
+    private val multiPartTlds = setOf(
+        "co.uk", "org.uk", "gov.uk", "ac.uk",
+        "co.jp", "co.kr", "co.in", "co.nz",
+        "com.au", "com.br", "com.cn"
+    )
+
+    private fun rootDomain(host: String): String {
+        val labels = host.split(".")
+        if (labels.size <= 2) return host
+        val lastTwo = labels.takeLast(2).joinToString(".")
+        return if (lastTwo in multiPartTlds) labels.takeLast(3).joinToString(".") else lastTwo
+    }
+
     private fun extractDomain(raw: String): String {
         return try {
             val normalized = if (raw.contains("://")) raw else "https://$raw"
             val host = normalized.toUri().host ?: return ""
-            host.lowercase().removePrefix("www.").trim()
+            rootDomain(host.lowercase().removePrefix("www.").trim())
         } catch (_: Exception) {
             ""
         }
+    }
+
+    private val packageStopwords = setOf(
+        "com", "org", "net", "io", "app", "apps", "android",
+        "mobile", "inc", "co", "www", "client", "prod"
+    )
+
+    private fun packageTokens(pkg: String): List<String> {
+        return pkg.lowercase()
+            .split(".")
+            .filter { it.isNotBlank() && it !in packageStopwords && it.length >= 3 }
     }
 
     private fun extractRequestDomain(structure: AssistStructure): String {
