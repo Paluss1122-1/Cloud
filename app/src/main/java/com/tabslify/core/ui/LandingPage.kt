@@ -141,6 +141,10 @@ import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.client
 import com.tabslify.core.objects.Config.realDevice
 import com.tabslify.core.objects.PasswordStorage
+import com.tabslify.core.objects.PrefsBackup
+import com.tabslify.core.objects.BackupOutcome
+import com.tabslify.core.objects.BackupEntry
+import com.tabslify.core.objects.toast
 import com.tabslify.core.objects.prvt
 import com.tabslify.quicksettingsfunctions.ChargingTrackerService
 import com.tabslify.quicksettingsfunctions.startBatteryWorker
@@ -148,6 +152,8 @@ import com.tabslify.quicksettingsfunctions.stopBatteryWorker
 import com.tabslify.services.QuietHoursNotificationService
 import com.tabslify.services.WhatsAppNotificationListener
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
+import com.tabslify.tabs.virustotal.VirusTotalScanBar
+import com.tabslify.tabs.virustotal.pendingVirusTotalReport
 import dev.chrisbanes.haze.HazeProgressive
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
@@ -309,6 +315,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                 "aitab" -> MenuItem.AITAB
                 "apkm" -> MenuItem.APKM_INSTALLER
                 "gmail" -> MenuItem.GMAIL
+                "virustotal" -> MenuItem.VIRUSTOTAL
                 else -> null
             }
             if (selectedMenuItem != null && selectedMenuItem != MenuItem.APKM_INSTALLER) {
@@ -350,6 +357,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                     "weather" -> MenuItem.WEATHER
                     "apkm" -> MenuItem.APKM_INSTALLER
                     "gmail" -> MenuItem.GMAIL
+                    "virustotal" -> MenuItem.VIRUSTOTAL
                     else -> null
                 }
             }
@@ -366,6 +374,16 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                     }
                 }
             }
+
+            VirusTotalScanBar(
+                onOpenReport = { id ->
+                    pendingVirusTotalReport = id
+                    selectedMenuItem = MenuItem.VIRUSTOTAL
+                    saveRecentTab(context, MenuItem.VIRUSTOTAL)
+                    if (!hasLoadedApp) hasLoadedApp = true
+                },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         }
 
         Box(
@@ -596,25 +614,7 @@ fun CoordinatesSetupScreen(modifier: Modifier, onCoordinatesSaved: (Double, Doub
 
 @Composable
 fun SupabaseLoadingScreen() {
-    Box(modifier = Modifier.fillMaxSize()) {
-        Image(
-            painter = painterResource(id = R.drawable.night),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            APP_COLOR.copy(alpha = 0.55f),
-                            Color(0xFF001A93).copy(alpha = 0.75f)
-                        )
-                    )
-                )
-        )
+    AppBackground(scrim = AppBgScrim.LIGHT) {
         CircularProgressIndicator(
             color = Color.White,
             modifier = Modifier.align(Alignment.Center)
@@ -630,26 +630,7 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
     var loading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Image(
-            painter = painterResource(id = R.drawable.night),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            APP_COLOR.copy(alpha = 0.55f),
-                            Color(0xFF001A93).copy(alpha = 0.75f)
-                        )
-                    )
-                )
-        )
-
+    AppBackground(scrim = AppBgScrim.LIGHT) {
         CompositionLocalProvider(LocalContentColor provides Color.White) {
             Column(
                 modifier = Modifier
@@ -789,40 +770,9 @@ fun LandingPage(
         }
     }
 
-    val gradient = remember {
-        val colors = when (currentHour) {
-            in 11..16 -> listOf(
-                APP_COLOR.copy(alpha = 0.85f),
-                Color(0xFF001A93).copy(alpha = 0.35f)
-            )
-
-            else -> listOf(
-                APP_COLOR.copy(alpha = 0.7f),
-                Color(0xFF001A93).copy(alpha = 0.7f)
-            )
-        }
-        Brush.linearGradient(colors = colors, start = Offset.Zero, end = Offset.Infinite)
-    }
     val txtcolors = Color.White
-    val bgpicture = remember {
-        when (currentHour) {
-            in 11..16 -> R.drawable.day; else -> R.drawable.night
-        }
-    }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Image(
-            painter = painterResource(id = bgpicture),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(gradient)
-        )
-
+    AppBackground(scrim = AppBgScrim.MEDIUM) {
         CompositionLocalProvider(LocalContentColor provides txtcolors) {
             Column(
                 modifier = Modifier
@@ -1102,6 +1052,8 @@ fun isPermissionGranted(context: Context, key: String): Boolean {
 
         "ACCESS_BACKGROUND_LOCATION" -> granted(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
 
+        "ACTIVITY_RECOGNITION" -> granted(Manifest.permission.ACTIVITY_RECOGNITION)
+
         "SYSTEM_ALERT_WINDOW" -> Settings.canDrawOverlays(context)
 
         "FOREGROUND_SERVICE" -> granted(Manifest.permission.FOREGROUND_SERVICE)
@@ -1188,6 +1140,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
     val location2 =
         stringResource(R.string.exploretab_explorelocationtracker_standortverfolgung_und_geofencing)
     val location3 = stringResource(R.string.shownetwerkinfo_anzeige_der_wlan_ssid)
+    val activityRecognition1 = stringResource(R.string.exploretab_activityrecognition_erkennung_des_verkehrsmittels)
     val systemAlertWindow1 =
         stringResource(R.string.quiethoursnotificationservice_test_overlay_fur_youtube)
     val foregroundService1 =
@@ -1227,6 +1180,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
         location1,
         location2,
         location3,
+        activityRecognition1,
         systemAlertWindow1,
         foregroundService1,
         foregroundService2,
@@ -1265,6 +1219,9 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
             ),
             "ACCESS_BACKGROUND_LOCATION" to listOf(
                 location2
+            ),
+            "ACTIVITY_RECOGNITION" to listOf(
+                activityRecognition1
             ),
             "SYSTEM_ALERT_WINDOW" to listOf(
                 systemAlertWindow1
@@ -1424,6 +1381,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                     add("POST_NOTIFICATIONS")
                     add("ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION")
                     add("ACCESS_BACKGROUND_LOCATION")
+                    add("ACTIVITY_RECOGNITION")
                     add("SYSTEM_ALERT_WINDOW")
                     add("FOREGROUND_SERVICE")
                     add("READ_MEDIA_IMAGES / READ_MEDIA_VIDEO")
@@ -1472,6 +1430,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                 PermissionButton("POST_NOTIFICATIONS")
                 PermissionButton("ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION")
                 PermissionButton("ACCESS_BACKGROUND_LOCATION")
+                PermissionButton("ACTIVITY_RECOGNITION")
                 PermissionButton("SYSTEM_ALERT_WINDOW")
                 PermissionButton("FOREGROUND_SERVICE")
                 PermissionButton("READ_MEDIA_IMAGES / READ_MEDIA_VIDEO")
@@ -1501,15 +1460,10 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                     headerHeightDp = with(density) { it.size.height.toDp() }
                 }
         ) {
-            // Blur-Flaeche: liegt HINTER dem Text. Traegt den progressiven Blur
-            // (funktioniert beim Scrollen) UND eine weiche obere Kante.
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    // 1) In einen Offscreen-Layer rendern, damit die DstIn-Maske
-                    //    NUR diese Blur-Ebene betrifft (nicht Titel/Text).
                     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                    // 2) Progressiver Blur bleibt exakt wie gehabt.
                     .hazeEffect(
                         state = hazeState,
                         style = HazeStyle(
@@ -1525,8 +1479,6 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                             preferPerformance = true
                         )
                     }
-                    // 3) Weiche obere Kante: Alpha der Blur-Ebene 0 -> 1 ueber ~24dp.
-                    //    Das ersetzt die (bei progressive ignorierte) mask-Funktion.
                     .drawWithContent {
                         drawContent()
                         val fadePx = 24.dp.toPx()
@@ -1689,6 +1641,23 @@ fun SettingsFrame(
     var animatePermissionInfo by remember { mutableStateOf(false) }
     var showCoordinatesEdit by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
+
+    val scope = rememberCoroutineScope()
+    var backupLastMs by remember { mutableStateOf(prefs.getLong("last_prefs_backup_ms", 0L)) }
+    var backupBusy by remember { mutableStateOf(false) }
+    var showRestoreList by remember { mutableStateOf(false) }
+    var backupList by remember { mutableStateOf<List<BackupEntry>>(emptyList()) }
+    var restoreTarget by remember { mutableStateOf<BackupEntry?>(null) }
+
+    fun outcomeMessage(outcome: BackupOutcome): String = when (outcome) {
+        BackupOutcome.DONE -> context.getString(R.string.cloud_backup_done)
+        BackupOutcome.NO_MASTER -> context.getString(R.string.cloud_backup_no_master)
+        BackupOutcome.SHRINK_BLOCKED -> context.getString(R.string.cloud_backup_shrink_warn)
+        BackupOutcome.WRONG_PASSWORD -> context.getString(R.string.cloud_backup_wrong_pw)
+        BackupOutcome.CORRUPT -> context.getString(R.string.cloud_backup_wrong_pw)
+        BackupOutcome.EMPTY -> context.getString(R.string.cloud_backup_failed)
+        BackupOutcome.FAILED -> context.getString(R.string.cloud_backup_failed)
+    }
 
     BackHandler {
         if (showCoordinatesEdit) {
@@ -1962,6 +1931,153 @@ fun SettingsFrame(
                             }
                         }
                     }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                NeonBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    neonColors = listOf(Color(0xFF00FFAA), Color(0xFFFFB300)),
+                    backgroundAlpha = 0.15f
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
+                        Text(
+                            text = stringResource(R.string.cloud_backup_title),
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = when {
+                                Config.masterPassword.isBlank() ->
+                                    stringResource(R.string.cloud_backup_no_master)
+                                backupLastMs > 0L ->
+                                    stringResource(R.string.cloud_backup_last) + " " +
+                                        android.text.format.DateUtils
+                                            .getRelativeTimeSpanString(backupLastMs)
+                                else -> stringResource(R.string.cloud_backup_never)
+                            },
+                            color = Color.White.copy(alpha = 0.6f),
+                            fontSize = 12.sp
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    if (backupBusy) return@Button
+                                    backupBusy = true
+                                    scope.launch {
+                                        val outcome =
+                                            PrefsBackup.backupNow(context, force = true)
+                                        if (outcome == BackupOutcome.DONE) {
+                                            backupLastMs =
+                                                prefs.getLong("last_prefs_backup_ms", 0L)
+                                        }
+                                        toast(context, outcomeMessage(outcome))
+                                        backupBusy = false
+                                    }
+                                },
+                                enabled = !backupBusy && Config.masterPassword.isNotBlank(),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(stringResource(R.string.cloud_backup_now))
+                            }
+                            Button(
+                                onClick = {
+                                    if (backupBusy) return@Button
+                                    backupBusy = true
+                                    scope.launch {
+                                        backupList = PrefsBackup.listBackups()
+                                        backupBusy = false
+                                        showRestoreList = true
+                                    }
+                                },
+                                enabled = !backupBusy && Config.masterPassword.isNotBlank(),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(stringResource(R.string.cloud_backup_restore))
+                            }
+                        }
+                    }
+                }
+
+                if (showRestoreList) {
+                    AlertDialog(
+                        onDismissRequest = { showRestoreList = false },
+                        title = { Text(stringResource(R.string.cloud_backup_restore)) },
+                        text = {
+                            if (backupList.isEmpty()) {
+                                Text(stringResource(R.string.cloud_backup_never))
+                            } else {
+                                Column(
+                                    modifier = Modifier.verticalScroll(rememberScrollState())
+                                ) {
+                                    val fmt = java.text.SimpleDateFormat(
+                                        "dd.MM.yyyy HH:mm",
+                                        java.util.Locale.getDefault()
+                                    )
+                                    backupList.forEach { entry ->
+                                        Text(
+                                            text = fmt.format(java.util.Date(entry.createdAt)),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    restoreTarget = entry
+                                                    showRestoreList = false
+                                                }
+                                                .padding(vertical = 12.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showRestoreList = false }) {
+                                Text(stringResource(R.string.close))
+                            }
+                        }
+                    )
+                }
+
+                restoreTarget?.let { entry ->
+                    AlertDialog(
+                        onDismissRequest = { restoreTarget = null },
+                        title = { Text(stringResource(R.string.cloud_backup_restore)) },
+                        text = { Text(stringResource(R.string.cloud_backup_restore_confirm)) },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                val target = entry
+                                restoreTarget = null
+                                if (backupBusy) return@TextButton
+                                backupBusy = true
+                                scope.launch {
+                                    val outcome = PrefsBackup.restore(context, target.fileName)
+                                    if (outcome == BackupOutcome.DONE) {
+                                        backupLastMs =
+                                            prefs.getLong("last_prefs_backup_ms", 0L)
+                                    }
+                                    toast(
+                                        context,
+                                        if (outcome == BackupOutcome.DONE)
+                                            context.getString(R.string.cloud_backup_restored)
+                                        else outcomeMessage(outcome)
+                                    )
+                                    backupBusy = false
+                                }
+                            }) {
+                                Text(stringResource(R.string.cloud_backup_restore))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { restoreTarget = null }) {
+                                Text(stringResource(R.string.close))
+                            }
+                        }
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
