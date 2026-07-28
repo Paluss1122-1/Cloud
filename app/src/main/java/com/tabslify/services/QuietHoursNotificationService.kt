@@ -272,6 +272,7 @@ class QuietHoursNotificationService : Service() {
         const val ACTION_CANCEL_DELETE = "com.tabslify.ACTION_CANCEL_DELETE"
         const val EXTRA_IMAGE_INDEX = "extra_image_index"
         const val MAIL_CHANNEL_ID = "mail_channel"
+        const val VIRUSTOTAL_CHANNEL_ID = "virustotal_scan_channel"
 
         const val ACTION_MARK_PARTS_READ = "com.tabslify.ACTION_MARK_PARTS_READ"
         const val EXTRA_MESSAGE_ID = "extra_message_id"
