@@ -12,6 +12,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,6 +28,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
@@ -52,13 +56,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.res.pluralStringResource
@@ -77,9 +87,19 @@ import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
 import com.tabslify.R
 import com.tabslify.core.TabNavigationViewModel
+import com.tabslify.core.objects.Config
 import com.tabslify.quiethoursnotificationhelper.AiProvider
 import com.tabslify.quiethoursnotificationhelper.sendAiRequest
 import com.tabslify.tabs.aitab.ChatMessage
+import dev.chrisbanes.haze.HazeProgressive
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -99,6 +119,12 @@ private const val HEISE_DEVELOPER_FEED_URL = "https://www.heise.de/developer/fee
 private const val HEISE_IT_FEED_URL = "https://www.heise.de/rss/heise-Rubrik-IT-atom.xml"
 private const val ARTICLE_TEXT_LIMIT_FOR_AI = 18_000
 private const val PARAGRAPH_BREAK_MARKER = "@@HEISE_PARA_BREAK@@"
+
+private const val EMAIL_ARTICLE_LINK_PREFIX = "tabslify-email://"
+private const val HEISE_DAILY_NEWSLETTER_SENDER = "heise-online-daily@newsletter.heise.de"
+private val NEWSLETTER_EMAIL_SENDERS = listOf(HEISE_DAILY_NEWSLETTER_SENDER)
+private const val NEWSLETTER_EMAIL_LIMIT = 7L
+private const val NEWSLETTER_EMAIL_SUMMARY_LIMIT = 260
 
 private data class MdLink(val range: IntRange, val url: String)
 
@@ -289,7 +315,8 @@ private data class HeiseNewsItem(
     val link: String,
     val imageUrl: String?,
     val publishedAt: String,
-    val rawTimestamp: Long
+    val rawTimestamp: Long,
+    val emailBody: String? = null
 )
 
 private data class HeiseChatMessage(
@@ -375,6 +402,7 @@ private fun saveArticlesToPrefs(context: Context, articles: List<HeiseNewsItem>)
             put("imageUrl", article.imageUrl)
             put("publishedAt", article.publishedAt)
             put("rawTimestamp", article.rawTimestamp)
+            put("emailBody", article.emailBody)
         }
         jsonArray.put(jsonObj)
     }
@@ -402,7 +430,8 @@ private fun loadArticlesFromPrefs(context: Context): Pair<List<HeiseNewsItem>, L
                     link = jsonObj.getString("link"),
                     imageUrl = jsonObj.optString("imageUrl", null),
                     publishedAt = jsonObj.getString("publishedAt"),
-                    rawTimestamp = jsonObj.getLong("rawTimestamp")
+                    rawTimestamp = jsonObj.getLong("rawTimestamp"),
+                    emailBody = jsonObj.optString("emailBody", null)
                 )
             )
         }
@@ -428,12 +457,14 @@ private fun preprocessSummaryMarkup(raw: String): Pair<String, List<HeiseTermQue
 @Composable
 fun HeiseNewsTabContent(
     modifier: Modifier = Modifier,
+    paddingValues: PaddingValues = PaddingValues(0.dp),
     viewModel: TabNavigationViewModel
 ) {
     val context = LocalContext.current
-    
+
     val unbekannterFehlerMsg = stringResource(R.string.unbekannter_fehler)
-    val artikeltextKonntNichtGeladenMsg = stringResource(R.string.artikeltext_konnte_nicht_geladen_werden)
+    val artikeltextKonntNichtGeladenMsg =
+        stringResource(R.string.artikeltext_konnte_nicht_geladen_werden)
     val keineZusammenfassungMsg = stringResource(R.string.keine_zusammenfassung_erhalten)
     val zusammenfassungFehlgeschlagenMsg = stringResource(R.string.zusammenfassung_fehlgeschlagen)
     val keineAntwortMsg = stringResource(R.string.keine_antwort_erhalten)
@@ -441,7 +472,7 @@ fun HeiseNewsTabContent(
     val antwortFehlgeschlagenMsg = stringResource(R.string.antwort_fehlgeschlagen)
     val bitteWartenMsg = stringResource(R.string.bitte_warten_bis_die_antwort)
     val artikelKonntNichtGeoffnetMsg = stringResource(R.string.artikel_konnte_nicht_geoffnet_werden)
-    
+
     val scope = rememberCoroutineScope()
     val articleTextCache = remember { mutableStateMapOf<String, String>() }
     val summaryCache = remember { mutableStateMapOf<String, String>() }
@@ -483,7 +514,7 @@ fun HeiseNewsTabContent(
                     }
                 }
 
-                val freshArticles = fetchHeiseNews()
+                val freshArticles = fetchHeiseNews(context.packageName)
                 articles = freshArticles
                 saveArticlesToPrefs(context, freshArticles)
             } catch (e: Exception) {
@@ -500,6 +531,10 @@ fun HeiseNewsTabContent(
 
     fun loadFullArticle(article: HeiseNewsItem) {
         if (articleTextCache.containsKey(article.link) || loadingArticleLink == article.link) return
+        if (article.emailBody != null) {
+            articleTextCache[article.link] = article.emailBody
+            return
+        }
         scope.launch {
             loadingArticleLink = article.link
             articleError = null
@@ -521,11 +556,12 @@ fun HeiseNewsTabContent(
             summaryError = null
             try {
                 val prompt = buildString {
-                    appendLine("Du bekommst den Volltext eines heise-Artikels. Erstelle daraus eine knackige, gut lesbare deutsche Zusammenfassung.")
+                    appendLine("Du bekommst den Volltext eines heise-Artikels. Erstelle daraus eine sehr knappe, gut lesbare deutsche Zusammenfassung.")
                     appendLine()
                     appendLine("Format der Zusammenfassung:")
-                    appendLine("- 4 bis 6 kurze Bulletpoints mit den wichtigsten Fakten, Zahlen, Produkt-/Versionsnamen und Auswirkungen.")
+                    appendLine("- Maximal 3 bis 4 kurze Bulletpoints (je maximal ein Satz) mit den wichtigsten Fakten, Zahlen, Produkt-/Versionsnamen und Auswirkungen.")
                     appendLine("- Bleib strikt beim Inhalt des Textes, erfinde nichts.")
+                    appendLine("- Keine Füllwörter oder Wiederholungen, insgesamt so kurz wie möglich.")
                     appendLine("- Schließe mit einer kurzen Einschätzung in maximal einem Satz ab.")
                     appendLine()
                     appendLine("Zusätzlich: Markiere 4 bis 8 zentrale Fachbegriffe, Produktnamen, Firmen, Personen oder Abkürzungen aus der Zusammenfassung, zu denen eine Rückfrage sinnvoll wäre. Nutze dafür GENAU diese Syntax, sonst nichts:")
@@ -558,18 +594,6 @@ fun HeiseNewsTabContent(
                 summarizingArticleLink = null
             }
         }
-    }
-
-    fun summarizeArticleTest(article: HeiseNewsItem) {
-        val testSummary = buildString {
-            appendLine("- [[Testmodus::Was bedeutet Testmodus hier?]] zeigt einen Beispieltext ohne API-Call.")
-            appendLine("- Zweiter Bulletpoint mit Beispieldaten zur Layout-Kontrolle.")
-            appendLine("- Dritter Punkt: [[Gemini::Was ist Gemini?]] wird hier nicht befragt.")
-            appendLine("- Vierter Punkt zum Testen von Zeilenumbrüchen und Formatierung.")
-            append("Fazit: Rein zu Testzwecken, keine echte KI-Antwort.")
-        }
-        summaryCache[article.link] = testSummary
-        saveSummaryToPrefs(context, article.link, testSummary)
     }
 
     fun askAboutArticle(article: HeiseNewsItem, question: String) {
@@ -676,7 +700,6 @@ fun HeiseNewsTabContent(
             onBack = { selectedArticle = null },
             onRetryArticle = { loadFullArticle(article) },
             onSummarize = { summarizeArticle(article) },
-            onSummarizeTest = { summarizeArticleTest(article) },
             onSendChat = { question -> askAboutArticle(article, question) },
             onTermQuestionClick = { question -> onTermQuestionClick(article, question) },
             onOpenOriginal = {
@@ -690,7 +713,8 @@ fun HeiseNewsTabContent(
                     ).show()
                 }
             },
-            modifier = modifier
+            modifier = modifier,
+            paddingValues = paddingValues
         )
         return
     }
@@ -699,6 +723,10 @@ fun HeiseNewsTabContent(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Transparent)
+            .padding(
+                top = paddingValues.calculateTopPadding(),
+                bottom = paddingValues.calculateBottomPadding()
+            )
             .padding(horizontal = 12.dp)
     ) {
         Row(
@@ -716,7 +744,11 @@ fun HeiseNewsTabContent(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = if (articles.isEmpty()) stringResource(R.string.aktuelle_news_per_atom_feed) else pluralStringResource(R.plurals.meldungen_geladen, articles.size, articles.size),
+                    text = if (articles.isEmpty()) stringResource(R.string.aktuelle_news_per_atom_feed) else pluralStringResource(
+                        R.plurals.meldungen_geladen,
+                        articles.size,
+                        articles.size
+                    ),
                     color = Color.White.copy(alpha = 0.65f),
                     fontSize = 12.sp
                 )
@@ -826,12 +858,16 @@ private fun HeiseArticleDetail(
     onBack: () -> Unit,
     onRetryArticle: () -> Unit,
     onSummarize: () -> Unit,
-    onSummarizeTest: () -> Unit,
     onSendChat: (String) -> Unit,
     onTermQuestionClick: (String) -> Unit,
     onOpenOriginal: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    paddingValues: PaddingValues = PaddingValues(0.dp)
 ) {
+    val hazeState = remember { HazeState() }
+    var headerHeightDp by remember { mutableStateOf(0.dp) }
+    val density = LocalDensity.current
+
     val isAiBusy = isSummarizing || isAsking
     val realUriHandler = LocalUriHandler.current
     val (displaySummary, termQuestions) = remember(summary) {
@@ -851,305 +887,400 @@ private fun HeiseArticleDetail(
     }
     var chatInput by remember(article.id) { mutableStateOf("") }
 
-    LazyColumn(
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Transparent)
-            .padding(horizontal = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(bottom = paddingValues.calculateBottomPadding())
     ) {
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(onClick = onBack) { Text(stringResource(R.string.zuruck)) }
-                TextButton(onClick = onOpenOriginal) { Text(stringResource(R.string.original_offnen)) }
-            }
-        }
-
-        item {
-            Text(
-                text = article.title,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 22.sp,
-                lineHeight = 26.sp
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = article.publishedAt,
-                color = Color.White.copy(alpha = 0.55f),
-                fontSize = 12.sp
-            )
-        }
-
-        if (!article.imageUrl.isNullOrBlank()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Transparent)
+                .hazeSource(state = hazeState)
+                .padding(horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             item {
-                AsyncImage(
-                    model = article.imageUrl,
-                    contentDescription = article.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(190.dp)
-                        .clip(RoundedCornerShape(18.dp))
+                Spacer(Modifier.height(headerHeightDp))
+            }
+            item {
+                Text(
+                    text = article.title,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 22.sp,
+                    lineHeight = 26.sp
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = article.publishedAt,
+                    color = Color.White.copy(alpha = 0.55f),
+                    fontSize = 12.sp
                 )
             }
-        }
 
-        item {
-            Card(
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C22).copy(alpha = 0.92f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.padding(14.dp)) {
-                    Text(
-                        text = stringResource(R.string.ai_summary),
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
+            if (!article.imageUrl.isNullOrBlank()) {
+                item {
+                    AsyncImage(
+                        model = article.imageUrl,
+                        contentDescription = article.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(190.dp)
+                            .clip(RoundedCornerShape(18.dp))
                     )
-                    Spacer(Modifier.height(8.dp))
-                    when {
-                        isSummarizing -> Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = Color.White
-                            )
-                            Text(
-                                text = stringResource(R.string.zusammenfassung_wird_erstellt),
-                                color = Color.White.copy(alpha = 0.75f)
-                            )
-                        }
+                }
+            }
 
-                        summary != null -> DottedMarkdownText(
-                            content = displaySummary,
-                            textColor = Color.White.copy(alpha = 0.86f),
-                            onLinkClick = { summaryUriHandler.openUri(it) }
+            item {
+                Card(
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF1C1C22).copy(
+                            alpha = 0.92f
                         )
-
-                        articleText.isNullOrBlank() -> Text(
-                            text = stringResource(R.string.lade_zuerst_den_vollstandigen_artikeltext),
-                            color = Color.White.copy(alpha = 0.65f),
-                            fontSize = 14.sp
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text(
+                            text = stringResource(R.string.ai_summary),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
                         )
-
-                        else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                            TextButton(onClick = onSummarize) {
-                                Text(stringResource(R.string.ai_zusammenfassung_erstellen))
-                            }
-                            TextButton(onClick = onSummarizeTest) {
-                                Text(stringResource(R.string.test), color = Color.White.copy(alpha = 0.55f))
-                            }
-                        }
-                    }
-
-                    if (!summaryError.isNullOrBlank()) {
                         Spacer(Modifier.height(8.dp))
-                        Text(summaryError, color = Color(0xFFFF8A80), fontSize = 12.sp)
+                        when {
+                            isSummarizing -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.White
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = stringResource(R.string.zusammenfassung_wird_erstellt),
+                                    color = Color.White.copy(alpha = 0.75f)
+                                )
+                            }
+
+                            summary != null -> DottedMarkdownText(
+                                content = displaySummary,
+                                textColor = Color.White.copy(alpha = 0.86f),
+                                onLinkClick = { summaryUriHandler.openUri(it) }
+                            )
+
+                            articleText.isNullOrBlank() -> Text(
+                                text = stringResource(R.string.lade_zuerst_den_vollstandigen_artikeltext),
+                                color = Color.White.copy(alpha = 0.65f),
+                                fontSize = 14.sp
+                            )
+
+                            else -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(onClick = onSummarize) {
+                                    Text(stringResource(R.string.ai_zusammenfassung_erstellen))
+                                }
+                            }
+                        }
+
+                        if (!summaryError.isNullOrBlank()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(summaryError, color = Color(0xFFFF8A80), fontSize = 12.sp)
+                        }
                     }
                 }
             }
-        }
 
-        item {
-            Card(
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C22).copy(alpha = 0.92f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.padding(14.dp)) {
-                    Text(
-                        text = stringResource(R.string.fragen_zum_artikel),
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = stringResource(R.string.tippe_auf_einen_markierten_begriff),
-                        color = Color.White.copy(alpha = 0.55f),
-                        fontSize = 12.sp
-                    )
+            item {
+                Card(
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF1C1C22).copy(
+                            alpha = 0.92f
+                        )
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text(
+                            text = stringResource(R.string.fragen_zum_artikel),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(R.string.tippe_auf_einen_markierten_begriff),
+                            color = Color.White.copy(alpha = 0.55f),
+                            fontSize = 12.sp
+                        )
 
-                    if (chatMessages.isNotEmpty()) {
-                        Spacer(Modifier.height(10.dp))
-                        chatMessages.forEachIndexed { index, message ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = if (message.own) Arrangement.End else Arrangement.Start
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .widthIn(max = 280.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(
-                                            if (message.own) Color(0xFF3B4CCA).copy(alpha = 0.85f)
-                                            else Color(0xFF2A2A32)
-                                        )
-                                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        if (chatMessages.isNotEmpty()) {
+                            Spacer(Modifier.height(10.dp))
+                            chatMessages.forEachIndexed { index, message ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = if (message.own) Arrangement.End else Arrangement.Start
                                 ) {
-                                    if (!message.own && message.text.isBlank() && isAsking && index == chatMessages.lastIndex) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(14.dp),
-                                                strokeWidth = 2.dp,
-                                                color = Color.White
+                                    Box(
+                                        modifier = Modifier
+                                            .widthIn(max = 280.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(
+                                                if (message.own) Color(0xFF3B4CCA).copy(alpha = 0.85f)
+                                                else Color(0xFF2A2A32)
                                             )
+                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    ) {
+                                        if (!message.own && message.text.isBlank() && isAsking && index == chatMessages.lastIndex) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(14.dp),
+                                                    strokeWidth = 2.dp,
+                                                    color = Color.White
+                                                )
+                                                Spacer(Modifier.width(4.dp))
+                                                Text(
+                                                    text = stringResource(R.string.denkt_nach),
+                                                    color = Color.White.copy(alpha = 0.75f),
+                                                    fontSize = 13.sp
+                                                )
+                                            }
+                                        } else if (message.own) {
                                             Text(
-                                                text = stringResource(R.string.denkt_nach),
-                                                color = Color.White.copy(alpha = 0.75f),
-                                                fontSize = 13.sp
+                                                message.text,
+                                                color = Color.White,
+                                                fontSize = 14.sp,
+                                                lineHeight = 19.sp
                                             )
-                                        }
-                                    } else if (message.own) {
-                                        Text(
-                                            message.text,
-                                            color = Color.White,
-                                            fontSize = 14.sp,
-                                            lineHeight = 19.sp
-                                        )
-                                    } else {
-                                        Markdown(
-                                            content = message.text,
-                                            colors = markdownColor(text = Color.White.copy(alpha = 0.9f)),
-                                            typography = markdownTypography(
-                                                text = MaterialTheme.typography.bodyMedium.copy(
-                                                    fontSize = 14.sp,
-                                                    lineHeight = 19.sp
+                                        } else {
+                                            Markdown(
+                                                content = message.text,
+                                                colors = markdownColor(
+                                                    text = Color.White.copy(
+                                                        alpha = 0.9f
+                                                    )
+                                                ),
+                                                typography = markdownTypography(
+                                                    text = MaterialTheme.typography.bodyMedium.copy(
+                                                        fontSize = 14.sp,
+                                                        lineHeight = 19.sp
+                                                    )
                                                 )
                                             )
-                                        )
+                                        }
                                     }
                                 }
+                                Spacer(Modifier.height(8.dp))
                             }
+                        }
+
+                        if (!chatError.isNullOrBlank()) {
+                            Text(chatError, color = Color(0xFFFF8A80), fontSize = 12.sp)
                             Spacer(Modifier.height(8.dp))
                         }
-                    }
 
-                    if (!chatError.isNullOrBlank()) {
-                        Text(chatError, color = Color(0xFFFF8A80), fontSize = 12.sp)
-                        Spacer(Modifier.height(8.dp))
-                    }
-
-                    Spacer(Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TextField(
-                            value = chatInput,
-                            onValueChange = { chatInput = it },
-                            modifier = Modifier.weight(1f),
-                            enabled = !isAiBusy && !articleText.isNullOrBlank(),
-                            singleLine = true,
-                            shape = RoundedCornerShape(24.dp),
-                            placeholder = {
-                                Text(
-                                    if (isAiBusy) stringResource(R.string.bitte_warten) else stringResource(R.string.frage_zum_artikel_stellen),
-                                    color = Color(0xFF888888)
-                                )
-                            },
-                            colors = TextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                disabledTextColor = Color.White.copy(alpha = 0.5f),
-                                cursorColor = Color.White,
-                                focusedContainerColor = Color(0xFF2A2A2A),
-                                unfocusedContainerColor = Color(0xFF2A2A2A),
-                                disabledContainerColor = Color(0xFF232328),
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                disabledIndicatorColor = Color.Transparent
-                            ),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                            keyboardActions = KeyboardActions(onSend = {
-                                if (chatInput.isNotBlank() && !isAiBusy) {
-                                    onSendChat(chatInput)
-                                    chatInput = ""
-                                }
-                            })
-                        )
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(Color(0xFF333333))
-                                .size(44.dp)
-                                .clickable(enabled = !isAiBusy && chatInput.isNotBlank()) {
-                                    onSendChat(chatInput)
-                                    chatInput = ""
-                                },
-                            contentAlignment = Alignment.Center
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.Send,
-                                contentDescription = stringResource(R.string.frage_senden),
-                                tint = if (!isAiBusy && chatInput.isNotBlank()) Color.White else Color.White.copy(
-                                    alpha = 0.4f
+                            TextField(
+                                value = chatInput,
+                                onValueChange = { chatInput = it },
+                                modifier = Modifier.weight(1f),
+                                enabled = !isAiBusy && !articleText.isNullOrBlank(),
+                                singleLine = true,
+                                shape = RoundedCornerShape(24.dp),
+                                placeholder = {
+                                    Text(
+                                        if (isAiBusy) stringResource(R.string.bitte_warten) else stringResource(
+                                            R.string.frage_zum_artikel_stellen
+                                        ),
+                                        color = Color(0xFF888888)
+                                    )
+                                },
+                                colors = TextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    disabledTextColor = Color.White.copy(alpha = 0.5f),
+                                    cursorColor = Color.White,
+                                    focusedContainerColor = Color(0xFF2A2A2A),
+                                    unfocusedContainerColor = Color(0xFF2A2A2A),
+                                    disabledContainerColor = Color(0xFF232328),
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent,
+                                    disabledIndicatorColor = Color.Transparent
+                                ),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                keyboardActions = KeyboardActions(onSend = {
+                                    if (chatInput.isNotBlank() && !isAiBusy) {
+                                        onSendChat(chatInput)
+                                        chatInput = ""
+                                    }
+                                })
+                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(Color(0xFF333333))
+                                    .size(44.dp)
+                                    .clickable(enabled = !isAiBusy && chatInput.isNotBlank()) {
+                                        onSendChat(chatInput)
+                                        chatInput = ""
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = stringResource(R.string.frage_senden),
+                                    tint = if (!isAiBusy && chatInput.isNotBlank()) Color.White else Color.White.copy(
+                                        alpha = 0.4f
+                                    )
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
+                Card(
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF1C1C22).copy(
+                            alpha = 0.92f
+                        )
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text(
+                            text = stringResource(R.string.artikeltext),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        when {
+                            isLoadingArticle -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.White
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    stringResource(R.string.artikel_wird_geladen),
+                                    color = Color.White.copy(alpha = 0.75f)
+                                )
+                            }
+
+                            !articleError.isNullOrBlank() -> {
+                                Text(articleError, color = Color(0xFFFF8A80), fontSize = 13.sp)
+                                Spacer(Modifier.height(8.dp))
+                                TextButton(onClick = onRetryArticle) { Text(stringResource(R.string.erneut_laden)) }
+                            }
+
+                            articleText.isNullOrBlank() -> Text(
+                                text = stringResource(R.string.kein_artikeltext_gefunden),
+                                color = Color.White.copy(alpha = 0.65f)
+                            )
+
+                            else -> Text(
+                                text = articleText,
+                                color = Color.White.copy(alpha = 0.82f),
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp
                             )
                         }
                     }
                 }
             }
+
+            item { Spacer(Modifier.height(8.dp)) }
+
         }
 
-        item {
-            Card(
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C22).copy(alpha = 0.92f)),
-                modifier = Modifier.fillMaxWidth()
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .onGloballyPositioned {
+                    headerHeightDp = with(density) { it.size.height.toDp() }
+                }
+        ) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .hazeEffect(
+                        state = hazeState,
+                        style = HazeStyle(
+                            backgroundColor = Color(0xFF0C1017),
+                            tint = HazeTint(Color(0xFF0C1017).copy(alpha = 0.7f)),
+                            blurRadius = 60.dp,
+                            noiseFactor = 0f
+                        )
+                    ) {
+                        progressive = HazeProgressive.verticalGradient(
+                            startIntensity = 1f,
+                            endIntensity = 0f,
+                            preferPerformance = true
+                        )
+                    }
+                    .drawWithContent {
+                        drawContent()
+                        val fadePx = 24.dp.toPx()
+                        val bottomStop = (1f - fadePx / size.height).coerceIn(0f, 1f)
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                0f to Color.Black,
+                                bottomStop to Color.Black,
+                                1f to Color.Transparent
+                            ),
+                            blendMode = BlendMode.DstIn
+                        )
+                    }
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = paddingValues.calculateTopPadding())
+                    .padding(horizontal = 4.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(Modifier.padding(14.dp)) {
-                    Text(
-                        text = stringResource(R.string.artikeltext),
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        stringResource(R.string.zuruck),
+                        tint = Color.White
                     )
-                    Spacer(Modifier.height(8.dp))
-                    when {
-                        isLoadingArticle -> Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = Color.White
-                            )
-                            Text(
-                                stringResource(R.string.artikel_wird_geladen),
-                                color = Color.White.copy(alpha = 0.75f)
-                            )
-                        }
-
-                        !articleError.isNullOrBlank() -> {
-                            Text(articleError, color = Color(0xFFFF8A80), fontSize = 13.sp)
-                            Spacer(Modifier.height(8.dp))
-                            TextButton(onClick = onRetryArticle) { Text(stringResource(R.string.erneut_laden)) }
-                        }
-
-                        articleText.isNullOrBlank() -> Text(
-                            text = stringResource(R.string.kein_artikeltext_gefunden),
-                            color = Color.White.copy(alpha = 0.65f)
-                        )
-
-                        else -> Text(
-                            text = articleText,
-                            color = Color.White.copy(alpha = 0.82f),
-                            fontSize = 14.sp,
-                            lineHeight = 20.sp
+                }
+                Text(
+                    text = article.title,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 4.dp)
+                )
+                if (!article.link.startsWith(EMAIL_ARTICLE_LINK_PREFIX)) {
+                    IconButton(onClick = onOpenOriginal) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.OpenInNew,
+                            stringResource(R.string.original_offnen),
+                            tint = Color.White
                         )
                     }
                 }
             }
         }
-
-        item { Spacer(Modifier.height(8.dp)) }
     }
 }
 
@@ -1196,58 +1327,117 @@ private fun EmptyNewsState(onRetry: () -> Unit) {
     }
 }
 
-private suspend fun fetchHeiseNews(): List<HeiseNewsItem> = withContext(Dispatchers.IO) {
-    val urls = listOf(HEISE_DEVELOPER_FEED_URL, HEISE_IT_FEED_URL)
-    val allItems = mutableListOf<HeiseNewsItem>()
+private suspend fun fetchHeiseNews(packageName: String): List<HeiseNewsItem> =
+    withContext(Dispatchers.IO) {
+        val urls = listOf(HEISE_DEVELOPER_FEED_URL, HEISE_IT_FEED_URL)
+        val feedItems = mutableListOf<HeiseNewsItem>()
 
-    for (feedUrl in urls) {
-        val connection = (URL(feedUrl).openConnection() as HttpURLConnection).apply {
+        for (feedUrl in urls) {
+            val connection = (URL(feedUrl).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 12_000
+                readTimeout = 12_000
+                requestMethod = "GET"
+                setRequestProperty("Accept", "application/atom+xml, application/xml, text/xml")
+                setRequestProperty("User-Agent", "Tabslify/1.0")
+            }
+
+            try {
+                if (connection.responseCode in 200..299) {
+                    connection.inputStream.use { feedItems += parseHeiseAtomFeed(it) }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                connection.disconnect()
+            }
+        }
+
+        val newsletterItems = fetchNewsletterEmailItems(packageName).distinctBy { it.id }
+
+        (newsletterItems + feedItems.distinctBy { it.id }).sortedByDescending { it.rawTimestamp }
+    }
+
+private suspend fun fetchNewsletterEmailItems(packageName: String): List<HeiseNewsItem> =
+    withContext(Dispatchers.IO) {
+        val items = mutableListOf<HeiseNewsItem>()
+        for (sender in NEWSLETTER_EMAIL_SENDERS) {
+            try {
+                val raw = Config.safeCall {
+                    Config.client.from("emails")
+                        .select(Columns.list("account,uid,subject,from_addr,timestamp,body,summary")) {
+                            filter { ilike("from_addr", "%$sender%") }
+                            order("timestamp", Order.DESCENDING)
+                            limit(NEWSLETTER_EMAIL_LIMIT)
+                        }
+                        .data
+                }
+                val jsonArray = JSONArray(raw)
+                val imageUrl = if (sender == HEISE_DAILY_NEWSLETTER_SENDER) {
+                    "android.resource://$packageName/${R.drawable.heise_logo}"
+                } else null
+                for (i in 0 until jsonArray.length()) {
+                    val obj = jsonArray.getJSONObject(i)
+                    val uid = obj.optString("uid")
+                    val account = obj.optString("account")
+                    if (uid.isBlank() || account.isBlank()) continue
+                    val body = obj.optString("body")
+                    val aiSummary = obj.optString("summary").takeIf { it.isNotBlank() }
+                    val timestamp = obj.optLong("timestamp", 0L)
+                    items += HeiseNewsItem(
+                        id = "email:$account:$uid",
+                        title = obj.optString("subject").ifBlank { sender },
+                        summary = aiSummary ?: body.trim().take(NEWSLETTER_EMAIL_SUMMARY_LIMIT),
+                        link = "$EMAIL_ARTICLE_LINK_PREFIX$account/$uid",
+                        imageUrl = imageUrl,
+                        publishedAt = "📧 " + formatEmailPublishedAt(timestamp),
+                        rawTimestamp = timestamp,
+                        emailBody = body
+                    )
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        items
+    }
+
+private fun formatEmailPublishedAt(timestampMillis: Long): String {
+    if (timestampMillis <= 0L) return ""
+    return runCatching {
+        val formatter = DateTimeFormatter
+            .ofPattern("dd. MMM yyyy, HH:mm", Locale.GERMANY)
+            .withZone(ZoneId.systemDefault())
+        formatter.format(Instant.ofEpochMilli(timestampMillis))
+    }.getOrDefault("")
+}
+
+private suspend fun fetchFullArticleText(articleUrl: String): String =
+    withContext(Dispatchers.IO) {
+        val connection = (URL(articleUrl).openConnection() as HttpURLConnection).apply {
             connectTimeout = 12_000
-            readTimeout = 12_000
+            readTimeout = 20_000
             requestMethod = "GET"
-            setRequestProperty("Accept", "application/atom+xml, application/xml, text/xml")
-            setRequestProperty("User-Agent", "Tabslify/1.0")
+            setRequestProperty("Accept", "text/html,application/xhtml+xml")
+            setRequestProperty("Accept-Language", "de-DE,de;q=0.9,en;q=0.7")
+            setRequestProperty(
+                "User-Agent",
+                "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36"
+            )
         }
 
         try {
-            if (connection.responseCode in 200..299) {
-                connection.inputStream.use { allItems += parseHeiseAtomFeed(it) }
+            if (connection.responseCode !in 200..299) {
+                throw IllegalStateException("HTTP ${connection.responseCode}")
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
+            val html =
+                connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            extractArticleText(html).ifBlank {
+                throw IllegalStateException("Kein Volltext im HTML gefunden")
+            }
         } finally {
             connection.disconnect()
         }
     }
-
-    allItems.distinctBy { it.id }.sortedByDescending { it.rawTimestamp }
-}
-
-private suspend fun fetchFullArticleText(articleUrl: String): String = withContext(Dispatchers.IO) {
-    val connection = (URL(articleUrl).openConnection() as HttpURLConnection).apply {
-        connectTimeout = 12_000
-        readTimeout = 20_000
-        requestMethod = "GET"
-        setRequestProperty("Accept", "text/html,application/xhtml+xml")
-        setRequestProperty("Accept-Language", "de-DE,de;q=0.9,en;q=0.7")
-        setRequestProperty(
-            "User-Agent",
-            "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36"
-        )
-    }
-
-    try {
-        if (connection.responseCode !in 200..299) {
-            throw IllegalStateException("HTTP ${connection.responseCode}")
-        }
-        val html = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-        extractArticleText(html).ifBlank {
-            throw IllegalStateException("Kein Volltext im HTML gefunden")
-        }
-    } finally {
-        connection.disconnect()
-    }
-}
 
 private fun XmlPullParser.readElementTextSafely(): String {
     if (eventType != XmlPullParser.START_TAG) return ""
@@ -1625,11 +1815,12 @@ private fun findArticleBody(value: Any?): String? {
     }
 }
 
-private fun cleanHtml(value: String): String = Html.fromHtml(value, Html.FROM_HTML_MODE_LEGACY)
-    .toString()
-    .replace(Regex("""[ \t\u000B\u000C\r]+"""), " ")
-    .replace(Regex("\n{3,}"), "\n\n")
-    .trim()
+private fun cleanHtml(value: String): String =
+    Html.fromHtml(value, Html.FROM_HTML_MODE_LEGACY)
+        .toString()
+        .replace(Regex("""[ \t\u000B\u000C\r]+"""), " ")
+        .replace(Regex("\n{3,}"), "\n\n")
+        .trim()
 
 private fun extractImageUrl(content: String): String? = Regex(
     """<img[^>]+src=["']([^"']+)["']""",
