@@ -80,8 +80,6 @@ import java.util.Calendar
 /*  Palette (shared with the welcome flow)                            */
 /* ------------------------------------------------------------------ */
 
-private val BgTop = Color(0xFF1A1330)
-private val BgBottom = Color(0xFF060509)
 private val TextPrimaryOnboarding = Color(0xFFF7F5FB)
 private val TextSecondaryOnboarding = Color(0xB3FFFFFF) // white @ 70%
 private val ChipBg = Color(0x0DFFFFFF)        // white @ 5%
@@ -213,9 +211,8 @@ fun WelcomeOnboardingScreen(
         onPageChanged?.invoke(pagerState.currentPage)
     }
 
-    Box(
+    AppBackground(
         modifier = Modifier
-            .fillMaxSize()
             .systemGestureExclusion()
             // Onboarding hebt sich beim Beenden leicht an, zoomt weg und blendet aus,
             // sodass die App darunter zum Vorschein kommt.
@@ -226,26 +223,13 @@ fun WelcomeOnboardingScreen(
                 scaleX = s
                 scaleY = s
                 translationY = -48.dp.toPx() * p
-            }
+            },
+        scrim = AppBgScrim.STRONG
     ) {
-        val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
-        val bgpicture = remember {
-            when (currentHour) {
-                in 11..16 -> R.drawable.day
-                else -> R.drawable.night
-            }
-        }
-        Image(
-            painter = painterResource(id = bgpicture),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize().zIndex(0f)
-        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Brush.verticalGradient(listOf(BgTop.copy(alpha = 0.9f), BgBottom.copy(alpha = 0.9f))))
-                .statusBarsPadding().zIndex(1f)
+                .statusBarsPadding()
         ) {
             Box(
                 modifier = Modifier
