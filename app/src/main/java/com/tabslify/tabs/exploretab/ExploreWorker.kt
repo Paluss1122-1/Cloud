@@ -22,12 +22,25 @@ class ExploreWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ct
         return try {
             val client = LocationServices.getFusedLocationProviderClient(ctx)
             val request = CurrentLocationRequest.Builder()
-                .setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
+                .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
                 .setMaxUpdateAgeMillis(1 * 60 * 1000L)
                 .setDurationMillis(10_000L)
                 .build()
             val loc = Tasks.await(client.getCurrentLocation(request, null))
-            if (loc != null) ExploreRepository(ctx).recordLocation(loc.latitude, loc.longitude)
+            if (loc != null) {
+                ExploreRepository(ctx).ingest(
+                    RawPoint(
+                        lat = loc.latitude,
+                        lon = loc.longitude,
+                        accuracy = loc.accuracy,
+                        speed = if (loc.hasSpeed()) loc.speed else null,
+                        bearing = if (loc.hasBearing()) loc.bearing else null,
+                        activityType = "UNKNOWN",
+                        activityConfidence = 0,
+                        timestamp = System.currentTimeMillis()
+                    )
+                )
+            }
             Result.success()
         } catch (_: Exception) {
             Result.retry()
