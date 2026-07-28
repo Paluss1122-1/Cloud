@@ -6,10 +6,14 @@ import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 import com.tabslify.core.functions.errorInsert
+import kotlinx.coroutines.runBlocking
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.concurrent.TimeUnit
+
+private const val RAW_POINT_RETENTION_DAYS = 30L
 
 class ExploreNightRestartWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
     override fun doWork(): Result {
@@ -21,6 +25,16 @@ class ExploreNightRestartWorker(ctx: Context, params: WorkerParameters) : Worker
             "LOG"
         )
         ExploreLocationTracker.start(ctx)
+
+        runBlocking {
+            try {
+                ExploreSegmentBuilder.rebuildDay(ctx, LocalDate.now().minusDays(1))
+                val cutoff = System.currentTimeMillis() - RAW_POINT_RETENTION_DAYS * 24 * 60 * 60 * 1000
+                ExploreRepository(ctx).deleteRawPointsBefore(cutoff)
+            } catch (_: Exception) {
+            }
+        }
+
         return Result.success()
     }
 
