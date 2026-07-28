@@ -1,8 +1,14 @@
 package com.tabslify.spotifydownloader_own.ui
 
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.os.Environment
+import androidx.core.app.NotificationCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tabslify.core.objects.tNotify
+import com.tabslify.services.MediaPlayerService
 import com.tabslify.spotifydownloader_own.domain.DownloadRepository
 import com.tabslify.spotifydownloader_own.domain.DownloadState
 import com.tabslify.spotifydownloader_own.domain.generateAndSaveHashtags
@@ -34,8 +40,34 @@ class DownloadViewModel(
                         album = state.album,
                         fileUri = state.fileUri
                     )
+                    showSongDownloadedNotification(state)
                 }
             }
         }
+    }
+
+    private fun showSongDownloadedNotification(state: DownloadState.Success) {
+        val songPath = "${
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+        }/Tabslify/${state.fileName}"
+
+        val playIntent = Intent(appContext, MediaPlayerService::class.java).apply {
+            action = MediaPlayerService.ACTION_PLAY_ALL_SONGS_AT_INDEX
+            putExtra(MediaPlayerService.EXTRA_SONG_PATH, songPath)
+        }
+        val pendingIntent = PendingIntent.getForegroundService(
+            appContext, state.trackId.hashCode(), playIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(appContext, MediaPlayerService.CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle("✓ Song heruntergeladen")
+            .setContentText("${state.artist} – ${state.title}")
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        tNotify(appContext, state.trackId.hashCode(), notification)
     }
 }
