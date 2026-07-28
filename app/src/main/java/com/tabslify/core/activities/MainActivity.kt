@@ -38,6 +38,8 @@ import com.tabslify.quicksettingsfunctions.startBatteryWorker
 import com.tabslify.services.QuietHoursNotificationService
 import com.tabslify.tabs.JsonEditorContent
 import com.tabslify.tabs.pendingApkmUri
+import com.tabslify.tabs.pendingEmailOpen
+import com.tabslify.tabs.virustotal.pendingVirusTotalReport
 import io.github.jan.supabase.storage.storage
 import java.io.File
 
@@ -128,6 +130,8 @@ class MainActivity : FragmentActivity() {
         val apkmUri = resolveApkmUri(intent)
         if (apkmUri != null) pendingApkmUri = apkmUri
         startTarget = if (apkmUri != null) "apkm" else intent.getStringExtra("target")
+        applyEmailDeepLink(intent)
+        applyVirusTotalDeepLink(intent)
         setContent {
             val appColor = rememberAppColor()
             MaterialTheme(
@@ -179,6 +183,22 @@ class MainActivity : FragmentActivity() {
             startTarget = "apkm"
         } else {
             intent.getStringExtra("target")?.let { startTarget = it }
+        }
+        applyEmailDeepLink(intent)
+        applyVirusTotalDeepLink(intent)
+    }
+
+    private fun applyEmailDeepLink(intent: Intent) {
+        val account = intent.getStringExtra("email_account")
+        val uid = intent.getStringExtra("email_uid")
+        if (account != null && uid != null) {
+            pendingEmailOpen = account to uid
+        }
+    }
+
+    private fun applyVirusTotalDeepLink(intent: Intent) {
+        intent.getStringExtra("vt_report_id")?.let { reportId ->
+            pendingVirusTotalReport = reportId
         }
     }
 
