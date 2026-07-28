@@ -61,28 +61,19 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
+import androidx.compose.runtime.DisposableEffect
+
 @Composable
 fun VirusTotalTabContent() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    val httpClient = remember {
-        HttpClient(OkHttp) {
-            install(ContentNegotiation) {
-                json(Json { ignoreUnknownKeys = true })
-            }
-        }
+    val jobs by VirusTotalScanManager.jobs.collectAsState()
+
+    DisposableEffect(Unit) {
+        VirusTotalScanManager.vtTabVisible = true
+        onDispose { VirusTotalScanManager.vtTabVisible = false }
     }
-    val factory = remember {
-        object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return VirusTotalViewModel(VirusTotalRepository(httpClient)) as T
-            }
-        }
-    }
-    val vm: VirusTotalViewModel = viewModel(factory = factory)
-    val state by vm.state.collectAsState()
 
     var mode by rememberSaveable { mutableStateOf(VirusTotalMode.URL) }
     var input by rememberSaveable { mutableStateOf("") }
@@ -95,7 +86,6 @@ fun VirusTotalTabContent() {
         if (uri != null) {
             selectedFileUri = uri
             selectedFileName = queryDisplayName(context, uri)
-            vm.reset()
         }
     }
 
@@ -126,7 +116,6 @@ fun VirusTotalTabContent() {
                         input = ""
                         selectedFileUri = null
                         selectedFileName = null
-                        vm.reset()
                     },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
@@ -156,8 +145,8 @@ fun VirusTotalTabContent() {
                 )
                 Spacer(Modifier.height(12.dp))
                 Button(
-                    onClick = { vm.checkUrl(input) },
-                    enabled = input.isNotBlank() && state != VirusTotalState.Loading,
+                    onClick = { VirusTotalScanManager.startUrl(context, input) },
+                    enabled = input.isNotBlank(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(stringResource(R.string.virustotal_prufen))
@@ -175,8 +164,8 @@ fun VirusTotalTabContent() {
                 )
                 Spacer(Modifier.height(12.dp))
                 Button(
-                    onClick = { vm.checkHash(input) },
-                    enabled = input.isNotBlank() && state != VirusTotalState.Loading,
+                    onClick = { VirusTotalScanManager.startHash(context, input) },
+                    enabled = input.isNotBlank(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(stringResource(R.string.virustotal_prufen))
@@ -200,10 +189,10 @@ fun VirusTotalTabContent() {
                         val name = selectedFileName ?: "file"
                         scope.launch {
                             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                            if (bytes != null) vm.checkFile(name, bytes)
+                            if (bytes != null) VirusTotalScanManager.startFile(context, name, bytes)
                         }
                     },
-                    enabled = selectedFileUri != null && state != VirusTotalState.Loading,
+                    enabled = selectedFileUri != null,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(stringResource(R.string.virustotal_hochladen_prufen))
@@ -213,7 +202,16 @@ fun VirusTotalTabContent() {
 
         Spacer(Modifier.height(24.dp))
 
-        when (val current = state) {
+        val relevantJob = pendingVirusTotalReport?.let { id -> jobs.find { it.id == id } }
+            ?: jobs.lastOrNull { it.mode == mode }
+
+        androidx.compose.runtime.LaunchedEffect(relevantJob) {
+            if (pendingVirusTotalReport != null && relevantJob != null && relevantJob.id == pendingVirusTotalReport) {
+                pendingVirusTotalReport = null
+            }
+        }
+
+        when (val current = relevantJob?.state ?: VirusTotalState.Idle) {
             VirusTotalState.Idle -> {}
 
             VirusTotalState.Loading -> {
