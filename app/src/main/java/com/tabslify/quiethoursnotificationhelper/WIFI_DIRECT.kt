@@ -316,6 +316,29 @@ var isLaptopConnected: Boolean
 private val syncScope = CoroutineScope(
     Dispatchers.IO + SupervisorJob() + coroutineExceptionHandler
 )
+
+private val pcCallFailures = java.util.concurrent.atomic.AtomicInteger(0)
+@Volatile
+private var reconnectAttempted = false
+private const val MAX_PC_CALL_FAILURES = 3
+
+fun onPcCallSuccess() {
+    pcCallFailures.set(0)
+    reconnectAttempted = false
+}
+
+fun onPcCallFailure(context: Context) {
+    if (!isLaptopConnected) return
+    if (pcCallFailures.incrementAndGet() < MAX_PC_CALL_FAILURES) return
+    pcCallFailures.set(0)
+    if (!reconnectAttempted) {
+        reconnectAttempted = true
+        syncTodosWithLaptop(context.applicationContext)
+    } else {
+        reconnectAttempted = false
+        stopAllSyncServices(context.applicationContext)
+    }
+}
 private val mediaScope = CoroutineScope(
     Dispatchers.IO + SupervisorJob() + coroutineExceptionHandler
 )
@@ -355,6 +378,8 @@ private var networkCallback: ConnectivityManager.NetworkCallback? = null
 private var pendingSyncJob: Job? = null
 private var lastTriggerTime = 0L
 private const val MIN_TRIGGER_INTERVAL = 15_000L
+private var lastReconnectHeartbeat = 0L
+private const val RECONNECT_HEARTBEAT_INTERVAL = 120_000L
 private const val WIFI_AP_STATE_CHANGED_ACTION = "android.net.wifi.WIFI_AP_STATE_CHANGED"
 
 private val syncInProgress = AtomicBoolean(false)
@@ -709,10 +734,17 @@ fun registerWifiReconnectReceiver(context: Context) {
             val now = System.currentTimeMillis()
             if (now - lastTriggerTime < MIN_TRIGGER_INTERVAL) return
             lastTriggerTime = now
-            checkIfNearLocation(context) { atHome ->
-                if (atHome && !isLaptopConnected) {
-                    syncTodosWithLaptop(context)
+
+            val isWifi = cm.getNetworkCapabilities(network)
+                ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+            if (isWifi) {
+                checkIfNearLocation(context) { atHome ->
+                    if (atHome && !isLaptopConnected) {
+                        syncTodosWithLaptop(context)
+                    }
                 }
+            } else if (!isLaptopConnected) {
+                syncTodosWithLaptop(context)
             }
         }
 
@@ -753,7 +785,6 @@ fun registerWifiReconnectReceiver(context: Context) {
     networkCallback = callback
 
     val request = NetworkRequest.Builder()
-        .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
         .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
         .build()
 
@@ -891,6 +922,12 @@ private fun startTriggerWatchdog(context: Context) {
             }
             if (isLaptopConnected) {
                 ensureSyncListenersAlive(context)
+            } else if (laptopIp.isNotEmpty()) {
+                val now = System.currentTimeMillis()
+                if (now - lastReconnectHeartbeat >= RECONNECT_HEARTBEAT_INTERVAL) {
+                    lastReconnectHeartbeat = now
+                    syncTodosWithLaptop(context)
+                }
             }
         }
     }
@@ -1147,6 +1184,7 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
             when (response) {
                 "OK" -> {
                     isLaptopConnected = true
+                    onPcCallSuccess()
 
                     // Save last sync time
                     val prefs = context.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)
@@ -2074,10 +2112,14 @@ fun pushMediaStateToLaptop(context: Context) {
                     flush()
                 }
             }
+            onPcCallSuccess()
         } catch (_: SocketTimeoutException) {
+            onPcCallFailure(context)
         } catch (_: ConnectException) {
+            onPcCallFailure(context)
         } catch (e: Exception) {
             logError("pushMediaStateToLaptop", e)
+            onPcCallFailure(context)
         }
     }
 }
