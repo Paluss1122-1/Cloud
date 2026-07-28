@@ -16,6 +16,7 @@ import com.google.firebase.messaging.FirebaseMessaging
 import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.client
+import com.tabslify.core.objects.PrefsBackup
 import com.tabslify.core.objects.prvt
 import com.tabslify.quicksettingsfunctions.BatteryDataRepository
 import io.github.jan.supabase.auth.auth
@@ -99,6 +100,7 @@ class Tabslify : Application() {
             FirebaseMessaging.getInstance().subscribeToTopic("emails")
             serviceScope.launch {
                 client.auth.awaitInitialization()
+                runCatching { PrefsBackup.autoBackup(this@Tabslify) }
             }
         }
 
