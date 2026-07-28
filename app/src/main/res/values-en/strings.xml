@@ -141,6 +141,7 @@
     <string name="access_coarse_location_access_fine">ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION</string>
     <string name="standortbasierte_wettervorhersage_im_weathertab">Location-based weather forecast in the WeatherTab</string>
     <string name="exploretab_explorelocationtracker_standortverfolgung_und_geofencing">ExploreTab &amp; ExploreLocationTracker: location tracking and geofencing</string>
+    <string name="exploretab_activityrecognition_erkennung_des_verkehrsmittels">ExploreTab &amp; ActivityRecognition: transport mode detection (walking/cycling/car)</string>
     <string name="shownetwerkinfo_anzeige_der_wlan_ssid">showNetwerkInfo: displaying the Wi-Fi SSID</string>
     <string name="quiethoursnotificationservice_test_overlay_fur_youtube">QuietHoursNotificationService: test overlay for YouTube</string>
     <string name="mediaplayerservice_medienwiedergabe_im_vordergrund">MediaPlayerService: media playback in the foreground</string>
@@ -1619,6 +1620,8 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="wahle_einen_modus">Choose a mode</string>
     <string name="aufnahme_lauft">🎙️ Recording in progress</string>
     <string name="audio_aufnahme">Audio recording</string>
+    <string name="explore_tracking_lauft">🗺️ Tabslify is tracking your day</string>
+    <string name="explore_tracking_kanal">Location tracking</string>
     <string name="mikrofonzugriff_benotigt">Microphone access required</string>
     <string name="dieser_tab_benotigt_zugriff_auf">This tab needs access to the microphone in order to create recordings.\n\n</string>
     <string name="bitte_erlaube_den_zugriff_in">Please allow access in the app settings:\n</string>
@@ -1809,6 +1812,16 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="erkundet">🌍 Explored</string>
     <string name="heute_2">📅 Today</string>
     <string name="tracker_status">📡 Tracker status</string>
+    <string name="gestern">Yesterday</string>
+    <string name="strecke">🛣️ Distance</string>
+    <string name="unterwegs">🚗 Moving</string>
+    <string name="stopps">📍 Stops</string>
+    <string name="modus_auto">Car</string>
+    <string name="modus_fahrrad">Bike</string>
+    <string name="modus_zu_fuss">On foot</string>
+    <string name="modus_unbekannt">Unknown</string>
+    <string name="modus_aufenthalt">Stop</string>
+    <string name="aktivitaet">Activity</string>
     <string name="tile_loschen">Delete tile</string>
     <string name="diesen_bereich_als_unbesucht_markieren">Mark this area as unvisited?</string>
     <string name="letzte_position">Last position</string>
@@ -2098,4 +2111,18 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="virustotal_harmlos">Harmless</string>
     <string name="virustotal_unentdeckt">Undetected</string>
     <string name="virustotal_bericht_offnen">Open full report</string>
+    <string name="virustotal_scan_abgeschlossen">VirusTotal Scan Finished</string>
+    <string name="virustotal_scan_ergebnis">Scan for %1$s complete. %2$d/%3$d flagged as malicious.</string>
+    <string name="cloud_backup_title">☁️ Cloud backup (encrypted)</string>
+    <string name="cloud_backup_now">Back up now</string>
+    <string name="cloud_backup_restore">Restore</string>
+    <string name="cloud_backup_last">Last backup:</string>
+    <string name="cloud_backup_never">No backup yet</string>
+    <string name="cloud_backup_done">Backup saved</string>
+    <string name="cloud_backup_failed">Backup failed</string>
+    <string name="cloud_backup_no_master">Set a master password first</string>
+    <string name="cloud_backup_wrong_pw">Wrong master password or corrupted backup</string>
+    <string name="cloud_backup_restore_confirm">This backup will be merged over your current settings. A safety copy is created automatically beforehand. Continue?</string>
+    <string name="cloud_backup_restored">Restored – restart the app if needed</string>
+    <string name="cloud_backup_shrink_warn">Backup skipped: suspiciously little data</string>
 </resources>
