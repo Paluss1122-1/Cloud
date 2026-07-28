@@ -6,7 +6,15 @@ import io.github.jan.supabase.functions.functions
 import kotlinx.coroutines.launch
 
 fun errorInsert(serviceName: String, errorMessage: String, createdAt: String, severity: String) {
-    if (!Config.realDevice) return
+    if (!Config.realDevice) {
+        println(mapOf(
+            "serviceName" to serviceName,
+            "errorMessage" to errorMessage,
+            "createdAt" to createdAt,
+            "severity" to severity
+        ))
+        return
+    }
     serviceScope.launch {
         try {
             Config.client.functions.invoke(
