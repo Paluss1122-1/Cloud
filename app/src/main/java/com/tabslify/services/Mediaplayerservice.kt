@@ -555,7 +555,7 @@ class MediaPlayerService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
-        if (!prefs.getBoolean("services_master", true) || !prefs.getBoolean("service_media", false)) {
+        if (!prefs.getBoolean("services_master", true)) {
             stopSelf()
             return
         }
@@ -996,6 +996,7 @@ class MediaPlayerService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = mediaSession
 
     override fun onDestroy() {
+        val wasInitialized = isRunning
         isServiceDestroyed = true
         isRunning = false
 
@@ -1009,6 +1010,11 @@ class MediaPlayerService : MediaSessionService() {
         screenReceiver = null
 
         cancelAutoPause()
+
+        if (!wasInitialized) {
+            super.onDestroy()
+            return
+        }
 
         savePodcastCurrentPosition()
         saveMusicState()
