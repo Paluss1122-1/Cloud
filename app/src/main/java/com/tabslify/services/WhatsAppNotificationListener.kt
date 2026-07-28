@@ -17,6 +17,8 @@ import com.tabslify.core.objects.prvt
 import com.tabslify.core.objects.tNotify
 import com.tabslify.quiethoursnotificationhelper.isLaptopConnected
 import com.tabslify.quiethoursnotificationhelper.laptopIp
+import com.tabslify.quiethoursnotificationhelper.onPcCallFailure
+import com.tabslify.quiethoursnotificationhelper.onPcCallSuccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -206,8 +208,10 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                         writer.flush()
                     }
                 }
+                onPcCallSuccess()
             } catch (e: Exception) {
                 Log.w("NotifForwarder", "❌ $targetIp: ${e.message}")
+                onPcCallFailure(this@WhatsAppNotificationListener)
             }
         }
     }
