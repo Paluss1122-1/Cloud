@@ -31,6 +31,7 @@ import com.tabslify.services.QuietHoursNotificationService.Companion.MAIL_CHANNE
 import com.tabslify.services.QuietHoursNotificationService.Companion.NOTIFICATION_ID
 import com.tabslify.services.QuietHoursNotificationService.Companion.SSN_CHANNEL_ID
 import com.tabslify.services.QuietHoursNotificationService.Companion.THRESHOLD_MINUTES
+import com.tabslify.services.QuietHoursNotificationService.Companion.VIRUSTOTAL_CHANNEL_ID
 import com.tabslify.services.QuietHoursNotificationService.Companion.VOICE_NOTE_CHANNEL_ID
 import com.tabslify.services.QuietHoursNotificationService.Companion.calculateNextStatusChange
 import com.tabslify.services.QuietHoursNotificationService.Companion.handler
@@ -237,6 +238,19 @@ fun createNotificationChannel(context: Context) {
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = "Notification if AITab is not opened and receives an AI answer"
+            setShowBadge(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            enableVibration(true)
+            enableLights(true)
+        })
+
+    notificationManager.createNotificationChannel(
+        NotificationChannel(
+            VIRUSTOTAL_CHANNEL_ID,
+            "VirusTotal Scans",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Zusammenfassung abgeschlossener VirusTotal-Scans"
             setShowBadge(true)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             enableVibration(true)
