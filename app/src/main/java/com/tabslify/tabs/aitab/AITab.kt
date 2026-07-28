@@ -20,6 +20,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -64,10 +65,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Color.Companion.Black
 import androidx.compose.ui.graphics.Color.Companion.Transparent
 import androidx.compose.ui.graphics.Color.Companion.White
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
@@ -100,9 +106,18 @@ import com.tabslify.core.ui.TextPrimary
 import com.tabslify.core.ui.c
 import com.tabslify.core.ui.calloutAwareMarkdownComponents
 import com.tabslify.core.ui.normalizeCallouts
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 
 @Composable
-fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewModel()) {
+fun AITabContent(
+    vm: AITabViewModel = viewModel(),
+    svm: SharedViewModel = viewModel(),
+    paddingValues: PaddingValues = PaddingValues(0.dp)
+) {
     val listState = rememberLazyListState()
     val alpha = remember { Animatable(0f) }
     val context = LocalContext.current
@@ -224,198 +239,30 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
     val cs = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     val aitabMessageLabel = stringResource(R.string.aitab_message)
 
+    val hazeState = remember { HazeState() }
+    var headerHeightDp by remember { mutableStateOf(0.dp) }
+
     Box(
         Modifier
             .fillMaxSize()
             .imePadding()
             .alpha(alpha.value)
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Box(
+            Modifier
+                .fillMaxSize()
         ) {
-            Row(
-                modifier = Modifier.padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val isPrivate = prvt()
-
-                listOfNotNull(
-                    "Nvidia",
-                    "Gemini",
-                    if (isPrivate) "Server" else null
-                ).forEachIndexed { index, mode ->
-                    val containerColor by animateColorAsState(
-                        targetValue = if (vm.currentMode == mode) Color(0xFF555555) else Color(
-                            0xFF333333
-                        ),
-                        animationSpec = tween(durationMillis = 300),
-                        label = "containerColor"
-                    )
-                    Box {
-                        PloppingButton(
-                            onClick = {
-                                if (vm.currentMode == mode) vm.showAiModels = true
-                                vm.setMode(mode)
-                            },
-                            colors = buttonColors(containerColor = containerColor),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(mode, color = White, fontSize = 13.sp)
-                        }
-
-                        if (index == 0) {
-                            DropdownMenu(
-                                expanded = vm.showAiModels,
-                                onDismissRequest = { vm.showAiModels = false },
-                                containerColor = Color(0xFF333333),
-                                shape = RoundedCornerShape(30.dp),
-                                modifier = Modifier.padding(10.dp, 0.dp)
-                            ) {
-                                var showedDiv = false
-                                vm.availableModels.forEach { model ->
-                                    if (model.vision && !showedDiv && !vm.availableModels[0].vision) {
-                                        Row(
-                                            modifier = Modifier
-                                                .padding(vertical = 16.dp)
-                                                .fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            HorizontalDivider(
-                                                modifier = Modifier.weight(1f),
-                                                thickness = 1.dp,
-                                                color = White.copy(alpha = 0.3f)
-                                            )
-
-                                            Text(
-                                                text = stringResource(R.string.vision_models),
-                                                modifier = Modifier.padding(horizontal = 8.dp)
-                                            )
-
-                                            HorizontalDivider(
-                                                modifier = Modifier.weight(1f),
-                                                thickness = 1.dp,
-                                                color = White.copy(alpha = 0.3f)
-                                            )
-                                        }
-                                        showedDiv = true
-                                    }
-                                    val containerColorModel by animateColorAsState(
-                                        targetValue = if (vm.selectedModel == model) Color(
-                                            0xFF555555
-                                        ) else Color(0xFF333333),
-                                        animationSpec = tween(durationMillis = 300),
-                                        label = "containerColor"
-                                    )
-                                    PloppingButton(
-                                        onClick = {
-                                            vm.selectModel(model)
-                                        },
-                                        onFinishedClick = { vm.showAiModels = false },
-                                        colors = buttonColors(containerColor = containerColorModel),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        val sizeRegex = Regex("""-\d+b""")
-                                        val sizeRegex1 = Regex("""\d+b""")
-                                        val name = model.name
-                                            .replace(sizeRegex, "")
-                                            .replace("-", " ")
-                                            .substringBeforeLast(":")
-                                        val sizeString: String? =
-                                            when (vm.currentMode) {
-                                                "Nvidia" -> sizeRegex1.find(
-                                                    model.name
-                                                )?.value
-
-                                                "Gemini" -> null
-                                                else -> model.name.substringAfter(":")
-                                            }
-                                        val size =
-                                            if (sizeString != null && sizeString != "null") {
-                                                " (${sizeString.replace("-", " ")})"
-                                            } else ""
-                                        val weightInfo =
-                                            if (model.weight > 1 && !prvt()) " [${model.weight}x]" else ""
-                                        Text(
-                                            "$name$size$weightInfo",
-                                            textAlign = TextAlign.Left,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                val clearButtonVisible = vm.history.isNotEmpty()
-
-                val clearButtonAlpha by animateFloatAsState(
-                    targetValue = if (clearButtonVisible) 1f else 0f,
-                    animationSpec = tween(durationMillis = 300),
-                    label = "clearButtonAlpha"
-                )
-
-                Box {
-                    if (clearButtonVisible || clearButtonAlpha > 0f) {
-                        PloppingButton(
-                            onClick = { clearHistoryConfirmation = true },
-                            modifier = Modifier
-                                .alpha(clearButtonAlpha),
-                            colors = buttonColors(containerColor = Color.Red),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(Icons.Default.Delete, stringResource(R.string.clear_ai_history))
-                        }
-                    }
-                }
-            }
-
-            if (vm.currentMode != "Server" && !prvt()) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    LinearProgressIndicator(
-                        progress = { vm.getUsageProgress() },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(12.dp)),
-                        color = Color(0xFF00FFAA),
-                        trackColor = Color(0xFF444444),
-                        strokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            vm.getUsageResetText(),
-                            color = White.copy(alpha = 0.8f),
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(start = 10.dp)
-                        )
-                        Text(
-                            "${vm.todayUsage}/$DAILY_LIMIT",
-                            color = White,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(end = 10.dp)
-                        )
-                    }
-                }
-            }
-
             LazyColumn(
                 state = listState,
                 modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp),
+                    .padding(horizontal = 8.dp)
+                    .hazeSource(state = hazeState)
+                    .fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                item {
+                    Spacer(Modifier.height(headerHeightDp))
+                }
                 items(
                     vm.history.size,
                     key = { index -> "${vm.history[index].ts}_${vm.history[index].own}" }) { index ->
@@ -548,7 +395,9 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                                     )
                                 ) {
                                     Markdown(
-                                        content = if (vm.isLoading && msg.text.isEmpty()) "..." else normalizeCallouts(msg.text),
+                                        content = if (vm.isLoading && msg.text.isEmpty()) "..." else normalizeCallouts(
+                                            msg.text
+                                        ),
                                         colors = markdownColors,
                                         typography = markdownTypography,
                                         components = markdownComponents
@@ -568,103 +417,343 @@ fun AITabContent(vm: AITabViewModel = viewModel(), svm: SharedViewModel = viewMo
                     }
                 }
             }
-
-            val uploadButtonWeight by animateDpAsState(
-                targetValue = if (vm.selectedModel.vision) 48.dp else 0.dp,
-                animationSpec = tween(durationMillis = 300),
-                label = "uploadButtonWeight"
-            )
-
-            val uploadButtonAlpha by animateFloatAsState(
-                targetValue = if (vm.selectedModel.vision) 1f else 0f,
-                animationSpec = tween(durationMillis = 300),
-                label = "uploadButtonWeight"
-            )
-
-            val audioButtonWeight by animateDpAsState(
-                targetValue = if (vm.selectedModel.audio) 48.dp else 0.dp,
-                animationSpec = tween(300), label = ""
-            )
-            val audioButtonAlpha by animateFloatAsState(
-                targetValue = if (vm.selectedModel.audio) 1f else 0f,
-                animationSpec = tween(300), label = ""
-            )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .zIndex(1f)
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+        }
+        Box(
+            Modifier
+                .fillMaxSize()
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                IconButton(
-                    onClick = { imagePickerLauncher.launch("image/*") },
-                    modifier = Modifier
-                        .size(uploadButtonWeight)
-                        .alpha(uploadButtonAlpha)
-                        .background(
-                            if (vm.selectedImageUri != null) Color(0xFF555555) else Color(
-                                0xFF333333
-                            ),
-                            RoundedCornerShape(50)
-                        )
-                ) {
-                    Icon(
-                        if (vm.selectedImageUri == null) Icons.Default.CameraAlt else Icons.Default.Check,
-                        stringResource(R.string.bild_anhangen),
-                        tint = Black
-                    )
-                }
-
-                IconButton(
-                    onClick = { audioPickerLauncher.launch("audio/*") },
-                    modifier = Modifier
-                        .size(audioButtonWeight)
-                        .alpha(audioButtonAlpha)
-                        .background(
-                            if (vm.selectedAudioUri != null) Color(0xFF555555) else Color(
-                                0xFF333333
-                            ),
-                            RoundedCornerShape(50)
-                        )
-                ) {
-                    Icon(
-                        if (vm.selectedAudioUri == null) Icons.Default.MusicNote else Icons.Default.Check,
-                        stringResource(R.string.audio_anhangen),
-                        tint = Black
-                    )
-                }
-
-                TextField(
-                    value = vm.currentMsg,
-                    onValueChange = { vm.currentMsg = it; vm.isEditMode = false },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    shape = RoundedCornerShape(24.dp),
-                    placeholder = { Text(stringResource(R.string.nachricht_eingeben), color = Color(0xFF888888)) },
-                    colors = TextFieldDefaults.colors(
-                        focusedTextColor = White,
-                        unfocusedTextColor = White,
-                        cursorColor = White,
-                        focusedContainerColor = Color(0xFF2A2A2A),
-                        unfocusedContainerColor = Color(0xFF2A2A2A),
-                        focusedIndicatorColor = Transparent,
-                        unfocusedIndicatorColor = Transparent
-                    ),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                    keyboardActions = KeyboardActions(onGo = { vm.sendMessage() })
-                )
-
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(Color(0xFF333333))
-                        .size(48.dp)
-                        .clickable(onClick = { vm.sendMessage() }),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .onGloballyPositioned {
+                            headerHeightDp = with(density) { it.size.height.toDp() }
+                        }
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send_message))
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                            .hazeEffect(
+                                state = hazeState, style = HazeStyle(
+                                    backgroundColor = Color(0xFF0C1017),
+                                    tint = HazeTint(Color(0xFF0C1017).copy(alpha = 0.7f)),
+                                    blurRadius = 60.dp,
+                                    noiseFactor = 0f
+                                )
+                            )
+                            .drawWithContent {
+                                drawContent()
+                                val fadePx = 24.dp.toPx()
+                                val bottomStop = (1f - fadePx / size.height).coerceIn(0f, 1f)
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        0f to Color.Black,
+                                        bottomStop to Color.Black,
+                                        1f to Color.Transparent
+                                    ),
+                                    blendMode = BlendMode.DstIn
+                                )
+                            }
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = paddingValues.calculateTopPadding())
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val isPrivate = prvt()
+
+                            listOfNotNull(
+                                "Nvidia",
+                                "Gemini",
+                                if (isPrivate) "Server" else null
+                            ).forEachIndexed { index, mode ->
+                                val containerColor by animateColorAsState(
+                                    targetValue = if (vm.currentMode == mode) Color(0xFF555555) else Color(
+                                        0xFF333333
+                                    ),
+                                    animationSpec = tween(durationMillis = 300),
+                                    label = "containerColor"
+                                )
+                                Box {
+                                    PloppingButton(
+                                        onClick = {
+                                            if (vm.currentMode == mode) vm.showAiModels = true
+                                            vm.setMode(mode)
+                                        },
+                                        colors = buttonColors(containerColor = containerColor),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text(mode, color = White, fontSize = 13.sp)
+                                    }
+
+                                    if (index == 0) {
+                                        DropdownMenu(
+                                            expanded = vm.showAiModels,
+                                            onDismissRequest = { vm.showAiModels = false },
+                                            containerColor = Color(0xFF333333),
+                                            shape = RoundedCornerShape(30.dp),
+                                            modifier = Modifier.padding(10.dp, 0.dp)
+                                        ) {
+                                            var showedDiv = false
+                                            vm.availableModels.forEach { model ->
+                                                if (model.vision && !showedDiv && !vm.availableModels[0].vision) {
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .padding(vertical = 16.dp)
+                                                            .fillMaxWidth(),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        HorizontalDivider(
+                                                            modifier = Modifier.weight(1f),
+                                                            thickness = 1.dp,
+                                                            color = White.copy(alpha = 0.3f)
+                                                        )
+
+                                                        Text(
+                                                            text = stringResource(R.string.vision_models),
+                                                            modifier = Modifier.padding(horizontal = 8.dp)
+                                                        )
+
+                                                        HorizontalDivider(
+                                                            modifier = Modifier.weight(1f),
+                                                            thickness = 1.dp,
+                                                            color = White.copy(alpha = 0.3f)
+                                                        )
+                                                    }
+                                                    showedDiv = true
+                                                }
+                                                val containerColorModel by animateColorAsState(
+                                                    targetValue = if (vm.selectedModel == model) Color(
+                                                        0xFF555555
+                                                    ) else Color(0xFF333333),
+                                                    animationSpec = tween(durationMillis = 300),
+                                                    label = "containerColor"
+                                                )
+                                                PloppingButton(
+                                                    onClick = {
+                                                        vm.selectModel(model)
+                                                    },
+                                                    onFinishedClick = { vm.showAiModels = false },
+                                                    colors = buttonColors(containerColor = containerColorModel),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    val sizeRegex = Regex("""-\d+b""")
+                                                    val sizeRegex1 = Regex("""\d+b""")
+                                                    val name = model.name
+                                                        .replace(sizeRegex, "")
+                                                        .replace("-", " ")
+                                                        .substringBeforeLast(":")
+                                                    val sizeString: String? =
+                                                        when (vm.currentMode) {
+                                                            "Nvidia" -> sizeRegex1.find(
+                                                                model.name
+                                                            )?.value
+
+                                                            "Gemini" -> null
+                                                            else -> model.name.substringAfter(":")
+                                                        }
+                                                    val size =
+                                                        if (sizeString != null && sizeString != "null") {
+                                                            " (${sizeString.replace("-", " ")})"
+                                                        } else ""
+                                                    val weightInfo =
+                                                        if (model.weight > 1 && !prvt()) " [${model.weight}x]" else ""
+                                                    Text(
+                                                        "$name$size$weightInfo",
+                                                        textAlign = TextAlign.Left,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            val clearButtonVisible = vm.history.isNotEmpty()
+
+                            val clearButtonAlpha by animateFloatAsState(
+                                targetValue = if (clearButtonVisible) 1f else 0f,
+                                animationSpec = tween(durationMillis = 300),
+                                label = "clearButtonAlpha"
+                            )
+
+                            Box {
+                                if (clearButtonVisible || clearButtonAlpha > 0f) {
+                                    PloppingButton(
+                                        onClick = { clearHistoryConfirmation = true },
+                                        modifier = Modifier
+                                            .alpha(clearButtonAlpha),
+                                        colors = buttonColors(containerColor = Color.Red),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Delete,
+                                            stringResource(R.string.clear_ai_history)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (vm.currentMode != "Server" && !prvt()) {
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                LinearProgressIndicator(
+                                    progress = { vm.getUsageProgress() },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(12.dp)),
+                                    color = Color(0xFF00FFAA),
+                                    trackColor = Color(0xFF444444),
+                                    strokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        vm.getUsageResetText(),
+                                        color = White.copy(alpha = 0.8f),
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(start = 10.dp)
+                                    )
+                                    Text(
+                                        "${vm.todayUsage}/$DAILY_LIMIT",
+                                        color = White,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.padding(end = 10.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+                    }
+                }
+
+                Spacer(Modifier.weight(1f))
+
+                val uploadButtonWeight by animateDpAsState(
+                    targetValue = if (vm.selectedModel.vision) 48.dp else 0.dp,
+                    animationSpec = tween(durationMillis = 300),
+                    label = "uploadButtonWeight"
+                )
+
+                val uploadButtonAlpha by animateFloatAsState(
+                    targetValue = if (vm.selectedModel.vision) 1f else 0f,
+                    animationSpec = tween(durationMillis = 300),
+                    label = "uploadButtonWeight"
+                )
+
+                val audioButtonWeight by animateDpAsState(
+                    targetValue = if (vm.selectedModel.audio) 48.dp else 0.dp,
+                    animationSpec = tween(300), label = ""
+                )
+                val audioButtonAlpha by animateFloatAsState(
+                    targetValue = if (vm.selectedModel.audio) 1f else 0f,
+                    animationSpec = tween(300), label = ""
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .zIndex(1f)
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { imagePickerLauncher.launch("image/*") },
+                        modifier = Modifier
+                            .size(uploadButtonWeight)
+                            .alpha(uploadButtonAlpha)
+                            .background(
+                                if (vm.selectedImageUri != null) Color(0xFF555555) else Color(
+                                    0xFF333333
+                                ),
+                                RoundedCornerShape(50)
+                            )
+                    ) {
+                        Icon(
+                            if (vm.selectedImageUri == null) Icons.Default.CameraAlt else Icons.Default.Check,
+                            stringResource(R.string.bild_anhangen),
+                            tint = Black
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { audioPickerLauncher.launch("audio/*") },
+                        modifier = Modifier
+                            .size(audioButtonWeight)
+                            .alpha(audioButtonAlpha)
+                            .background(
+                                if (vm.selectedAudioUri != null) Color(0xFF555555) else Color(
+                                    0xFF333333
+                                ),
+                                RoundedCornerShape(50)
+                            )
+                    ) {
+                        Icon(
+                            if (vm.selectedAudioUri == null) Icons.Default.MusicNote else Icons.Default.Check,
+                            stringResource(R.string.audio_anhangen),
+                            tint = Black
+                        )
+                    }
+
+                    TextField(
+                        value = vm.currentMsg,
+                        onValueChange = { vm.currentMsg = it; vm.isEditMode = false },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        shape = RoundedCornerShape(24.dp),
+                        placeholder = {
+                            Text(
+                                stringResource(R.string.nachricht_eingeben),
+                                color = Color(0xFF888888)
+                            )
+                        },
+                        colors = TextFieldDefaults.colors(
+                            focusedTextColor = White,
+                            unfocusedTextColor = White,
+                            cursorColor = White,
+                            focusedContainerColor = Color(0xFF2A2A2A),
+                            unfocusedContainerColor = Color(0xFF2A2A2A),
+                            focusedIndicatorColor = Transparent,
+                            unfocusedIndicatorColor = Transparent
+                        ),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                        keyboardActions = KeyboardActions(onGo = { vm.sendMessage() })
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(Color(0xFF333333))
+                            .size(48.dp)
+                            .clickable(onClick = { vm.sendMessage() }),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Send,
+                            contentDescription = stringResource(R.string.send_message)
+                        )
+                    }
                 }
             }
         }
