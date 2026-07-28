@@ -7,7 +7,11 @@ import android.content.Context
 import android.content.Intent
 import android.location.Location
 import android.os.Looper
+import androidx.core.content.ContextCompat
+import com.google.android.gms.location.ActivityRecognition
+import com.google.android.gms.location.ActivityRecognitionResult
 import com.google.android.gms.location.CurrentLocationRequest
+import com.google.android.gms.location.DetectedActivity
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingEvent
 import com.google.android.gms.location.GeofencingRequest
@@ -19,6 +23,9 @@ import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.Tasks
 import com.tabslify.core.objects.Config
 import com.tabslify.quiethoursnotificationhelper.getHomeWifiStatus
+import com.tabslify.quiethoursnotificationhelper.isLaptopConnected
+import com.tabslify.quiethoursnotificationhelper.stopAllSyncServices
+import com.tabslify.quiethoursnotificationhelper.syncTodosWithLaptop
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -42,15 +49,33 @@ data class ExploreTrackerInfo(
     val isEnabled: Boolean = false,
 )
 
+data class ExploreActivityInfo(
+    val mode: String = "UNKNOWN",
+    val confidence: Int = 0,
+)
+
 class ExploreGeofenceReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val event = GeofencingEvent.fromIntent(intent) ?: return
         if (event.hasError()) return
 
         when (event.geofenceTransition) {
-            Geofence.GEOFENCE_TRANSITION_ENTER -> ExploreLocationTracker.stop(context)
-            Geofence.GEOFENCE_TRANSITION_EXIT -> ExploreLocationTracker.start(context)
+            Geofence.GEOFENCE_TRANSITION_ENTER -> {
+                ExploreLocationTracker.stop(context)
+                ExploreLocationTracker.onArrivedHome(context)
+            }
+            Geofence.GEOFENCE_TRANSITION_EXIT -> {
+                ExploreLocationTracker.start(context)
+                ExploreLocationTracker.onLeftHome(context)
+            }
         }
+    }
+}
+
+class ExploreActivityRecognitionReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val result = ActivityRecognitionResult.extractResult(intent) ?: return
+        ExploreLocationTracker.onActivityRecognitionResult(context, result)
     }
 }
 
@@ -62,14 +87,25 @@ object ExploreLocationTracker {
     private val _trackerInfo = MutableStateFlow(ExploreTrackerInfo())
     val trackerInfo: StateFlow<ExploreTrackerInfo> = _trackerInfo.asStateFlow()
 
+    private val _currentActivity = MutableStateFlow(ExploreActivityInfo())
+    val currentActivity: StateFlow<ExploreActivityInfo> = _currentActivity.asStateFlow()
+
     private const val GEOFENCE_ID = "HOME"
     private const val GEOFENCE_RADIUS = 100f
     const val HOME_WIFI_SSID = "FRITZ!Box 5590 XO"
     private const val NIGHT_START_HOUR = 0
     private const val NIGHT_END_HOUR = 5
 
+    private const val MAX_ACCURACY_METERS = 50f
+    private const val UNIVERSAL_SPEED_CEILING_MPS = 55f
+    private const val AR_UPDATE_INTERVAL_MS = 30_000L
+    private const val AR_CONFIDENCE_FLOOR = 50
+    private const val AR_CEILING_CONFIDENCE_FLOOR = 75
+
     private var locationCallback: LocationCallback? = null
     private var lastLocation: Location? = null
+    private var currentMode: String = "UNKNOWN"
+    private var serviceContext: Context? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     @Volatile
@@ -86,6 +122,16 @@ object ExploreLocationTracker {
         return results[0]
     }
 
+    fun onArrivedHome(context: Context) {
+        syncTodosWithLaptop(context.applicationContext)
+    }
+
+    fun onLeftHome(context: Context) {
+        if (isLaptopConnected) {
+            stopAllSyncServices(context.applicationContext)
+        }
+    }
+
     private fun getClient(context: Context) =
         LocationServices.getFusedLocationProviderClient(context.applicationContext)
 
@@ -93,6 +139,14 @@ object ExploreLocationTracker {
         val intent = Intent(context, ExploreGeofenceReceiver::class.java)
         return PendingIntent.getBroadcast(
             context, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        )
+    }
+
+    private fun activityRecognitionPendingIntent(context: Context): PendingIntent {
+        val intent = Intent(context, ExploreActivityRecognitionReceiver::class.java)
+        return PendingIntent.getBroadcast(
+            context, 1, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
     }
@@ -176,10 +230,11 @@ object ExploreLocationTracker {
             if (isHomeWifi) {
                 _trackerStatus.value = "Gestoppt (Zuhause)"
                 stop(appCtx)
+                onArrivedHome(appCtx)
                 return@getHomeWifiStatus
             }
             if (isEnabled && !isNightTime()) {
-                startLocationUpdates(appCtx)
+                ContextCompat.startForegroundService(appCtx, Intent(appCtx, ExploreForegroundService::class.java))
             }
         }
     }
@@ -213,27 +268,114 @@ object ExploreLocationTracker {
                     distanceToHomeMeters = distanceHome,
                 )
 
-                _trackerStatus.value = if (distanceHome <= GEOFENCE_RADIUS) "Zuhause" else "Außerhalb"
+                if (distanceHome <= GEOFENCE_RADIUS) {
+                    _trackerStatus.value = "Zuhause"
+                    onArrivedHome(context)
+                } else {
+                    _trackerStatus.value = "Außerhalb"
+                    onLeftHome(context)
+                }
             } catch (_: Exception) {
                 _trackerStatus.value = "Warte auf Geofence"
             }
         }
     }
 
+    private fun locationRequestFor(mode: String): LocationRequest = when (mode) {
+        "STILL" -> LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 120_000L)
+            .setMinUpdateIntervalMillis(60_000L)
+            .setMinUpdateDistanceMeters(0f)
+            .setWaitForAccurateLocation(false)
+            .build()
+
+        "WALKING", "ON_FOOT" -> LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10_000L)
+            .setMinUpdateIntervalMillis(8_000L)
+            .setMinUpdateDistanceMeters(10f)
+            .setWaitForAccurateLocation(false)
+            .build()
+
+        "ON_BICYCLE" -> LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5_000L)
+            .setMinUpdateIntervalMillis(4_000L)
+            .setMinUpdateDistanceMeters(15f)
+            .setWaitForAccurateLocation(false)
+            .build()
+
+        "IN_VEHICLE" -> LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5_000L)
+            .setMinUpdateIntervalMillis(4_000L)
+            .setMinUpdateDistanceMeters(30f)
+            .setWaitForAccurateLocation(false)
+            .build()
+
+        else -> LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 20_000L)
+            .setMinUpdateIntervalMillis(15_000L)
+            .setMinUpdateDistanceMeters(20f)
+            .setWaitForAccurateLocation(false)
+            .build()
+    }
+
+    private fun modeSpeedCeiling(mode: String): Float = when (mode) {
+        "STILL" -> 2f
+        "WALKING", "ON_FOOT" -> 3f
+        "ON_BICYCLE" -> 12f
+        "IN_VEHICLE" -> 60f
+        else -> UNIVERSAL_SPEED_CEILING_MPS
+    }
+
+    private fun activityTypeToMode(type: Int): String = when (type) {
+        DetectedActivity.STILL -> "STILL"
+        DetectedActivity.WALKING -> "WALKING"
+        DetectedActivity.ON_FOOT -> "ON_FOOT"
+        DetectedActivity.ON_BICYCLE -> "ON_BICYCLE"
+        DetectedActivity.IN_VEHICLE -> "IN_VEHICLE"
+        else -> "UNKNOWN"
+    }
+
     @SuppressLint("MissingPermission")
-    private fun startLocationUpdates(context: Context) {
+    private fun applyLocationRequest(context: Context, mode: String) {
+        val callback = locationCallback ?: return
+        currentMode = mode
+        try {
+            val client = getClient(context)
+            client.removeLocationUpdates(callback)
+            client.requestLocationUpdates(locationRequestFor(mode), callback, Looper.getMainLooper())
+        } catch (_: Exception) {
+        }
+    }
+
+    fun onActivityRecognitionResult(context: Context, result: ActivityRecognitionResult) {
+        val appCtx = context.applicationContext
+        val most = result.mostProbableActivity
+        val mode = if (most.confidence >= AR_CONFIDENCE_FLOOR) activityTypeToMode(most.type) else "UNKNOWN"
+        _currentActivity.value = ExploreActivityInfo(mode, most.confidence)
+        if (locationCallback != null && mode != currentMode) {
+            applyLocationRequest(appCtx, mode)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startActivityRecognitionUpdates(context: Context) {
+        try {
+            ActivityRecognition.getClient(context)
+                .requestActivityUpdates(AR_UPDATE_INTERVAL_MS, activityRecognitionPendingIntent(context))
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun stopActivityRecognitionUpdates(context: Context) {
+        try {
+            ActivityRecognition.getClient(context)
+                .removeActivityUpdates(activityRecognitionPendingIntent(context))
+        } catch (_: Exception) {
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startLocationUpdates(context: Context, repo: ExploreRepository) {
         if (locationCallback != null) {
             return
         }
 
-        val repo = ExploreRepository(context)
         val client = getClient(context)
-
-        val request = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 30_000L)
-            .setMinUpdateIntervalMillis(15_000L)
-            .setMinUpdateDistanceMeters(25f)
-            .setWaitForAccurateLocation(false)
-            .build()
 
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
@@ -251,46 +393,94 @@ object ExploreLocationTracker {
                     distanceToHomeMeters = distanceHome,
                 )
 
-                val distance = lastLocation?.distanceTo(loc) ?: Float.MAX_VALUE
-                if (distance < 25f) {
+                if (loc.accuracy > MAX_ACCURACY_METERS) {
                     return
+                }
+
+                val previous = lastLocation
+                if (previous != null) {
+                    val deltaSeconds = (loc.time - previous.time) / 1000.0
+                    if (deltaSeconds > 0) {
+                        val impliedSpeed = previous.distanceTo(loc) / deltaSeconds
+                        val activityInfo = _currentActivity.value
+                        val ceiling = if (activityInfo.confidence >= AR_CEILING_CONFIDENCE_FLOOR) {
+                            modeSpeedCeiling(activityInfo.mode)
+                        } else {
+                            UNIVERSAL_SPEED_CEILING_MPS
+                        }
+                        if (impliedSpeed > ceiling) {
+                            return
+                        }
+                    }
                 }
 
                 lastLocation = loc
                 scope.launch {
                     try {
-                        repo.recordLocation(loc.latitude, loc.longitude)
+                        repo.ingest(
+                            RawPoint(
+                                lat = loc.latitude,
+                                lon = loc.longitude,
+                                accuracy = loc.accuracy,
+                                speed = if (loc.hasSpeed()) loc.speed else null,
+                                bearing = if (loc.hasBearing()) loc.bearing else null,
+                                activityType = _currentActivity.value.mode,
+                                activityConfidence = _currentActivity.value.confidence,
+                                timestamp = System.currentTimeMillis()
+                            )
+                        )
                     } catch (_: Exception) {
                     }
                 }
             }
         }
 
+        locationCallback = callback
         try {
-            client.requestLocationUpdates(request, callback, Looper.getMainLooper())
+            client.requestLocationUpdates(locationRequestFor(currentMode), callback, Looper.getMainLooper())
                 .addOnSuccessListener {}
                 .addOnFailureListener {}
-            locationCallback = callback
-            _trackerStatus.value = "Läuft aktiv"
-            ExploreWorker.schedule(context)
         } catch (e: Exception) {
             _trackerStatus.value = "Fehler: ${e.message}"
         }
     }
 
+    fun onServiceStarted(context: Context) {
+        val appCtx = context.applicationContext
+        serviceContext = appCtx
+        startLocationUpdates(appCtx, ExploreRepository(appCtx))
+        startActivityRecognitionUpdates(appCtx)
+        ExploreWorker.schedule(appCtx)
+        _trackerStatus.value = "Läuft aktiv"
+    }
+
+    fun onServiceDestroyed() {
+        val appCtx = serviceContext
+        if (appCtx != null) {
+            locationCallback?.let {
+                try {
+                    getClient(appCtx).removeLocationUpdates(it)
+                } catch (_: Exception) {
+                }
+            }
+            stopActivityRecognitionUpdates(appCtx)
+            ExploreWorker.cancel(appCtx)
+        }
+        locationCallback = null
+        lastLocation = null
+        currentMode = "UNKNOWN"
+        _currentActivity.value = ExploreActivityInfo()
+        serviceContext = null
+    }
+
     fun stop(context: Context) {
         val appCtx = context.applicationContext
-        val wasEnabled = isEnabled
         isEnabled = false
         _trackerInfo.value = _trackerInfo.value.copy(isEnabled = false)
 
-        if (locationCallback != null) {
-            getClient(appCtx).removeLocationUpdates(locationCallback!!)
-                .addOnSuccessListener {}
-                .addOnFailureListener {}
-            locationCallback = null
-            lastLocation = null
-            ExploreWorker.cancel(appCtx)
+        try {
+            appCtx.stopService(Intent(appCtx, ExploreForegroundService::class.java))
+        } catch (_: Exception) {
         }
 
         if (isNightTime()) {
