@@ -12,12 +12,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -55,6 +59,12 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Overlay
+import org.osmdroid.views.overlay.Polyline
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.math.floor
 
@@ -69,6 +79,13 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
     val tiles by vm.allTiles.collectAsStateWithLifecycle()
     val trackerStatus by ExploreLocationTracker.trackerStatus.collectAsStateWithLifecycle()
     val trackerInfo by ExploreLocationTracker.trackerInfo.collectAsStateWithLifecycle()
+    val currentActivity by ExploreLocationTracker.currentActivity.collectAsStateWithLifecycle()
+    val selectedDate by vm.selectedDate.collectAsStateWithLifecycle()
+    val daySegments by vm.daySegments.collectAsStateWithLifecycle()
+    val dayStays by vm.dayStays.collectAsStateWithLifecycle()
+    val dayPoints by vm.dayPoints.collectAsStateWithLifecycle()
+    val totalDistanceKm by vm.totalDistanceKm.collectAsStateWithLifecycle()
+    val timeMovingMs by vm.timeMovingMs.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var tileToDelete by remember { mutableStateOf<ExploredTile?>(null) }
@@ -96,10 +113,19 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
     }
 
     LaunchedEffect(Unit) {
-        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
-            ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
-        ) {
-            permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        val missing = buildList {
+            if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
+            ) {
+                add(Manifest.permission.ACCESS_FINE_LOCATION)
+                add(Manifest.permission.ACCESS_COARSE_LOCATION)
+            }
+            if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
+                add(Manifest.permission.ACTIVITY_RECOGNITION)
+            }
+        }
+        if (missing.isNotEmpty()) {
+            permissionLauncher.launch(missing.toTypedArray())
         }
     }
 
@@ -147,6 +173,56 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
+            val today = remember { LocalDate.now() }
+            val isToday = selectedDate == today
+            val todayLabel = stringResource(R.string.heute)
+            val gesternLabel = stringResource(R.string.gestern)
+            val dayLabel = remember(selectedDate, todayLabel, gesternLabel) {
+                when (selectedDate) {
+                    today -> todayLabel
+                    today.minusDays(1) -> gesternLabel
+                    else -> selectedDate.format(DateTimeFormatter.ofPattern("EEEE, d. MMMM", Locale.GERMAN))
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "◀",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    modifier = Modifier
+                        .clickable { vm.previousDay() }
+                        .padding(8.dp)
+                )
+                Text(text = dayLabel, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "▶",
+                    color = if (isToday) Color(0xFF4A4A55) else Color.White,
+                    fontSize = 20.sp,
+                    modifier = Modifier
+                        .clickable(enabled = !isToday) { vm.nextDay() }
+                        .padding(8.dp)
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                StatCard(stringResource(R.string.strecke), "%.1f km".format(totalDistanceKm), Modifier.weight(1f))
+                StatCard(stringResource(R.string.unterwegs), formatDuration(timeMovingMs), Modifier.weight(1f))
+                StatCard(stringResource(R.string.stopps), dayStays.size.toString(), Modifier.weight(1f))
+            }
+
             // Stats Header
             Row(
                 modifier = Modifier
@@ -179,6 +255,7 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
 
             TrackerDebugInfo(
                 info = trackerInfo,
+                activity = currentActivity,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
@@ -188,7 +265,7 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
+                    .weight(0.45f)
                     .clipToBounds()
             ) {
                 AndroidView(
@@ -226,12 +303,56 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                             mv.overlays.add(
                                 0,
                                 ExploreOverlay(tiles) { tile -> tileToDelete = tile })
-                            mv.invalidate()
                         }
+
+                        mv.overlays.removeAll(
+                            mv.overlays.filterIsInstance<Polyline>().toSet()
+                        )
+                        daySegments.forEach { segment ->
+                            val segmentPoints = dayPoints.filter { it.timestamp in segment.startTime..segment.endTime }
+                            if (segmentPoints.size >= 2) {
+                                mv.overlays.add(Polyline().apply {
+                                    setPoints(segmentPoints.map { GeoPoint(it.lat, it.lon) })
+                                    outlinePaint.color = colorForMode(segment.mode)
+                                    outlinePaint.strokeWidth = 8f
+                                    outlinePaint.isAntiAlias = true
+                                })
+                            }
+                        }
+
+                        mv.overlays.removeAll(
+                            mv.overlays.filterIsInstance<ExploreStayOverlay>().toSet()
+                        )
+                        if (dayStays.isNotEmpty()) {
+                            mv.overlays.add(ExploreStayOverlay(dayStays))
+                        }
+
+                        mv.invalidate()
                     },
                     modifier = Modifier
                         .fillMaxSize()
                 )
+            }
+
+            val timeline = remember(daySegments, dayStays) {
+                (daySegments.map { TimelineItem.SegmentItem(it) } + dayStays.map { TimelineItem.StayItem(it) })
+                    .sortedBy { it.startTime }
+            }
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(0.55f)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(vertical = 8.dp)
+            ) {
+                items(timeline, key = { it.startTime }) { item ->
+                    when (item) {
+                        is TimelineItem.SegmentItem -> SegmentCard(item.segment)
+                        is TimelineItem.StayItem -> StayCard(item.stay)
+                    }
+                }
             }
         }
         tileToDelete?.let { tile ->
@@ -245,6 +366,119 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                 title = stringResource(R.string.tile_loschen),
                 text = stringResource(R.string.diesen_bereich_als_unbesucht_markieren)
             )
+        }
+    }
+}
+
+private sealed class TimelineItem(val startTime: Long) {
+    class SegmentItem(val segment: Segment) : TimelineItem(segment.startTime)
+    class StayItem(val stay: Stay) : TimelineItem(stay.startTime)
+}
+
+private fun formatDuration(ms: Long): String {
+    val totalMinutes = ms / 60_000
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+    return if (hours > 0) "${hours}h ${minutes}min" else "${minutes}min"
+}
+
+private fun modeIcon(mode: String): String = when (mode) {
+    "IN_VEHICLE" -> "🚗"
+    "ON_BICYCLE" -> "🚲"
+    "WALKING", "ON_FOOT" -> "🚶"
+    else -> "❔"
+}
+
+private fun segmentAccentColor(mode: String): Color = when (mode) {
+    "IN_VEHICLE" -> Color(0xFF00CCFF)
+    "ON_BICYCLE" -> Color(0xFF00FFAA)
+    "WALKING", "ON_FOOT" -> Color(0xFFFFAB00)
+    else -> Color(0xFF9090A0)
+}
+
+private fun colorForMode(mode: String): Int = when (mode) {
+    "IN_VEHICLE" -> android.graphics.Color.rgb(0, 204, 255)
+    "ON_BICYCLE" -> android.graphics.Color.rgb(0, 255, 170)
+    "WALKING", "ON_FOOT" -> android.graphics.Color.rgb(255, 171, 0)
+    else -> android.graphics.Color.rgb(144, 144, 160)
+}
+
+@Composable
+private fun modeLabel(mode: String): String = when (mode) {
+    "IN_VEHICLE" -> stringResource(R.string.modus_auto)
+    "ON_BICYCLE" -> stringResource(R.string.modus_fahrrad)
+    "WALKING", "ON_FOOT" -> stringResource(R.string.modus_zu_fuss)
+    else -> stringResource(R.string.modus_unbekannt)
+}
+
+private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
+private fun timeRangeLabel(start: Long, end: Long): String {
+    val startLabel = Instant.ofEpochMilli(start).atZone(ZoneId.systemDefault()).format(timeFormatter)
+    val endLabel = Instant.ofEpochMilli(end).atZone(ZoneId.systemDefault()).format(timeFormatter)
+    return "$startLabel – $endLabel"
+}
+
+@Composable
+private fun SegmentCard(segment: Segment, modifier: Modifier = Modifier) {
+    NeonBox(
+        modifier = modifier.fillMaxWidth(),
+        borderWidth = 2.dp,
+        neonColors = listOf(segmentAccentColor(segment.mode), Color(0xFF00CCFF)),
+        backgroundAlpha = 0.15f,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp, horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = modeIcon(segment.mode), fontSize = 22.sp)
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(text = modeLabel(segment.mode), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text(text = timeRangeLabel(segment.startTime, segment.endTime), color = Color(0xFF9090A0), fontSize = 11.sp)
+                }
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(text = "%.1f km".format(segment.distanceMeters / 1000f), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(text = formatDuration(segment.endTime - segment.startTime), color = Color(0xFF9090A0), fontSize = 11.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StayCard(stay: Stay, modifier: Modifier = Modifier) {
+    NeonBox(
+        modifier = modifier.fillMaxWidth(),
+        borderWidth = 2.dp,
+        neonColors = if (stay.isHome) listOf(Color(0xFF00FFAA), Color(0xFF00CCFF)) else listOf(Color(0xFF9090A0), Color(0xFF606070)),
+        backgroundAlpha = 0.12f,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp, horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = if (stay.isHome) "🏠" else "📍", fontSize = 22.sp)
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = stay.placeName ?: stringResource(R.string.modus_aufenthalt),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    Text(text = timeRangeLabel(stay.startTime, stay.endTime), color = Color(0xFF9090A0), fontSize = 11.sp)
+                }
+            }
+            Text(text = formatDuration(stay.endTime - stay.startTime), color = Color(0xFF9090A0), fontSize = 11.sp)
         }
     }
 }
@@ -288,7 +522,7 @@ private fun StatCard(
 }
 
 @Composable
-private fun TrackerDebugInfo(info: ExploreTrackerInfo, modifier: Modifier = Modifier) {
+private fun TrackerDebugInfo(info: ExploreTrackerInfo, activity: ExploreActivityInfo, modifier: Modifier = Modifier) {
     NeonBox(
         modifier = modifier,
         borderWidth = 2.dp,
@@ -324,6 +558,7 @@ private fun TrackerDebugInfo(info: ExploreTrackerInfo, modifier: Modifier = Modi
             )
             DebugLine(stringResource(R.string.nachtmodus), if (info.isNight) stringResource(R.string.ja) else stringResource(R.string.nein))
             DebugLine(stringResource(R.string.enabled), if (info.isEnabled) stringResource(R.string.ja) else stringResource(R.string.nein))
+            DebugLine(stringResource(R.string.aktivitaet), "${modeLabel(activity.mode)} (${activity.confidence}%)")
         }
     }
 }
@@ -393,5 +628,25 @@ private class ExploreOverlay(
             return true
         }
         return false
+    }
+}
+
+private class ExploreStayOverlay(private val stays: List<Stay>) : Overlay() {
+    private val homePaint = Paint().apply {
+        color = android.graphics.Color.argb(230, 0, 255, 170)
+        style = Paint.Style.FILL
+    }
+    private val otherPaint = Paint().apply {
+        color = android.graphics.Color.argb(230, 144, 144, 160)
+        style = Paint.Style.FILL
+    }
+
+    override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
+        if (shadow) return
+        val projection = mapView.projection
+        stays.forEach { stay ->
+            val pixel = projection.toPixels(GeoPoint(stay.centerLat, stay.centerLon), null)
+            canvas.drawCircle(pixel.x.toFloat(), pixel.y.toFloat(), 16f, if (stay.isHome) homePaint else otherPaint)
+        }
     }
 }
