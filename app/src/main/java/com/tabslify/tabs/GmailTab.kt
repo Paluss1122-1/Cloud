@@ -34,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -102,6 +104,8 @@ data class EmailItem(
     val summary: String?,
     val hasSummary: Boolean,
 )
+
+var pendingEmailOpen: Pair<String, String>? by mutableStateOf(null)
 
 private val emailJson = Json { ignoreUnknownKeys = true }
 
@@ -230,6 +234,15 @@ fun GmailTabContent() {
         }
     }
 
+    LaunchedEffect(allEmails, pendingEmailOpen) {
+        val target = pendingEmailOpen ?: return@LaunchedEffect
+        val (account, uid) = target
+        allEmails.find { it.account == account && it.id == uid }?.let { match ->
+            selectedEmail = match
+            pendingEmailOpen = null
+        }
+    }
+
     val accounts = remember(allEmails) { allEmails.map { it.account }.distinct().sorted() }
     val emails = remember(allEmails, accountFilter) {
         accountFilter?.let { f -> allEmails.filter { it.account == f } } ?: allEmails
@@ -261,51 +274,58 @@ fun GmailTabContent() {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xFF111114))
+            .background(Color.Transparent)
     ) {
-        when {
-            selectedEmail != null -> EmailDetailView(
-                email = selectedEmail!!,
-                onBack = { selectedEmail = null },
-                onDelete = { pendingDelete = selectedEmail })
+        PullToRefreshBox(
+            isRefreshing = isLoading,
+            onRefresh = {
+                refresh()
+            },
+            modifier = Modifier
+                .fillMaxSize(),
+            indicator = {}
+        ) {
+            when {
+                selectedEmail != null -> EmailDetailView(
+                    email = selectedEmail!!,
+                    onBack = { selectedEmail = null },
+                    onDelete = { pendingDelete = selectedEmail })
 
-            else -> Column(Modifier.fillMaxSize()) {
-                EmailTopBar(
-                    cacheInfo = if (isLoading) stringResource(R.string.ladt_bisher, emails.size)
-                    else pluralStringResource(R.plurals.emails, emails.size, emails.size),
-                    isLoading = isLoading,
-                    onReload = { refresh() }
-                )
-                if (accounts.size > 1) {
-                    AccountFilterRow(
-                        accounts = accounts,
-                        selected = accountFilter,
-                        onSelect = { accountFilter = it }
-                    )
-                }
-                when {
-                    isLoading && emails.isEmpty() -> LoadingPlaceholder()
-                    errorMsg != null && emails.isEmpty() -> ErrorPlaceholder(errorMsg!!) { refresh() }
-                    emails.isEmpty() -> EmptyPlaceholder { refresh() }
-                    else -> {
-                        if (isLoading) {
-                            LinearProgressIndicator(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(2.dp),
-                                color = Color(0xFF4285F4),
-                                trackColor = Color.Transparent
+                else -> Column(Modifier.fillMaxSize()) {
+                    if (accounts.size > 1) {
+                        AccountFilterRow(
+                            accounts = accounts,
+                            selected = accountFilter,
+                            onSelect = { accountFilter = it },
+                            cacheInfo = if (isLoading) stringResource(R.string.ladt_bisher, emails.size)
+                            else pluralStringResource(R.plurals.emails, emails.size, emails.size),
+                        )
+                    }
+                    when {
+                        isLoading && emails.isEmpty() -> LoadingPlaceholder()
+                        errorMsg != null && emails.isEmpty() -> ErrorPlaceholder(errorMsg!!) { refresh() }
+                        emails.isEmpty() -> EmptyPlaceholder { refresh() }
+                        else -> {
+                            if (isLoading) {
+                                LinearProgressIndicator(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(2.dp),
+                                    color = Color(0xFF4285F4),
+                                    trackColor = Color.Transparent
+                                )
+                            }
+                            EmailList(
+                                emails = emails,
+                                onClick = { selectedEmail = it },
+                                onLongClick = { pendingDelete = it }
                             )
                         }
-                        EmailList(
-                            emails = emails,
-                            onClick = { selectedEmail = it },
-                            onLongClick = { pendingDelete = it }
-                        )
                     }
                 }
             }
         }
+
 
         pendingDelete?.let { target ->
             AlertDialogTabslify(
@@ -318,67 +338,24 @@ fun GmailTabContent() {
     }
 }
 
-// ─── Top-Bar ─────────────────────────────────────────────────────────────────
-
-@Composable
-fun EmailTopBar(
-    cacheInfo: String?,
-    isLoading: Boolean,
-    onReload: () -> Unit,
-) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFF1A1A22))
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            GmailLogoText()
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                if (cacheInfo != null) {
-                    Text(cacheInfo, color = Color(0xFF555568), fontSize = 11.sp)
-                }
-            }
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    color = Color(0xFF4285F4),
-                    strokeWidth = 2.dp
-                )
-                Spacer(Modifier.width(4.dp))
-            }
-            IconButton(onClick = onReload, enabled = !isLoading) {
-                Icon(
-                    Icons.Default.Refresh,
-                    null,
-                    tint = Color(0xFF8888AA),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
-        HorizontalDivider(color = Color(0xFF222230))
-    }
-}
-
 @Composable
 fun AccountFilterRow(
     accounts: List<String>,
     selected: String?,
     onSelect: (String?) -> Unit,
+    cacheInfo: String
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF141420))
+            .background(Color.Transparent)
             .horizontalScroll(rememberScrollState())
             .padding(horizontal = 8.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         AccountChip(label = stringResource(R.string.alle), active = selected == null) { onSelect(null) }
         accounts.forEach { acc ->
-            AccountChip(label = acc.substringBefore("@"), active = selected == acc) { onSelect(acc) }
+            AccountChip(label = "${acc.substringBefore("@")}${if (selected == acc) " $cacheInfo" else ""}", active = selected == acc) { onSelect(acc) }
         }
     }
 }
@@ -400,8 +377,6 @@ private fun AccountChip(label: String, active: Boolean, onClick: () -> Unit) {
         )
     }
 }
-
-// ─── Email-Liste ─────────────────────────────────────────────────────────────
 
 @Composable
 fun EmailList(
@@ -431,11 +406,10 @@ fun EmailRow(email: EmailItem, onClick: () -> Unit, onLongClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .background(Color(0xFF161620))
+            .background(Color.Transparent)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // Sender-Avatar
             val initial = email.from.firstOrNull { it.isLetter() }?.uppercase() ?: "?"
             val avatarColor = remember(email.from) {
                 val colors = listOf(
