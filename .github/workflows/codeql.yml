@@ -21,8 +21,6 @@ on:
 
 jobs:
   analyze:
-    # disabled: CodeQL's Kotlin extractor doesn't support Kotlin 2.4.10 yet (only up to 2.4.0 as of CodeQL 2.26.1)
-    if: false
     name: Analyze (${{ matrix.language }})
     # Runner size impacts CodeQL analysis time. To learn more, please see:
     #   - https://gh.io/recommended-hardware-resources-for-running-codeql
