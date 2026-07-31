@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.tabslify.R
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -39,8 +40,13 @@ class ExploreViewModel(app: Application) : AndroidViewModel(app) {
     var todayCount by mutableLongStateOf(0L)
         private set
 
+    private var exportRunning = false
+
     private val _selectedDate = MutableStateFlow(LocalDate.now())
     val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
+
+    private val _exportStatus = MutableStateFlow<String?>(null)
+    val exportStatus: StateFlow<String?> = _exportStatus.asStateFlow()
 
     val daySegments: StateFlow<List<Segment>> = _selectedDate.flatMapLatest { day ->
         val (start, end) = dayBounds(day)
@@ -92,6 +98,32 @@ class ExploreViewModel(app: Application) : AndroidViewModel(app) {
         val next = _selectedDate.value.plusDays(1)
         if (!next.isAfter(LocalDate.now())) {
             _selectedDate.value = next
+        }
+    }
+
+    fun exportData(days: Int) {
+        if (exportRunning) return
+        exportRunning = true
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            _exportStatus.value = app.getString(R.string.explore_export_laeuft)
+            try {
+                ExploreSegmentBuilder.rebuildDay(app, _selectedDate.value, force = true)
+                val file = ExploreExport.export(app, _selectedDate.value, days)
+                _exportStatus.value = app.getString(
+                    R.string.explore_export_fertig,
+                    file.name,
+                    "%.0f KB".format(file.length() / 1024.0)
+                )
+                ExploreExport.share(app, file)
+            } catch (e: Exception) {
+                _exportStatus.value = app.getString(
+                    R.string.explore_export_fehler,
+                    e.message ?: e::class.java.simpleName
+                )
+            } finally {
+                exportRunning = false
+            }
         }
     }
 
