@@ -49,8 +49,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -68,7 +66,9 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -163,6 +163,7 @@ import com.tabslify.privatetabslifyapp.getLocalFileWithPath
 import com.tabslify.privatetabslifyapp.getMimeType
 import com.tabslify.privatetabslifyapp.isImageFile
 import com.tabslify.privatetabslifyapp.isOnline
+import com.tabslify.tabs.ApkmInstallerTabContent
 import com.tabslify.tabs.BrowserTabContent
 import com.tabslify.tabs.CalendarTabContent
 import com.tabslify.tabs.ContactsRepository
@@ -175,20 +176,20 @@ import com.tabslify.tabs.HeiseNewsTabContent
 import com.tabslify.tabs.MovieDiscoveryTabContent
 import com.tabslify.tabs.NotizenApp
 import com.tabslify.tabs.OtherBucketViewer
-import com.tabslify.tabs.ApkmInstallerTabContent
 import com.tabslify.tabs.PCManagerTab
 import com.tabslify.tabs.QuickSettingsTabContent
-import com.tabslify.tabs.pendingApkmUri
 import com.tabslify.tabs.RemoteDesktopTabContent
 import com.tabslify.tabs.WeatherTabContent
 import com.tabslify.tabs.aitab.AITabContent
 import com.tabslify.tabs.audiorecordertab.AudioRecorderTab
 import com.tabslify.tabs.authenticator.AuthenticatorTab
 import com.tabslify.tabs.exploretab.ExploreTabContent
+import com.tabslify.tabs.fitnesstab.FitnessTabContent
 import com.tabslify.tabs.mediaplayer.AiResponseHistorySheet
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
 import com.tabslify.tabs.mediaplayer.MediaTab
 import com.tabslify.tabs.mediaplayer.PodcastTab
+import com.tabslify.tabs.pendingApkmUri
 import com.tabslify.tabs.school.VocabTab
 import com.tabslify.tabs.virustotal.VirusTotalTabContent
 import io.github.jan.supabase.storage.Storage
@@ -202,7 +203,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.time.Instant
 import java.time.ZoneId
-import java.util.Calendar
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
@@ -361,6 +361,11 @@ enum class MenuItem(
         R.string.virustotal,
         "🛡️",
         { VirusTotalTabContent() }
+    ),
+    PUSHUPS(
+        R.string.push_ups,
+        "💪",
+        { FitnessTabContent() }
     ),
 }
 
