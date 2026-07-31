@@ -23,6 +23,7 @@ class ExploreRepository(context: Context) {
     private val rawPointDao = db.rawPointDao()
     private val segmentDao = db.segmentDao()
     private val stayDao = db.stayDao()
+    private val trackerEventDao = db.trackerEventDao()
 
     val countFlow: Flow<Long> = dao.countFlow()
     val allTilesFlow: Flow<List<ExploredTile>> = dao.allFlow()
@@ -59,7 +60,19 @@ class ExploreRepository(context: Context) {
         stays.forEach { stayDao.insert(it) }
     }
 
+    suspend fun segmentsBetween(dayStart: Long, dayEnd: Long): List<Segment> =
+        segmentDao.segmentsBetween(dayStart, dayEnd)
+
+    suspend fun logTrackerEvent(event: TrackerEvent) {
+        trackerEventDao.insert(event)
+    }
+
+    suspend fun trackerEventsBetween(from: Long, to: Long): List<TrackerEvent> =
+        trackerEventDao.eventsBetween(from, to)
+
     suspend fun deleteRawPointsBefore(cutoff: Long) = rawPointDao.deleteBefore(cutoff)
+
+    suspend fun deleteTrackerEventsBefore(cutoff: Long) = trackerEventDao.deleteBefore(cutoff)
 
     suspend fun todayCount(): Long {
         val midnight = System.currentTimeMillis() / 86_400_000L * 86_400_000L
