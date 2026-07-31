@@ -75,6 +75,9 @@ android {
         buildConfig = true
         compose = true
     }
+    androidResources {
+        noCompress += listOf("task", "tflite")
+    }
     packaging {
         resources {
             excludes += listOf(
@@ -124,6 +127,11 @@ dependencies {
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.common)
     implementation(libs.androidx.biometric)
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.mediapipe.tasks.vision)
     implementation(libs.core)
     implementation(libs.zxing.android.embedded)
     debugImplementation(libs.androidx.compose.ui.tooling)
