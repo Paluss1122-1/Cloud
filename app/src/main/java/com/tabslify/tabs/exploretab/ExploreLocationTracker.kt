@@ -52,6 +52,7 @@ data class ExploreTrackerInfo(
 data class ExploreActivityInfo(
     val mode: String = "UNKNOWN",
     val confidence: Int = 0,
+    val held: Boolean = false,
 )
 
 class ExploreGeofenceReceiver : BroadcastReceiver() {
@@ -102,11 +103,25 @@ object ExploreLocationTracker {
     private const val AR_CONFIDENCE_FLOOR = 50
     private const val AR_CEILING_CONFIDENCE_FLOOR = 75
 
+    private const val AR_MODE_HOLD_MS = 3 * 60_000L
+    private const val MIN_IMPLIED_SPEED_INTERVAL_S = 2.0
+
+    private const val AR_LOG_CONFIDENCE_DELTA = 15
+    private const val AR_LOG_MAX_SILENCE_MS = 5 * 60_000L
+
     private var locationCallback: LocationCallback? = null
     private var lastLocation: Location? = null
     private var currentMode: String = "UNKNOWN"
+    private var currentProfile: String = requestProfile("UNKNOWN")
     private var serviceContext: Context? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    private var lastConfidentMode = "UNKNOWN"
+    private var lastConfidentAt = 0L
+
+    private var lastLoggedActivityMode: String? = null
+    private var lastLoggedActivityConfidence = 0
+    private var lastLoggedActivityAt = 0L
 
     @Volatile
     private var isEnabled = false
@@ -316,9 +331,17 @@ object ExploreLocationTracker {
     private fun modeSpeedCeiling(mode: String): Float = when (mode) {
         "STILL" -> 2f
         "WALKING", "ON_FOOT" -> 3f
-        "ON_BICYCLE" -> 12f
+        "ON_BICYCLE" -> 20f
         "IN_VEHICLE" -> 60f
         else -> UNIVERSAL_SPEED_CEILING_MPS
+    }
+
+    private fun requestProfile(mode: String): String = when (mode) {
+        "STILL" -> "STILL"
+        "WALKING", "ON_FOOT" -> "FOOT"
+        "ON_BICYCLE" -> "BICYCLE"
+        "IN_VEHICLE" -> "VEHICLE"
+        else -> "DEFAULT"
     }
 
     private fun activityTypeToMode(type: Int): String = when (type) {
@@ -330,10 +353,56 @@ object ExploreLocationTracker {
         else -> "UNKNOWN"
     }
 
+    private fun logEvent(context: Context, type: String, mode: String, confidence: Int, detail: String?, timestamp: Long = System.currentTimeMillis()) {
+        val appCtx = context.applicationContext
+        scope.launch {
+            try {
+                ExploreRepository(appCtx).logTrackerEvent(
+                    TrackerEvent(
+                        timestamp = timestamp,
+                        type = type,
+                        mode = mode,
+                        confidence = confidence,
+                        detail = detail
+                    )
+                )
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    fun tuningSnapshot(): Map<String, Any> {
+        val modes = listOf("STILL", "WALKING", "ON_FOOT", "ON_BICYCLE", "IN_VEHICLE", "UNKNOWN")
+        return mapOf(
+            "maxAccuracyMeters" to MAX_ACCURACY_METERS,
+            "universalSpeedCeilingMps" to UNIVERSAL_SPEED_CEILING_MPS,
+            "arUpdateIntervalMs" to AR_UPDATE_INTERVAL_MS,
+            "arConfidenceFloor" to AR_CONFIDENCE_FLOOR,
+            "arCeilingConfidenceFloor" to AR_CEILING_CONFIDENCE_FLOOR,
+            "arModeHoldMs" to AR_MODE_HOLD_MS,
+            "minImpliedSpeedIntervalSeconds" to MIN_IMPLIED_SPEED_INTERVAL_S,
+            "geofenceRadiusMeters" to GEOFENCE_RADIUS,
+            "nightStartHour" to NIGHT_START_HOUR,
+            "nightEndHour" to NIGHT_END_HOUR,
+            "speedCeilingsMps" to modes.associateWith { modeSpeedCeiling(it) },
+            "requestProfiles" to modes.associateWith { requestProfile(it) },
+            "locationRequests" to modes.associateWith { mode ->
+                val request = locationRequestFor(mode)
+                mapOf(
+                    "intervalMs" to request.intervalMillis,
+                    "minIntervalMs" to request.minUpdateIntervalMillis,
+                    "minDistanceMeters" to request.minUpdateDistanceMeters,
+                    "priority" to request.priority
+                )
+            }
+        )
+    }
+
     @SuppressLint("MissingPermission")
     private fun applyLocationRequest(context: Context, mode: String) {
         val callback = locationCallback ?: return
         currentMode = mode
+        currentProfile = requestProfile(mode)
         try {
             val client = getClient(context)
             client.removeLocationUpdates(callback)
@@ -345,9 +414,48 @@ object ExploreLocationTracker {
     fun onActivityRecognitionResult(context: Context, result: ActivityRecognitionResult) {
         val appCtx = context.applicationContext
         val most = result.mostProbableActivity
-        val mode = if (most.confidence >= AR_CONFIDENCE_FLOOR) activityTypeToMode(most.type) else "UNKNOWN"
-        _currentActivity.value = ExploreActivityInfo(mode, most.confidence)
-        if (locationCallback != null && mode != currentMode) {
+        val now = System.currentTimeMillis()
+
+        val detected = activityTypeToMode(most.type)
+        val confident = most.confidence >= AR_CONFIDENCE_FLOOR && detected != "UNKNOWN"
+        var held = false
+        val mode = when {
+            confident -> {
+                lastConfidentMode = detected
+                lastConfidentAt = now
+                detected
+            }
+
+            lastConfidentMode != "UNKNOWN" && now - lastConfidentAt <= AR_MODE_HOLD_MS -> {
+                held = true
+                lastConfidentMode
+            }
+
+            else -> {
+                lastConfidentMode = "UNKNOWN"
+                "UNKNOWN"
+            }
+        }
+        _currentActivity.value = ExploreActivityInfo(mode, most.confidence, held)
+
+        val worthLogging = mode != lastLoggedActivityMode ||
+            kotlin.math.abs(most.confidence - lastLoggedActivityConfidence) >= AR_LOG_CONFIDENCE_DELTA ||
+            now - lastLoggedActivityAt >= AR_LOG_MAX_SILENCE_MS
+        if (worthLogging) {
+            lastLoggedActivityMode = mode
+            lastLoggedActivityConfidence = most.confidence
+            lastLoggedActivityAt = now
+            val candidates = result.probableActivities.joinToString(" ") {
+                "${activityTypeToMode(it.type)}:${it.confidence}"
+            }
+            val suffix = if (held) " gehalten" else ""
+            logEvent(appCtx, "AR", mode, most.confidence, candidates + suffix, result.time)
+        }
+
+        val profile = requestProfile(mode)
+        currentMode = mode
+        if (locationCallback != null && profile != currentProfile) {
+            logEvent(appCtx, "MODE_SWITCH", mode, most.confidence, "profil=$currentProfile->$profile")
             applyLocationRequest(appCtx, mode)
         }
     }
@@ -393,24 +501,39 @@ object ExploreLocationTracker {
                     distanceToHomeMeters = distanceHome,
                 )
 
+                val activityInfo = _currentActivity.value
+
                 if (loc.accuracy > MAX_ACCURACY_METERS) {
+                    logEvent(
+                        context, "REJECT_ACCURACY", activityInfo.mode, activityInfo.confidence,
+                        "acc=%.1f limit=%.1f".format(loc.accuracy, MAX_ACCURACY_METERS)
+                    )
                     return
                 }
 
                 val previous = lastLocation
-                if (previous != null) {
-                    val deltaSeconds = (loc.time - previous.time) / 1000.0
-                    if (deltaSeconds > 0) {
-                        val impliedSpeed = previous.distanceTo(loc) / deltaSeconds
-                        val activityInfo = _currentActivity.value
-                        val ceiling = if (activityInfo.confidence >= AR_CEILING_CONFIDENCE_FLOOR) {
-                            modeSpeedCeiling(activityInfo.mode)
-                        } else {
-                            UNIVERSAL_SPEED_CEILING_MPS
-                        }
-                        if (impliedSpeed > ceiling) {
-                            return
-                        }
+                val deltaSeconds = if (previous != null) (loc.time - previous.time) / 1000.0 else 0.0
+                val distance = if (previous != null) previous.distanceTo(loc) else 0f
+
+                val measuredSpeed = if (loc.hasSpeed()) loc.speed.toDouble() else null
+                val impliedSpeed = if (deltaSeconds >= MIN_IMPLIED_SPEED_INTERVAL_S) distance / deltaSeconds else null
+                val speedSource = if (measuredSpeed != null) "doppler" else "implied"
+                val speed = measuredSpeed ?: impliedSpeed
+
+                if (speed != null) {
+                    val ceiling = if (activityInfo.confidence >= AR_CEILING_CONFIDENCE_FLOOR && !activityInfo.held) {
+                        modeSpeedCeiling(activityInfo.mode)
+                    } else {
+                        UNIVERSAL_SPEED_CEILING_MPS
+                    }
+                    if (speed > ceiling) {
+                        logEvent(
+                            context, "REJECT_SPEED", activityInfo.mode, activityInfo.confidence,
+                            "v=%.1f quelle=%s ceiling=%.1f dt=%.1f dist=%.1f acc=%.1f".format(
+                                speed, speedSource, ceiling, deltaSeconds, distance, loc.accuracy
+                            )
+                        )
+                        return
                     }
                 }
 
@@ -469,6 +592,9 @@ object ExploreLocationTracker {
         locationCallback = null
         lastLocation = null
         currentMode = "UNKNOWN"
+        currentProfile = requestProfile("UNKNOWN")
+        lastConfidentMode = "UNKNOWN"
+        lastConfidentAt = 0L
         _currentActivity.value = ExploreActivityInfo()
         serviceContext = null
     }
