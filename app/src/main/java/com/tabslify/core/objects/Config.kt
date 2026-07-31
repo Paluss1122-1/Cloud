@@ -103,7 +103,8 @@ object Config {
         MenuItem.PODCAST to R.string.so_bedienst_du_die_podcasts,
         MenuItem.HEISE_NEWS to R.string.so_bedienst_du_die_news,
         MenuItem.PC_MANAGER to R.string.so_bedienst_du_den_pc,
-        MenuItem.APKM_INSTALLER to R.string.so_bedienst_du_den_apkm
+        MenuItem.APKM_INSTALLER to R.string.so_bedienst_du_den_apkm,
+        MenuItem.PUSHUPS to R.string.so_bedienst_du_den_pushup
     )
 
     var LAT: Double = 0.0
