@@ -30,7 +30,9 @@ class ExploreNightRestartWorker(ctx: Context, params: WorkerParameters) : Worker
             try {
                 ExploreSegmentBuilder.rebuildDay(ctx, LocalDate.now().minusDays(1))
                 val cutoff = System.currentTimeMillis() - RAW_POINT_RETENTION_DAYS * 24 * 60 * 60 * 1000
-                ExploreRepository(ctx).deleteRawPointsBefore(cutoff)
+                val repo = ExploreRepository(ctx)
+                repo.deleteRawPointsBefore(cutoff)
+                repo.deleteTrackerEventsBefore(cutoff)
             } catch (_: Exception) {
             }
         }
