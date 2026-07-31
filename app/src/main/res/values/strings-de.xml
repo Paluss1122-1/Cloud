@@ -1826,6 +1826,12 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="modus_unbekannt">Unbekannt</string>
     <string name="modus_aufenthalt">Aufenthalt</string>
     <string name="aktivitaet">Aktivität</string>
+    <string name="explore_export">📤 Export</string>
+    <string name="explore_export_tag">Tag</string>
+    <string name="explore_export_7_tage">7 Tage</string>
+    <string name="explore_export_laeuft">Export läuft…</string>
+    <string name="explore_export_fertig">Export erstellt: %1$s (%2$s)</string>
+    <string name="explore_export_fehler">Export fehlgeschlagen: %1$s</string>
     <string name="tile_loschen">Tile löschen</string> <!-- app/src/main/java/com/tabslify/tabs/exploretab/ExploreTabContent.kt:245 -->
     <string name="diesen_bereich_als_unbesucht_markieren">Diesen Bereich als unbesucht markieren?</string> <!-- app/src/main/java/com/tabslify/tabs/exploretab/ExploreTabContent.kt:246 -->
     <string name="letzte_position">Letzte Position</string> <!-- app/src/main/java/com/tabslify/tabs/exploretab/ExploreTabContent.kt:303 -->
@@ -2139,4 +2145,840 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="cloud_backup_restore_confirm">Dieses Backup wird über die aktuellen Einstellungen gelegt. Vorher wird automatisch eine Sicherheitskopie angelegt. Fortfahren?</string>
     <string name="cloud_backup_restored">Wiederhergestellt – App ggf. neu starten</string>
     <string name="cloud_backup_shrink_warn">Backup übersprungen: verdächtig wenige Daten</string>
+    <string name="push_ups">Push-ups</string> <!-- app/src/main/java/com/tabslify/core/ui/PrivateTabslifyApp.kt -->
+    <string name="fitnesstab_zahlen_von_push_ups">FitnessTab: Zählen von Push-ups per Pose-Erkennung (Verarbeitung nur auf dem Gerät)</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt -->
+    <string name="fitness_start">Start</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpControls.kt -->
+    <string name="fitness_stop">Stopp</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpControls.kt -->
+    <string name="fitness_reset">Zurücksetzen</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpControls.kt -->
+    <string name="fitness_dauer">Dauer</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpHud.kt -->
+    <string name="fitness_tempo">Tempo</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpHud.kt -->
+    <string name="fitness_tempo_wert">%1$.1f/min</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpHud.kt -->
+    <string name="fitness_bestleistung">Bestleistung</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpHud.kt -->
+    <string name="fitness_neuer_rekord">Neuer Rekord!</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpControls.kt -->
+    <string name="fitness_phase_oben">OBEN</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpHud.kt -->
+    <string name="fitness_phase_unten">UNTEN</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpHud.kt -->
+    <string name="fitness_phase_bereit">BEREIT</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpHud.kt -->
+    <string name="fitness_ellbogen">Ellbogen %1$d°</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpControls.kt -->
+    <string name="fitness_kein_korper">Kein Körper erkannt – stell das Handy so auf, dass du komplett im Bild bist.</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpControls.kt -->
+    <string name="fitness_arme_verdeckt">Arme nicht sichtbar – Hände und Ellbogen müssen im Bild sein.</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpControls.kt -->
+    <string name="fitness_kalibriert">Kalibriere … mach einen vollen Push-up.</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpControls.kt -->
+    <string name="fitness_form_huefte">Hüfte durchdrücken</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/FitnessViewModel.kt -->
+    <string name="fitness_form_tiefer">Tiefer gehen</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/FitnessViewModel.kt -->
+    <string name="fitness_kamera_wechseln">Kamera wechseln</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpControls.kt -->
+    <string name="fitness_skelett">Skelett anzeigen</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpControls.kt -->
+    <string name="fitness_kamerazugriff_benotigt">Kamerazugriff benötigt</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/FitnessTab.kt -->
+    <string name="fitness_kamera_dialog_text">Dieser Tab zählt deine Push-ups per Kamera. Die Bilder werden ausschließlich auf dem Gerät verarbeitet und weder gespeichert noch hochgeladen.</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/FitnessTab.kt -->
+    <string name="fitness_kamera_verweigert">Ohne Kamerazugriff kann der Push-up-Zähler nicht arbeiten.</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/FitnessTab.kt -->
+    <string name="fitness_tipp_titel">TIPP</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpControls.kt -->
+    <string name="fitness_tipp_text">Am genauesten wird es, wenn das Handy seitlich etwa zwei Meter entfernt steht. Frontal geht auch – wichtig ist nur, dass Schultern, Hüfte und Hände im Bild bleiben.</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpControls.kt -->
+    <string name="fitness_verstanden">Verstanden</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/PushUpControls.kt -->
+    <string name="so_bedienst_du_den_pushup">So bedienst du den Push-up-Zähler:\n\n1. Stell das Handy seitlich auf, sodass dein Oberkörper komplett im Bild ist.\n2. Tippe auf „Start“ und beginne mit den Push-ups.\n3. Der Zähler erkennt jede Wiederholung am Ellbogenwinkel – unten unter 98°, oben über 152°.\n4. Über die Kamera-Taste wechselst du zwischen Front- und Rückkamera, über das Figuren-Symbol blendest du das Skelett aus.\n5. „Stopp“ beendet den Satz und speichert deine Bestleistung.</string> <!-- app/src/main/java/com/tabslify/core/objects/Config.kt -->
+
+    <string name="fitness_nav_dashboard">Heute</string>
+    <string name="fitness_nav_exercises">Übungen</string>
+    <string name="fitness_nav_workout">Workout</string>
+    <string name="fitness_nav_history">Verlauf</string>
+
+    <string name="fitness_dashboard_today">Heute</string>
+    <string name="fitness_dashboard_greeting_morning">Guten Morgen 🌅</string>
+    <string name="fitness_dashboard_greeting_day">Los geht\'s 💪</string>
+    <string name="fitness_dashboard_greeting_evening">Guten Abend 🌙</string>
+    <string name="fitness_dashboard_streak">Tage-Serie</string>
+    <string name="fitness_dashboard_streak_days">%1$d Tage</string>
+
+    <string name="fitness_dashboard_minutes">Aktiv</string>
+    <string name="fitness_dashboard_minutes_value">%1$d Min</string>
+    <string name="fitness_dashboard_calories">Kalorien</string>
+    <string name="fitness_dashboard_calories_value">%1$.0f kcal</string>
+    <string name="fitness_dashboard_workouts">Workouts</string>
+    <string name="fitness_dashboard_workouts_value">%1$d</string>
+    <string name="fitness_dashboard_reps">Wiederholungen</string>
+    <string name="fitness_dashboard_reps_value">%1$d</string>
+
+    <string name="fitness_dashboard_goal_minutes">Ziel: %1$d Min</string>
+    <string name="fitness_dashboard_goal_calories">Ziel: %1$d kcal</string>
+    <string name="fitness_dashboard_goal_reached">Ziel erreicht! 🎉</string>
+
+    <string name="fitness_dashboard_last_workout">Letztes Training</string>
+    <string name="fitness_dashboard_no_last_workout">Noch keine Session – leg los!</string>
+    <string name="fitness_dashboard_ago_minutes">vor %1$d Min</string>
+    <string name="fitness_dashboard_ago_hours">vor %1$d Std</string>
+    <string name="fitness_dashboard_ago_days">vor %1$d Tagen</string>
+
+    <string name="fitness_dashboard_week_overview">Diese Woche</string>
+    <string name="fitness_dashboard_week_empty">Bisher eine ruhige Woche – Zeit für Bewegung!</string>
+
+    <string name="fitness_dashboard_quick_start">Schnellstart</string>
+    <string name="fitness_dashboard_quick_pushups">Push-ups (Kamera)</string>
+    <string name="fitness_dashboard_quick_workout">Neues Workout</string>
+
+    <string name="fitness_profile_title">Profil</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/ui/DashboardScreen.kt -->
+    <string name="fitness_profile_hint">Alter und Gewicht helfen, die Kalorienschätzung genauer zu machen.</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/ui/DashboardScreen.kt -->
+    <string name="fitness_profile_age">Alter</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/ui/DashboardScreen.kt -->
+    <string name="fitness_profile_age_value">%1$d Jahre</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/ui/DashboardScreen.kt -->
+    <string name="fitness_profile_weight">Gewicht</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/ui/DashboardScreen.kt -->
+    <string name="fitness_profile_weight_value">%1$d kg</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/ui/DashboardScreen.kt -->
+
+    <string name="fitness_exercises_title">Übungen</string>
+    <string name="fitness_exercises_coming_soon">📚 50+ Übungen mit kompletter Schritt-für-Schritt-Anleitung.</string>
+    <string name="fitness_exercises_filters_all">Alle</string>
+    <string name="fitness_exercises_group_chest">Brust</string>
+    <string name="fitness_exercises_group_back">Rücken</string>
+    <string name="fitness_exercises_group_legs">Beine</string>
+    <string name="fitness_exercises_group_core">Rumpf</string>
+    <string name="fitness_exercises_group_shoulders">Schultern</string>
+    <string name="fitness_exercises_group_arms">Arme</string>
+    <string name="fitness_exercises_group_cardio">Cardio</string>
+    <string name="fitness_exercises_group_fullbody">Ganzkörper</string>
+
+    <string name="fitness_history_title">Verlauf</string>
+    <string name="fitness_history_empty">Noch keine Sessions gespeichert. Deine Workouts erscheinen hier.</string>
+    <string name="fitness_history_week">Woche</string>
+    <string name="fitness_history_month">Monat</string>
+    <string name="fitness_history_tab_sessions">Sessions</string>
+    <string name="fitness_history_tab_stats">Statistik</string>
+    <string name="fitness_history_chart_min">Min</string>
+    <string name="fitness_history_chart_kcal">kcal</string>
+    <string name="fitness_history_total_workouts">Workouts gesamt</string>
+    <string name="fitness_history_total_minutes">Minuten gesamt</string>
+    <string name="fitness_history_total_calories">Kalorien gesamt</string>
+
+    <string name="fitness_workout_title">Push-up-Zähler</string>
+    <string name="fitness_workout_open_camera">Push-up-Kamera öffnen</string>
+
+    <string name="fitness_ex_detail_back">Zurück</string>
+    <string name="fitness_ex_detail_howto">So geht\'s</string>
+    <string name="fitness_ex_detail_steps">Schritt für Schritt</string>
+    <string name="fitness_ex_detail_tips">Profi-Tipps</string>
+    <string name="fitness_ex_detail_mistakes">Typische Fehler</string>
+    <string name="fitness_ex_detail_start">Übung starten</string>
+    <string name="fitness_ex_detail_log_set">Satz eintragen</string>
+    <string name="fitness_ex_detail_level">Level</string>
+    <string name="fitness_ex_detail_gear">Ausrüstung</string>
+    <string name="fitness_ex_detail_calmin">~%.0f kcal/Min</string>
+    <string name="fitness_ex_detail_group">Muskelgruppe</string>
+    <string name="fitness_ex_detail_tracking">Tracking</string>
+    <string name="fitness_ex_detail_tracking_reps">Wiederholungen zählen</string>
+    <string name="fitness_ex_detail_tracking_time">Auf Zeit halten</string>
+    <string name="fitness_ex_detail_tracking_weight">Gewicht + Wiederholungen</string>
+    <string name="fitness_ex_detail_tracking_camera">Kamera-Pose-Tracking</string>
+    <string name="fitness_ex_detail_tracking_distance">Distanz + Zeit</string>
+
+    <string name="fitness_ex_search">Übungen suchen…</string>
+    <string name="fitness_ex_filter_difficulty">Schwierigkeit</string>
+    <string name="fitness_ex_filter_gear">Ausrüstung</string>
+    <string name="fitness_ex_difficulty_beginner">Einsteiger</string>
+    <string name="fitness_ex_difficulty_intermediate">Fortgeschritten</string>
+    <string name="fitness_ex_difficulty_advanced">Profi</string>
+    <string name="fitness_ex_gear_none">Ohne Geräte</string>
+    <string name="fitness_ex_gear_band">Widerstandsband</string>
+    <string name="fitness_ex_gear_dumbbell">Kurzhantel(n)</string>
+    <string name="fitness_ex_gear_barbell">Langhantel</string>
+    <string name="fitness_ex_gear_kettlebell">Kettlebell</string>
+    <string name="fitness_ex_gear_pullupbar">Klimmzugstange</string>
+    <string name="fitness_ex_gear_bench">Bank / Stuhl</string>
+
+    <string name="fitness_ex_none_found">Keine Übung passt zu deinen Filtern.</string>
+
+    <!-- ====== BRUST ====== -->
+    <string name="fitness_ex_chest_pushups">Liegestütze</string>
+    <string name="fitness_ex_chest_pushups_desc">Der Klassiker fürs Eigengewicht – stärkt Brust, Schultern und Trizeps und fordert dabei den ganzen Rumpf.</string>
+    <string name="fitness_ex_chest_pushups_step_1">Geh in den hohen Stütz, Hände etwas weiter als schulterbreit.</string>
+    <string name="fitness_ex_chest_pushups_step_2">Der Körper bildet eine gerade Linie von Kopf bis Ferse, Rumpf fest angespannt.</string>
+    <string name="fitness_ex_chest_pushups_step_3">Beuge die Ellbogen und senke die Brust fast bis zum Boden.</string>
+    <string name="fitness_ex_chest_pushups_step_4">Drücke dich mit gestreckten Armen zurück in die Ausgangsposition.</string>
+    <string name="fitness_ex_chest_pushups_tip_1">Halte den Nacken neutral – Kopf weder hängen lassen noch überstrecken.</string>
+    <string name="fitness_ex_chest_pushups_tip_2">Die Ellbogen bleiben etwa im 45°-Winkel zum Körper, nicht seitlich abgespreizt.</string>
+    <string name="fitness_ex_chest_pushups_tip_3">Geh so tief, wie deine Beweglichkeit erlaubt – der volle Bewegungsradius bringt mehr Kraft.</string>
+    <string name="fitness_ex_chest_pushups_mistake_1">Durchhängende Hüfte – das belastet den unteren Rücken.</string>
+    <string name="fitness_ex_chest_pushups_mistake_2">Hüfte zu hoch – so nimmst du der Brust die Spannung.</string>
+    <string name="fitness_ex_chest_pushups_mistake_3">Halbe Wiederholungen, ohne die Brust weit genug abzusenken.</string>
+
+    <string name="fitness_ex_chest_wide">Breite Liegestütze</string>
+    <string name="fitness_ex_chest_wide_desc">Die breitere Handposition verlagert die Last auf die äußere Brust und die vordere Schulter und entlastet den Trizeps.</string>
+    <string name="fitness_ex_chest_wide_step_1">Setze die Hände im hohen Stütz etwa 1,5-fach schulterbreit auf.</string>
+    <string name="fitness_ex_chest_wide_step_2">Rumpf und Gesäß anspannen, Körper in einer geraden Linie.</string>
+    <string name="fitness_ex_chest_wide_step_3">Senke die Brust zum Boden, die Ellbogen zeigen dabei natürlich nach außen.</string>
+    <string name="fitness_ex_chest_wide_step_4">Drücke dich explosiv zurück in den Stütz und wiederhole.</string>
+    <string name="fitness_ex_chest_wide_tip_1">Nicht so breit, dass es in der Schulter zwickt.</string>
+    <string name="fitness_ex_chest_wide_tip_2">Spüre beim Absenken bewusst die Dehnung über der Brust.</string>
+    <string name="fitness_ex_chest_wide_mistake_1">Schulterenge durch übertriebene Handbreite.</string>
+    <string name="fitness_ex_chest_wide_mistake_2">Den Kopf zwischen die Arme hängen lassen.</string>
+
+    <string name="fitness_ex_chest_diamond">Diamant-Liegestütze</string>
+    <string name="fitness_ex_chest_diamond_desc">Die Hände bilden ein Dreieck – kaum eine andere Eigengewichtsübung trifft Trizeps und innere Brust so hart.</string>
+    <string name="fitness_ex_chest_diamond_step_1">Forme im hohen Stütz mit Zeigefingern und Daumen ein Dreieck.</string>
+    <string name="fitness_ex_chest_diamond_step_2">Körper gerade, Rumpf fest, Ellbogen zeigen nach hinten.</string>
+    <string name="fitness_ex_chest_diamond_step_3">Senke die Brust zu den Händen, die Ellbogen bleiben nah an den Rippen.</string>
+    <string name="fitness_ex_chest_diamond_step_4">Drücke dich über den Trizeps zurück nach oben.</string>
+    <string name="fitness_ex_chest_diamond_tip_1">Die Variante auf den Knien ist ein perfekter Einstieg.</string>
+    <string name="fitness_ex_chest_diamond_tip_2">Spanne den Trizeps oben bei jeder Wiederholung bewusst an.</string>
+    <string name="fitness_ex_chest_diamond_mistake_1">Einknickende Handgelenke – notfalls auf Fäusten oder Griffen stützen.</string>
+    <string name="fitness_ex_chest_diamond_mistake_2">Nicht tief genug gehen und den Trizeps damit kaum belasten.</string>
+
+    <string name="fitness_ex_chest_incline">Liegestütze erhöht (Incline)</string>
+    <string name="fitness_ex_chest_incline_desc">Hände auf Stuhl oder Bank – die ideale Vorstufe, wenn normale Liegestütze noch zu schwer sind.</string>
+    <string name="fitness_ex_chest_incline_step_1">Setze die Hände schulterbreit auf eine stabile Bank, einen Stuhl oder eine Stufe.</string>
+    <string name="fitness_ex_chest_incline_step_2">Geh mit den Füßen so weit zurück, bis der Körper eine gerade, schräge Linie bildet.</string>
+    <string name="fitness_ex_chest_incline_step_3">Senke die Brust bis zur Kante der Ablage.</string>
+    <string name="fitness_ex_chest_incline_step_4">Drücke dich zurück nach oben, ohne die Ellbogen durchzudrücken.</string>
+    <string name="fitness_ex_chest_incline_tip_1">Je höher die Ablage, desto leichter die Übung.</string>
+    <string name="fitness_ex_chest_incline_tip_2">Steigere dich, indem du mit der Zeit immer niedrigere Ablagen nutzt.</string>
+    <string name="fitness_ex_chest_incline_mistake_1">Durchhängende Hüfte statt gerader Linie.</string>
+    <string name="fitness_ex_chest_incline_mistake_2">Die Absenkphase zu schnell abspulen.</string>
+
+    <string name="fitness_ex_chest_decline">Liegestütze mit erhöhten Füßen (Decline)</string>
+    <string name="fitness_ex_chest_decline_desc">Die erhöhten Füße verlagern mehr Gewicht auf obere Brust und vordere Schulter – eine anspruchsvolle Variante.</string>
+    <string name="fitness_ex_chest_decline_step_1">Lege die Füße auf eine Bank oder einen Stuhl, die Hände im Stütz am Boden.</string>
+    <string name="fitness_ex_chest_decline_step_2">Der Körper bleibt gerade und zeigt schräg nach unten.</string>
+    <string name="fitness_ex_chest_decline_step_3">Senke die Brust kontrolliert zum Boden.</string>
+    <string name="fitness_ex_chest_decline_step_4">Drücke dich kraftvoll zurück in die Ausgangsposition.</string>
+    <string name="fitness_ex_chest_decline_tip_1">Starte mit einer niedrigen Erhöhung (15–20 cm), bevor du höher gehst.</string>
+    <string name="fitness_ex_chest_decline_tip_2">Explosiv hoch, langsam runter – so wächst der Muskel am besten.</string>
+    <string name="fitness_ex_chest_decline_mistake_1">Füße zu hoch – das belastet die Schultern gefährlich stark.</string>
+    <string name="fitness_ex_chest_decline_mistake_2">Den Kopf beim Absenken nach vorn fallen lassen.</string>
+
+    <string name="fitness_ex_chest_bench">Bankdrücken</string>
+    <string name="fitness_ex_chest_bench_desc">Die Königsübung fürs horizontale Drücken – maximale Kraft für Brust, vordere Schulter und Trizeps.</string>
+    <string name="fitness_ex_chest_bench_step_1">Leg dich flach auf die Bank, Augen unter der Stange, Füße fest am Boden.</string>
+    <string name="fitness_ex_chest_bench_step_2">Greife die Stange etwas weiter als schulterbreit und hebe sie aus der Ablage.</string>
+    <string name="fitness_ex_chest_bench_step_3">Senke die Stange kontrolliert zur Brustmitte, Ellbogen etwa 45° zum Körper.</string>
+    <string name="fitness_ex_chest_bench_step_4">Drücke die Füße in den Boden und presse die Stange zurück nach oben.</string>
+    <string name="fitness_ex_chest_bench_tip_1">Bei schweren Sätzen immer jemanden zum Sichern dabeihaben.</string>
+    <string name="fitness_ex_chest_bench_tip_2">Ein leichtes Hohlkreuz im oberen Rücken schützt die Schultern.</string>
+    <string name="fitness_ex_chest_bench_tip_3">Kontrolliere die Absenkphase – mindestens zwei Sekunden nach unten.</string>
+    <string name="fitness_ex_chest_bench_mistake_1">Abgespreizte Ellbogen = Risiko für Schulterenge.</string>
+    <string name="fitness_ex_chest_bench_mistake_2">Die Stange von der Brust abprallen lassen, um Schwung zu holen.</string>
+    <string name="fitness_ex_chest_bench_mistake_3">Rücken komplett flach auf der Bank ohne natürliche Krümmung.</string>
+
+    <string name="fitness_ex_chest_fly">Kurzhantel-Fliegende</string>
+    <string name="fitness_ex_chest_fly_desc">Isolationsübung, die die Brust über einen weiten Bogen dehnt und kontrahiert – fast ohne Trizeps-Hilfe.</string>
+    <string name="fitness_ex_chest_fly_step_1">Leg dich auf eine Flachbank, Hanteln über der Brust, Handflächen zueinander.</string>
+    <string name="fitness_ex_chest_fly_step_2">Mit leicht gebeugten Ellbogen die Hanteln langsam im Bogen zur Seite absenken.</string>
+    <string name="fitness_ex_chest_fly_step_3">Stoppe auf Schulterhöhe, sobald du eine angenehme Dehnung in der Brust spürst.</string>
+    <string name="fitness_ex_chest_fly_step_4">Führe die Hanteln über der Brust wieder zusammen und drücke die Brust zusammen.</string>
+    <string name="fitness_ex_chest_fly_tip_1">Nimm weniger Gewicht als du denkst – Fliegende sind keine Kraftübung.</string>
+    <string name="fitness_ex_chest_fly_tip_2">Der Ellbogenwinkel bleibt konstant, als würdest du einen Baum umarmen.</string>
+    <string name="fitness_ex_chest_fly_mistake_1">Ellbogen durchstrecken = Belastung für die Sehnen.</string>
+    <string name="fitness_ex_chest_fly_mistake_2">Zu tief gehen und über die angenehme Dehnung hinaus arbeiten.</string>
+
+    <!-- ====== RÜCKEN ====== -->
+    <string name="fitness_ex_back_pullups">Klimmzüge</string>
+    <string name="fitness_ex_back_pullups_desc">Der ultimative vertikale Zug – baut einen breiten, dicken Rücken und brutale Griffkraft auf.</string>
+    <string name="fitness_ex_back_pullups_step_1">Häng dich mit mehr als schulterbreitem Obergriff an die Stange, Handflächen nach vorn.</string>
+    <string name="fitness_ex_back_pullups_step_2">Spanne den Latissimus an und ziehe die Ellbogen Richtung Hüfte.</string>
+    <string name="fitness_ex_back_pullups_step_3">Zieh dich hoch, bis das Kinn über der Stange ist.</string>
+    <string name="fitness_ex_back_pullups_step_4">Lass dich langsam bis in den vollständigen Hang ab.</string>
+    <string name="fitness_ex_back_pullups_tip_1">Denk daran, mit den Ellbogen zu ziehen, nicht mit dem Bizeps.</string>
+    <string name="fitness_ex_back_pullups_tip_2">Nutze Band oder Maschine als Unterstützung, wenn freie Klimmzüge noch nicht gehen.</string>
+    <string name="fitness_ex_back_pullups_tip_3">Verzichte auf Schwung, außer du trainierst gezielt darauf.</string>
+    <string name="fitness_ex_back_pullups_mistake_1">Unten nicht komplett in den Hang gehen.</string>
+    <string name="fitness_ex_back_pullups_mistake_2">Den Kopf über die Stange strecken statt die Brust zu heben.</string>
+    <string name="fitness_ex_back_pullups_mistake_3">Unkontrolliert schwingender Oberkörper.</string>
+
+    <string name="fitness_ex_back_chinups">Chin-ups (Untergriff)</string>
+    <string name="fitness_ex_back_chinups_desc">Der Untergriff holt den Bizeps mit ins Spiel und trifft den Latissimus trotzdem voll – meist leichter als Klimmzüge.</string>
+    <string name="fitness_ex_back_chinups_step_1">Greife die Stange schulterbreit im Untergriff, Handflächen zeigen zu dir.</string>
+    <string name="fitness_ex_back_chinups_step_2">Häng vollständig aus, die Schulterblätter nach unten ziehen.</string>
+    <string name="fitness_ex_back_chinups_step_3">Zieh die Ellbogen nach unten und die Brust zur Stange.</string>
+    <string name="fitness_ex_back_chinups_step_4">Lass dich in drei Sekunden zurück in den Hang ab.</string>
+    <string name="fitness_ex_back_chinups_tip_1">Der Untergriff nimmt Druck von den Schultern.</string>
+    <string name="fitness_ex_back_chinups_tip_2">Spanne den Bizeps oben kräftig an.</string>
+    <string name="fitness_ex_back_chinups_mistake_1">Zu kurzer Bewegungsradius – die Brust erreicht die Stange nie.</string>
+    <string name="fitness_ex_back_chinups_mistake_2">Nur mit Armkraft ziehen, ohne den Rücken einzusetzen.</string>
+
+    <string name="fitness_ex_back_inverted">Schrägrudern (Inverted Rows)</string>
+    <string name="fitness_ex_back_inverted_desc">Horizontales Ziehen unter einer Stange oder einem Tisch – ideale Grundlage für Einsteiger vor den Klimmzügen.</string>
+    <string name="fitness_ex_back_inverted_step_1">Leg dich unter eine stabile Stange (Multipresse, Rack, stabiler Tisch).</string>
+    <string name="fitness_ex_back_inverted_step_2">Greife schulterbreit, Körper gerade, Fersen am Boden.</string>
+    <string name="fitness_ex_back_inverted_step_3">Zieh die Brust zur Stange und die Schulterblätter zusammen.</string>
+    <string name="fitness_ex_back_inverted_step_4">Lass dich kontrolliert wieder ab.</string>
+    <string name="fitness_ex_back_inverted_tip_1">Je aufrechter dein Körper, desto leichter das Rudern.</string>
+    <string name="fitness_ex_back_inverted_tip_2">Probiere breiten und engen Griff für unterschiedliche Reize.</string>
+    <string name="fitness_ex_back_inverted_mistake_1">Durchhängende Hüfte – bleib bretthart.</string>
+    <string name="fitness_ex_back_inverted_mistake_2">Die Brust nicht ganz bis zur Stange ziehen.</string>
+
+    <string name="fitness_ex_back_barrow">Langhantelrudern vorgebeugt</string>
+    <string name="fitness_ex_back_barrow_desc">Die Grundübung fürs Rudern – baut Dicke über die komplette hintere Kette auf.</string>
+    <string name="fitness_ex_back_barrow_step_1">Stell dich hüftbreit hin und beuge dich in der Hüfte auf etwa 45° nach vorn.</string>
+    <string name="fitness_ex_back_barrow_step_2">Greife die Stange knapp außerhalb der Knie, Arme hängen gestreckt, Rücken gerade.</string>
+    <string name="fitness_ex_back_barrow_step_3">Zieh die Stange zur unteren Brust bzw. zum Oberbauch, Ellbogen nach oben.</string>
+    <string name="fitness_ex_back_barrow_step_4">Schulterblätter zusammenziehen, dann die Stange langsam absenken.</string>
+    <string name="fitness_ex_back_barrow_tip_1">Beuge die Knie leicht, das schützt den unteren Rücken.</string>
+    <string name="fitness_ex_back_barrow_tip_2">Zieh die Ellbogen nach hinten, nicht nach oben zu den Ohren.</string>
+    <string name="fitness_ex_back_barrow_mistake_1">Runder Rücken – ein neutraler Rücken ist Pflicht.</string>
+    <string name="fitness_ex_back_barrow_mistake_2">Mit dem Bizeps ziehen statt die Schulterblätter zu nutzen.</string>
+    <string name="fitness_ex_back_barrow_mistake_3">Zu aufrechter Oberkörper – das ist kein aufrechtes Rudern.</string>
+
+    <string name="fitness_ex_back_dumbrow">Einarmiges Kurzhantelrudern</string>
+    <string name="fitness_ex_back_dumbrow_desc">Einseitige Kraftübung: Jede Seite arbeitet für sich, während die Bank die Wirbelsäule stützt.</string>
+    <string name="fitness_ex_back_dumbrow_step_1">Knie mit dem linken Knie und der linken Hand auf einer Bank ab, rechter Fuß steht am Boden.</string>
+    <string name="fitness_ex_back_dumbrow_step_2">Nimm die Hantel im Neutralgriff auf, Arm hängt, Rücken gerade.</string>
+    <string name="fitness_ex_back_dumbrow_step_3">Zieh die Hantel zur Hüfte und das Schulterblatt nach hinten.</string>
+    <string name="fitness_ex_back_dumbrow_step_4">Langsam absenken, wiederholen, dann Seite wechseln.</string>
+    <string name="fitness_ex_back_dumbrow_tip_1">Halte oben eine ganze Sekunde und spanne bewusst an.</string>
+    <string name="fitness_ex_back_dumbrow_tip_2">Wähle ein Gewicht, das du sauber ohne Verdrehen ziehen kannst.</string>
+    <string name="fitness_ex_back_dumbrow_mistake_1">Den Oberkörper eindrehen, um mehr Gewicht zu bewegen.</string>
+    <string name="fitness_ex_back_dumbrow_mistake_2">Die Schulter unten nach vorn rollen lassen.</string>
+
+    <string name="fitness_ex_back_superman">Superman-Halt</string>
+    <string name="fitness_ex_back_superman_desc">Statischer Halt für die hintere Kette: Rückenstrecker, Gesäß und oberer Rücken – ganz ohne Geräte.</string>
+    <string name="fitness_ex_back_superman_step_1">Leg dich bäuchlings hin, Arme nach vorn gestreckt, Beine lang.</string>
+    <string name="fitness_ex_back_superman_step_2">Hebe Brust, Arme und Oberschenkel gleichzeitig ein paar Zentimeter an.</string>
+    <string name="fitness_ex_back_superman_step_3">Spanne Gesäß, unteren Rücken und Schulterblätter an.</string>
+    <string name="fitness_ex_back_superman_step_4">Halte die Position und senke dich dann langsam ab.</string>
+    <string name="fitness_ex_back_superman_tip_1">Atme ruhig weiter – nicht die ganze Zeit die Luft anhalten.</string>
+    <string name="fitness_ex_back_superman_tip_2">Arme und Beine müssen nur knapp abheben, höher ist nicht besser.</string>
+    <string name="fitness_ex_back_superman_mistake_1">Den Nacken überstrecken – halte ihn neutral.</string>
+    <string name="fitness_ex_back_superman_mistake_2">Die Knie beugen, um die Beine höher zu bekommen.</string>
+
+    <string name="fitness_ex_back_goodmorning">Good Morning</string>
+    <string name="fitness_ex_back_goodmorning_desc">Hüftbeuge mit Langhantel im Nacken – lehrt sauberes Belasten von Beinbeuger und Gesäß.</string>
+    <string name="fitness_ex_back_goodmorning_step_1">Lege die Stange bequem auf den oberen Rücken (Trapez), Füße schulterbreit.</string>
+    <string name="fitness_ex_back_goodmorning_step_2">Knie leicht gebeugt, Brust raus, Rumpf fest anspannen.</string>
+    <string name="fitness_ex_back_goodmorning_step_3">Schiebe die Hüfte nach hinten und senke den Oberkörper nach vorn ab.</string>
+    <string name="fitness_ex_back_goodmorning_step_4">Spüre die Dehnung im Beinbeuger und drücke dich über die Fersen wieder hoch.</string>
+    <string name="fitness_ex_back_goodmorning_tip_1">Starte mit leerer Stange oder leichter Hantel, um das Muster zu lernen.</string>
+    <string name="fitness_ex_back_goodmorning_tip_2">Der Kniewinkel bleibt konstant – das ist keine Kniebeuge.</string>
+    <string name="fitness_ex_back_goodmorning_mistake_1">Den Rücken rund machen, um tiefer zu kommen.</string>
+    <string name="fitness_ex_back_goodmorning_mistake_2">In die Kniebeuge gehen statt in der Hüfte zu beugen.</string>
+
+    <!-- ====== BEINE ====== -->
+    <string name="fitness_ex_legs_squat">Kniebeugen (Eigengewicht)</string>
+    <string name="fitness_ex_legs_squat_desc">Die Urbewegung für den Unterkörper – baut Oberschenkel, Gesäß und Beweglichkeit auf, die jeder braucht.</string>
+    <string name="fitness_ex_legs_squat_step_1">Stell dich etwas weiter als hüftbreit hin, Fußspitzen 15–30° nach außen.</string>
+    <string name="fitness_ex_legs_squat_step_2">Rumpf anspannen, Brust raus, Hüfte nach hinten schieben wie beim Hinsetzen.</string>
+    <string name="fitness_ex_legs_squat_step_3">Geh mindestens so tief, bis die Oberschenkel parallel zum Boden sind.</string>
+    <string name="fitness_ex_legs_squat_step_4">Drücke dich über Fersen und Mittelfuß wieder nach oben.</string>
+    <string name="fitness_ex_legs_squat_tip_1">Die Knie zeigen immer in dieselbe Richtung wie die Fußspitzen.</string>
+    <string name="fitness_ex_legs_squat_tip_2">Halte unten 1–2 Sekunden, das bringt echte Kraft.</string>
+    <string name="fitness_ex_legs_squat_tip_3">Geh tiefer als parallel, wenn Hüfte, Knie und Sprunggelenke es zulassen.</string>
+    <string name="fitness_ex_legs_squat_mistake_1">Nach innen einknickende Knie.</string>
+    <string name="fitness_ex_legs_squat_mistake_2">Fersen heben vom Boden ab.</string>
+    <string name="fitness_ex_legs_squat_mistake_3">Oberkörper kippt mit rundem Rücken nach vorn.</string>
+
+    <string name="fitness_ex_legs_goblet">Goblet Squats</string>
+    <string name="fitness_ex_legs_goblet_desc">Eine Hantel oder Kettlebell vor der Brust – der beste Weg, eine tiefe, aufrechte Kniebeuge zu lernen.</string>
+    <string name="fitness_ex_legs_goblet_step_1">Halte eine Kurzhantel senkrecht (oder die Kettlebell an den Hörnern) vor der Brust, Ellbogen zeigen nach unten.</string>
+    <string name="fitness_ex_legs_goblet_step_2">Füße etwas weiter als schulterbreit, Fußspitzen 20–30° nach außen.</string>
+    <string name="fitness_ex_legs_goblet_step_3">Beuge zwischen die Knie und drücke sie mit den Ellbogen nach außen.</string>
+    <string name="fitness_ex_legs_goblet_step_4">Drücke dich über die Fersen wieder aufrecht.</string>
+    <string name="fitness_ex_legs_goblet_tip_1">Das Gewicht wirkt als Gegengewicht – du kommst tiefer als ohne.</string>
+    <string name="fitness_ex_legs_goblet_tip_2">Bei wenig Beweglichkeit unten drei Sekunden halten.</string>
+    <string name="fitness_ex_legs_goblet_mistake_1">Das Gewicht wandert von der Brust weg nach vorn.</string>
+    <string name="fitness_ex_legs_goblet_mistake_2">Zu wenig Tiefe, weil das Gewicht zu hoch gewählt ist.</string>
+
+    <string name="fitness_ex_legs_reverselunge">Ausfallschritte rückwärts</string>
+    <string name="fitness_ex_legs_reverselunge_desc">Der Schritt nach hinten ist deutlich knieschonender und trifft Gesäß und Oberschenkel trotzdem voll.</string>
+    <string name="fitness_ex_legs_reverselunge_step_1">Steh aufrecht, Hände in die Hüfte oder Hanteln seitlich haltend.</string>
+    <string name="fitness_ex_legs_reverselunge_step_2">Mach einen Schritt nach hinten und senke das hintere Knie Richtung Boden.</string>
+    <string name="fitness_ex_legs_reverselunge_step_3">Das vordere Schienbein bleibt senkrecht, das hintere Knie schwebt knapp über dem Boden.</string>
+    <string name="fitness_ex_legs_reverselunge_step_4">Drücke dich über die vordere Ferse zurück, dann Bein wechseln.</string>
+    <string name="fitness_ex_legs_reverselunge_tip_1">Denk unten an zwei saubere 90°-Winkel.</string>
+    <string name="fitness_ex_legs_reverselunge_tip_2">Oberkörper bleibt aufrecht – nicht ins vordere Bein lehnen.</string>
+    <string name="fitness_ex_legs_reverselunge_mistake_1">Das vordere Knie knickt nach innen.</string>
+    <string name="fitness_ex_legs_reverselunge_mistake_2">Zu weit nach hinten steigen und das Gleichgewicht verlieren.</string>
+
+    <string name="fitness_ex_legs_walkinglunge">Ausfallschritte gehend</string>
+    <string name="fitness_ex_legs_walkinglunge_desc">Die gehende Variante macht aus dem Ausfallschritt ein Ganzkörper-Konditionstraining mit brutalem Gesäß-Pump.</string>
+    <string name="fitness_ex_legs_walkinglunge_step_1">Steh aufrecht, mit Kurzhanteln an den Seiten oder nur mit Eigengewicht.</string>
+    <string name="fitness_ex_legs_walkinglunge_step_2">Mach einen Schritt nach vorn, bis beide Knie etwa 90° gebeugt sind.</string>
+    <string name="fitness_ex_legs_walkinglunge_step_3">Drücke dich über die vordere Ferse hoch und zieh das hintere Bein nach.</string>
+    <string name="fitness_ex_legs_walkinglunge_step_4">Geh direkt in den nächsten Schritt mit dem anderen Bein.</string>
+    <string name="fitness_ex_legs_walkinglunge_tip_1">Mach die Schritte lang genug, das schont das vordere Knie.</string>
+    <string name="fitness_ex_legs_walkinglunge_tip_2">Such dir einen Fixpunkt und laufe jeden Satz bis dorthin.</string>
+    <string name="fitness_ex_legs_walkinglunge_mistake_1">Kurze, hackende Schritte, die die Knie überlasten.</string>
+    <string name="fitness_ex_legs_walkinglunge_mistake_2">Den Oberkörper weit nach vorn lehnen, um schneller zu werden.</string>
+
+    <string name="fitness_ex_legs_bulgarian">Bulgarische Split Squats</string>
+    <string name="fitness_ex_legs_bulgarian_desc">Der hintere Fuß liegt erhöht – intensive einbeinige Kraftübung mit starkem Reiz auf Oberschenkel und Gesäß.</string>
+    <string name="fitness_ex_legs_bulgarian_step_1">Stell dich etwa einen Schritt vor eine Bank, Fußspitzen nach vorn.</string>
+    <string name="fitness_ex_legs_bulgarian_step_2">Lege den Spann eines Fußes hinter dir auf die Bank.</string>
+    <string name="fitness_ex_legs_bulgarian_step_3">Senke dich ab, bis der vordere Oberschenkel parallel ist und das hintere Knie fast den Boden berührt.</string>
+    <string name="fitness_ex_legs_bulgarian_step_4">Drücke dich über die vordere Ferse wieder hoch.</string>
+    <string name="fitness_ex_legs_bulgarian_tip_1">Nimm Kurzhanteln dazu, sobald das Eigengewicht leicht fällt.</string>
+    <string name="fitness_ex_legs_bulgarian_tip_2">Probiere verschiedene Fußabstände aus, bis es sich rund anfühlt.</string>
+    <string name="fitness_ex_legs_bulgarian_mistake_1">Das vordere Knie schiebt viel zu weit über die Fußspitze.</string>
+    <string name="fitness_ex_legs_bulgarian_mistake_2">Den hinteren Fuß flach auf die Bank stellen statt nur den Spann.</string>
+
+    <string name="fitness_ex_legs_wallsit">Wandsitz</string>
+    <string name="fitness_ex_legs_wallsit_desc">Statischer Oberschenkel-Brenner für überall – ein knallharter Ausdauertest ganz ohne Geräte.</string>
+    <string name="fitness_ex_legs_wallsit_step_1">Lehne dich mit dem Rücken flach an eine Wand, Füße etwa 60 cm davor.</string>
+    <string name="fitness_ex_legs_wallsit_step_2">Rutsche an der Wand herunter, bis Knie und Hüfte etwa 90° gebeugt sind.</string>
+    <string name="fitness_ex_legs_wallsit_step_3">Oberschenkel parallel zum Boden, Rücken fest an die Wand gedrückt.</string>
+    <string name="fitness_ex_legs_wallsit_step_4">Halte die Position – atmen, durchbeißen, wiederholen.</string>
+    <string name="fitness_ex_legs_wallsit_tip_1">Hände auf die Oberschenkel legen, aber nicht abstützen.</string>
+    <string name="fitness_ex_legs_wallsit_tip_2">Stell eine Zeit und versuche, deinen Rekord zu schlagen.</string>
+    <string name="fitness_ex_legs_wallsit_mistake_1">Nach innen fallende Knie – aktiv nach außen drücken.</string>
+    <string name="fitness_ex_legs_wallsit_mistake_2">Füße zu nah an der Wand = Druck aufs Knie.</string>
+
+    <string name="fitness_ex_legs_calfraise">Wadenheben</string>
+    <string name="fitness_ex_legs_calfraise_desc">Einfache, aber wirksame Isolation für Zwillings- und Schollenmuskel – braucht viele Wiederholungen.</string>
+    <string name="fitness_ex_legs_calfraise_step_1">Stell dich auf eine Stufenkante (oder flach), halte dich zur Balance fest.</string>
+    <string name="fitness_ex_legs_calfraise_step_2">Drücke die Fersen so hoch wie möglich auf die Fußballen.</string>
+    <string name="fitness_ex_legs_calfraise_step_3">Spanne die Waden oben eine Sekunde bewusst an.</string>
+    <string name="fitness_ex_legs_calfraise_step_4">Senke die Fersen unter Stufenniveau für die volle Dehnung und wiederhole.</string>
+    <string name="fitness_ex_legs_calfraise_tip_1">Variiere das Tempo: langsam runter, oben halten, explosiv hoch.</string>
+    <string name="fitness_ex_legs_calfraise_tip_2">Nimm Hanteln dazu, sobald 20+ Wiederholungen leicht fallen.</string>
+    <string name="fitness_ex_legs_calfraise_mistake_1">Mit Schwung wippen statt kontrolliert arbeiten.</string>
+    <string name="fitness_ex_legs_calfraise_mistake_2">Knie oben durchdrücken – halte sie leicht gebeugt.</string>
+
+    <string name="fitness_ex_legs_glutebridge">Glute Bridge</string>
+    <string name="fitness_ex_legs_glutebridge_desc">Klassiker für die hintere Kette, der das Gesäß besser aktiviert als fast jede andere Übung.</string>
+    <string name="fitness_ex_legs_glutebridge_step_1">Leg dich auf den Rücken, Knie gebeugt, Füße flach am Boden, Arme seitlich.</string>
+    <string name="fitness_ex_legs_glutebridge_step_2">Drücke über die Fersen und hebe die Hüfte hoch.</string>
+    <string name="fitness_ex_legs_glutebridge_step_3">Spanne oben das Gesäß fest an und kippe das Becken leicht nach hinten.</string>
+    <string name="fitness_ex_legs_glutebridge_step_4">Senke die Hüfte langsam ab, ohne den Boden zu berühren, und wiederhole.</string>
+    <string name="fitness_ex_legs_glutebridge_tip_1">Für mehr Last eine Langhantel auf die Hüfte oder ein Band über die Knie legen.</string>
+    <string name="fitness_ex_legs_glutebridge_tip_2">Halte oben bei jeder Wiederholung zwei volle Sekunden.</string>
+    <string name="fitness_ex_legs_glutebridge_mistake_1">Ins Hohlkreuz gehen statt die Hüfte zu strecken.</string>
+    <string name="fitness_ex_legs_glutebridge_mistake_2">Über die Zehen drücken statt über die Fersen.</string>
+
+    <string name="fitness_ex_legs_romaniandl">Rumänisches Kreuzheben</string>
+    <string name="fitness_ex_legs_romaniandl_desc">Hüftdominante Kreuzheben-Variante, die gezielt Beinbeuger, Gesäß und Adduktoren trifft.</string>
+    <string name="fitness_ex_legs_romaniandl_step_1">Halte eine Langhantel oder zwei Kurzhanteln vor den Oberschenkeln, Arme gestreckt.</string>
+    <string name="fitness_ex_legs_romaniandl_step_2">Knie leicht gebeugt, Brust raus, Blick nach vorn, Rumpf fest.</string>
+    <string name="fitness_ex_legs_romaniandl_step_3">Schiebe die Hüfte nach hinten und führe das Gewicht an den Beinen entlang nach unten, bis der Beinbeuger deutlich dehnt.</string>
+    <string name="fitness_ex_legs_romaniandl_step_4">Spanne das Gesäß an und schiebe die Hüfte nach vorn, die Stange bleibt körpernah.</string>
+    <string name="fitness_ex_legs_romaniandl_tip_1">Stoppe, bevor der untere Rücken rund wird – das ist dein Bewegungslimit.</string>
+    <string name="fitness_ex_legs_romaniandl_tip_2">Die Stange berührt die ganze Wiederholung über die Beine.</string>
+    <string name="fitness_ex_legs_romaniandl_mistake_1">Der Kniewinkel verändert sich mitten in der Bewegung (das ist kein klassisches Kreuzheben).</string>
+    <string name="fitness_ex_legs_romaniandl_mistake_2">Den Rücken rund machen, um tiefer zu kommen.</string>
+
+    <string name="fitness_ex_legs_deadlift">Kreuzheben (konventionell)</string>
+    <string name="fitness_ex_legs_deadlift_desc">Die rohe Königsübung für Ganzkörperkraft – belastet alles von den Fingern bis zum Nacken.</string>
+    <string name="fitness_ex_legs_deadlift_step_1">Stell dich hüftbreit über die Stange, Mittelfuß darunter, Schienbeine nah an der Stange.</string>
+    <string name="fitness_ex_legs_deadlift_step_2">Geh in die Hüftbeuge und greife knapp außerhalb der Knie. Brust raus, Rücken gerade, Blick 3–5 m nach vorn.</string>
+    <string name="fitness_ex_legs_deadlift_step_3">Drücke dich mit den Beinen vom Boden weg – die Stange bleibt an den Beinen.</string>
+    <string name="fitness_ex_legs_deadlift_step_4">Steh mit gestreckter Hüfte und Knien auf, Gesäß anspannen. Kontrolliert wieder absenken.</string>
+    <string name="fitness_ex_legs_deadlift_tip_1">Tief in den Bauch einatmen und die Luft für den Zug anhalten.</string>
+    <string name="fitness_ex_legs_deadlift_tip_2">Denk vor dem Zug an „Brust raus“, das schützt die Wirbelsäule.</string>
+    <string name="fitness_ex_legs_deadlift_tip_3">Fang leicht an und baue erst die perfekte Technik, dann das Gewicht.</string>
+    <string name="fitness_ex_legs_deadlift_mistake_1">Mit rundem Rücken ziehen – hohes Verletzungsrisiko.</string>
+    <string name="fitness_ex_legs_deadlift_mistake_2">Die Stange wandert vom Körper weg nach vorn.</string>
+    <string name="fitness_ex_legs_deadlift_mistake_3">Die Hüfte schnellt schneller hoch als die Stange.</string>
+
+    <!-- ====== RUMPF ====== -->
+    <string name="fitness_ex_core_plank">Unterarmstütz (Plank)</string>
+    <string name="fitness_ex_core_plank_desc">Die Nummer 1 unter den statischen Rumpfübungen – baut eine stabile Mitte auf, die jede andere Übung besser macht.</string>
+    <string name="fitness_ex_core_plank_step_1">Unterarme am Boden, Ellbogen direkt unter den Schultern, Körper in gerader Linie.</string>
+    <string name="fitness_ex_core_plank_step_2">Füße hüftbreit, Becken leicht aufrichten, Rumpf rundum anspannen.</string>
+    <string name="fitness_ex_core_plank_step_3">Gesäß und Oberschenkel anspannen, um die Körperlinie zu fixieren.</string>
+    <string name="fitness_ex_core_plank_step_4">Halte die Position und atme ruhig durch die Nase.</string>
+    <string name="fitness_ex_core_plank_tip_1">Hüfte weder durchhängen noch hochschieben – such die neutrale Linie.</string>
+    <string name="fitness_ex_core_plank_tip_2">Steigere dich mit Zusatzgewicht auf dem Rücken oder längerer Haltezeit.</string>
+    <string name="fitness_ex_core_plank_mistake_1">Durchhängende Hüfte = keine Rumpfarbeit, viel Druck auf den Rücken.</string>
+    <string name="fitness_ex_core_plank_mistake_2">Kopf hängen lassen oder überstrecken.</string>
+
+    <string name="fitness_ex_core_sideplank">Seitstütz</string>
+    <string name="fitness_ex_core_sideplank_desc">Statischer Halt gegen seitliches Einknicken – formt die schrägen Bauchmuskeln und stabilisiert die Hüfte.</string>
+    <string name="fitness_ex_core_sideplank_step_1">Leg dich auf die Seite, Füße übereinander, Ellbogen unter der Schulter.</string>
+    <string name="fitness_ex_core_sideplank_step_2">Hebe die Hüfte an, bis der Körper eine lange Linie bildet.</string>
+    <string name="fitness_ex_core_sideplank_step_3">Der obere Arm liegt auf der Hüfte oder zeigt zur Decke.</string>
+    <string name="fitness_ex_core_sideplank_step_4">Halten, dann Seite wechseln.</string>
+    <string name="fitness_ex_core_sideplank_tip_1">Als Erleichterung bleibt das untere Knie am Boden.</string>
+    <string name="fitness_ex_core_sideplank_tip_2">Das obere Bein anheben macht es deutlich schwerer.</string>
+    <string name="fitness_ex_core_sideplank_mistake_1">Die Hüfte rollt nach vorn oder hinten weg.</string>
+    <string name="fitness_ex_core_sideplank_mistake_2">Die Schulter zieht hoch Richtung Ohr.</string>
+
+    <string name="fitness_ex_core_crunch">Crunches</string>
+    <string name="fitness_ex_core_crunch_desc">Kurze Beugebewegung für den geraden Bauchmuskel – klassisch, simpel und wirksam.</string>
+    <string name="fitness_ex_core_crunch_step_1">Leg dich auf den Rücken, Knie gebeugt, Füße flach, Hände locker am Hinterkopf.</string>
+    <string name="fitness_ex_core_crunch_step_2">Atme aus und rolle Schultern und oberen Rücken vom Boden.</string>
+    <string name="fitness_ex_core_crunch_step_3">Spanne oben den Bauch an, Kinn Richtung Brust.</string>
+    <string name="fitness_ex_core_crunch_step_4">Senke dich langsam ab, ohne unten locker zu lassen.</string>
+    <string name="fitness_ex_core_crunch_tip_1">Stell dir vor, du drückst eine Traube zwischen Brustbein und Becken zusammen.</string>
+    <string name="fitness_ex_core_crunch_tip_2">Arme vor der Brust kreuzen macht es leichter, ein Gewicht schwerer.</string>
+    <string name="fitness_ex_core_crunch_mistake_1">Am Nacken ziehen.</string>
+    <string name="fitness_ex_core_crunch_mistake_2">Nur den Kopf heben – der obere Rücken muss mitkommen.</string>
+
+    <string name="fitness_ex_core_russian">Russian Twists</string>
+    <string name="fitness_ex_core_russian_desc">Rotationsübung, die schräge und tiefe Bauchmuskeln bei jeder Drehung fordert.</string>
+    <string name="fitness_ex_core_russian_step_1">Setz dich hin, Oberkörper etwa 45° zurückgelehnt, Knie gebeugt, Fersen knapp über dem Boden.</string>
+    <string name="fitness_ex_core_russian_step_2">Hebe die Füße an, Hände vor der Brust gefaltet (oder Gewicht halten).</string>
+    <string name="fitness_ex_core_russian_step_3">Dreh den Oberkörper nach rechts, dann nach links – das ist eine Wiederholung.</string>
+    <string name="fitness_ex_core_russian_step_4">Die Drehung kommt aus den Rippen, nicht nur aus den Armen.</string>
+    <string name="fitness_ex_core_russian_tip_1">Fersen bleiben am Boden, bis du den V-Sitz sicher kontrollierst.</string>
+    <string name="fitness_ex_core_russian_tip_2">Atme bei jeder Drehung aus, das maximiert die Spannung.</string>
+    <string name="fitness_ex_core_russian_mistake_1">Das Gewicht herumschwingen, ohne den Rumpf zu spannen.</string>
+    <string name="fitness_ex_core_russian_mistake_2">Runder oberer Rücken.</string>
+
+    <string name="fitness_ex_core_legraise">Beinheben (hängend oder liegend)</string>
+    <string name="fitness_ex_core_legraise_desc">Starker Reiz für den unteren Bauch und die Hüftbeuger – das Brennen sitzt tief.</string>
+    <string name="fitness_ex_core_legraise_step_1">Häng dich an eine Klimmzugstange (oder leg dich flach hin), Beine gestreckt.</string>
+    <string name="fitness_ex_core_legraise_step_2">Spanne den Rumpf an, damit du nicht schwingst.</string>
+    <string name="fitness_ex_core_legraise_step_3">Hebe die Beine bis mindestens waagerecht, ohne Schwung.</string>
+    <string name="fitness_ex_core_legraise_step_4">Senke sie in drei Sekunden kontrolliert ab.</string>
+    <string name="fitness_ex_core_legraise_tip_1">Beuge die Knie, wenn gestreckte Beine zu schwer sind.</string>
+    <string name="fitness_ex_core_legraise_tip_2">Kippe oben das Becken nach hinten, dann arbeitet der Bauch richtig.</string>
+    <string name="fitness_ex_core_legraise_mistake_1">Mit Schwung arbeiten statt mit Muskelkraft.</string>
+    <string name="fitness_ex_core_legraise_mistake_2">Schultern und Körper lösen sich mitten in der Wiederholung von der Spannung.</string>
+
+    <string name="fitness_ex_core_bicycle">Fahrrad-Crunches</string>
+    <string name="fitness_ex_core_bicycle_desc">Dynamische Kombination aus Beugung und Rotation für rundum aktivierte Bauchmuskeln.</string>
+    <string name="fitness_ex_core_bicycle_step_1">Leg dich auf den Rücken, Hände locker am Kopf, Knie im rechten Winkel angehoben.</string>
+    <string name="fitness_ex_core_bicycle_step_2">Führe den rechten Ellbogen zum linken Knie und strecke das rechte Bein aus.</string>
+    <string name="fitness_ex_core_bicycle_step_3">Wechsle die Seite und dreh dabei aus dem Rumpf – langsam treten.</string>
+    <string name="fitness_ex_core_bicycle_step_4">Atme bei jeder Drehung aus.</string>
+    <string name="fitness_ex_core_bicycle_tip_1">Langsame, saubere Wiederholungen schlagen schnelle und schlampige.</string>
+    <string name="fitness_ex_core_bicycle_tip_2">Halte jedes Mal eine Sekunde, wenn Ellbogen und Knie sich treffen.</string>
+    <string name="fitness_ex_core_bicycle_mistake_1">Nur mit den Beinen strampeln, ohne den Oberkörper zu drehen.</string>
+    <string name="fitness_ex_core_bicycle_mistake_2">Am Nacken ziehen, um Wiederholungen zu erzwingen.</string>
+
+    <string name="fitness_ex_core_mountain">Mountain Climbers</string>
+    <string name="fitness_ex_core_mountain_desc">Mischung aus Cardio und Rumpftraining im Stütz – treibt den Puls hoch und fordert Bauch, Hüftbeuger und Schultern.</string>
+    <string name="fitness_ex_core_mountain_step_1">Hoher Stütz, Hände unter den Schultern, Körper gerade.</string>
+    <string name="fitness_ex_core_mountain_step_2">Zieh ein Knie zur Brust, der Fuß schwebt knapp über dem Boden.</string>
+    <string name="fitness_ex_core_mountain_step_3">Wechsle schnell die Beine und halte die Hüfte dabei ruhig.</string>
+    <string name="fitness_ex_core_mountain_step_4">So schnell wie möglich wechseln, ohne den Stütz zu verlieren.</string>
+    <string name="fitness_ex_core_mountain_tip_1">Halte die Hüfte tief – nicht nach oben schieben.</string>
+    <string name="fitness_ex_core_mountain_tip_2">Atme bei jedem Kniezug aus.</string>
+    <string name="fitness_ex_core_mountain_mistake_1">Die Hüfte wippt wild auf und ab.</string>
+    <string name="fitness_ex_core_mountain_mistake_2">Hände zu weit vor den Schultern aufgesetzt.</string>
+
+    <string name="fitness_ex_core_flutter">Flutter Kicks</string>
+    <string name="fitness_ex_core_flutter_desc">Finisher für den unteren Bauch, der den oft vernachlässigten Bereich unter Dauerspannung setzt.</string>
+    <string name="fitness_ex_core_flutter_step_1">Leg dich flach hin, Hände unter das Gesäß, unterer Rücken fest am Boden.</string>
+    <string name="fitness_ex_core_flutter_step_2">Hebe beide Beine ein paar Zentimeter an, Fußspitzen gestreckt.</string>
+    <string name="fitness_ex_core_flutter_step_3">Bewege die Beine in kleinen, schnellen Scherenbewegungen auf und ab.</string>
+    <string name="fitness_ex_core_flutter_step_4">Bauch bleibt fest, der untere Rücken bleibt am Boden.</string>
+    <string name="fitness_ex_core_flutter_tip_1">Kleine, kontrollierte Bewegungen statt wildes Zappeln.</string>
+    <string name="fitness_ex_core_flutter_tip_2">Kopf und Schultern leicht anheben brennt noch mehr.</string>
+    <string name="fitness_ex_core_flutter_mistake_1">Der untere Rücken hebt sich vom Boden ab.</string>
+    <string name="fitness_ex_core_flutter_mistake_2">Beine zu hoch = weniger Reiz auf den unteren Bauch.</string>
+
+    <string name="fitness_ex_core_hollow">Hollow Body Hold</string>
+    <string name="fitness_ex_core_hollow_desc">Turn-Klassiker – die perfekte statische Bauchspannung, die direkt auf Handstand und Hebel übertragbar ist.</string>
+    <string name="fitness_ex_core_hollow_step_1">Leg dich auf den Rücken, Arme über dem Kopf gestreckt, Beine lang.</string>
+    <string name="fitness_ex_core_hollow_step_2">Drücke die Lendenwirbelsäule fest in den Boden – Becken nach hinten kippen.</string>
+    <string name="fitness_ex_core_hollow_step_3">Hebe Arme und Beine knapp vom Boden ab, Kinn leicht angezogen.</string>
+    <string name="fitness_ex_core_hollow_step_4">Halte die Bananenform, ohne dass der untere Rücken abhebt.</string>
+    <string name="fitness_ex_core_hollow_tip_1">Leichter wird es mit 90° gebeugten Knien oder Armen am Körper.</string>
+    <string name="fitness_ex_core_hollow_tip_2">Mit Hollow Body Rocks wird daraus eine dynamische Übung.</string>
+    <string name="fitness_ex_core_hollow_mistake_1">Der untere Rücken hebt ab – damit ist der Sinn der Übung weg.</string>
+    <string name="fitness_ex_core_hollow_mistake_2">Schultern ziehen zu den Ohren – halte sie unten.</string>
+
+    <string name="fitness_ex_core_birddog">Bird-Dog</string>
+    <string name="fitness_ex_core_birddog_desc">Übung gegen Rotation und Überstreckung im Vierfüßlerstand – verbessert die Rumpfstabilität der ganzen hinteren Kette.</string>
+    <string name="fitness_ex_core_birddog_step_1">Vierfüßlerstand, Handgelenke unter den Schultern, Knie unter der Hüfte, Rücken neutral.</string>
+    <string name="fitness_ex_core_birddog_step_2">Strecke den linken Arm nach vorn und das rechte Bein nach hinten, bis beide waagerecht sind.</string>
+    <string name="fitness_ex_core_birddog_step_3">Kurz halten, Gesäß anspannen, die Hüfte dreht nicht mit.</string>
+    <string name="fitness_ex_core_birddog_step_4">Zurückführen und Seite wechseln.</string>
+    <string name="fitness_ex_core_birddog_tip_1">Tippe mit Hand und Fuß an eine Wand, um die volle Streckung zu prüfen.</string>
+    <string name="fitness_ex_core_birddog_tip_2">Beim Strecken ausatmen, beim Zurückführen einatmen.</string>
+    <string name="fitness_ex_core_birddog_mistake_1">Die Hüfte kippt zur Seite statt waagerecht zu bleiben.</string>
+    <string name="fitness_ex_core_birddog_mistake_2">Ins Hohlkreuz gehen, um Arm und Bein höher zu bekommen.</string>
+
+    <!-- ====== SCHULTERN ====== -->
+    <string name="fitness_ex_shoulders_ohp">Schulterdrücken (Overhead Press)</string>
+    <string name="fitness_ex_shoulders_ohp_desc">Die Grundübung fürs Drücken über Kopf – baut runde Schultern, obere Brust und Trizepskraft auf.</string>
+    <string name="fitness_ex_shoulders_ohp_step_1">Lege die Stange vorn auf den Schultern ab, Griff knapp außerhalb der Schulterbreite.</string>
+    <string name="fitness_ex_shoulders_ohp_step_2">Rumpf fest, Gesäß anspannen, Füße hüftbreit.</string>
+    <string name="fitness_ex_shoulders_ohp_step_3">Drücke die Stange gerade nach oben und schiebe den Kopf am Ende leicht durch.</string>
+    <string name="fitness_ex_shoulders_ohp_step_4">Senke die Stange langsam zurück auf die Schultern.</string>
+    <string name="fitness_ex_shoulders_ohp_tip_1">Rippen unten halten – kein Hohlkreuz, um die Stange hochzubekommen.</string>
+    <string name="fitness_ex_shoulders_ohp_tip_2">Die Kurzhantel-Variante (ein- oder beidarmig) ist eine sehr gute Alternative.</string>
+    <string name="fitness_ex_shoulders_ohp_mistake_1">Die Hüfte nach vorn schieben und sich stark zurücklehnen.</string>
+    <string name="fitness_ex_shoulders_ohp_mistake_2">Vor dem Gesicht drücken mit vorgeschobenem Kopf.</string>
+
+    <string name="fitness_ex_shoulders_pikepush">Pike Push-ups</string>
+    <string name="fitness_ex_shoulders_pikepush_desc">Schulterdrücken mit Eigengewicht – die beste Möglichkeit, Schultern und Trizeps ohne Gym zu trainieren.</string>
+    <string name="fitness_ex_shoulders_pikepush_step_1">Geh aus dem Stütz mit den Füßen näher an die Hände und schiebe die Hüfte hoch ins umgekehrte V.</string>
+    <string name="fitness_ex_shoulders_pikepush_step_2">Hände schulterbreit, Ellbogen zeigen nach außen, Kopf Richtung Boden.</string>
+    <string name="fitness_ex_shoulders_pikepush_step_3">Senke den Scheitel durch Beugen der Ellbogen zum Boden.</string>
+    <string name="fitness_ex_shoulders_pikepush_step_4">Drücke dich zurück in die Pike-Position.</string>
+    <string name="fitness_ex_shoulders_pikepush_tip_1">Füße auf einer Bank erhöhen die Schulterbelastung deutlich.</string>
+    <string name="fitness_ex_shoulders_pikepush_tip_2">Spanne oben Trizeps und seitliche Schulter bewusst an.</string>
+    <string name="fitness_ex_shoulders_pikepush_mistake_1">Daraus einen normalen Liegestütz machen – die Hüfte muss oben bleiben.</string>
+    <string name="fitness_ex_shoulders_pikepush_mistake_2">Mit dem Kopf auf den Boden knallen – kontrolliert absenken.</string>
+
+    <string name="fitness_ex_shoulders_lateral">Seitheben</string>
+    <string name="fitness_ex_shoulders_lateral_desc">Isolation für die seitliche Schulter – genau die Bewegung, die für breite Schultern sorgt.</string>
+    <string name="fitness_ex_shoulders_lateral_step_1">Steh aufrecht mit leichten Kurzhanteln an den Seiten, Handflächen zueinander, Ellbogen leicht gebeugt.</string>
+    <string name="fitness_ex_shoulders_lateral_step_2">Hebe die Hanteln seitlich an, bis die Arme waagerecht sind.</string>
+    <string name="fitness_ex_shoulders_lateral_step_3">Halte oben eine Sekunde – die Ellbogen sind leicht höher als die Handgelenke.</string>
+    <string name="fitness_ex_shoulders_lateral_step_4">Senke sie über drei Sekunden sehr langsam ab.</string>
+    <string name="fitness_ex_shoulders_lateral_tip_1">Stell dir vor, du gießt oben Wasser aus einer Kanne – Daumen leicht nach unten.</string>
+    <string name="fitness_ex_shoulders_lateral_tip_2">Du brauchst viel weniger Gewicht als gedacht, die Technik entscheidet.</string>
+    <string name="fitness_ex_shoulders_lateral_mistake_1">Mit Schwung arbeiten, um schwerere Hanteln zu bewegen.</string>
+    <string name="fitness_ex_shoulders_lateral_mistake_2">Die Schultern hochziehen statt die seitliche Schulter zu isolieren.</string>
+
+    <string name="fitness_ex_shoulders_frontraise">Frontheben</string>
+    <string name="fitness_ex_shoulders_frontraise_desc">Trifft die vordere Schulter – gleicht drucklastige Pläne aus und verbessert die Schulterhaltung.</string>
+    <string name="fitness_ex_shoulders_frontraise_step_1">Halte die Hanteln vor den Oberschenkeln, Handflächen nach unten oder zu dir, Ellbogen leicht gebeugt.</string>
+    <string name="fitness_ex_shoulders_frontraise_step_2">Hebe einen oder beide Arme nach vorn, bis sie waagerecht sind.</string>
+    <string name="fitness_ex_shoulders_frontraise_step_3">Halte auf Schulterhöhe kurz, ohne den Oberkörper zu bewegen.</string>
+    <string name="fitness_ex_shoulders_frontraise_step_4">Kontrolliert absenken und wiederholen.</string>
+    <string name="fitness_ex_shoulders_frontraise_tip_1">Abwechselnd zu heben ist leichter zu kontrollieren als beidseitig.</string>
+    <string name="fitness_ex_shoulders_frontraise_tip_2">Mit Widerstandsband funktioniert die Übung genauso gut.</string>
+    <string name="fitness_ex_shoulders_frontraise_mistake_1">Sich zurücklehnen, um das Gewicht hochzuschwingen.</string>
+    <string name="fitness_ex_shoulders_frontraise_mistake_2">Über Schulterhöhe heben – dann übernimmt der Trapezmuskel.</string>
+
+    <string name="fitness_ex_shoulders_arnold">Arnold Press</string>
+    <string name="fitness_ex_shoulders_arnold_desc">Von Schwarzenegger erfundenes Drücken über den vollen Bewegungsradius – trifft alle drei Schulterköpfe in einer Wiederholung.</string>
+    <string name="fitness_ex_shoulders_arnold_step_1">Starte mit den Hanteln auf Schulterhöhe, Handflächen zu dir, Ellbogen eng.</string>
+    <string name="fitness_ex_shoulders_arnold_step_2">Drücke nach oben und drehe dabei gleichzeitig die Handflächen nach außen.</string>
+    <string name="fitness_ex_shoulders_arnold_step_3">Oben zeigen die Handflächen nach vorn, die Arme sind gestreckt.</string>
+    <string name="fitness_ex_shoulders_arnold_step_4">Führe die Bewegung mit umgekehrter Drehung zurück.</string>
+    <string name="fitness_ex_shoulders_arnold_tip_1">Kontrolliere die Drehung – genau die macht den Unterschied zum normalen Drücken.</string>
+    <string name="fitness_ex_shoulders_arnold_tip_2">Spanne oben bei jeder Wiederholung die Schulter komplett an.</string>
+    <string name="fitness_ex_shoulders_arnold_mistake_1">Die Handdrehung zu hastig durchziehen.</string>
+    <string name="fitness_ex_shoulders_arnold_mistake_2">Zu schwer wählen und unten aus dem Schwung arbeiten.</string>
+
+    <string name="fitness_ex_shoulders_facepull">Face Pulls (Band / Kabel)</string>
+    <string name="fitness_ex_shoulders_facepull_desc">Haltungsretter – zieht die Schultern zurück und stärkt Außenrotatoren und hintere Schulter.</string>
+    <string name="fitness_ex_shoulders_facepull_step_1">Befestige ein Band (oder Kabel) auf Gesichtshöhe und greife es mit Daumen nach oben.</string>
+    <string name="fitness_ex_shoulders_facepull_step_2">Geh so weit zurück, dass Spannung auf dem Band liegt, Schulterblätter fixieren.</string>
+    <string name="fitness_ex_shoulders_facepull_step_3">Zieh das Band zur Stirn, die Ellbogen bleiben hoch und außen.</string>
+    <string name="fitness_ex_shoulders_facepull_step_4">Spanne hinten kurz an und führe kontrolliert zurück.</string>
+    <string name="fitness_ex_shoulders_facepull_tip_1">Mach das in JEDER Einheit, wenn du viel am Rechner sitzt oder viel drückst.</string>
+    <string name="fitness_ex_shoulders_facepull_tip_2">Zieh das Band am Ende auseinander, wenn es das Gesicht erreicht.</string>
+    <string name="fitness_ex_shoulders_facepull_mistake_1">Zu tief ziehen wie beim Rudern statt zum Gesicht.</string>
+    <string name="fitness_ex_shoulders_facepull_mistake_2">Sich vom Band nach vorn zurückreißen lassen.</string>
+
+    <!-- ====== ARME ====== -->
+    <string name="fitness_ex_arms_bicepcurl">Bizepscurls (Lang- / Kurzhantel)</string>
+    <string name="fitness_ex_arms_bicepcurl_desc">Der Klassiker für dicke Oberarme und einen ausgeprägten Bizepsberg.</string>
+    <string name="fitness_ex_arms_bicepcurl_step_1">Steh aufrecht, Hantel in gestreckten Armen, Ellbogen fest am Körper.</string>
+    <string name="fitness_ex_arms_bicepcurl_step_2">Curle das Gewicht hoch und spanne den Bizeps an, die Schultern bleiben unten.</string>
+    <string name="fitness_ex_arms_bicepcurl_step_3">Oben voll anspannen und eine Sekunde halten.</string>
+    <string name="fitness_ex_arms_bicepcurl_step_4">Senke das Gewicht über mindestens drei Sekunden ab.</string>
+    <string name="fitness_ex_arms_bicepcurl_tip_1">Die Ellbogen bleiben die ganze Wiederholung am Rippenbogen.</string>
+    <string name="fitness_ex_arms_bicepcurl_tip_2">Untergriff trifft den langen Bizepskopf, Hammergriff den Brachialis.</string>
+    <string name="fitness_ex_arms_bicepcurl_mistake_1">Mit Schwung arbeiten und daraus ein halbes Rudern machen.</string>
+    <string name="fitness_ex_arms_bicepcurl_mistake_2">Unten nicht ganz ausstrecken und damit den halben Bewegungsradius verschenken.</string>
+
+    <string name="fitness_ex_arms_hammercurl">Hammercurls</string>
+    <string name="fitness_ex_arms_hammercurl_desc">Curls im Neutralgriff bauen den Brachialis auf, der den Bizeps optisch nach oben drückt.</string>
+    <string name="fitness_ex_arms_hammercurl_step_1">Steh mit Hanteln an den Seiten, Handflächen zueinander (Hammergriff).</string>
+    <string name="fitness_ex_arms_hammercurl_step_2">Ellbogen eng am Körper, eine Hantel hochcurlen, ohne das Handgelenk zu drehen.</string>
+    <string name="fitness_ex_arms_hammercurl_step_3">Oben anspannen, der Daumen zeigt zur Schulter.</string>
+    <string name="fitness_ex_arms_hammercurl_step_4">Langsam absenken und die Seite wechseln.</string>
+    <string name="fitness_ex_arms_hammercurl_tip_1">Sechs Wochen lang in jeder Einheit – der Ärmel wird es dir sagen.</string>
+    <string name="fitness_ex_arms_hammercurl_tip_2">Am Kabelzug mit Seilgriff funktioniert es genauso gut.</string>
+    <string name="fitness_ex_arms_hammercurl_mistake_1">Die Ellbogen wandern nach vorn, um mitzuhelfen.</string>
+    <string name="fitness_ex_arms_hammercurl_mistake_2">Die Handgelenke mitten in der Wiederholung nach außen drehen.</string>
+
+    <string name="fitness_ex_arms_tricepdip">Trizeps-Dips (Eigengewicht)</string>
+    <string name="fitness_ex_arms_tricepdip_desc">Dips an Barren oder zwischen zwei Stühlen zerlegen Trizeps und Brust mit dem eigenen Körpergewicht.</string>
+    <string name="fitness_ex_arms_tricepdip_step_1">Stütze dich an Barren oder Stuhlkanten ab, Arme gestreckt, Körper hängt davor.</string>
+    <string name="fitness_ex_arms_tricepdip_step_2">Lehne den Oberkörper leicht nach vorn und beuge die Ellbogen.</string>
+    <string name="fitness_ex_arms_tricepdip_step_3">Senke dich, bis die Ellbogen etwa 90° erreichen (oder so tief wie angenehm).</string>
+    <string name="fitness_ex_arms_tricepdip_step_4">Drücke dich über die Handflächen zurück in die volle Streckung.</string>
+    <string name="fitness_ex_arms_tricepdip_tip_1">Aufrechter Oberkörper = mehr Trizeps, nach vorn gelehnt = mehr Brust.</string>
+    <string name="fitness_ex_arms_tricepdip_tip_2">Mit Gewichtsgürtel oder Rucksack lässt sich die Übung steigern.</string>
+    <string name="fitness_ex_arms_tricepdip_mistake_1">Zu tief gehen und die Schulterkapsel überlasten.</string>
+    <string name="fitness_ex_arms_tricepdip_mistake_2">Oben ausruhen statt die Spannung zu halten.</string>
+
+    <string name="fitness_ex_arms_cgpushup">Enge Liegestütze</string>
+    <string name="fitness_ex_arms_cgpushup_desc">Die engere Handposition verlagert einen großen Teil der Arbeit direkt auf den Trizeps – ganz ohne Gewichte.</string>
+    <string name="fitness_ex_arms_cgpushup_step_1">Hoher Stütz, Hände enger als schulterbreit, Finger nah beieinander.</string>
+    <string name="fitness_ex_arms_cgpushup_step_2">Körper gerade, Rumpf fest angespannt.</string>
+    <string name="fitness_ex_arms_cgpushup_step_3">Senke die Brust zum Boden, die Ellbogen streifen den Rippenbogen.</string>
+    <string name="fitness_ex_arms_cgpushup_step_4">Drücke dich über den Trizeps gerade nach oben, ohne die Ellbogen abzuspreizen.</string>
+    <string name="fitness_ex_arms_cgpushup_tip_1">Auf den Knien zu starten ist völlig legitim.</string>
+    <string name="fitness_ex_arms_cgpushup_tip_2">Spanne oben bei jeder Wiederholung eine Sekunde an.</string>
+    <string name="fitness_ex_arms_cgpushup_mistake_1">Ellbogen spreizen trotzdem ab – halte sie eng!</string>
+    <string name="fitness_ex_arms_cgpushup_mistake_2">Die Hüfte hängt durch, weil die Kraft nachlässt.</string>
+
+    <string name="fitness_ex_arms_tricepkickback">Trizeps-Kickbacks</string>
+    <string name="fitness_ex_arms_tricepkickback_desc">Klassische Isolation, die den langen Trizepskopf in der Endkontraktion trifft.</string>
+    <string name="fitness_ex_arms_tricepkickback_step_1">Beuge dich in der Hüfte, bis der Oberkörper fast waagerecht ist, eine Hand stützt auf der Bank.</string>
+    <string name="fitness_ex_arms_tricepkickback_step_2">Nimm eine Hantel, der Oberarm liegt waagerecht am Körper, Ellbogen 90° gebeugt.</string>
+    <string name="fitness_ex_arms_tricepkickback_step_3">Strecke den Ellbogen, bis der Arm hinter dir komplett gerade ist.</string>
+    <string name="fitness_ex_arms_tricepkickback_step_4">Trizeps anspannen und langsam zurückführen.</string>
+    <string name="fitness_ex_arms_tricepkickback_tip_1">Nur der Unterarm bewegt sich – der Oberarm bleibt fixiert.</string>
+    <string name="fitness_ex_arms_tricepkickback_tip_2">Leicht wählen. Zu schwer wird daraus ein Rudern und der Reiz ist weg.</string>
+    <string name="fitness_ex_arms_tricepkickback_mistake_1">Der Oberarm wippt auf und ab statt fixiert zu bleiben.</string>
+    <string name="fitness_ex_arms_tricepkickback_mistake_2">Oben nicht ganz durchstrecken.</string>
+
+    <string name="fitness_ex_arms_concentration">Konzentrationscurls</string>
+    <string name="fitness_ex_arms_concentration_desc">Einarmiger Curl im Sitzen ganz ohne Schwung – der ultimative Finisher für den Bizepsberg.</string>
+    <string name="fitness_ex_arms_concentration_step_1">Setz dich auf eine Bank, Beine geöffnet, ein Ellbogen stützt an der Oberschenkelinnenseite.</string>
+    <string name="fitness_ex_arms_concentration_step_2">Halte die Hantel im Untergriff, der Arm hängt leicht gebeugt.</string>
+    <string name="fitness_ex_arms_concentration_step_3">Curle das Gewicht hoch, der Ellbogen bleibt am Oberschenkel.</string>
+    <string name="fitness_ex_arms_concentration_step_4">Oben anspannen und sehr langsam absenken.</string>
+    <string name="fitness_ex_arms_concentration_tip_1">Dreh die Hand oben kräftig nach außen für die maximale Kontraktion.</string>
+    <string name="fitness_ex_arms_concentration_tip_2">Heb dir die Übung fürs Ende des Armtrainings auf – sie ist ein Ausbrenner.</string>
+    <string name="fitness_ex_arms_concentration_mistake_1">Mit der Schulter Schwung holen.</string>
+    <string name="fitness_ex_arms_concentration_mistake_2">Durchhetzen, ohne oben richtig anzuspannen.</string>
+
+    <string name="fitness_ex_arms_skullcrusher">Skull Crusher (Stirndrücken)</string>
+    <string name="fitness_ex_arms_skullcrusher_desc">Schwere Trizeps-Isolation auf der Bank mit SZ-Stange, Langhantel oder Kurzhanteln.</string>
+    <string name="fitness_ex_arms_skullcrusher_step_1">Leg dich flach auf die Bank, die Stange über der Brust, Ellbogen zeigen nach oben.</string>
+    <string name="fitness_ex_arms_skullcrusher_step_2">Senke die Stange nur aus dem Ellbogen Richtung Stirn bzw. Haaransatz.</string>
+    <string name="fitness_ex_arms_skullcrusher_step_3">Die Stange tippt leicht an die Stirn, die Ellbogen bleiben senkrecht fixiert.</string>
+    <string name="fitness_ex_arms_skullcrusher_step_4">Strecke den Trizeps zurück in die Ausgangsposition.</string>
+    <string name="fitness_ex_arms_skullcrusher_tip_1">Nutze eine SZ-Stange, wenn die Handgelenke zwicken.</string>
+    <string name="fitness_ex_arms_skullcrusher_tip_2">Am Kabelzug ist die Übung ellbogenschonender und trotzdem hart.</string>
+    <string name="fitness_ex_arms_skullcrusher_mistake_1">Die Ellbogen spreizen nach außen – sie müssen parallel bleiben.</string>
+    <string name="fitness_ex_arms_skullcrusher_mistake_2">Die Ellbogen wandern nach vorn, um oben zu schummeln.</string>
+
+    <!-- ====== CARDIO ====== -->
+    <string name="fitness_ex_cardio_jjacks">Hampelmänner</string>
+    <string name="fitness_ex_cardio_jjacks_desc">Cardio-Klassiker ohne Geräte, der den Puls in Sekunden hochtreibt und den ganzen Körper aufwärmt.</string>
+    <string name="fitness_ex_cardio_jjacks_step_1">Steh aufrecht, Füße zusammen, Arme seitlich am Körper.</string>
+    <string name="fitness_ex_cardio_jjacks_step_2">Spring die Füße schulterbreit auseinander und die Arme über den Kopf.</string>
+    <string name="fitness_ex_cardio_jjacks_step_3">Spring direkt zurück in die Ausgangsposition.</string>
+    <string name="fitness_ex_cardio_jjacks_step_4">Wiederhole in einem gleichmäßigen Rhythmus.</string>
+    <string name="fitness_ex_cardio_jjacks_tip_1">Lande auf den Fußballen, nicht platt auf dem ganzen Fuß.</string>
+    <string name="fitness_ex_cardio_jjacks_tip_2">Die Schritt-Variante ohne Sprung ist drinnen nachbarfreundlich.</string>
+    <string name="fitness_ex_cardio_jjacks_mistake_1">Die Arme nur halb hochnehmen – ganz nach oben führen.</string>
+    <string name="fitness_ex_cardio_jjacks_mistake_2">Mit den Fersen auf den Boden knallen.</string>
+
+    <string name="fitness_ex_cardio_burpees">Burpees</string>
+    <string name="fitness_ex_cardio_burpees_desc">Stoffwechsel-Monster aus Kniebeuge, Stütz, Liegestütz und Sprung – der echte Ganzkörpertest.</string>
+    <string name="fitness_ex_cardio_burpees_step_1">Steh aufrecht, Füße schulterbreit.</string>
+    <string name="fitness_ex_cardio_burpees_step_2">Geh in die Hocke und setze die Hände vor den Füßen auf.</string>
+    <string name="fitness_ex_cardio_burpees_step_3">Spring die Beine nach hinten in den Stütz und mach einen Liegestütz (für die leichte Variante weglassen).</string>
+    <string name="fitness_ex_cardio_burpees_step_4">Spring die Füße zu den Händen und explosiv nach oben, Hände über dem Kopf klatschen.</string>
+    <string name="fitness_ex_cardio_burpees_tip_1">Die Atmung entscheidet – atme beim Liegestütz und beim Sprung aus.</string>
+    <string name="fitness_ex_cardio_burpees_tip_2">Bei Knieproblemen den Sprung durch einfaches Aufstehen ersetzen.</string>
+    <string name="fitness_ex_cardio_burpees_mistake_1">Der Stütz sackt mitten in der Wiederholung durch.</string>
+    <string name="fitness_ex_cardio_burpees_mistake_2">Jede Phase nur halb ausführen, nur um Wiederholungen zu sammeln.</string>
+
+    <string name="fitness_ex_cardio_highknees">High Knees</string>
+    <string name="fitness_ex_cardio_highknees_desc">Laufen auf der Stelle mit hohem Knieanzug – harter HIIT-Finisher oder dynamisches Aufwärmen.</string>
+    <string name="fitness_ex_cardio_highknees_step_1">Steh aufrecht, Brust raus, Arme wie beim Sprinten 90° gebeugt.</string>
+    <string name="fitness_ex_cardio_highknees_step_2">Zieh die Knie so schnell wie möglich auf Hüfthöhe.</string>
+    <string name="fitness_ex_cardio_highknees_step_3">Lande weich auf den Fußballen und wechsle sofort das Bein.</string>
+    <string name="fitness_ex_cardio_highknees_step_4">Arbeite kräftig mit den Armen für den Rhythmus.</string>
+    <string name="fitness_ex_cardio_highknees_tip_1">Ein Metronom oder ein schneller Beat hilft, die Frequenz zu halten.</string>
+    <string name="fitness_ex_cardio_highknees_tip_2">Denk zuerst an „schnelle Füße“, dann an „hohe Knie“.</string>
+    <string name="fitness_ex_cardio_highknees_mistake_1">Sich bei jedem Kniezug weit zurücklehnen.</string>
+    <string name="fitness_ex_cardio_highknees_mistake_2">Auf der Ferse landen = Risiko für Schienbeinschmerzen.</string>
+
+    <string name="fitness_ex_cardio_jumprope">Seilspringen</string>
+    <string name="fitness_ex_cardio_jumprope_desc">Der Liebling der Boxer – Wadenausdauer, Koordination und brutales Cardio auf einem Quadratmeter.</string>
+    <string name="fitness_ex_cardio_jumprope_step_1">Halte die Griffe auf Hüfthöhe, Ellbogen eng, das Seil liegt hinter den Fersen.</string>
+    <string name="fitness_ex_cardio_jumprope_step_2">Dreh das Seil aus den Handgelenken (nicht aus den Armen) und spring 2–3 cm hoch.</string>
+    <string name="fitness_ex_cardio_jumprope_step_3">Lande auf den Fußballen, Knie leicht gebeugt, in gleichmäßigen Sprüngen.</string>
+    <string name="fitness_ex_cardio_jumprope_step_4">Das Seil läuft bei jedem Sprung sauber unter den Füßen durch.</string>
+    <string name="fitness_ex_cardio_jumprope_tip_1">Kein Seil zur Hand? Simuliere die Bewegung mit demselben Timing.</string>
+    <string name="fitness_ex_cardio_jumprope_tip_2">Schaffe erst 100 Sprünge am Stück, bevor du Tricks probierst.</string>
+    <string name="fitness_ex_cardio_jumprope_mistake_1">15 cm hoch springen – kleine Sprünge sind effizienter.</string>
+    <string name="fitness_ex_cardio_jumprope_mistake_2">Große Armkreise; das Seil dreht aus dem Handgelenk.</string>
+
+    <string name="fitness_ex_cardio_skipping">Schnelle Schritte auf der Stelle</string>
+    <string name="fitness_ex_cardio_skipping_desc">Gelenkschonender Cardio-Finisher – leichter für die Knie als High Knees, aber genauso gut für den Puls.</string>
+    <string name="fitness_ex_cardio_skipping_step_1">Steh mit einem angehobenen Fuß, Arme locker.</string>
+    <string name="fitness_ex_cardio_skipping_step_2">Tritt schnell auf der Stelle und verlagere das Gewicht zügig von links nach rechts.</string>
+    <string name="fitness_ex_cardio_skipping_step_3">Der gegengleiche Arm schwingt natürlich mit.</string>
+    <string name="fitness_ex_cardio_skipping_step_4">Steigere das Tempo bis in deinen Zielpulsbereich.</string>
+    <string name="fitness_ex_cardio_skipping_tip_1">Perfekt zum Aufwärmen vor dem Krafttraining.</string>
+    <string name="fitness_ex_cardio_skipping_tip_2">Höherer Knieanzug erhöht die Intensität.</string>
+    <string name="fitness_ex_cardio_skipping_mistake_1">Mit den Füßen aufstampfen – bleib leichtfüßig.</string>
+    <string name="fitness_ex_cardio_skipping_mistake_2">Runder Rücken; Brust bleibt aufrecht!</string>
+
+    <!-- ====== GANZKÖRPER ====== -->
+    <string name="fitness_ex_fullbody_thruster">Kurzhantel-Thruster</string>
+    <string name="fitness_ex_fullbody_thruster_desc">Frontkniebeuge und Schulterdrücken in einem – trifft jede große Muskelgruppe und raubt dir den Atem.</string>
+    <string name="fitness_ex_fullbody_thruster_step_1">Bring zwei Kurzhanteln auf die Schultern, Handflächen zueinander, Ellbogen nach vorn.</string>
+    <string name="fitness_ex_fullbody_thruster_step_2">Geh in die Kniebeuge, bis die Oberschenkel waagerecht sind.</string>
+    <string name="fitness_ex_fullbody_thruster_step_3">Drücke über die Fersen explosiv aus der Beuge heraus.</string>
+    <string name="fitness_ex_fullbody_thruster_step_4">Nutze den Schwung direkt für das Drücken – die Hanteln enden gestreckt über dem Kopf.</string>
+    <string name="fitness_ex_fullbody_thruster_tip_1">Denk an „eine flüssige Bewegung“, nicht an „erst Beuge, dann Drücken“.</string>
+    <string name="fitness_ex_fullbody_thruster_tip_2">Langhantel, Kettlebells oder ein Sandsack funktionieren genauso.</string>
+    <string name="fitness_ex_fullbody_thruster_mistake_1">Drücken, bevor der Beinantrieb kommt = verschenkte Kraft.</string>
+    <string name="fitness_ex_fullbody_thruster_mistake_2">Oben nicht komplett ausstrecken.</string>
+
+    <string name="fitness_ex_fullbody_bearcrawl">Bärengang</string>
+    <string name="fitness_ex_fullbody_bearcrawl_desc">Fortbewegung im Vierfüßlerstand – baut Ganzkörperkraft, Schulterstabilität und Beweglichkeit gleichzeitig auf.</string>
+    <string name="fitness_ex_fullbody_bearcrawl_step_1">Hände unter den Schultern, Knie unter der Hüfte und wenige Zentimeter über dem Boden.</string>
+    <string name="fitness_ex_fullbody_bearcrawl_step_2">Rumpf fest, Hüfte auf Schulterhöhe, Rücken gerade.</string>
+    <string name="fitness_ex_fullbody_bearcrawl_step_3">Bewege rechte Hand und linkes Knie gleichzeitig nach vorn.</string>
+    <string name="fitness_ex_fullbody_bearcrawl_step_4">Dann linke Hand und rechtes Knie; krabble vorwärts, rückwärts oder seitwärts.</string>
+    <string name="fitness_ex_fullbody_bearcrawl_tip_1">Denk an „schwere Pfoten“ – setz bewusst auf, statt zu schleichen.</string>
+    <string name="fitness_ex_fullbody_bearcrawl_tip_2">Markiere eine 8–10 m lange Bahn und krabble auf Zeit.</string>
+    <string name="fitness_ex_fullbody_bearcrawl_mistake_1">Das Gesäß ragt nach oben wie beim herabschauenden Hund.</string>
+    <string name="fitness_ex_fullbody_bearcrawl_mistake_2">Gleichseitig krabbeln (gleiche Hand und gleiches Bein).</string>
+
+    <string name="fitness_ex_fullbody_kbswing">Kettlebell Swing</string>
+    <string name="fitness_ex_fullbody_kbswing_desc">Hüftbeuge mit der Kettlebell – knallhartes Training für die hintere Kette mit über 20 kcal pro Minute.</string>
+    <string name="fitness_ex_fullbody_kbswing_step_1">Die Kettlebell liegt zwischen den Füßen, Stand etwas weiter als schulterbreit.</string>
+    <string name="fitness_ex_fullbody_kbswing_step_2">Geh in die Hüftbeuge, greife den Griff und schwinge die Kugel zwischen die Beine nach hinten.</string>
+    <string name="fitness_ex_fullbody_kbswing_step_3">Schiebe die Hüfte explosiv nach vorn, sodass die Kugel bis auf Brust- bzw. Augenhöhe fliegt.</string>
+    <string name="fitness_ex_fullbody_kbswing_step_4">Lass die Kugel zurückpendeln, geh in die Hüftbeuge und wiederhole.</string>
+    <string name="fitness_ex_fullbody_kbswing_tip_1">Das GESÄSS macht die Arbeit, nicht die Arme. Die Arme sind nur Seile.</string>
+    <string name="fitness_ex_fullbody_kbswing_tip_2">Zum Lernen der Hüftbeuge geht auch eine Kurzhantel.</string>
+    <string name="fitness_ex_fullbody_kbswing_tip_3">Die Kraft kommt aus dem Hüftschnapper – kräftig ausatmen dabei.</string>
+    <string name="fitness_ex_fullbody_kbswing_mistake_1">Den Swing zur Kniebeuge machen (es ist eine Hüftbeuge).</string>
+    <string name="fitness_ex_fullbody_kbswing_mistake_2">Die Kugel oben mit den Schultern hochdrücken.</string>
+    <string name="fitness_ex_fullbody_kbswing_mistake_3">Runder Rücken – ein gerader Rücken ist Pflicht.</string>
+
+    <string name="fitness_ex_fullbody_burpeepushup">Burpee mit Liegestütz</string>
+    <string name="fitness_ex_fullbody_burpeepushup_desc">Härtere Burpee-Variante mit vollem Liegestütz bis zum Boden und Strecksprung.</string>
+    <string name="fitness_ex_fullbody_burpeepushup_step_1">Steh aufrecht, Füße schulterbreit.</string>
+    <string name="fitness_ex_fullbody_burpeepushup_step_2">Geh in die Hocke, Hände auf den Boden, spring die Beine in den Stütz.</string>
+    <string name="fitness_ex_fullbody_burpeepushup_step_3">Mach einen tiefen Liegestütz über den vollen Bewegungsradius.</string>
+    <string name="fitness_ex_fullbody_burpeepushup_step_4">Zieh die Knie explosiv an und spring aus der Hocke gerade nach oben.</string>
+    <string name="fitness_ex_fullbody_burpeepushup_tip_1">Absteigende Sätze: 10, 9, 8 … 1 – der ultimative Finisher.</string>
+    <string name="fitness_ex_fullbody_burpeepushup_tip_2">Bei Knieproblemen den Sprung weglassen, den Liegestütz behalten.</string>
+    <string name="fitness_ex_fullbody_burpeepushup_mistake_1">Liegestütze auf den Knien, nur um die Wiederholung abzuhaken.</string>
+    <string name="fitness_ex_fullbody_burpeepushup_mistake_2">Den Übergang in den Stütz hetzen.</string>
+
+    <string name="fitness_ex_fullbody_manmaker">Man-Maker</string>
+    <string name="fitness_ex_fullbody_manmaker_desc">Berüchtigte Ganzkörperkombination aus Rudern, Liegestütz, Umsetzen und Drücken in einer einzigen Wiederholung.</string>
+    <string name="fitness_ex_fullbody_manmaker_step_1">Steh mit Kurzhanteln an den Seiten, Füße schulterbreit.</string>
+    <string name="fitness_ex_fullbody_manmaker_step_2">Geh in den Stütz auf den Hanteln und rudere eine Hantel zur Hüfte. Dann die Seite wechseln.</string>
+    <string name="fitness_ex_fullbody_manmaker_step_3">Mach einen vollständigen Liegestütz auf den Hanteln.</string>
+    <string name="fitness_ex_fullbody_manmaker_step_4">Spring die Füße nach vorn, bring die Hanteln auf die Schultern, beuge und drücke über Kopf.</string>
+    <string name="fitness_ex_fullbody_manmaker_tip_1">Fang sehr leicht an. Diese Wiederholung hat viele Einzelteile.</string>
+    <string name="fitness_ex_fullbody_manmaker_tip_2">Die Hanteln müssen schwer genug sein, um beim Rudern nicht wegzurutschen.</string>
+    <string name="fitness_ex_fullbody_manmaker_mistake_1">Das zweite Rudern weglassen, um Kraft zu sparen.</string>
+    <string name="fitness_ex_fullbody_manmaker_mistake_2">Die Hüfte rutscht beim Liegestütz nach oben.</string>
+
+    <!-- ====== WORKOUT (manuell) ====== -->
+    <string name="fitness_ws_title">Neues Workout</string>
+    <string name="fitness_ws_session_active">Läuft…</string>
+    <string name="fitness_ws_elapsed">Vergangen</string>
+    <string name="fitness_ws_add_exercise">Übung hinzufügen</string>
+    <string name="fitness_ws_pick_exercise">Übung wählen</string>
+    <string name="fitness_ws_cancel">Abbrechen</string>
+    <string name="fitness_ws_set_header">Sätze</string>
+    <string name="fitness_ws_set_header_weight">Gewicht (kg)</string>
+    <string name="fitness_ws_set_header_reps">Wdh.</string>
+    <string name="fitness_ws_set_header_time">Zeit (s)</string>
+    <string name="fitness_ws_set_header_done">Fertig</string>
+    <string name="fitness_ws_add_set">+ Satz hinzufügen</string>
+    <string name="fitness_ws_remove_exercise">Übung entfernen</string>
+    <string name="fitness_ws_finish">Beenden &amp; speichern</string>
+    <string name="fitness_ws_discard">Verwerfen</string>
+    <string name="fitness_ws_discard_confirm">Dieses Workout verwerfen? Der Fortschritt geht verloren.</string>
+    <string name="fitness_ws_discard_confirm_yes">Verwerfen</string>
+    <string name="fitness_ws_discard_confirm_no">Weiter bearbeiten</string>
+    <string name="fitness_ws_session_name">Name des Workouts</string>
+    <string name="fitness_ws_session_name_hint">z. B. Push Day, Beine, HIIT…</string>
+    <string name="fitness_ws_empty">Noch keine Übung – tippe auf „Übung hinzufügen“.</string>
+    <string name="fitness_ws_empty_hint">💡 Tipp: Öffne eine Übung in der Bibliothek und tippe auf „Übung starten“, dann landet sie automatisch hier.</string>
+    <string name="fitness_ws_rest_timer">Pause</string>
+    <string name="fitness_ws_rest_start">Timer starten</string>
+    <string name="fitness_ws_rest_reset">Zurücksetzen</string>
+    <string name="fitness_ws_rest_done">Pause vorbei 💪</string>
+    <string name="fitness_ws_set_count">%1$d Sätze</string>
+    <string name="fitness_ws_total_volume">Gesamtvolumen</string>
+    <string name="fitness_ws_total_volume_kg">%1$.0f kg × Wdh.</string>
+    <string name="fitness_ws_saved">Workout gespeichert ✓</string>
+
+    <!-- ====== VERLAUF (Details) ====== -->
+    <string name="fitness_history_entry_sets">%1$d Sätze · %2$d Wdh.</string>
+    <string name="fitness_history_entry_volume">%1$.0f kg gesamt</string>
+    <string name="fitness_history_session_duration">%1$d Min</string>
+    <string name="fitness_history_session_calories">%1$.0f kcal</string>
+    <string name="fitness_history_session_exercises">%1$d Übungen</string>
+    <string name="fitness_history_session_expand">Zum Aufklappen tippen</string>
+    <string name="fitness_history_session_delete">Session löschen</string>
+    <string name="fitness_history_session_delete_confirm">Dieses Workout löschen?</string>
+    <string name="fitness_history_session_delete_yes">Löschen</string>
+    <string name="fitness_history_session_delete_no">Behalten</string>
+    <string name="fitness_history_no_sessions_yet">Noch keine Session gespeichert.\nStarte ein Workout über das Dashboard oder den Übungen-Tab!</string>
+    <string name="fitness_history_day_summary">%1$d Workouts · %2$d Min · %3$.0f kcal</string>
+    <string name="fitness_history_empty_filtered">Keine Sessions in diesem Zeitraum.</string>
+    <string name="fitness_history_workout_pushup">Push-up-Session</string>
+    <string name="fitness_history_workout_manual">Workout</string>
+    <string name="fitness_history_pushup_pose">%1$d Wdh. per Pose-Tracking</string>
+
+    <!-- ====== ÜBUNGSAUSWAHL ====== -->
+    <string name="fitness_picker_title">Übung auswählen</string>
+
 </resources>
