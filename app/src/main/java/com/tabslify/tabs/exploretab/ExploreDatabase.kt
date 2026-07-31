@@ -73,6 +73,19 @@ data class Stay(
     val isHome: Boolean
 )
 
+@Entity(
+    tableName = "tracker_events",
+    indices = [Index(value = ["timestamp"])]
+)
+data class TrackerEvent(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val timestamp: Long,
+    val type: String,
+    val mode: String,
+    val confidence: Int,
+    val detail: String?
+)
+
 @Dao
 interface ExploredTileDao {
     @Query("SELECT COUNT(*) FROM explored_tiles")
@@ -117,6 +130,9 @@ interface SegmentDao {
     @Query("SELECT * FROM segments WHERE startTime >= :dayStart AND startTime < :dayEnd ORDER BY startTime ASC")
     fun segmentsForDayFlow(dayStart: Long, dayEnd: Long): Flow<List<Segment>>
 
+    @Query("SELECT * FROM segments WHERE startTime >= :dayStart AND startTime < :dayEnd ORDER BY startTime ASC")
+    suspend fun segmentsBetween(dayStart: Long, dayEnd: Long): List<Segment>
+
     @Query("SELECT COUNT(*) FROM segments WHERE startTime >= :dayStart AND startTime < :dayEnd")
     suspend fun countForDay(dayStart: Long, dayEnd: Long): Int
 
@@ -139,9 +155,21 @@ interface StayDao {
     suspend fun deleteForDay(dayStart: Long, dayEnd: Long)
 }
 
+@Dao
+interface TrackerEventDao {
+    @Insert
+    suspend fun insert(event: TrackerEvent): Long
+
+    @Query("SELECT * FROM tracker_events WHERE timestamp >= :from AND timestamp < :to ORDER BY timestamp ASC")
+    suspend fun eventsBetween(from: Long, to: Long): List<TrackerEvent>
+
+    @Query("DELETE FROM tracker_events WHERE timestamp < :cutoff")
+    suspend fun deleteBefore(cutoff: Long)
+}
+
 @Database(
-    entities = [ExploredTile::class, RawPoint::class, Segment::class, Stay::class],
-    version = 2,
+    entities = [ExploredTile::class, RawPoint::class, Segment::class, Stay::class, TrackerEvent::class],
+    version = 3,
     exportSchema = false
 )
 abstract class ExploreDatabase : RoomDatabase() {
@@ -149,6 +177,7 @@ abstract class ExploreDatabase : RoomDatabase() {
     abstract fun rawPointDao(): RawPointDao
     abstract fun segmentDao(): SegmentDao
     abstract fun stayDao(): StayDao
+    abstract fun trackerEventDao(): TrackerEventDao
 
     companion object {
         @Volatile
@@ -210,13 +239,31 @@ abstract class ExploreDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `tracker_events` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `timestamp` INTEGER NOT NULL,
+                        `type` TEXT NOT NULL,
+                        `mode` TEXT NOT NULL,
+                        `confidence` INTEGER NOT NULL,
+                        `detail` TEXT
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_tracker_events_timestamp` ON `tracker_events` (`timestamp`)")
+            }
+        }
+
         fun get(context: Context): ExploreDatabase =
             INSTANCE ?: synchronized(this) {
                 Room.databaseBuilder(
                     context.applicationContext,
                     ExploreDatabase::class.java,
                     "explore_db"
-                ).addMigrations(MIGRATION_1_2)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .fallbackToDestructiveMigration(true)
                     .build().also { INSTANCE = it }
             }
