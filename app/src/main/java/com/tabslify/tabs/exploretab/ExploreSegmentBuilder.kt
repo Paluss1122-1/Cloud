@@ -19,6 +19,13 @@ object ExploreSegmentBuilder {
 
     private class Run(val mode: String, val points: MutableList<RawPoint>)
 
+    fun tuningSnapshot(): Map<String, Any> = mapOf(
+        "minSegmentDurationMs" to MIN_SEGMENT_DURATION_MS,
+        "minSegmentDistanceMeters" to MIN_SEGMENT_DISTANCE_M,
+        "stayMinDurationMs" to STAY_MIN_DURATION_MS,
+        "homeRadiusMeters" to HOME_RADIUS_M
+    )
+
     suspend fun rebuildDay(context: Context, day: LocalDate, force: Boolean = false) {
         val repo = ExploreRepository(context)
         val (dayStart, dayEnd) = dayBounds(day)
