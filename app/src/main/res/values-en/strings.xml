@@ -1822,6 +1822,12 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="modus_unbekannt">Unknown</string>
     <string name="modus_aufenthalt">Stop</string>
     <string name="aktivitaet">Activity</string>
+    <string name="explore_export">📤 Export</string>
+    <string name="explore_export_tag">Day</string>
+    <string name="explore_export_7_tage">7 days</string>
+    <string name="explore_export_laeuft">Export running…</string>
+    <string name="explore_export_fertig">Export created: %1$s (%2$s)</string>
+    <string name="explore_export_fehler">Export failed: %1$s</string>
     <string name="tile_loschen">Delete tile</string>
     <string name="diesen_bereich_als_unbesucht_markieren">Mark this area as unvisited?</string>
     <string name="letzte_position">Last position</string>
@@ -2125,4 +2131,838 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="cloud_backup_restore_confirm">This backup will be merged over your current settings. A safety copy is created automatically beforehand. Continue?</string>
     <string name="cloud_backup_restored">Restored – restart the app if needed</string>
     <string name="cloud_backup_shrink_warn">Backup skipped: suspiciously little data</string>
+    <string name="push_ups">Push-ups</string>
+    <string name="fitnesstab_zahlen_von_push_ups">FitnessTab: counting push-ups via pose detection (processed on-device only)</string>
+    <string name="fitness_start">Start</string>
+    <string name="fitness_stop">Stop</string>
+    <string name="fitness_reset">Reset</string>
+    <string name="fitness_dauer">Duration</string>
+    <string name="fitness_tempo">Pace</string>
+    <string name="fitness_tempo_wert">%1$.1f/min</string>
+    <string name="fitness_bestleistung">Personal best</string>
+    <string name="fitness_neuer_rekord">New record!</string>
+    <string name="fitness_phase_oben">UP</string>
+    <string name="fitness_phase_unten">DOWN</string>
+    <string name="fitness_phase_bereit">READY</string>
+    <string name="fitness_ellbogen">Elbow %1$d°</string>
+    <string name="fitness_kein_korper">No body detected – position the phone so you are fully in frame.</string>
+    <string name="fitness_arme_verdeckt">Arms not visible – hands and elbows must be in frame.</string>
+    <string name="fitness_kalibriert">Calibrating … do one full push-up.</string>
+    <string name="fitness_form_huefte">Keep your hips straight</string>
+    <string name="fitness_form_tiefer">Go deeper</string>
+    <string name="fitness_kamera_wechseln">Switch camera</string>
+    <string name="fitness_skelett">Show skeleton</string>
+    <string name="fitness_kamerazugriff_benotigt">Camera access required</string>
+    <string name="fitness_kamera_dialog_text">This tab counts your push-ups using the camera. The images are processed exclusively on the device and are neither stored nor uploaded.</string>
+    <string name="fitness_kamera_verweigert">The push-up counter cannot work without camera access.</string>
+    <string name="fitness_tipp_titel">TIP</string>
+    <string name="fitness_tipp_text">It works most accurately with the phone placed sideways about two metres away. Head-on works too – just keep your shoulders, hips and hands in frame.</string>
+    <string name="fitness_verstanden">Got it</string>
+    <string name="so_bedienst_du_den_pushup">How to use the push-up counter:\n\n1. Place the phone sideways so your upper body is fully in frame.\n2. Tap “Start” and begin your push-ups.\n3. Each rep is detected from your elbow angle – below 98° at the bottom, above 152° at the top.\n4. The camera button switches between the front and rear camera, the figure icon hides the skeleton.\n5. “Stop” ends the set and saves your personal best.</string>
+    <string name="fitness_nav_dashboard">Today</string>
+    <string name="fitness_nav_exercises">Exercises</string>
+    <string name="fitness_nav_workout">Workout</string>
+    <string name="fitness_nav_history">History</string>
+
+    <string name="fitness_dashboard_today">Today</string>
+    <string name="fitness_dashboard_greeting_morning">Good morning 🌅</string>
+    <string name="fitness_dashboard_greeting_day">Let\'s go 💪</string>
+    <string name="fitness_dashboard_greeting_evening">Good evening 🌙</string>
+    <string name="fitness_dashboard_streak">Day streak</string>
+    <string name="fitness_dashboard_streak_days">%1$d days</string>
+
+    <string name="fitness_dashboard_minutes">Active</string>
+    <string name="fitness_dashboard_minutes_value">%1$d min</string>
+    <string name="fitness_dashboard_calories">Calories</string>
+    <string name="fitness_dashboard_calories_value">%1$.0f kcal</string>
+    <string name="fitness_dashboard_workouts">Workouts</string>
+    <string name="fitness_dashboard_workouts_value">%1$d</string>
+    <string name="fitness_dashboard_reps">Reps</string>
+    <string name="fitness_dashboard_reps_value">%1$d</string>
+
+    <string name="fitness_dashboard_goal_minutes">Goal: %1$d min</string>
+    <string name="fitness_dashboard_goal_calories">Goal: %1$d kcal</string>
+    <string name="fitness_dashboard_goal_reached">Goal reached! 🎉</string>
+
+    <string name="fitness_dashboard_last_workout">Last workout</string>
+    <string name="fitness_dashboard_no_last_workout">No sessions yet — start your first!</string>
+    <string name="fitness_dashboard_ago_minutes">%1$d min ago</string>
+    <string name="fitness_dashboard_ago_hours">%1$d h ago</string>
+    <string name="fitness_dashboard_ago_days">%1$d d ago</string>
+
+    <string name="fitness_dashboard_week_overview">This week</string>
+    <string name="fitness_dashboard_week_empty">Quiet week so far — let\'s move!</string>
+
+    <string name="fitness_dashboard_quick_start">Quick start</string>
+    <string name="fitness_dashboard_quick_pushups">Push-Ups (Camera)</string>
+    <string name="fitness_dashboard_quick_workout">New Workout</string>
+
+    <string name="fitness_profile_title">Profile</string>
+    <string name="fitness_profile_hint">Age and weight help make the calorie estimate more accurate.</string>
+    <string name="fitness_profile_age">Age</string>
+    <string name="fitness_profile_age_value">%1$d years</string>
+    <string name="fitness_profile_weight">Weight</string>
+    <string name="fitness_profile_weight_value">%1$d kg</string>
+
+    <string name="fitness_exercises_title">Exercises</string>
+    <string name="fitness_exercises_coming_soon">📚 50+ exercises with full step-by-step instructions landing in Phase 2.</string>
+    <string name="fitness_exercises_filters_all">All</string>
+    <string name="fitness_exercises_group_chest">Chest</string>
+    <string name="fitness_exercises_group_back">Back</string>
+    <string name="fitness_exercises_group_legs">Legs</string>
+    <string name="fitness_exercises_group_core">Core</string>
+    <string name="fitness_exercises_group_shoulders">Shoulders</string>
+    <string name="fitness_exercises_group_arms">Arms</string>
+    <string name="fitness_exercises_group_cardio">Cardio</string>
+    <string name="fitness_exercises_group_fullbody">Full Body</string>
+
+    <string name="fitness_history_title">History</string>
+    <string name="fitness_history_empty">No sessions logged yet. Your workouts will appear here.</string>
+    <string name="fitness_history_week">Week</string>
+    <string name="fitness_history_month">Month</string>
+    <string name="fitness_history_tab_sessions">Sessions</string>
+    <string name="fitness_history_tab_stats">Stats</string>
+    <string name="fitness_history_chart_min">min</string>
+    <string name="fitness_history_chart_kcal">kcal</string>
+    <string name="fitness_history_total_workouts">Total workouts</string>
+    <string name="fitness_history_total_minutes">Total minutes</string>
+    <string name="fitness_history_total_calories">Total calories</string>
+
+    <string name="fitness_workout_title">Push-Up Counter</string>
+    <string name="fitness_workout_open_camera">Open Push-Up Camera</string>
+
+    <string name="fitness_ex_detail_back">Back</string>
+    <string name="fitness_ex_detail_howto">How to do it</string>
+    <string name="fitness_ex_detail_steps">Step-by-step</string>
+    <string name="fitness_ex_detail_tips">Pro tips</string>
+    <string name="fitness_ex_detail_mistakes">Common mistakes</string>
+    <string name="fitness_ex_detail_start">Start exercise</string>
+    <string name="fitness_ex_detail_log_set">Log a set</string>
+    <string name="fitness_ex_detail_level">Level</string>
+    <string name="fitness_ex_detail_gear">Gear</string>
+    <string name="fitness_ex_detail_calmin">~%.0f kcal/min</string>
+    <string name="fitness_ex_detail_group">Muscle group</string>
+    <string name="fitness_ex_detail_tracking">Tracking</string>
+    <string name="fitness_ex_detail_tracking_reps">Count repetitions</string>
+    <string name="fitness_ex_detail_tracking_time">Hold for time</string>
+    <string name="fitness_ex_detail_tracking_weight">Weight + reps</string>
+    <string name="fitness_ex_detail_tracking_camera">Camera pose tracking</string>
+    <string name="fitness_ex_detail_tracking_distance">Distance + time</string>
+
+    <string name="fitness_ex_search">Search exercises…</string>
+    <string name="fitness_ex_filter_difficulty">Difficulty</string>
+    <string name="fitness_ex_filter_gear">Equipment</string>
+    <string name="fitness_ex_difficulty_beginner">Beginner</string>
+    <string name="fitness_ex_difficulty_intermediate">Intermediate</string>
+    <string name="fitness_ex_difficulty_advanced">Advanced</string>
+    <string name="fitness_ex_gear_none">No equipment</string>
+    <string name="fitness_ex_gear_band">Resistance band</string>
+    <string name="fitness_ex_gear_dumbbell">Dumbbell(s)</string>
+    <string name="fitness_ex_gear_barbell">Barbell</string>
+    <string name="fitness_ex_gear_kettlebell">Kettlebell</string>
+    <string name="fitness_ex_gear_pullupbar">Pull-up bar</string>
+    <string name="fitness_ex_gear_bench">Bench / chair</string>
+
+    <string name="fitness_ex_none_found">No exercises match your filters.</string>
+
+    <!-- ====== CHEST ====== -->
+    <string name="fitness_ex_chest_pushups">Push-Ups</string>
+    <string name="fitness_ex_chest_pushups_desc">The classic bodyweight chest builder — strengthens chest, shoulders and triceps while bracing your core.</string>
+    <string name="fitness_ex_chest_pushups_step_1">Get into a high plank with hands slightly wider than shoulder-width.</string>
+    <string name="fitness_ex_chest_pushups_step_2">Body forms a straight line from head through heels, core braced.</string>
+    <string name="fitness_ex_chest_pushups_step_3">Bend elbows to lower chest nearly to the floor.</string>
+    <string name="fitness_ex_chest_pushups_step_4">Straighten arms to push back to the starting plank.</string>
+    <string name="fitness_ex_chest_pushups_tip_1">Keep your neck neutral — don\'t drop or crane your head.</string>
+    <string name="fitness_ex_chest_pushups_tip_2">Elbows should stay about 45° to your body, not flared out to the sides.</string>
+    <string name="fitness_ex_chest_pushups_tip_3">Go as deep as your mobility allows; full range of motion builds more strength.</string>
+    <string name="fitness_ex_chest_pushups_mistake_1">Sagging hips — puts stress on your lower back.</string>
+    <string name="fitness_ex_chest_pushups_mistake_2">Piked hips — takes tension off the chest.</string>
+    <string name="fitness_ex_chest_pushups_mistake_3">Half reps without lowering the chest enough.</string>
+
+    <string name="fitness_ex_chest_wide">Wide Push-Ups</string>
+    <string name="fitness_ex_chest_wide_desc">Wider hand placement shifts more load to the outer chest and front delts while reducing triceps involvement.</string>
+    <string name="fitness_ex_chest_wide_step_1">Place hands 1.5× shoulder-width apart in a high plank.</string>
+    <string name="fitness_ex_chest_wide_step_2">Brace core and glutes, body in a straight line.</string>
+    <string name="fitness_ex_chest_wide_step_3">Lower chest to the floor with elbows flaring out naturally.</string>
+    <string name="fitness_ex_chest_wide_step_4">Explosively push back to plank and repeat.</string>
+    <string name="fitness_ex_chest_wide_tip_1">Don\'t over-widen to the point where your shoulders feel pinched.</string>
+    <string name="fitness_ex_chest_wide_tip_2">Feel the stretch across the chest as you lower.</string>
+    <string name="fitness_ex_chest_wide_mistake_1">Shoulder impingement from excessive width.</string>
+    <string name="fitness_ex_chest_wide_mistake_2">Dropping the head between the arms.</string>
+
+    <string name="fitness_ex_chest_diamond">Diamond Push-Ups</string>
+    <string name="fitness_ex_chest_diamond_desc">Hands together in a triangle blasts the triceps and inner chest like few other bodyweight moves.</string>
+    <string name="fitness_ex_chest_diamond_step_1">From high plank, make a diamond / triangle with index fingers and thumbs.</string>
+    <string name="fitness_ex_chest_diamond_step_2">Body straight, core tight, elbows pointing back.</string>
+    <string name="fitness_ex_chest_diamond_step_3">Lower chest toward your hands while keeping elbows close to ribs.</string>
+    <string name="fitness_ex_chest_diamond_step_4">Press through triceps to return to plank.</string>
+    <string name="fitness_ex_chest_diamond_tip_1">Knee-down version works great while building strength.</string>
+    <string name="fitness_ex_chest_diamond_tip_2">Squeeze triceps hard at the top of each rep.</string>
+    <string name="fitness_ex_chest_diamond_mistake_1">Wrists collapsing — use fists or push-up bars if needed.</string>
+    <string name="fitness_ex_chest_diamond_mistake_2">Not going deep enough to load the triceps.</string>
+
+    <string name="fitness_ex_chest_incline">Incline Push-Ups</string>
+    <string name="fitness_ex_chest_incline_desc">Hands elevated on a chair or bench — a perfect regression if full push-ups are still too hard.</string>
+    <string name="fitness_ex_chest_incline_step_1">Place hands shoulder-width on a sturdy bench, chair or step.</string>
+    <string name="fitness_ex_chest_incline_step_2">Step feet back until body forms a straight, inclined line.</string>
+    <string name="fitness_ex_chest_incline_step_3">Lower chest toward the edge of the bench.</string>
+    <string name="fitness_ex_chest_incline_step_4">Press back up without locking out the elbows.</string>
+    <string name="fitness_ex_chest_incline_tip_1">The higher the surface, the easier the movement.</string>
+    <string name="fitness_ex_chest_incline_tip_2">Progress by using lower and lower surfaces over time.</string>
+    <string name="fitness_ex_chest_incline_mistake_1">Hips sagging instead of a straight line.</string>
+    <string name="fitness_ex_chest_incline_mistake_2">Rushing the lowering (eccentric) phase.</string>
+
+    <string name="fitness_ex_chest_decline">Decline Push-Ups</string>
+    <string name="fitness_ex_chest_decline_desc">Feet elevated to shift more weight to the upper chest and front shoulders for an advanced push-up variation.</string>
+    <string name="fitness_ex_chest_decline_step_1">Rest feet on a bench or chair, hands in plank on the floor.</string>
+    <string name="fitness_ex_chest_decline_step_2">Body is straight and angled head-down.</string>
+    <string name="fitness_ex_chest_decline_step_3">Lower chest to the floor with control.</string>
+    <string name="fitness_ex_chest_decline_step_4">Push back powerfully to the starting position.</string>
+    <string name="fitness_ex_chest_decline_tip_1">Use a lower surface first (6–8 inches) before going higher.</string>
+    <string name="fitness_ex_chest_decline_tip_2">Explode up and lower slowly for maximal hypertrophy.</string>
+    <string name="fitness_ex_chest_decline_mistake_1">Feet too high — places dangerous strain on the shoulders.</string>
+    <string name="fitness_ex_chest_decline_mistake_2">Letting the head drop forward on the way down.</string>
+
+    <string name="fitness_ex_chest_bench">Bench Press</string>
+    <string name="fitness_ex_chest_bench_desc">The king of horizontal pressing — builds maximal chest, front-delt and tricep strength with a loaded barbell.</string>
+    <string name="fitness_ex_chest_bench_step_1">Lie flat on a bench, eyes under the bar, feet planted on the floor.</string>
+    <string name="fitness_ex_chest_bench_step_2">Grip the bar slightly wider than shoulder-width, lift bar out of the rack.</string>
+    <string name="fitness_ex_chest_bench_step_3">Lower bar to mid-chest with control, elbows about 45° to the body.</string>
+    <string name="fitness_ex_chest_bench_step_4">Drive feet through the floor and press bar back to lockout.</string>
+    <string name="fitness_ex_chest_bench_tip_1">Always have a spotter when going heavy.</string>
+    <string name="fitness_ex_chest_bench_tip_2">Create a small arch in your upper back to protect shoulders.</string>
+    <string name="fitness_ex_chest_bench_tip_3">Control the eccentric — at least 2 seconds down.</string>
+    <string name="fitness_ex_chest_bench_mistake_1">Flared elbows = shoulder impingement risk.</string>
+    <string name="fitness_ex_chest_bench_mistake_2">Bouncing the bar off the chest to gain momentum.</string>
+    <string name="fitness_ex_chest_bench_mistake_3">Ass-to-bench flat without a natural arch.</string>
+
+    <string name="fitness_ex_chest_fly">Dumbbell Chest Fly</string>
+    <string name="fitness_ex_chest_fly_desc">Isolation movement that stretches and contracts the pectorals through a wide arc without much triceps help.</string>
+    <string name="fitness_ex_chest_fly_step_1">Lie on a flat bench, dumbbells pressed above the chest, palms facing each other.</string>
+    <string name="fitness_ex_chest_fly_step_2">With a slight elbow bend, slowly lower the dumbbells out to the sides in an arc.</string>
+    <string name="fitness_ex_chest_fly_step_3">Stop when you feel a comfortable chest stretch at shoulder level.</string>
+    <string name="fitness_ex_chest_fly_step_4">Squeeze the chest to hug the weights back together above the sternum.</string>
+    <string name="fitness_ex_chest_fly_tip_1">Use lighter weight than you think — flyes are not a power lift.</string>
+    <string name="fitness_ex_chest_fly_tip_2">Elbow angle stays constant throughout, like hugging a tree.</string>
+    <string name="fitness_ex_chest_fly_mistake_1">Locking out elbows = tendon stress.</string>
+    <string name="fitness_ex_chest_fly_mistake_2">Going too deep and stretching beyond comfort.</string>
+
+    <!-- ====== BACK ====== -->
+    <string name="fitness_ex_back_pullups">Pull-Ups</string>
+    <string name="fitness_ex_back_pullups_desc">The ultimate vertical pull — builds a thick, wide back and crushing grip strength.</string>
+    <string name="fitness_ex_back_pullups_step_1">Hang from a pull-up bar with a grip wider than shoulder-width, palms facing away.</string>
+    <string name="fitness_ex_back_pullups_step_2">Engage lats and pull elbows down toward your hips.</string>
+    <string name="fitness_ex_back_pullups_step_3">Raise yourself until chin clears the bar.</string>
+    <string name="fitness_ex_back_pullups_step_4">Lower slowly back to a full dead hang.</string>
+    <string name="fitness_ex_back_pullups_tip_1">Think about pulling with your elbows, not your biceps.</string>
+    <string name="fitness_ex_back_pullups_tip_2">Use an assisted machine or band if full pull-ups are out of reach.</string>
+    <string name="fitness_ex_back_pullups_tip_3">Avoid kipping unless training specifically for it.</string>
+    <string name="fitness_ex_back_pullups_mistake_1">Not achieving full dead hang at the bottom.</string>
+    <string name="fitness_ex_back_pullups_mistake_2">Chicken-necking your way over the bar.</string>
+    <string name="fitness_ex_back_pullups_mistake_3">Loose, swinging torso.</string>
+
+    <string name="fitness_ex_back_chinups">Chin-Ups</string>
+    <string name="fitness_ex_back_chinups_desc">Supinated grip moves more work to the biceps while still hammering the lats — usually easier to master than pull-ups.</string>
+    <string name="fitness_ex_back_chinups_step_1">Grip bar shoulder-width apart, palms facing you (supinated).</string>
+    <string name="fitness_ex_back_chinups_step_2">Hang fully with scapulae depressed.</string>
+    <string name="fitness_ex_back_chinups_step_3">Drive elbows down and pull chest to the bar.</string>
+    <string name="fitness_ex_back_chinups_step_4">Lower with a 3-second eccentric back to dead hang.</string>
+    <string name="fitness_ex_back_chinups_tip_1">The supinated grip takes pressure off your shoulders.</string>
+    <string name="fitness_ex_back_chinups_tip_2">Squeeze the biceps hard at the top.</string>
+    <string name="fitness_ex_back_chinups_mistake_1">Short range of motion — chest never reaches the bar.</string>
+    <string name="fitness_ex_back_chinups_mistake_2">Using only arm strength instead of engaging the back.</string>
+
+    <string name="fitness_ex_back_inverted">Inverted Rows</string>
+    <string name="fitness_ex_back_inverted_desc">Horizontal pulling under a fixed bar or a table — ideal for beginners to build pulling foundation before pull-ups.</string>
+    <string name="fitness_ex_back_inverted_step_1">Lie under a sturdy bar (Smith machine, rack, picnic bench, heavy table).</string>
+    <string name="fitness_ex_back_inverted_step_2">Grab the bar shoulder-width, body straight, heels on the floor.</string>
+    <string name="fitness_ex_back_inverted_step_3">Pull chest up toward the bar, retracting shoulder blades.</string>
+    <string name="fitness_ex_back_inverted_step_4">Lower back down with control.</string>
+    <string name="fitness_ex_back_inverted_tip_1">The more vertical your body, the harder the row.</string>
+    <string name="fitness_ex_back_inverted_tip_2">Try wide grip and close grip to target different areas.</string>
+    <string name="fitness_ex_back_inverted_mistake_1">Hips sagging — keep a rigid body line.</string>
+    <string name="fitness_ex_back_inverted_mistake_2">Not pulling the chest all the way to the bar.</string>
+
+    <string name="fitness_ex_back_barrow">Bent-Over Barbell Row</string>
+    <string name="fitness_ex_back_barrow_desc">Foundational compound row — slabs on thickness across the entire posterior chain.</string>
+    <string name="fitness_ex_back_barrow_step_1">Stand with feet hip-width, hinge at hips so torso is ~45° to the floor.</string>
+    <string name="fitness_ex_back_barrow_step_2">Grip bar just outside knees, arms hanging straight, back flat.</string>
+    <string name="fitness_ex_back_barrow_step_3">Pull bar into your lower chest / upper abdomen, elbows pointing up.</string>
+    <string name="fitness_ex_back_barrow_step_4">Squeeze shoulder blades, then lower the bar slowly.</string>
+    <string name="fitness_ex_back_barrow_tip_1">Bend knees a little to protect your lower back.</string>
+    <string name="fitness_ex_back_barrow_tip_2">Drive the elbows back, not up toward your ears.</string>
+    <string name="fitness_ex_back_barrow_mistake_1">Rounding the spine — neutral spine is non-negotiable.</string>
+    <string name="fitness_ex_back_barrow_mistake_2">Pulling with biceps instead of retracting the scapulae.</string>
+    <string name="fitness_ex_back_barrow_mistake_3">Upright torso — you\'re not upright-rowing.</string>
+
+    <string name="fitness_ex_back_dumbrow">Single-Arm Dumbbell Row</string>
+    <string name="fitness_ex_back_dumbrow_desc">Unilateral powerhouse that lets each side do its own work while the bench supports your spine.</string>
+    <string name="fitness_ex_back_dumbrow_step_1">Kneel with left knee and left hand on a bench, right foot flat on the floor.</string>
+    <string name="fitness_ex_back_dumbrow_step_2">Pick up the dumbbell with a neutral grip, arm hanging, back flat.</string>
+    <string name="fitness_ex_back_dumbrow_step_3">Pull dumbbell to your hip while retracting the shoulder blade.</string>
+    <string name="fitness_ex_back_dumbrow_step_4">Lower slowly and repeat; switch sides.</string>
+    <string name="fitness_ex_back_dumbrow_tip_1">Pause for a full second at the top and squeeze.</string>
+    <string name="fitness_ex_back_dumbrow_tip_2">Choose a weight you can row cleanly without twisting.</string>
+    <string name="fitness_ex_back_dumbrow_mistake_1">Twisting the torso to pull more weight.</string>
+    <string name="fitness_ex_back_dumbrow_mistake_2">Letting the shoulder roll forward at the bottom.</string>
+
+    <string name="fitness_ex_back_superman">Superman Hold</string>
+    <string name="fitness_ex_back_superman_desc">Isometric posterior-chain hold that hits erectors, glutes and upper back without equipment.</string>
+    <string name="fitness_ex_back_superman_step_1">Lie face-down on the floor, arms extended in front, legs straight.</string>
+    <string name="fitness_ex_back_superman_step_2">Simultaneously lift chest, arms and thighs a few inches off the ground.</string>
+    <string name="fitness_ex_back_superman_step_3">Squeeze glutes, lower back and shoulder blades.</string>
+    <string name="fitness_ex_back_superman_step_4">Hold the position, then return slowly to the floor.</string>
+    <string name="fitness_ex_back_superman_tip_1">Breathe steadily — don\'t hold your breath the entire time.</string>
+    <string name="fitness_ex_back_superman_tip_2">Arms + legs only need to clear the floor; higher is not better.</string>
+    <string name="fitness_ex_back_superman_mistake_1">Cranking the neck up — keep it neutral.</string>
+    <string name="fitness_ex_back_superman_mistake_2">Bending the knees to lift the thighs higher.</string>
+
+    <string name="fitness_ex_back_goodmorning">Good Morning</string>
+    <string name="fitness_ex_back_goodmorning_desc">Hip-hinge drill with a barbell across the traps — teaches pure hamstring and glute loading for the posterior chain.</string>
+    <string name="fitness_ex_back_goodmorning_step_1">Place barbell comfortably across upper back (traps), feet shoulder-width.</string>
+    <string name="fitness_ex_back_goodmorning_step_2">Soft knees, chest tall, brace your core.</string>
+    <string name="fitness_ex_back_goodmorning_step_3">Hinge at the hips to lower torso forward, bar sliding along your legs.</string>
+    <string name="fitness_ex_back_goodmorning_step_4">Feel the hamstring stretch, then drive through heels to stand.</string>
+    <string name="fitness_ex_back_goodmorning_tip_1">Start with an empty bar or light dumbbell to master the hinge pattern.</string>
+    <string name="fitness_ex_back_goodmorning_tip_2">Knee angle stays constant — this is not a squat.</string>
+    <string name="fitness_ex_back_goodmorning_mistake_1">Rounding the back to go lower.</string>
+    <string name="fitness_ex_back_goodmorning_mistake_2">Squatting instead of hinging.</string>
+
+    <!-- ====== LEGS ====== -->
+    <string name="fitness_ex_legs_squat">Bodyweight Squats</string>
+    <string name="fitness_ex_legs_squat_desc">The primal lower-body movement — builds quads, glutes and mobility every human should own.</string>
+    <string name="fitness_ex_legs_squat_step_1">Stand with feet slightly wider than hip-width, toes turned out ~15–30°.</string>
+    <string name="fitness_ex_legs_squat_step_2">Brace core, chest up, drive hips back as if sitting into a chair.</string>
+    <string name="fitness_ex_legs_squat_step_3">Lower until thighs are at least parallel to the floor.</string>
+    <string name="fitness_ex_legs_squat_step_4">Push through heels and mid-foot to stand tall.</string>
+    <string name="fitness_ex_legs_squat_tip_1">Keep knees tracking in the same direction as your toes.</string>
+    <string name="fitness_ex_legs_squat_tip_2">Pause for 1–2 seconds at the bottom to build real strength.</string>
+    <string name="fitness_ex_legs_squat_tip_3">Go deeper than parallel if your hips, knees and ankles allow it.</string>
+    <string name="fitness_ex_legs_squat_mistake_1">Knees collapsing inward.</string>
+    <string name="fitness_ex_legs_squat_mistake_2">Heels lifting off the floor.</string>
+    <string name="fitness_ex_legs_squat_mistake_3">Chest dropping forward with a rounded spine.</string>
+
+    <string name="fitness_ex_legs_goblet">Goblet Squats</string>
+    <string name="fitness_ex_legs_goblet_desc">Hold one dumbbell / kettlebell at chest level — great way to learn a deep, upright squat pattern.</string>
+    <string name="fitness_ex_legs_goblet_step_1">Cup one end of a dumbbell (or kettlebell horns) at chest level, elbows down.</string>
+    <string name="fitness_ex_legs_goblet_step_2">Feet slightly wider than shoulders, toes out 20–30°.</string>
+    <string name="fitness_ex_legs_goblet_step_3">Squat between your knees, using elbows to push knees out.</string>
+    <string name="fitness_ex_legs_goblet_step_4">Drive through heels to stand tall.</string>
+    <string name="fitness_ex_legs_goblet_tip_1">The weight acts as a counter-balance — you\'ll squat deeper than bodyweight.</string>
+    <string name="fitness_ex_legs_goblet_tip_2">If mobility is tight, pause for a 3-count at the bottom each rep.</string>
+    <string name="fitness_ex_legs_goblet_mistake_1">Letting the weight drift forward away from the chest.</string>
+    <string name="fitness_ex_legs_goblet_mistake_2">Short-changing depth because of ego-weight.</string>
+
+    <string name="fitness_ex_legs_reverselunge">Reverse Lunges</string>
+    <string name="fitness_ex_legs_reverselunge_desc">Stepping back (instead of forward) is far more knee-friendly while still hammering glutes and quads.</string>
+    <string name="fitness_ex_legs_reverselunge_step_1">Stand tall, hands on hips or holding weights at your sides.</string>
+    <string name="fitness_ex_legs_reverselunge_step_2">Step backward with one foot and lower the back knee toward the floor.</string>
+    <string name="fitness_ex_legs_reverselunge_step_3">Front shin stays vertical, back knee hovers just above the ground.</string>
+    <string name="fitness_ex_legs_reverselunge_step_4">Drive through the front heel to return; alternate legs.</string>
+    <string name="fitness_ex_legs_reverselunge_tip_1">Think "two 90° angles" at the bottom of each rep.</string>
+    <string name="fitness_ex_legs_reverselunge_tip_2">Keep your torso upright — no leaning into the front leg.</string>
+    <string name="fitness_ex_legs_reverselunge_mistake_1">Front knee caving inward.</string>
+    <string name="fitness_ex_legs_reverselunge_mistake_2">Stepping too far back and losing balance.</string>
+
+    <string name="fitness_ex_legs_walkinglunge">Walking Lunges</string>
+    <string name="fitness_ex_legs_walkinglunge_desc">Traveling version turns lunges into full-body conditioning with a brutal glute pump.</string>
+    <string name="fitness_ex_legs_walkinglunge_step_1">Stand tall with dumbbells by your sides or bodyweight.</string>
+    <string name="fitness_ex_legs_walkinglunge_step_2">Step forward into a lunge until both knees are at ~90°.</string>
+    <string name="fitness_ex_legs_walkinglunge_step_3">Push through the front heel and bring your back foot forward to meet it.</string>
+    <string name="fitness_ex_legs_walkinglunge_step_4">Immediately step into the next rep with the opposite leg.</string>
+    <string name="fitness_ex_legs_walkinglunge_tip_1">Keep steps long enough to protect the front knee.</string>
+    <string name="fitness_ex_legs_walkinglunge_tip_2">Pick a landmark and walk to it for consistent reps each set.</string>
+    <string name="fitness_ex_legs_walkinglunge_mistake_1">Short choppy steps that place too much stress on knees.</string>
+    <string name="fitness_ex_legs_walkinglunge_mistake_2">Leaning torso far forward to move faster.</string>
+
+    <string name="fitness_ex_legs_bulgarian">Bulgarian Split Squats</string>
+    <string name="fitness_ex_legs_bulgarian_desc">Back foot elevated on a bench for an intense single-leg strength move with heavy quad and glute stimulus.</string>
+    <string name="fitness_ex_legs_bulgarian_step_1">Stand a couple of feet in front of a bench, toes facing forward.</string>
+    <string name="fitness_ex_legs_bulgarian_step_2">Place the laces / top of one foot onto the bench behind you.</string>
+    <string name="fitness_ex_legs_bulgarian_step_3">Lower into a lunge until front thigh is parallel, back knee near the floor.</string>
+    <string name="fitness_ex_legs_bulgarian_step_4">Drive through the front heel to stand back up.</string>
+    <string name="fitness_ex_legs_bulgarian_tip_1">Add dumbbells once bodyweight feels comfortable.</string>
+    <string name="fitness_ex_legs_bulgarian_tip_2">Experiment with foot distance to find your sweet spot.</string>
+    <string name="fitness_ex_legs_bulgarian_mistake_1">Front knee traveling past your toes too far.</string>
+    <string name="fitness_ex_legs_bulgarian_mistake_2">Rear foot planted flat on the bench (laces only!).</string>
+
+    <string name="fitness_ex_legs_wallsit">Wall Sit</string>
+    <string name="fitness_ex_legs_wallsit_desc">Isometric quad burner you can do anywhere — brutal leg endurance test with zero equipment.</string>
+    <string name="fitness_ex_legs_wallsit_step_1">Lean your back flat against a wall, feet about two feet in front of you.</string>
+    <string name="fitness_ex_legs_wallsit_step_2">Slide down the wall until knees and hips are bent ~90°.</string>
+    <string name="fitness_ex_legs_wallsit_step_3">Thighs parallel to the floor, back pressed into the wall.</string>
+    <string name="fitness_ex_legs_wallsit_step_4">Hold the position — breathe, grit, repeat.</string>
+    <string name="fitness_ex_legs_wallsit_tip_1">Hands on your thighs — no pushing down on your legs to rest.</string>
+    <string name="fitness_ex_legs_wallsit_tip_2">Set a timer and try to beat your previous best.</string>
+    <string name="fitness_ex_legs_wallsit_mistake_1">Knees caving inwards — push them out.</string>
+    <string name="fitness_ex_legs_wallsit_mistake_2">Feet too close to the wall = knee pressure.</string>
+
+    <string name="fitness_ex_legs_calfraise">Calf Raises</string>
+    <string name="fitness_ex_legs_calfraise_desc">Simple but effective isolation for the gastrocnemius and soleus — high reps required for best results.</string>
+    <string name="fitness_ex_legs_calfraise_step_1">Stand on the edge of a step (or flat floor), hold onto a wall for balance.</string>
+    <string name="fitness_ex_legs_calfraise_step_2">Raise heels as high as possible onto the balls of your feet.</string>
+    <string name="fitness_ex_legs_calfraise_step_3">Squeeze the calves at the top for 1 second.</string>
+    <string name="fitness_ex_legs_calfraise_step_4">Lower heels below step level for a full stretch, and repeat.</string>
+    <string name="fitness_ex_legs_calfraise_tip_1">Mix rep speeds: slow eccentric, hold at top, explosive concentric.</string>
+    <string name="fitness_ex_legs_calfraise_tip_2">Add weight (holding dumbbells) when 20+ reps feel easy.</string>
+    <string name="fitness_ex_legs_calfraise_mistake_1">Bouncing to cheat reps — control the range.</string>
+    <string name="fitness_ex_legs_calfraise_mistake_2">Locking knees at the top; keep a soft bend.</string>
+
+    <string name="fitness_ex_legs_glutebridge">Glute Bridge</string>
+    <string name="fitness_ex_legs_glutebridge_desc">Posterior-chain staple that activates the glutes better than almost any other movement.</string>
+    <string name="fitness_ex_legs_glutebridge_step_1">Lie on your back, knees bent, feet flat on the floor, arms at your sides.</string>
+    <string name="fitness_ex_legs_glutebridge_step_2">Feet planted, drive through your heels to lift hips high.</string>
+    <string name="fitness_ex_legs_glutebridge_step_3">Squeeze glutes at the top as if tucking your tailbone under.</string>
+    <string name="fitness_ex_legs_glutebridge_step_4">Lower hips slowly, just short of the floor, and repeat.</string>
+    <string name="fitness_ex_legs_glutebridge_tip_1">Add a barbell across your hips or resistance band above knees for load.</string>
+    <string name="fitness_ex_legs_glutebridge_tip_2">Pause 2 full seconds at the peak of every rep.</string>
+    <string name="fitness_ex_legs_glutebridge_mistake_1">Arching the lower back instead of extending the hips.</string>
+    <string name="fitness_ex_legs_glutebridge_mistake_2">Pushing through the toes instead of the heels.</string>
+
+    <string name="fitness_ex_legs_romaniandl">Romanian Deadlift</string>
+    <string name="fitness_ex_legs_romaniandl_desc">Hip-dominant deadlift variation that specifically targets the hamstrings, glutes and adductors.</string>
+    <string name="fitness_ex_legs_romaniandl_step_1">Hold a barbell or two dumbbells in front of your thighs, arms straight.</string>
+    <string name="fitness_ex_legs_romaniandl_step_2">Soft knees, chest up, gaze forward, core braced.</string>
+    <string name="fitness_ex_legs_romaniandl_step_3">Push hips back and slide weights down your legs until you feel a strong hamstring stretch.</string>
+    <string name="fitness_ex_legs_romaniandl_step_4">Squeeze glutes and drive hips forward to stand, keeping the bar close.</string>
+    <string name="fitness_ex_legs_romaniandl_tip_1">Stop the descent before your lower back rounds — that\'s your ROM limit.</string>
+    <string name="fitness_ex_legs_romaniandl_tip_2">Feel the bar touching your legs the entire rep.</string>
+    <string name="fitness_ex_legs_romaniandl_mistake_1">Knee angle changing mid-lift (this is not a conventional deadlift).</string>
+    <string name="fitness_ex_legs_romaniandl_mistake_2">Rounding the spine to go lower.</string>
+
+    <string name="fitness_ex_legs_deadlift">Conventional Deadlift</string>
+    <string name="fitness_ex_legs_deadlift_desc">The raw king of full-body strength — loads every muscle from fingers to traps with the most weight you can lift.</string>
+    <string name="fitness_ex_legs_deadlift_step_1">Stand over bar with mid-foot under it, feet hip-width, shins close to the bar.</string>
+    <string name="fitness_ex_legs_deadlift_step_2">Hinge down, grip the bar just outside your knees. Chest up, back flat, eyes 3–5 m ahead.</string>
+    <string name="fitness_ex_legs_deadlift_step_3">Drive through the floor with your legs — the bar stays in contact with legs.</string>
+    <string name="fitness_ex_legs_deadlift_step_4">Stand tall with hips and knees locked, squeeze glutes. Reverse to lower under control.</string>
+    <string name="fitness_ex_legs_deadlift_tip_1">Take a huge diaphragmatic breath and hold it for the pull.</string>
+    <string name="fitness_ex_legs_deadlift_tip_2">Cue "chest up" before you pull to protect the spine.</string>
+    <string name="fitness_ex_legs_deadlift_tip_3">Start light and build a perfect pattern before adding load.</string>
+    <string name="fitness_ex_legs_deadlift_mistake_1">Pulling with a rounded back — catastrophic injury risk.</string>
+    <string name="fitness_ex_legs_deadlift_mistake_2">Bar drifting away from the body mid-lift.</string>
+    <string name="fitness_ex_legs_deadlift_mistake_3">Hips rising faster than the bar (stripper pull).</string>
+
+    <!-- ====== CORE ====== -->
+    <string name="fitness_ex_core_plank">Plank</string>
+    <string name="fitness_ex_core_plank_desc">The #1 anti-extension core isometric — builds a braced, resilient midline that transfers to every lift.</string>
+    <string name="fitness_ex_core_plank_step_1">Forearms on the floor, elbows directly under shoulders, body in a straight line.</string>
+    <string name="fitness_ex_core_plank_step_2">Feet hip-width, tuck pelvis slightly, brace core 360°.</string>
+    <string name="fitness_ex_core_plank_step_3">Squeeze glutes and quads to lock the body line.</string>
+    <string name="fitness_ex_core_plank_step_4">Hold the position, breathing steadily through your nose.</string>
+    <string name="fitness_ex_core_plank_tip_1">Don\'t let hips sag or pike — find a true neutral spine.</string>
+    <string name="fitness_ex_core_plank_tip_2">Progress by adding load (plate on back) or extending duration.</string>
+    <string name="fitness_ex_core_plank_mistake_1">Sagging hips = no core work, lots of back pressure.</string>
+    <string name="fitness_ex_core_plank_mistake_2">Head hanging or craning.</string>
+
+    <string name="fitness_ex_core_sideplank">Side Plank</string>
+    <string name="fitness_ex_core_sideplank_desc">Anti-lateral-flexion hold that sculpts obliques and stabilises the hips in the frontal plane.</string>
+    <string name="fitness_ex_core_sideplank_step_1">Lie on your side, feet stacked, elbow under shoulder.</string>
+    <string name="fitness_ex_core_sideplank_step_2">Lift hips off the floor so body forms one long line.</string>
+    <string name="fitness_ex_core_sideplank_step_3">Top arm can rest on hip or extend toward the ceiling.</string>
+    <string name="fitness_ex_core_sideplank_step_4">Hold, then switch sides.</string>
+    <string name="fitness_ex_core_sideplank_tip_1">Bottom knee can stay on the floor as a regression.</string>
+    <string name="fitness_ex_core_sideplank_tip_2">Lift the top leg for a much harder progression.</string>
+    <string name="fitness_ex_core_sideplank_mistake_1">Hips rolling forward or backward.</string>
+    <string name="fitness_ex_core_sideplank_mistake_2">Shoulder hunching up to your ear.</string>
+
+    <string name="fitness_ex_core_crunch">Crunches</string>
+    <string name="fitness_ex_core_crunch_desc">Short-range spinal flexion that targets the rectus abdominis — classic, simple and effective.</string>
+    <string name="fitness_ex_core_crunch_step_1">Lie on your back, knees bent, feet flat, hands behind your head (light touch).</string>
+    <string name="fitness_ex_core_crunch_step_2">Exhale and curl shoulders and upper back off the floor.</string>
+    <string name="fitness_ex_core_crunch_step_3">Squeeze abs at the top, chin tucked to chest.</string>
+    <string name="fitness_ex_core_crunch_step_4">Lower slowly without relaxing at the bottom.</string>
+    <string name="fitness_ex_core_crunch_tip_1">Think about "crunching a grape" between your sternum and pelvis.</string>
+    <string name="fitness_ex_core_crunch_tip_2">Cross arms over your chest to make it easier; hold a weight to make it harder.</string>
+    <string name="fitness_ex_core_crunch_mistake_1">Yanking on your neck with your hands.</string>
+    <string name="fitness_ex_core_crunch_mistake_2">Just lifting your head — the upper back must curl up too.</string>
+
+    <string name="fitness_ex_core_russian">Russian Twists</string>
+    <string name="fitness_ex_core_russian_desc">Rotational powerhouse that fires obliques and deep transverse abdominis with each twist.</string>
+    <string name="fitness_ex_core_russian_step_1">Sit on the floor, torso leaning back ~45°, knees bent, heels near the ground.</string>
+    <string name="fitness_ex_core_russian_step_2">Lift feet off the floor, hands clasped in front of chest (or hold a weight).</string>
+    <string name="fitness_ex_core_russian_step_3">Twist torso to the right, then to the left — that\'s one rep.</string>
+    <string name="fitness_ex_core_russian_step_4">Keep the twist coming from the ribs, not just the arms.</string>
+    <string name="fitness_ex_core_russian_tip_1">Heels on the floor until you can control the V-sit.</string>
+    <string name="fitness_ex_core_russian_tip_2">Exhale with every rotation for maximum core engagement.</string>
+    <string name="fitness_ex_core_russian_mistake_1">Swinging the weight around without bracing.</string>
+    <string name="fitness_ex_core_russian_mistake_2">Hunching the upper back.</string>
+
+    <string name="fitness_ex_core_legraise">Hanging / Lying Leg Raises</string>
+    <string name="fitness_ex_core_legraise_desc">Powerful lower-abdominals and hip-flexor builder — feel the burn low on your stomach.</string>
+    <string name="fitness_ex_core_legraise_step_1">Hang from a pull-up bar (or lie flat on the floor), legs straight.</string>
+    <string name="fitness_ex_core_legraise_step_2">Brace your core to eliminate sway.</string>
+    <string name="fitness_ex_core_legraise_step_3">Raise legs until they\'re parallel to the floor (or higher), no swinging.</string>
+    <string name="fitness_ex_core_legraise_step_4">Lower slowly with a 3-second eccentric.</string>
+    <string name="fitness_ex_core_legraise_tip_1">Bend knees if straight legs are too hard.</string>
+    <string name="fitness_ex_core_legraise_tip_2">At the top, tilt pelvis posteriorly to really crunch the abs.</string>
+    <string name="fitness_ex_core_legraise_mistake_1">Using momentum to swing legs up.</string>
+    <string name="fitness_ex_core_legraise_mistake_2">Lower body / shoulders pulling away from the bar mid-rep.</string>
+
+    <string name="fitness_ex_core_bicycle">Bicycle Crunches</string>
+    <string name="fitness_ex_core_bicycle_desc">Dynamic core mashup that combines flexion + rotation for 360° ab activation.</string>
+    <string name="fitness_ex_core_bicycle_step_1">Lie on your back, hands light behind your head, knees lifted to tabletop.</string>
+    <string name="fitness_ex_core_bicycle_step_2">Bring right elbow to left knee while extending the right leg straight out.</string>
+    <string name="fitness_ex_core_bicycle_step_3">Switch sides, twisting from the core — pedal slowly.</string>
+    <string name="fitness_ex_core_bicycle_step_4">Exhale on each twist.</string>
+    <string name="fitness_ex_core_bicycle_tip_1">Slow, controlled reps beat fast sloppy ones every time.</string>
+    <string name="fitness_ex_core_bicycle_tip_2">Pause 1 second each time the elbow touches the knee.</string>
+    <string name="fitness_ex_core_bicycle_mistake_1">Pedaling your legs without any actual trunk twist.</string>
+    <string name="fitness_ex_core_bicycle_mistake_2">Pulling the neck to force reps.</string>
+
+    <string name="fitness_ex_core_mountain">Mountain Climbers</string>
+    <string name="fitness_ex_core_mountain_desc">Plank-based cardio/core hybrid that spikes heart rate while hammering abs, hip flexors and shoulders.</string>
+    <string name="fitness_ex_core_mountain_step_1">High plank position, hands under shoulders, body straight.</string>
+    <string name="fitness_ex_core_mountain_step_2">Drive one knee up toward your chest, foot hovering just above the floor.</string>
+    <string name="fitness_ex_core_mountain_step_3">Quickly switch legs while keeping hips level.</string>
+    <string name="fitness_ex_core_mountain_step_4">Alternate as fast as possible without breaking the plank.</string>
+    <string name="fitness_ex_core_mountain_tip_1">Keep hips low — no piking.</string>
+    <string name="fitness_ex_core_mountain_tip_2">Exhale each time a knee drives in.</string>
+    <string name="fitness_ex_core_mountain_mistake_1">Hips bouncing up and down wildly.</string>
+    <string name="fitness_ex_core_mountain_mistake_2">Placing hands too far in front of shoulders.</string>
+
+    <string name="fitness_ex_core_flutter">Flutter Kicks</string>
+    <string name="fitness_ex_core_flutter_desc">Low-ab finisher that hits the often-neglected lower rectus abdominis with sustained tension.</string>
+    <string name="fitness_ex_core_flutter_step_1">Lie flat, hands under glutes, lower back pressed into the floor.</string>
+    <string name="fitness_ex_core_flutter_step_2">Lift both legs a few inches off the ground, toes pointed.</string>
+    <string name="fitness_ex_core_flutter_step_3">Kick legs up and down in small, rapid scissor motions.</string>
+    <string name="fitness_ex_core_flutter_step_4">Keep abs braced and lower back glued to the ground.</string>
+    <string name="fitness_ex_core_flutter_tip_1">Small, controlled kicks — don\'t flail.</string>
+    <string name="fitness_ex_core_flutter_tip_2">Lift upper back / head slightly for extra ab burn.</string>
+    <string name="fitness_ex_core_flutter_mistake_1">Lower back arching away from the floor.</string>
+    <string name="fitness_ex_core_flutter_mistake_2">Legs too high = less lower-ab stimulus.</string>
+
+    <string name="fitness_ex_core_hollow">Hollow Body Hold</string>
+    <string name="fitness_ex_core_hollow_desc">Gymnastic staple — the "perfect" isometric abs shape that directly translates to handstands and levers.</string>
+    <string name="fitness_ex_core_hollow_step_1">Lie on your back, arms extended overhead, legs straight.</string>
+    <string name="fitness_ex_core_hollow_step_2">Press lumbar spine firmly into the ground — posterior pelvic tilt.</string>
+    <string name="fitness_ex_core_hollow_step_3">Lift arms and legs just off the floor, chin tucked.</string>
+    <string name="fitness_ex_core_hollow_step_4">Hold the banana / C-shape without letting the lower back peel up.</string>
+    <string name="fitness_ex_core_hollow_tip_1">Regression: knees bent 90° or arms alongside your body.</string>
+    <string name="fitness_ex_core_hollow_tip_2">Add hollow body rocks to make it dynamic.</string>
+    <string name="fitness_ex_core_hollow_mistake_1">Lower back leaving the floor — this defeats the whole purpose.</string>
+    <string name="fitness_ex_core_hollow_mistake_2">Shoulders up around your ears; keep them depressed.</string>
+
+    <string name="fitness_ex_core_birddog">Bird-Dog</string>
+    <string name="fitness_ex_core_birddog_desc">Anti-rotation + anti-extension drill in quadruped that improves core stability for the entire posterior chain.</string>
+    <string name="fitness_ex_core_birddog_step_1">On hands and knees, wrists under shoulders, knees under hips, neutral spine.</string>
+    <string name="fitness_ex_core_birddog_step_2">Extend left arm forward and right leg back until both are parallel to the floor.</string>
+    <string name="fitness_ex_core_birddog_step_3">Pause, squeeze glutes, no hip rotation.</string>
+    <string name="fitness_ex_core_birddog_step_4">Return and switch sides.</string>
+    <string name="fitness_ex_core_birddog_tip_1">Tap a wall with your hand and foot to ensure full extension.</string>
+    <string name="fitness_ex_core_birddog_tip_2">Exhale as you extend; inhale as you return.</string>
+    <string name="fitness_ex_core_birddog_mistake_1">Hips hiking up or tilting instead of staying level.</string>
+    <string name="fitness_ex_core_birddog_mistake_2">Arching the lower back to get limbs higher.</string>
+
+    <!-- ====== SHOULDERS ====== -->
+    <string name="fitness_ex_shoulders_ohp">Overhead Press</string>
+    <string name="fitness_ex_shoulders_ohp_desc">The fundamental vertical press — builds capped delts, upper chest and tricep strength with strict form.</string>
+    <string name="fitness_ex_shoulders_ohp_step_1">Rack barbell across the front of shoulders, grip just outside shoulder-width.</string>
+    <string name="fitness_ex_shoulders_ohp_step_2">Brace core, squeeze glutes, feet hip-width.</string>
+    <string name="fitness_ex_shoulders_ohp_step_3">Press bar straight up, finishing with head through, bar locked out overhead.</string>
+    <string name="fitness_ex_shoulders_ohp_step_4">Lower bar slowly back to the shoulders.</string>
+    <string name="fitness_ex_shoulders_ohp_tip_1">Keep ribs down — don\'t arch your lower back to get the bar up.</string>
+    <string name="fitness_ex_shoulders_ohp_tip_2">Dumbbell version (one or two arms) is an excellent alternative.</string>
+    <string name="fitness_ex_shoulders_ohp_mistake_1">Pushing hips forward / leaning back heavily to "lockout".</string>
+    <string name="fitness_ex_shoulders_ohp_mistake_2">Pressing in front of your face with a forward head.</string>
+
+    <string name="fitness_ex_shoulders_pikepush">Pike Push-Ups</string>
+    <string name="fitness_ex_shoulders_pikepush_desc">Bodyweight overhead press in disguise — the best way to train shoulders and triceps without a gym.</string>
+    <string name="fitness_ex_shoulders_pikepush_step_1">From high plank, walk feet toward hands and pike hips high into an upside-down V.</string>
+    <string name="fitness_ex_shoulders_pikepush_step_2">Arms shoulder-width, elbows pointing out, head lowered toward the floor.</string>
+    <string name="fitness_ex_shoulders_pikepush_step_3">Lower the crown of your head toward the ground by bending elbows.</string>
+    <string name="fitness_ex_shoulders_pikepush_step_4">Press back up to the pike position.</string>
+    <string name="fitness_ex_shoulders_pikepush_tip_1">Feet on a bench dramatically increases shoulder loading.</string>
+    <string name="fitness_ex_shoulders_pikepush_tip_2">Squeeze triceps and lateral delts at the top lockout.</string>
+    <string name="fitness_ex_shoulders_pikepush_mistake_1">Turning it into a regular push-up — hips must stay up.</string>
+    <string name="fitness_ex_shoulders_pikepush_mistake_2">Head crashing into the floor; control the descent.</string>
+
+    <string name="fitness_ex_shoulders_lateral">Lateral Raises</string>
+    <string name="fitness_ex_shoulders_lateral_desc">Isolation for the side delts — the exact movement that creates that 3D capped shoulder look.</string>
+    <string name="fitness_ex_shoulders_lateral_step_1">Stand tall holding light dumbbells at your sides, palms facing each other, slight elbow bend.</string>
+    <string name="fitness_ex_shoulders_lateral_step_2">Raise weights out to the sides until arms are parallel to the floor.</string>
+    <string name="fitness_ex_shoulders_lateral_step_3">Pause at the top for 1 second — elbows slightly above wrists.</string>
+    <string name="fitness_ex_shoulders_lateral_step_4">Lower very slowly with a 3-second eccentric.</string>
+    <string name="fitness_ex_shoulders_lateral_tip_1">"Pour water out of a pitcher" — thumbs slightly down at the top.</string>
+    <string name="fitness_ex_shoulders_lateral_tip_2">You\'ll use way less weight than you think; form is everything.</string>
+    <string name="fitness_ex_shoulders_lateral_mistake_1">Swinging / using momentum to lift heavy dumbbells.</string>
+    <string name="fitness_ex_shoulders_lateral_mistake_2">Shrugging the traps up instead of isolating the side delts.</string>
+
+    <string name="fitness_ex_shoulders_frontraise">Front Raises</string>
+    <string name="fitness_ex_shoulders_frontraise_desc">Targets the anterior (front) deltoid — balances out pressing-heavy routines and improves shoulder posture.</string>
+    <string name="fitness_ex_shoulders_frontraise_step_1">Hold dumbbells in front of thighs, palms facing down or toward you, slight elbow bend.</string>
+    <string name="fitness_ex_shoulders_frontraise_step_2">Raise one (or both) arms forward until parallel to the floor.</string>
+    <string name="fitness_ex_shoulders_frontraise_step_3">Pause at shoulder height, no torso lean.</string>
+    <string name="fitness_ex_shoulders_frontraise_step_4">Lower with control, repeat.</string>
+    <string name="fitness_ex_shoulders_frontraise_tip_1">Alternating arms is easier to control than doing both at once.</string>
+    <string name="fitness_ex_shoulders_frontraise_tip_2">Resistance band version works great if no dumbbells available.</string>
+    <string name="fitness_ex_shoulders_frontraise_mistake_1">Leaning backward to swing the weight up.</string>
+    <string name="fitness_ex_shoulders_frontraise_mistake_2">Lifting higher than shoulder level traps the upper traps.</string>
+
+    <string name="fitness_ex_shoulders_arnold">Arnold Press</string>
+    <string name="fitness_ex_shoulders_arnold_desc">A full-range press invented by Schwarzenegger that hits all three delt heads in one rep.</string>
+    <string name="fitness_ex_shoulders_arnold_step_1">Start with dumbbells at shoulder height, palms facing you, elbows tucked.</string>
+    <string name="fitness_ex_shoulders_arnold_step_2">Press upward while simultaneously rotating palms outward.</string>
+    <string name="fitness_ex_shoulders_arnold_step_3">Finish overhead with palms facing forward, arms fully extended.</string>
+    <string name="fitness_ex_shoulders_arnold_step_4">Reverse the motion to come down, rotating palms back.</string>
+    <string name="fitness_ex_shoulders_arnold_tip_1">Control the rotation — it\'s what makes this different from a regular OHP.</string>
+    <string name="fitness_ex_shoulders_arnold_tip_2">Squeeze at the top of each rep for a full delt contraction.</string>
+    <string name="fitness_ex_shoulders_arnold_mistake_1">Rushing the palm rotation.</string>
+    <string name="fitness_ex_shoulders_arnold_mistake_2">Using too much weight and bouncing out of the bottom.</string>
+
+    <string name="fitness_ex_shoulders_facepull">Face Pulls (Band / Cable)</string>
+    <string name="fitness_ex_shoulders_facepull_desc">Posture saver — pulls your shoulders back and strengthens the external rotators and rear delts.</string>
+    <string name="fitness_ex_shoulders_facepull_step_1">Anchor a resistance band (or cable) at face height, double grip with thumbs up.</string>
+    <string name="fitness_ex_shoulders_facepull_step_2">Step back so there is tension on the band, scaps set.</string>
+    <string name="fitness_ex_shoulders_facepull_step_3">Pull band toward your forehead / eyebrows, elbows high and out.</string>
+    <string name="fitness_ex_shoulders_facepull_step_4">Squeeze rear delts at the end, then return slowly with control.</string>
+    <string name="fitness_ex_shoulders_facepull_tip_1">Do these EVERY session if you spend lots of time at a computer or doing push work.</string>
+    <string name="fitness_ex_shoulders_facepull_tip_2">Pull the rope / band apart as it reaches your face.</string>
+    <string name="fitness_ex_shoulders_facepull_mistake_1">Pulling too low (row-style) instead of to the face.</string>
+    <string name="fitness_ex_shoulders_facepull_mistake_2">Letting the band snap you back forward.</string>
+
+    <!-- ====== ARMS ====== -->
+    <string name="fitness_ex_arms_bicepcurl">Barbell / Dumbbell Bicep Curls</string>
+    <string name="fitness_ex_arms_bicepcurl_desc">Classic flexion move that builds sleeve-busting bicep peaks and overall arm mass.</string>
+    <string name="fitness_ex_arms_bicepcurl_step_1">Stand tall, barbell / dumbbells at arms length, elbows pinned to your sides.</string>
+    <string name="fitness_ex_arms_bicepcurl_step_2">Curl weight up while squeezing the biceps, keeping shoulders down.</string>
+    <string name="fitness_ex_arms_bicepcurl_step_3">Full contraction at the top, 1-second pause.</string>
+    <string name="fitness_ex_arms_bicepcurl_step_4">Lower with at least a 3-second eccentric.</string>
+    <string name="fitness_ex_arms_bicepcurl_tip_1">Keep elbows glued to your ribcage the entire rep.</string>
+    <string name="fitness_ex_arms_bicepcurl_tip_2">Supinated grip = peak biceps long head; hammer curl = brachialis.</string>
+    <string name="fitness_ex_arms_bicepcurl_mistake_1">Swinging the weight and turning it into a curl + row.</string>
+    <string name="fitness_ex_arms_bicepcurl_mistake_2">Not going fully down at the bottom = losing half the ROM.</string>
+
+    <string name="fitness_ex_arms_hammercurl">Hammer Curls</string>
+    <string name="fitness_ex_arms_hammercurl_desc">Neutral-grip curls build the brachialis, which pushes your bicep up for a visibly thicker arm.</string>
+    <string name="fitness_ex_arms_hammercurl_step_1">Stand with dumbbells at sides, palms facing each other (hammer grip).</string>
+    <string name="fitness_ex_arms_hammercurl_step_2">Elbows tight, curl one dumbbell up without turning the wrist.</string>
+    <string name="fitness_ex_arms_hammercurl_step_3">Squeeze at the top, thumb toward shoulder.</string>
+    <string name="fitness_ex_arms_hammercurl_step_4">Lower slowly; alternate sides.</string>
+    <string name="fitness_ex_arms_hammercurl_tip_1">Do these every session for 6 weeks and your shirt sleeves will tell the story.</string>
+    <string name="fitness_ex_arms_hammercurl_tip_2">Cable machine with rope handles works great too.</string>
+    <string name="fitness_ex_arms_hammercurl_mistake_1">Elbows traveling forward to assist the lift.</string>
+    <string name="fitness_ex_arms_hammercurl_mistake_2">Rotating wrists into a supinated grip mid-rep.</string>
+
+    <string name="fitness_ex_arms_tricepdip">Triceps Dips (Bodyweight)</string>
+    <string name="fitness_ex_arms_tricepdip_desc">Parallel-bar or two-chair dip demolishes triceps and chest while using your own bodyweight.</string>
+    <string name="fitness_ex_arms_tricepdip_step_1">Grip parallel bars / chair edges, arms straight, body hanging in front.</string>
+    <string name="fitness_ex_arms_tricepdip_step_2">Lean torso slightly forward, bend elbows to lower body.</string>
+    <string name="fitness_ex_arms_tricepdip_step_3">Descend until elbows reach ~90° (or comfortable depth).</string>
+    <string name="fitness_ex_arms_tricepdip_step_4">Press through palms to return to full arm extension.</string>
+    <string name="fitness_ex_arms_tricepdip_tip_1">More upright torso = more triceps; lean forward = more chest.</string>
+    <string name="fitness_ex_arms_tricepdip_tip_2">Add a weight belt / backpack for progressive overload.</string>
+    <string name="fitness_ex_arms_tricepdip_mistake_1">Going too deep and stressing the shoulder capsule.</string>
+    <string name="fitness_ex_arms_tricepdip_mistake_2">Locking out at the top to "rest".</string>
+
+    <string name="fitness_ex_arms_cgpushup">Close-Grip Push-Ups</string>
+    <string name="fitness_ex_arms_cgpushup_desc">Narrower hands shift a big chunk of the work straight onto the triceps without touching a weight.</string>
+    <string name="fitness_ex_arms_cgpushup_step_1">High plank position, hands inside shoulder-width, fingers close together.</string>
+    <string name="fitness_ex_arms_cgpushup_step_2">Body straight, core braced.</string>
+    <string name="fitness_ex_arms_cgpushup_step_3">Lower chest to the floor — elbows brushing your ribcage.</string>
+    <string name="fitness_ex_arms_cgpushup_step_4">Press straight up by squeezing the triceps, not flaring elbows.</string>
+    <string name="fitness_ex_arms_cgpushup_tip_1">Knee-down is a totally legitimate starting point.</string>
+    <string name="fitness_ex_arms_cgpushup_tip_2">Squeeze at the top for 1 second each rep.</string>
+    <string name="fitness_ex_arms_cgpushup_mistake_1">Elbows still flaring out — keep them tight!</string>
+    <string name="fitness_ex_arms_cgpushup_mistake_2">Hips sagging to compensate for fatigue.</string>
+
+    <string name="fitness_ex_arms_tricepkickback">Triceps Kickbacks</string>
+    <string name="fitness_ex_arms_tricepkickback_desc">Classic isolation that fires the long head of the triceps through its contracted end-range.</string>
+    <string name="fitness_ex_arms_tricepkickback_step_1">Hinge at the hips until torso is almost parallel to the floor, one hand on bench for support.</string>
+    <string name="fitness_ex_arms_tricepkickback_step_2">Grab a dumbbell, upper arm pinned parallel to the floor, elbow bent 90°.</string>
+    <string name="fitness_ex_arms_tricepkickback_step_3">Extend elbow until arm is completely straight behind you.</string>
+    <string name="fitness_ex_arms_tricepkickback_step_4">Squeeze triceps, return slowly.</string>
+    <string name="fitness_ex_arms_tricepkickback_tip_1">Only the forearm moves — upper arm stays glued parallel.</string>
+    <string name="fitness_ex_arms_tricepkickback_tip_2">Go light. Heavy kickbacks turn into rows and ruin the stimulus.</string>
+    <string name="fitness_ex_arms_tricepkickback_mistake_1">Upper arm bouncing up and down, not fixed.</string>
+    <string name="fitness_ex_arms_tricepkickback_mistake_2">Short-changing the lockout at the top.</string>
+
+    <string name="fitness_ex_arms_concentration">Concentration Curls</string>
+    <string name="fitness_ex_arms_concentration_desc">Seated, one-arm curl with zero momentum — the ultimate biceps peak finisher.</string>
+    <string name="fitness_ex_arms_concentration_step_1">Sit on a bench, legs spread, one elbow braced against inner thigh.</string>
+    <string name="fitness_ex_arms_concentration_step_2">Hold dumbbell with a supinated grip, arm hanging slightly bent.</string>
+    <string name="fitness_ex_arms_concentration_step_3">Curl weight up while keeping the elbow pressed into the thigh.</string>
+    <string name="fitness_ex_arms_concentration_step_4">Squeeze at the top, lower very slowly.</string>
+    <string name="fitness_ex_arms_concentration_tip_1">Supinate hard at the top for peak biceps contraction.</string>
+    <string name="fitness_ex_arms_concentration_tip_2">Save these for the end of your arm day; they\'re a burnout finisher.</string>
+    <string name="fitness_ex_arms_concentration_mistake_1">Lifting with shoulder momentum.</string>
+    <string name="fitness_ex_arms_concentration_mistake_2">Rushing through without peak contractions.</string>
+
+    <string name="fitness_ex_arms_skullcrusher">Skull Crushers (Lying Triceps Extension)</string>
+    <string name="fitness_ex_arms_skullcrusher_desc">Heavy triceps isolation done on a bench with EZ-bar, barbell or dumbbells.</string>
+    <string name="fitness_ex_arms_skullcrusher_step_1">Lie flat on a bench, bar pressed above chest with elbows pointing up.</string>
+    <string name="fitness_ex_arms_skullcrusher_step_2">Only at the elbows, lower the bar toward your forehead / hairline.</string>
+    <string name="fitness_ex_arms_skullcrusher_step_3">Let bar tap your forehead lightly, elbows stay vertically fixed.</string>
+    <string name="fitness_ex_arms_skullcrusher_step_4">Extend triceps to press back to the starting position.</string>
+    <string name="fitness_ex_arms_skullcrusher_tip_1">Use an EZ-curl bar if wrists start to ache.</string>
+    <string name="fitness_ex_arms_skullcrusher_tip_2">Cable version = kinder to the elbows, still brutal.</string>
+    <string name="fitness_ex_arms_skullcrusher_mistake_1">Elbows flaring outward — they need to stay parallel.</string>
+    <string name="fitness_ex_arms_skullcrusher_mistake_2">Elbows traveling forward to cheat lockout.</string>
+
+    <!-- ====== CARDIO ====== -->
+    <string name="fitness_ex_cardio_jjacks">Jumping Jacks</string>
+    <string name="fitness_ex_cardio_jjacks_desc">Zero-equipment cardio classic that elevates your heart rate in seconds and warms up the whole body.</string>
+    <string name="fitness_ex_cardio_jjacks_step_1">Stand tall, feet together, hands at your sides.</string>
+    <string name="fitness_ex_cardio_jjacks_step_2">Jump while spreading feet shoulder-width and raising arms overhead.</string>
+    <string name="fitness_ex_cardio_jjacks_step_3">Immediately jump back to starting position.</string>
+    <string name="fitness_ex_cardio_jjacks_step_4">Repeat in a continuous, rhythmic motion.</string>
+    <string name="fitness_ex_cardio_jjacks_tip_1">Land on the balls of your feet, not flat-footed.</string>
+    <string name="fitness_ex_cardio_jjacks_tip_2">Step version (no jump) works great indoors without bothering neighbours.</string>
+    <string name="fitness_ex_cardio_jjacks_mistake_1">Arms staying half-way up — reach all the way over.</string>
+    <string name="fitness_ex_cardio_jjacks_mistake_2">Heels slamming into the floor.</string>
+
+    <string name="fitness_ex_cardio_burpees">Burpees</string>
+    <string name="fitness_ex_cardio_burpees_desc">Metabolic monster that combines squat + plank + push-up + jump for a true full-body test.</string>
+    <string name="fitness_ex_cardio_burpees_step_1">Stand tall, feet shoulder-width.</string>
+    <string name="fitness_ex_cardio_burpees_step_2">Squat down, place hands on the floor in front of feet.</string>
+    <string name="fitness_ex_cardio_burpees_step_3">Kick feet back into a plank, do a push-up (or skip for easy mode).</string>
+    <string name="fitness_ex_cardio_burpees_step_4">Jump feet back to hands, explode up into a jump, clap overhead.</string>
+    <string name="fitness_ex_cardio_burpees_tip_1">Breathing rhythm matters — exhale on the push-up and the jump.</string>
+    <string name="fitness_ex_cardio_burpees_tip_2">Substitute the jump for a stand-up on knees-injured days.</string>
+    <string name="fitness_ex_cardio_burpees_mistake_1">Plank collapsing mid-rep.</string>
+    <string name="fitness_ex_cardio_burpees_mistake_2">Half-assing every phase of the rep just to get reps.</string>
+
+    <string name="fitness_ex_cardio_highknees">High Knees</string>
+    <string name="fitness_ex_cardio_highknees_desc">Running in place with exaggerated knee-lift — brutal HIIT finisher or dynamic warm-up.</string>
+    <string name="fitness_ex_cardio_highknees_step_1">Stand, chest up, arms bent at 90° like you\'re sprinting.</string>
+    <string name="fitness_ex_cardio_highknees_step_2">Drive knees up to hip height as quickly as possible.</string>
+    <string name="fitness_ex_cardio_highknees_step_3">Land softly on the balls of your feet, immediately switching legs.</string>
+    <string name="fitness_ex_cardio_highknees_step_4">Pump arms vigorously for rhythm.</string>
+    <string name="fitness_ex_cardio_highknees_tip_1">Use a metronome or drum beat to keep cadence high.</string>
+    <string name="fitness_ex_cardio_highknees_tip_2">Think "fast feet" not "high feet" first.</string>
+    <string name="fitness_ex_cardio_highknees_mistake_1">Leaning way back with each knee drive.</string>
+    <string name="fitness_ex_cardio_highknees_mistake_2">Heel strikes = shin splint risk.</string>
+
+    <string name="fitness_ex_cardio_jumprope">Jump Rope</string>
+    <string name="fitness_ex_cardio_jumprope_desc">Boxers\' favourite — builds calf endurance, coordination and insane cardio in a tiny footprint.</string>
+    <string name="fitness_ex_cardio_jumprope_step_1">Hold rope handles at hip height, elbows tucked, rope behind heels.</string>
+    <string name="fitness_ex_cardio_jumprope_step_2">Spin the rope with wrists (not arms), jump 1–2 inches off the floor.</string>
+    <string name="fitness_ex_cardio_jumprope_step_3">Land on balls of feet, knees soft, continuous bounces.</string>
+    <string name="fitness_ex_cardio_jumprope_step_4">Rope passes cleanly under feet every bounce.</string>
+    <string name="fitness_ex_cardio_jumprope_tip_1">If you don\'t have a rope, simulate! "Air-jump" with the same timing.</string>
+    <string name="fitness_ex_cardio_jumprope_tip_2">Master 100 skips without a miss before trying tricks (cross-overs, double-unders).</string>
+    <string name="fitness_ex_cardio_jumprope_mistake_1">Jumping 6+ inches off the floor — tiny bounces win.</string>
+    <string name="fitness_ex_cardio_jumprope_mistake_2">Huge arm circles; the rope turns at the wrists.</string>
+
+    <string name="fitness_ex_cardio_skipping">Skip Steps (In Place)</string>
+    <string name="fitness_ex_cardio_skipping_desc">Low-impact cardio finisher — lighter on the knees than high knees but just as effective at raising HR.</string>
+    <string name="fitness_ex_cardio_skipping_step_1">Stand with one foot lifted, arms relaxed.</string>
+    <string name="fitness_ex_cardio_skipping_step_2">Step in place rapidly, shifting weight quickly between left and right foot.</string>
+    <string name="fitness_ex_cardio_skipping_step_3">Opposite arm to leg swings forward naturally.</string>
+    <string name="fitness_ex_cardio_skipping_step_4">Gradually increase speed to target heart rate.</string>
+    <string name="fitness_ex_cardio_skipping_tip_1">Perfect for warm-up before a weights session.</string>
+    <string name="fitness_ex_cardio_skipping_tip_2">Increase the knee-lift for extra intensity.</string>
+    <string name="fitness_ex_cardio_skipping_mistake_1">Stomping the feet down — stay light.</string>
+    <string name="fitness_ex_cardio_skipping_mistake_2">Turtle-shell posture; keep chest up!</string>
+
+    <!-- ====== FULL BODY ====== -->
+    <string name="fitness_ex_fullbody_thruster">Dumbbell Thruster</string>
+    <string name="fitness_ex_fullbody_thruster_desc">Front squat + overhead press combined — hits every major muscle group and makes you gasp for air.</string>
+    <string name="fitness_ex_fullbody_thruster_step_1">Clean two dumbbells to your shoulders, palms facing each other, elbows up.</string>
+    <string name="fitness_ex_fullbody_thruster_step_2">Squat down until thighs are parallel to the floor.</string>
+    <string name="fitness_ex_fullbody_thruster_step_3">Drive through heels and use leg power to explode out of the hole.</string>
+    <string name="fitness_ex_fullbody_thruster_step_4">Continue that upward momentum into a press — dumbbells finish locked out overhead.</string>
+    <string name="fitness_ex_fullbody_thruster_tip_1">Think "one smooth motion" not "squat, then press".</string>
+    <string name="fitness_ex_fullbody_thruster_tip_2">Barbell, kettlebells or even a sandbag all work.</string>
+    <string name="fitness_ex_fullbody_thruster_mistake_1">Pressing before the squat drive = wasted leg power.</string>
+    <string name="fitness_ex_fullbody_thruster_mistake_2">Soft lockout at the top of the press.</string>
+
+    <string name="fitness_ex_fullbody_bearcrawl">Bear Crawl</string>
+    <string name="fitness_ex_fullbody_bearcrawl_desc">Quadruped locomotion builds total-body strength, shoulder stability and mobility all at once.</string>
+    <string name="fitness_ex_fullbody_bearcrawl_step_1">Hands under shoulders, knees under hips, knees hover 1 inch above the floor.</string>
+    <string name="fitness_ex_fullbody_bearcrawl_step_2">Core braced, hips level with shoulders, back flat.</string>
+    <string name="fitness_ex_fullbody_bearcrawl_step_3">Move right hand + left knee forward simultaneously.</string>
+    <string name="fitness_ex_fullbody_bearcrawl_step_4">Then left hand + right knee; continue crawling forward / backward / sideways.</string>
+    <string name="fitness_ex_fullbody_bearcrawl_tip_1">Think "heavy paws" — reach but don\'t slither.</string>
+    <string name="fitness_ex_fullbody_bearcrawl_tip_2">Mark 8–10 m lanes and crawl for timed sets.</string>
+    <string name="fitness_ex_fullbody_bearcrawl_mistake_1">Butt up in the air like a yoga downward dog.</string>
+    <string name="fitness_ex_fullbody_bearcrawl_mistake_2">Ipsilateral crawling (same hand + same leg).</string>
+
+    <string name="fitness_ex_fullbody_kbswing">Kettlebell Swing</string>
+    <string name="fitness_ex_fullbody_kbswing_desc">Hip-hinge pattern with kettlebell — brutal posterior chain conditioning that burns 20+ kcal per minute.</string>
+    <string name="fitness_ex_fullbody_kbswing_step_1">Kettlebell on the floor between feet, feet wider than shoulder-width.</string>
+    <string name="fitness_ex_fullbody_kbswing_step_2">Hinge, grab the handle, hike the bell back between your legs like a football center.</string>
+    <string name="fitness_ex_fullbody_kbswing_step_3">Drive hips forward explosively to float the bell to chest / eye level.</string>
+    <string name="fitness_ex_fullbody_kbswing_step_4">Let gravity pull the bell back; hinge and repeat.</string>
+    <string name="fitness_ex_fullbody_kbswing_tip_1">The GLUTES do the work, not the arms. Arms are just ropes.</string>
+    <string name="fitness_ex_fullbody_kbswing_tip_2">Dumbbell substitute works fine for learning the hinge.</string>
+    <string name="fitness_ex_fullbody_kbswing_tip_3">Power = hip snap. Big exhale as you snap.</string>
+    <string name="fitness_ex_fullbody_kbswing_mistake_1">Squatting the swing (it\'s a hinge, not a squat).</string>
+    <string name="fitness_ex_fullbody_kbswing_mistake_2">Shoulder-pressing the bell up at the top.</string>
+    <string name="fitness_ex_fullbody_kbswing_mistake_3">Rounded back — flat spine essential.</string>
+
+    <string name="fitness_ex_fullbody_burpeepushup">Burpee + Push-Up</string>
+    <string name="fitness_ex_fullbody_burpeepushup_desc">Harder burpee variant with a full chest-to-floor push-up and jump squat back out.</string>
+    <string name="fitness_ex_fullbody_burpeepushup_step_1">Stand tall, feet shoulder-width.</string>
+    <string name="fitness_ex_fullbody_burpeepushup_step_2">Squat down, palms on floor, jump legs back into a full plank.</string>
+    <string name="fitness_ex_fullbody_burpeepushup_step_3">Do a deep, full-range push-up to the floor.</string>
+    <string name="fitness_ex_fullbody_burpeepushup_step_4">Tuck knees in explosively and jump straight up from the squat.</string>
+    <string name="fitness_ex_fullbody_burpeepushup_tip_1">Drop sets: 10, 9, 8… 1 = ultimate finisher.</string>
+    <string name="fitness_ex_fullbody_burpeepushup_tip_2">Skip the jump on knee issues, keep the push-up.</string>
+    <string name="fitness_ex_fullbody_burpeepushup_mistake_1">Knee push-ups just to check the box.</string>
+    <string name="fitness_ex_fullbody_burpeepushup_mistake_2">Rushing the plank transition.</string>
+
+    <string name="fitness_ex_fullbody_manmaker">Man-Maker</string>
+    <string name="fitness_ex_fullbody_manmaker_desc">Infamous full-body combo that stacks row, push-up, squat-clean and press into a single soul-crushing rep.</string>
+    <string name="fitness_ex_fullbody_manmaker_step_1">Stand with dumbbells at sides, feet shoulder-width.</string>
+    <string name="fitness_ex_fullbody_manmaker_step_2">Drop into a plank holding dumbbells, row one dumbbell to your hip. Switch sides.</string>
+    <string name="fitness_ex_fullbody_manmaker_step_3">Perform a full push-up on the dumbbells.</string>
+    <string name="fitness_ex_fullbody_manmaker_step_4">Jump feet back in, clean bells to shoulders, squat, then thruster overhead.</string>
+    <string name="fitness_ex_fullbody_manmaker_tip_1">Start very light. This rep has a lot of moving parts.</string>
+    <string name="fitness_ex_fullbody_manmaker_tip_2">Make sure dumbbells are heavy enough to stay planted while you row.</string>
+    <string name="fitness_ex_fullbody_manmaker_mistake_1">Skipping the second row to save energy.</string>
+    <string name="fitness_ex_fullbody_manmaker_mistake_2">Hips piking during the push-up portion.</string>
+
+    <!-- ====== WORKOUT (Manual) ====== -->
+    <string name="fitness_ws_title">New Workout</string>
+    <string name="fitness_ws_session_active">In progress…</string>
+    <string name="fitness_ws_elapsed">Elapsed</string>
+    <string name="fitness_ws_add_exercise">Add exercise</string>
+    <string name="fitness_ws_pick_exercise">Pick exercise</string>
+    <string name="fitness_ws_cancel">Cancel</string>
+    <string name="fitness_ws_set_header">Sets</string>
+    <string name="fitness_ws_set_header_weight">Weight (kg)</string>
+    <string name="fitness_ws_set_header_reps">Reps</string>
+    <string name="fitness_ws_set_header_time">Time (s)</string>
+    <string name="fitness_ws_set_header_done">Done</string>
+    <string name="fitness_ws_add_set">+ Add set</string>
+    <string name="fitness_ws_remove_exercise">Remove exercise</string>
+    <string name="fitness_ws_finish">Finish &amp; save</string>
+    <string name="fitness_ws_discard">Discard</string>
+    <string name="fitness_ws_discard_confirm">Discard this workout? Progress will be lost.</string>
+    <string name="fitness_ws_discard_confirm_yes">Discard</string>
+    <string name="fitness_ws_discard_confirm_no">Keep editing</string>
+    <string name="fitness_ws_session_name">Workout name</string>
+    <string name="fitness_ws_session_name_hint">e.g. Push Day, Legs, HIIT…</string>
+    <string name="fitness_ws_empty">No exercises yet — tap “Add exercise” to start.</string>
+    <string name="fitness_ws_empty_hint">💡 Tip: open any exercise from the library and tap “Start exercise” to add it here automatically.</string>
+    <string name="fitness_ws_rest_timer">Rest</string>
+    <string name="fitness_ws_rest_start">Start timer</string>
+    <string name="fitness_ws_rest_reset">Reset</string>
+    <string name="fitness_ws_rest_done">Rest done 💪</string>
+    <string name="fitness_ws_set_count">%1$d sets</string>
+    <string name="fitness_ws_total_volume">Total volume</string>
+    <string name="fitness_ws_total_volume_kg">%1$.0f kg × reps</string>
+    <string name="fitness_ws_saved">Workout saved ✓</string>
+
+    <!-- ====== HISTORY (Detailed) ====== -->
+    <string name="fitness_history_entry_sets">%1$d sets · %2$d reps</string>
+    <string name="fitness_history_entry_volume">%1$.0f kg total</string>
+    <string name="fitness_history_session_duration">%1$d min</string>
+    <string name="fitness_history_session_calories">%1$.0f kcal</string>
+    <string name="fitness_history_session_exercises">%1$d exercises</string>
+    <string name="fitness_history_session_expand">Tap to expand</string>
+    <string name="fitness_history_session_delete">Delete session</string>
+    <string name="fitness_history_session_delete_confirm">Delete this workout?</string>
+    <string name="fitness_history_session_delete_yes">Delete</string>
+    <string name="fitness_history_session_delete_no">Keep</string>
+    <string name="fitness_history_no_sessions_yet">No sessions saved yet.\nStart a workout from the dashboard or the exercises tab!</string>
+    <string name="fitness_history_day_summary">%1$d workouts · %2$d min · %3$.0f kcal</string>
+    <string name="fitness_history_empty_filtered">No sessions for this time range.</string>
+    <string name="fitness_history_workout_pushup">Push-Up Session</string>
+    <string name="fitness_history_workout_manual">Workout</string>
+    <string name="fitness_history_pushup_pose">%1$d reps via pose tracking</string>
+
+    <!-- ====== EXERCISE PICKER (for adding to workout) ====== -->
+    <string name="fitness_picker_title">Choose an exercise</string>
 </resources>
