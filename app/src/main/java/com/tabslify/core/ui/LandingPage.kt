@@ -1158,6 +1158,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
     val ignoreBattery1 =
         stringResource(R.string.quiethoursnotificationservice_anfrage_zum_ignorieren_von)
     val camera1 = stringResource(R.string.authenticator_scannen_von_qr_codes)
+    val camera2 = stringResource(R.string.fitnesstab_zahlen_von_push_ups)
     val keineAngabenHinterlegt = stringResource(R.string.keine_angaben_hinterlegt)
     val bluetoothConnect1 =
         stringResource(R.string.reportdeviceinformation_bluetooth_verbindungsstatus)
@@ -1192,6 +1193,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
         recordAudio1,
         ignoreBattery1,
         camera1,
+        camera2,
         bluetoothConnect1,
         phoneState1,
         readSms1,
@@ -1248,7 +1250,8 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                 ignoreBattery1
             ),
             "CAMERA" to listOf(
-                camera1
+                camera1,
+                camera2
             ),
             "BLUETOOTH_CONNECT" to listOf(
                 bluetoothConnect1
