@@ -86,6 +86,7 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
     val dayPoints by vm.dayPoints.collectAsStateWithLifecycle()
     val totalDistanceKm by vm.totalDistanceKm.collectAsStateWithLifecycle()
     val timeMovingMs by vm.timeMovingMs.collectAsStateWithLifecycle()
+    val exportStatus by vm.exportStatus.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var tileToDelete by remember { mutableStateOf<ExploredTile?>(null) }
@@ -261,6 +262,40 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 12.dp)
             )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                StatCard(
+                    label = stringResource(R.string.explore_export),
+                    value = stringResource(R.string.explore_export_tag),
+                    modifier = Modifier.weight(1f),
+                    onClick = { vm.exportData(1) }
+                )
+                StatCard(
+                    label = stringResource(R.string.explore_export),
+                    value = stringResource(R.string.explore_export_7_tage),
+                    modifier = Modifier.weight(1f),
+                    onClick = { vm.exportData(7) }
+                )
+            }
+
+            exportStatus?.let { status ->
+                Text(
+                    text = status,
+                    color = Color(0xFF9090A0),
+                    fontSize = 11.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 4.dp)
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
 
             Box(
                 modifier = Modifier
