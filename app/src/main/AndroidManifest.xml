@@ -16,7 +16,6 @@
     <!--
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" /> dis/enable, start scan, trigger connection
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" /> prioritize Network Requests / use specific Network Capabilities
-    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" /> allows receiving Multicast-Daten in wifi (z. B. mDNS, Discovery, Chromecast/Local Device Discovery)
 
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />  Wifi? Roaming? cellular data?
 
@@ -25,6 +24,7 @@
         tools:ignore="PackageVisibilityPolicy,QueryAllPackagesPermission" />
        -->
 
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" /> <!--allows receiving Multicast-Daten in wifi (z. B. mDNS, Discovery, Chromecast/Local Device Discovery)-->
 
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
