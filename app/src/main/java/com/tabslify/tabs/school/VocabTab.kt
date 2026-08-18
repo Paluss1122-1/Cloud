@@ -231,7 +231,7 @@ fun VocabTab(paddingValues: PaddingValues) {
             }
             if (valid.size != parsed.size) {
                 rawRecentMaterials = valid.map(::serializeRecentMaterial)
-                prefs.edit {
+                materialPrefs.edit {
                     putString(
                         "recent_materials",
                         rawRecentMaterials.joinToString("\u001e")
