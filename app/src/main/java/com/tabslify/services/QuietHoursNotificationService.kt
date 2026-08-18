@@ -128,7 +128,6 @@ import com.tabslify.quiethoursnotificationhelper.showPreviousGalleryImage
 import com.tabslify.quiethoursnotificationhelper.showUnreadMessages
 import com.tabslify.quiethoursnotificationhelper.shutdownAllWifiDirectServices
 import com.tabslify.quiethoursnotificationhelper.startAiResponseListener
-import com.tabslify.quiethoursnotificationhelper.startMailNotifyListener
 import com.tabslify.quiethoursnotificationhelper.startTriggerListenerIfHomeWifi
 import com.tabslify.quiethoursnotificationhelper.stopVoiceNote
 import com.tabslify.quiethoursnotificationhelper.syncTodosWithLaptop
@@ -474,7 +473,6 @@ class QuietHoursNotificationService : Service() {
         startTriggerListenerIfHomeWifi(this)
         startAiResponseListener(this)
         scheduleDailySummaryAlarm()
-        startMailNotifyListener(this)
 
         val filter = IntentFilter(ACTION_MESSAGE_SENT)
         try {
