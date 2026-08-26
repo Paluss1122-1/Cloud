@@ -5,6 +5,7 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,10 +18,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,9 +37,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Color.Companion.Transparent
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
@@ -43,7 +51,9 @@ import com.tabslify.core.objects.prvt
 import com.tabslify.quiethoursnotificationhelper.ensureRandomSyncSecret
 import com.tabslify.quiethoursnotificationhelper.laptopIp
 import com.tabslify.quiethoursnotificationhelper.laptopName
+import com.tabslify.quiethoursnotificationhelper.resolveDisplayName
 import com.tabslify.quiethoursnotificationhelper.resolveSyncSecret
+import com.tabslify.quiethoursnotificationhelper.setDisplayName
 import com.tabslify.quiethoursnotificationhelper.stopAllSyncServices
 import com.tabslify.quiethoursnotificationhelper.syncTodosWithLaptop
 import com.tabslify.quiethoursnotificationhelper.getTriggerListenerStatus
@@ -56,6 +66,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 data class PcDetails(
     val name: String,
+    val displayName: String,
     val ip: String,
     val uuid: String,
     val regInfo: String,
@@ -91,12 +102,24 @@ fun PCManagerTab() {
     val secretsPrefs = remember { context.getSharedPreferences("pc_secrets", Context.MODE_PRIVATE) }
     val pendingPrefs = remember { context.getSharedPreferences("pending_pcs", Context.MODE_PRIVATE) }
     val uuidPrefs = remember { context.getSharedPreferences("pc_uuids", Context.MODE_PRIVATE) }
+    val displayNamesPrefs = remember { context.getSharedPreferences("pc_display_names", Context.MODE_PRIVATE) }
 
     var pcDetailsList by remember { mutableStateOf(emptyList<PcDetails>()) }
     var pendingList by remember { mutableStateOf(emptyList<PendingPc>()) }
     var triggerStatus by remember { mutableStateOf("") }
+    var editingName by remember { mutableStateOf<String?>(null) }
+    var editText by remember { mutableStateOf("") }
+    val focusRequester = remember { FocusRequester() }
 
-    // Poll to keep the UI in sync
+    LaunchedEffect(editingName) {
+        if (editingName != null) focusRequester.requestFocus()
+    }
+
+    val saveName: (String) -> Unit = { key ->
+        setDisplayName(context, key, editText.trim())
+        editingName = null
+    }
+
     LaunchedEffect(Unit) {
         while (true) {
             val allPcs = prefs.all.map { (name, regInfo) ->
@@ -105,6 +128,7 @@ fun PCManagerTab() {
                 val liveCode = if (secret.isNotEmpty()) TotpGenerator.generateTOTP(secret) else "?"
                 PcDetails(
                     name = name,
+                    displayName = resolveDisplayName(context, name) ?: name,
                     ip = "",
                     uuid = uuid,
                     regInfo = regInfo.toString(),
@@ -151,7 +175,8 @@ fun PCManagerTab() {
                 val currentConnectedName = laptopName
                 val currentConnectedIp = laptopIp
                 if (currentConnectedName.isNotEmpty() || currentConnectedIp.isNotEmpty()) {
-                    val displayName = currentConnectedName.ifEmpty { currentConnectedIp }
+                    val shownName = currentConnectedName.let { resolveDisplayName(context, it) ?: it }
+                    val displayName = shownName.ifEmpty { currentConnectedIp }
 
                     Text(
                         text = stringResource(R.string.aktiv_verbunden_mit),
@@ -164,6 +189,13 @@ fun PCManagerTab() {
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF4CAF50)
                     )
+                    if (shownName.isNotEmpty() && shownName != currentConnectedName) {
+                        Text(
+                            text = stringResource(R.string.hostname_label, currentConnectedName),
+                            fontSize = 11.sp,
+                            color = Color.Gray
+                        )
+                    }
                     if (currentConnectedIp.isNotEmpty() && currentConnectedIp != displayName) {
                         Text(
                             text = "IP: $currentConnectedIp",
@@ -316,27 +348,84 @@ fun PCManagerTab() {
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = pc.name,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF81C784)
-                                )
-                                Button(
-                                    onClick = {
-                                        prefs.edit().remove(pc.name).apply()
-                                        uuidPrefs.edit().remove(pc.name).apply()
-                                        secretsPrefs.edit().remove(pc.name).apply()
-                                        if (pc.name == laptopName) {
-                                            stopAllSyncServices(context)
+                                if (editingName == pc.name) {
+                                    OutlinedTextField(
+                                        value = editText,
+                                        onValueChange = { editText = it },
+                                        singleLine = true,
+                                        label = { Text(stringResource(R.string.pc_name_bearbeiten)) },
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                        keyboardActions = KeyboardActions(onDone = { saveName(pc.name) }),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White,
+                                            focusedBorderColor = Color(0xFF81C784),
+                                            unfocusedBorderColor = Color(0xFF3F3F5F),
+                                            focusedLabelColor = Color(0xFF81C784),
+                                            unfocusedLabelColor = Color.Gray,
+                                            cursorColor = Color(0xFF81C784)
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .focusRequester(focusRequester)
+                                    )
+                                    Button(
+                                        onClick = { saveName(pc.name) },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0x3381C784)),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(6.dp),
+                                        modifier = Modifier.padding(start = 8.dp)
+                                    ) {
+                                        Text(stringResource(R.string.speichern), color = Color(0xFF81C784), fontSize = 11.sp)
+                                    }
+                                    Button(
+                                        onClick = { editingName = null },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0x33FFFFFF)),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
+                                        Text(stringResource(R.string.abbrechen), color = Color.Gray, fontSize = 11.sp)
+                                    }
+                                } else {
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable {
+                                                editText = pc.displayName
+                                                editingName = pc.name
+                                            }
+                                    ) {
+                                        Text(
+                                            text = pc.displayName,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF81C784)
+                                        )
+                                        if (pc.displayName != pc.name) {
+                                            Text(
+                                                text = stringResource(R.string.hostname_label, pc.name),
+                                                fontSize = 11.sp,
+                                                color = Color.Gray
+                                            )
                                         }
-                                        Toast.makeText(context, pcEntferntMsg.format(pc.name), Toast.LENGTH_SHORT).show()
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0x33CF6679)),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                    shape = RoundedCornerShape(6.dp)
-                                ) {
-                                    Text(stringResource(R.string.entfernen), color = Color(0xFFEF5350), fontSize = 11.sp)
+                                    }
+                                    Button(
+                                        onClick = {
+                                            prefs.edit().remove(pc.name).apply()
+                                            uuidPrefs.edit().remove(pc.name).apply()
+                                            secretsPrefs.edit().remove(pc.name).apply()
+                                            displayNamesPrefs.edit().remove(pc.name).apply()
+                                            if (pc.name == laptopName) {
+                                                stopAllSyncServices(context)
+                                            }
+                                            Toast.makeText(context, pcEntferntMsg.format(pc.name), Toast.LENGTH_SHORT).show()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0x33CF6679)),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
+                                        Text(stringResource(R.string.entfernen), color = Color(0xFFEF5350), fontSize = 11.sp)
+                                    }
                                 }
                             }
                             Text(
@@ -369,6 +458,7 @@ fun PCManagerTab() {
                         pendingPrefs.edit().clear().apply()
                         uuidPrefs.edit().clear().apply()
                         secretsPrefs.edit().clear().apply()
+                        displayNamesPrefs.edit().clear().apply()
                         stopAllSyncServices(context)
                         Toast.makeText(context, alleAltenVerbindungenGeloeschtMsg, Toast.LENGTH_SHORT).show()
                     },
