@@ -20,8 +20,6 @@ import com.tabslify.R
 import com.tabslify.core.functions.canNotify
 import com.tabslify.core.ui.MenuItem
 import com.tabslify.core.ui.getDeviceName
-import com.tabslify.tabs.HeiseNewsTabContent
-import com.tabslify.tabs.WeatherTabContent
 import io.github.jan.supabase.annotations.SupabaseInternal
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.auth
@@ -104,7 +102,8 @@ object Config {
         MenuItem.HEISE_NEWS to R.string.so_bedienst_du_die_news,
         MenuItem.PC_MANAGER to R.string.so_bedienst_du_den_pc,
         MenuItem.APKM_INSTALLER to R.string.so_bedienst_du_den_apkm,
-        MenuItem.PUSHUPS to R.string.so_bedienst_du_den_pushup
+        MenuItem.PUSHUPS to R.string.so_bedienst_du_den_pushup,
+        MenuItem.FOCUSGUARD to R.string.so_bedienst_du_den_focusguard
     )
 
     var LAT: Double = 0.0
@@ -125,7 +124,6 @@ object Config {
     const val MEDIA_STATE_PORT = 8900
     const val AI_PORT = 8902
     const val SPOTIFY_HISTORY_PORT = 8903
-    const val MAIL_NOTIFY_PORT = 8904
     const val EXECUTE_PORT = 8905
     const val EXECUTE_PORT_SEND_FROM_HANDY = 8906
     const val EXECUTE_RESPONSE_PORT = 8907
@@ -200,10 +198,12 @@ object Config {
 
     @Suppress("unused")
     fun sendBridgeCommand(context: Context, json: String) {
-        context.sendBroadcast(Intent("com.paluss1122.accessibily.EXECUTE").apply {
-            setPackage("com.paluss1122.accessibily")
-            putExtra("cmd", json)
-        })
+        if (prvt()) {
+            context.sendBroadcast(Intent("com.paluss1122.accessibily.EXECUTE").apply {
+                setPackage("com.paluss1122.accessibily")
+                putExtra("cmd", json)
+            })
+        }
     }
 
     fun requestPermission(
@@ -214,18 +214,42 @@ object Config {
             "audio" -> launcher.launch(arrayOf(Manifest.permission.READ_MEDIA_AUDIO))
             "img" -> {
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    launcher.launch(arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED))
+                    launcher.launch(
+                        arrayOf(
+                            Manifest.permission.READ_MEDIA_IMAGES,
+                            Manifest.permission.READ_MEDIA_VIDEO,
+                            Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+                        )
+                    )
                 } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    launcher.launch(arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO))
+                    launcher.launch(
+                        arrayOf(
+                            Manifest.permission.READ_MEDIA_IMAGES,
+                            Manifest.permission.READ_MEDIA_VIDEO
+                        )
+                    )
                 } else {
                     launcher.launch(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE))
                 }
             }
-            "loc" -> launcher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+
+            "loc" -> launcher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+
             "loc_bg" -> launcher.launch(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
             "activity" -> launcher.launch(arrayOf(Manifest.permission.ACTIVITY_RECOGNITION))
             "cam" -> launcher.launch(arrayOf(Manifest.permission.CAMERA))
-            "con" -> launcher.launch(arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS))
+            "con" -> launcher.launch(
+                arrayOf(
+                    Manifest.permission.READ_CONTACTS,
+                    Manifest.permission.WRITE_CONTACTS
+                )
+            )
+
             "not" -> launcher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
             "mic" -> launcher.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
             "bt" -> launcher.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT))
@@ -252,6 +276,7 @@ object Config {
                 }
                 launcher.launch(permissions.toTypedArray())
             }
+
             else -> return false
         }
         return true
@@ -261,7 +286,8 @@ object Config {
         "SYSTEM_ALERT_WINDOW",
         "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
         "MANAGE_EXTERNAL_STORAGE",
-        "ACCESS_NOTIFICATION_POLICY"
+        "ACCESS_NOTIFICATION_POLICY",
+        "PACKAGE_USAGE_STATS"
     )
 
     fun isPermissionRequestable(key: String): Boolean =
@@ -277,7 +303,10 @@ object Config {
             "READ_MEDIA_AUDIO" -> launcher.launch(arrayOf(Manifest.permission.READ_MEDIA_AUDIO))
             "POST_NOTIFICATIONS" -> launcher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
             "ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION" -> launcher.launch(
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
             )
 
             "ACCESS_BACKGROUND_LOCATION" -> launcher.launch(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
@@ -296,12 +325,18 @@ object Config {
             "READ_SMS" -> launcher.launch(arrayOf(Manifest.permission.READ_SMS))
 
             "SYSTEM_ALERT_WINDOW" -> context.startActivity(
-                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, "package:${context.packageName}".toUri())
+                Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    "package:${context.packageName}".toUri()
+                )
                     .apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
             )
 
             "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" -> context.startActivity(
-                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, "package:${context.packageName}".toUri())
+                Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    "package:${context.packageName}".toUri()
+                )
                     .apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
             )
 
@@ -313,6 +348,11 @@ object Config {
                     ).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
                 )
             }
+
+            "PACKAGE_USAGE_STATS" -> context.startActivity(
+                Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                    .apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+            )
 
             "ACCESS_NOTIFICATION_POLICY" -> context.startActivity(
                 Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
@@ -382,19 +422,24 @@ object Config {
                 PackageManager.GET_SIGNING_CERTIFICATES
             )
             val signingInfo = packageInfo.signingInfo
-            val signatures = signingInfo?.signingCertificateHistory ?: signingInfo?.apkContentsSigners
+            val signatures =
+                signingInfo?.signingCertificateHistory ?: signingInfo?.apkContentsSigners
             if (signatures != null) {
                 for (signature in signatures) {
                     val md = MessageDigest.getInstance("SHA-256")
                     md.update(signature.toByteArray())
                     val digest = md.digest()
-                    val toRet = digest.fold("") { str, it -> str + "%02x".format(it) }.replace(":", "")
-                        .lowercase()
-                    
+                    val toRet =
+                        digest.fold("") { str, it -> str + "%02x".format(it) }.replace(":", "")
+                            .lowercase()
+
                     if (allowedHashes.contains(toRet)) {
                         return toRet
                     } else {
-                        android.util.Log.e("Config", "Invalid App Signature SHA256: $toRet. Please add this hash to BuildConfig if it is valid.")
+                        android.util.Log.e(
+                            "Config",
+                            "Invalid App Signature SHA256: $toRet. Please add this hash to BuildConfig if it is valid."
+                        )
                     }
                 }
             }
@@ -450,7 +495,8 @@ object Config {
         try {
             connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
             if (connection.responseCode != 200) {
-                val errorText = connection.errorStream?.bufferedReader()?.readText() ?: "No error body"
+                val errorText =
+                    connection.errorStream?.bufferedReader()?.readText() ?: "No error body"
                 Log.e(tag, "api-proxy failed: Code ${connection.responseCode}, Body: $errorText")
                 return@withContext null
             }
@@ -479,7 +525,10 @@ fun toast(context: Context, text: String) {
 
 fun prvt(): Boolean {
     @Suppress("KotlinConstantConditions", "RedundantSuppression", "SimplifyBooleanWithConstants")
-    return (getDeviceName().trim().contains(BuildConfig.LOCAL_DEVICE_NAME, ignoreCase = true) || !Config.realDevice) && BuildConfig.IS_DEV
+    return (getDeviceName().trim().contains(
+        BuildConfig.LOCAL_DEVICE_NAME,
+        ignoreCase = true
+    ) || !Config.realDevice) && BuildConfig.IS_DEV
 }
 
 fun hasStarred(
