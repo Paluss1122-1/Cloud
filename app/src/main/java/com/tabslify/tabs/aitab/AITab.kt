@@ -241,6 +241,7 @@ fun AITabContent(
 
     val hazeState = remember { HazeState() }
     var headerHeightDp by remember { mutableStateOf(0.dp) }
+    var inputBarHeightDp by remember { mutableStateOf(0.dp) }
 
     Box(
         Modifier
@@ -370,6 +371,12 @@ fun AITabContent(
                         } else {
                             NeonBox(
                                 modifier = Modifier
+                                    .widthIn(max = 380.dp)
+                                    .padding(
+                                        start = 8.dp,
+                                        end = 40.dp
+                                    )
+                                    .clip(RoundedCornerShape(2.dp, 10.dp, 10.dp, 10.dp))
                                     .combinedClickable(
                                         onLongClick = {
                                             vm.selectedMsg = vm.history.indexOf(msg)
@@ -377,11 +384,6 @@ fun AITabContent(
                                             vm.lastSelectedMsg = vm.selectedMsg
                                         },
                                         onClick = {}
-                                    )
-                                    .widthIn(max = 380.dp)
-                                    .padding(
-                                        start = 8.dp,
-                                        end = 40.dp
                                     ),
                                 cornerRadius = RoundedCornerShape(2.dp, 10.dp, 10.dp, 10.dp),
                                 backgroundAlpha = 0.91f,
@@ -415,6 +417,9 @@ fun AITabContent(
                             }
                         }
                     }
+                }
+                item {
+                    Spacer(Modifier.height(inputBarHeightDp))
                 }
             }
         }
@@ -674,6 +679,9 @@ fun AITabContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .zIndex(1f)
+                        .onGloballyPositioned {
+                            inputBarHeightDp = with(density) { it.size.height.toDp() }
+                        }
                         .padding(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
