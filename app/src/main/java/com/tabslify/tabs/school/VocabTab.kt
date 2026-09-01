@@ -57,6 +57,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -85,7 +86,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import com.tabslify.R
-import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.prvt
 import com.tabslify.core.ui.AccentViolet
@@ -165,13 +165,20 @@ private fun isImageFile(name: String) =
 @Composable
 fun VocabTab(paddingValues: PaddingValues) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("vocab_sets", Context.MODE_PRIVATE) }
     val materialPrefs =
         remember { context.getSharedPreferences("material_cache", Context.MODE_PRIVATE) }
+    val scope = rememberCoroutineScope()
 
     var screen by remember { mutableStateOf(VokabelTabScreen.DASHBOARD) }
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            bitmap?.recycle()
+            bitmap = null
+        }
+    }
     var vokabeln by remember { mutableStateOf<List<Vokabel>>(emptyList()) }
     var isExtracting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -263,6 +270,7 @@ fun VocabTab(paddingValues: PaddingValues) {
     val imagePicker =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri?.let {
+                bitmap?.recycle()
                 bitmap = uriToBitmap(context, it)
                 vokabeln = emptyList()
                 screen = VokabelTabScreen.UPLOAD
@@ -273,7 +281,7 @@ fun VocabTab(paddingValues: PaddingValues) {
         SaveSetDialog(
             initial = saveNameInput,
             onConfirm = { name ->
-                appScope.launch {
+                scope.launch {
                     val set = VokabelSet(name.trim(), vokabeln)
                     savedSets = saveVokabelSet(prefs, set)
                     cachedSetName = name.trim()
@@ -2157,6 +2165,8 @@ fun deleteVokabelSet(prefs: SharedPreferences, set: VokabelSet): List<VokabelSet
     return updated
 }
 
+private const val MAX_UPLOAD_IMAGE_DIMENSION = 2048
+
 fun uriToBitmap(context: Context, uri: Uri): Bitmap? {
     return try {
         ImageDecoder.decodeBitmap(
@@ -2164,8 +2174,17 @@ fun uriToBitmap(context: Context, uri: Uri): Bitmap? {
                 context.contentResolver,
                 uri
             )
-        )
-            .copy(Bitmap.Config.ARGB_8888, true)
+        ) { decoder, info, _ ->
+            val maxDimension = maxOf(info.size.width, info.size.height)
+            if (maxDimension > MAX_UPLOAD_IMAGE_DIMENSION) {
+                val scale = MAX_UPLOAD_IMAGE_DIMENSION.toFloat() / maxDimension
+                decoder.setTargetSize(
+                    (info.size.width * scale).toInt(),
+                    (info.size.height * scale).toInt()
+                )
+            }
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+        }
     } catch (_: Exception) {
         null
     }
