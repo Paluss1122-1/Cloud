@@ -20,7 +20,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -182,6 +184,10 @@ fun GmailTabContent() {
     var selectedEmail by remember { mutableStateOf<EmailItem?>(null) }
     var accountFilter by remember { mutableStateOf<String?>(null) }
     var pendingDelete by remember { mutableStateOf<EmailItem?>(null) }
+    val listState = rememberLazyListState()
+    LaunchedEffect(accountFilter) {
+        listState.scrollToItem(0)
+    }
     val verbindungsfehler = stringResource(R.string.verbindungsfehler)
     val geloeschtMsg = stringResource(R.string.email_geloscht)
     val loeschFehlerMsg = stringResource(R.string.email_loschen_fehlgeschlagen)
@@ -317,6 +323,7 @@ fun GmailTabContent() {
                             }
                             EmailList(
                                 emails = emails,
+                                listState = listState,
                                 onClick = { selectedEmail = it },
                                 onLongClick = { pendingDelete = it }
                             )
@@ -381,10 +388,12 @@ private fun AccountChip(label: String, active: Boolean, onClick: () -> Unit) {
 @Composable
 fun EmailList(
     emails: List<EmailItem>,
+    listState: LazyListState,
     onClick: (EmailItem) -> Unit,
     onLongClick: (EmailItem) -> Unit
 ) {
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
