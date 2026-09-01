@@ -37,6 +37,7 @@ class BridgeAccessibilityService : AccessibilityService() {
     override fun onInterrupt() {}
 
     override fun onDestroy() {
+        mainHandler.removeCallbacksAndMessages(null)
         unregisterReceiver(receiver)
         super.onDestroy()
     }
