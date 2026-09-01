@@ -241,6 +241,7 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
                 list.subList(0, list.size - MAX_MESSAGES_PER_CONTACT).clear()
             updateChatNotification(key, context)
 
+            val appContext = context.applicationContext
             appScope.launch {
                 val snapshot = mutableListOf<ChatMessage>()
                 list.dropLast(1).forEach { obj ->
@@ -253,7 +254,7 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
                         )
                     )
                 }
-                val answer = sendAiRequest(context, userMessage = trimmed, history = snapshot, target = "notif", serviceKey = "chat")
+                val answer = sendAiRequest(appContext, userMessage = trimmed, history = snapshot, target = "notif", serviceKey = "chat")
                 if (!answer.isNullOrBlank()) {
                     list.add(
                         WhatsAppNotificationListener.Companion.ChatMessage(
@@ -264,13 +265,13 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
                     )
                     if (list.size > MAX_MESSAGES_PER_CONTACT)
                         list.subList(0, list.size - MAX_MESSAGES_PER_CONTACT).clear()
-                    withContext(Dispatchers.Main) { updateChatNotification(key, context) }
+                    withContext(Dispatchers.Main) { updateChatNotification(key, appContext) }
                 } else {
                     withContext(Dispatchers.Main) {
                         showSimpleNotificationExtern(
                             "❌ Chat",
                             "Antwort konnte nicht geladen werden.",
-                            context = context
+                            context = appContext
                         )
                     }
                 }
