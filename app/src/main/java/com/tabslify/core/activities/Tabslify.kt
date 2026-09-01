@@ -122,6 +122,7 @@ class Tabslify : Application() {
 
         Config.init(this)
         BatteryDataRepository.init(this)
+        com.tabslify.tabs.focusguard.data.FocusGuardRepository.init(this)
     }
 }
 
