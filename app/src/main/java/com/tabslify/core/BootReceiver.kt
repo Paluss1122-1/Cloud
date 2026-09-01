@@ -7,6 +7,7 @@ import android.content.Intent
 import androidx.core.content.ContextCompat
 import com.tabslify.services.QuietHoursNotificationService
 import com.tabslify.tabs.exploretab.ExploreLocationTracker
+import com.tabslify.tabs.focusguard.FocusGuardService
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -24,6 +25,25 @@ class BootReceiver : BroadcastReceiver() {
                     context.startService(serviceIntent)
                 } catch (_: Exception) {
                 }
+            }
+        }
+
+        if (prefs.getBoolean("service_focusguard", false)) {
+            try {
+                ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, FocusGuardService::class.java)
+                )
+            } catch (_: Exception) {
+                try {
+                    context.startService(Intent(context, FocusGuardService::class.java))
+                } catch (_: Exception) {
+                }
+            }
+            try {
+                com.tabslify.tabs.focusguard.monitoring.scheduleFocusGuardWorkers(context)
+                com.tabslify.tabs.focusguard.monitoring.scheduleFocusGuardDailySummary(context)
+            } catch (_: Exception) {
             }
         }
 
