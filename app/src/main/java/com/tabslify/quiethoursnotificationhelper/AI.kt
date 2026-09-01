@@ -193,7 +193,7 @@ private suspend fun sendNvidiaChatMessageAITab(
     }.toString()
 
     return withContext(Dispatchers.IO) {
-        val connection = Config.openApiProxyConnection(ctx, if (onToken != null) 0 else 60_000)
+        val connection = Config.openApiProxyConnection(ctx, 60_000)
             ?: return@withContext "Proxy Connection Setup Failed (Signature NULL)"
         try {
             connection.outputStream.use { it.write(requestBody.toByteArray(Charsets.UTF_8)) }
