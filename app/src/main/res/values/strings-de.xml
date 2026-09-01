@@ -159,13 +159,13 @@
     <string name="tabslify_berechtigungen">Tabslify Berechtigungen</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1197 | WelcomeOnboarding.kt:133 -->
     <string name="close">Close</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1214 | LandingPage.kt:1546 | LandingPage.kt:2312 -->
     <string name="tabslify_ist">Tabslify ist </string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1225 -->
-    <string name="nicht_nur_irgendeine_app">nicht nur irgendeine App</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1236 -->
+    <string name="nicht_nur_irgendeine_app"> nicht nur irgendeine App</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1236 -->
     <string name="sie_ist_ein">, sie ist ein </string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1238 -->
-    <string name="mix_aus_ganz_vielen">Mix aus ganz vielen</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1249 -->
+    <string name="mix_aus_ganz_vielen"> Mix aus ganz vielen </string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1249 -->
     <string name="apps_unter_anderem_fur_die"> Apps, unter anderem für die Schule, zum eigenen Erfolg tracken oder zum Podcast hören. \nDieser Mix aus Funktionen benötigt </string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1251 -->
-    <string name="jeweils_viele_berechtigungen">jeweils viele Berechtigungen</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1262 -->
+    <string name="jeweils_viele_berechtigungen"> jeweils viele Berechtigungen </string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1262 -->
     <string name="um_das_benutzererlebnis"> um das Benutzererlebnis </string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1264 -->
-    <string name="moglichst_unkompliziert">möglichst unkompliziert</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1275 -->
+    <string name="moglichst_unkompliziert"> möglichst unkompliziert </string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1275 -->
     <string name="zu_halten"> zu halten.</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1277 -->
     <string name="schliesen">Schließen</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1301 | Helpers.kt:219 | Batterychart.kt:302 | Commands.kt:789 -->
     <string name="erteilen">Erteilen</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt -->
@@ -305,7 +305,7 @@
     <string name="hilfe">Hilfe</string> <!-- app/src/main/java/com/tabslify/core/ui/PrivateTabslifyApp.kt:2383 -->
     <string name="hilfe_schliesen">Hilfe schließen</string> <!-- app/src/main/java/com/tabslify/core/ui/PrivateTabslifyApp.kt:2398 -->
     <string name="verstanden">Verstanden</string> <!-- app/src/main/java/com/tabslify/core/ui/PrivateTabslifyApp.kt:2433 | WeatherTab.kt:794 -->
-    <string name="eine_app_die_20_tools">Eine App, die 20+ Tools ersetzt.\nWillkommen an Bord.</string> <!-- app/src/main/java/com/tabslify/core/ui/WelcomeOnboarding.kt:102 -->
+    <string name="eine_app_die_20_tools">Eine App, die 20+ Tools ersetzt.</string> <!-- app/src/main/java/com/tabslify/core/ui/WelcomeOnboarding.kt:102 -->
     <string name="alles_an_einem_ort">Alles an einem Ort</string> <!-- app/src/main/java/com/tabslify/core/ui/WelcomeOnboarding.kt:106 -->
     <string name="ki_chat_passworter_browser_notizen">KI-Chat, Passwörter, Browser, Notizen, Vokabel Traning, Musik / Podcasts &amp; mehr — kein App-Wechsel mehr nötig.</string> <!-- app/src/main/java/com/tabslify/core/ui/WelcomeOnboarding.kt:107 -->
     <string name="ki_die_wirklich_hilft">KI, die wirklich hilft</string> <!-- app/src/main/java/com/tabslify/core/ui/WelcomeOnboarding.kt:111 -->
@@ -1421,6 +1421,8 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="trigger_listener_2">Trigger Listener: %1$s</string> <!-- app/src/main/java/com/tabslify/tabs/PCManager.kt:173  ||  %1$s=triggerStatus -->
     <string name="ausstehende_anfragen">Ausstehende Anfragen (%1$d)</string> <!-- app/src/main/java/com/tabslify/tabs/PCManager.kt:190  ||  %1$s=pendingList.size -->
     <string name="pc_name">PC Name: %1$s</string> <!-- app/src/main/java/com/tabslify/tabs/PCManager.kt:210  ||  %1$s=pc.name -->
+    <string name="pc_name_bearbeiten">Name bearbeiten</string> <!-- app/src/main/java/com/tabslify/tabs/PCManager.kt -->
+    <string name="hostname_label">Hostname: %1$s</string> <!-- app/src/main/java/com/tabslify/tabs/PCManager.kt  ||  %1$s=pc.name -->
     <string name="hardware_id">Hardware-ID: %1$s…</string> <!-- app/src/main/java/com/tabslify/tabs/PCManager.kt:221  ||  %1$s=pc.uuid.take(16) -->
     <string name="ablehnen">Ablehnen</string> <!-- app/src/main/java/com/tabslify/tabs/PCManager.kt:239 -->
     <string name="registriert_am">Registriert am %1$s</string> <!-- app/src/main/java/com/tabslify/tabs/PCManager.kt:245  ||  %1$s=nowStr -->
@@ -1822,6 +1824,7 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="stopps">📍 Stopps</string>
     <string name="modus_auto">Auto</string>
     <string name="modus_fahrrad">Fahrrad</string>
+    <string name="modus_ebike">E-Bike</string>
     <string name="modus_zu_fuss">Zu Fuß</string>
     <string name="modus_unbekannt">Unbekannt</string>
     <string name="modus_aufenthalt">Aufenthalt</string>
@@ -2133,6 +2136,15 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="virustotal_bericht_offnen">Vollständigen Bericht öffnen</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
     <string name="virustotal_scan_abgeschlossen">VirusTotal Scan abgeschlossen</string>
     <string name="virustotal_scan_ergebnis">Scan für %1$s beendet. %2$d/%3$d als bösartig eingestuft.</string>
+    <string name="virustotal_scan_abgebrochen">Scan wurde abgebrochen, weil die App beendet wurde.</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalScanManager.kt -->
+    <string name="virustotal_wird_gescannt">Wird gescannt…</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalScanBar.kt -->
+    <string name="virustotal_scan_fehler">Fehler beim Scan</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalScanBar.kt -->
+    <string name="virustotal_ausblenden">Ausblenden</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalScanBar.kt -->
+    <string name="virustotal_verlauf">Frühere Scans</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_verlauf_leeren">Verlauf leeren</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_verlauf_leer">Noch keine Scans gespeichert.</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_verlauf_treffer">%1$d/%2$d bösartig</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_bericht_loschen">Bericht löschen</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
     <string name="cloud_backup_title">☁️ Cloud-Backup (verschlüsselt)</string>
     <string name="cloud_backup_now">Jetzt sichern</string>
     <string name="cloud_backup_restore">Wiederherstellen</string>
@@ -2194,6 +2206,8 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="fitness_dashboard_workouts_value">%1$d</string>
     <string name="fitness_dashboard_reps">Wiederholungen</string>
     <string name="fitness_dashboard_reps_value">%1$d</string>
+    <string name="fitness_dashboard_distance">Strecke (Fuß &amp; Rad)</string>
+    <string name="fitness_dashboard_distance_value">%1$.1f km</string>
 
     <string name="fitness_dashboard_goal_minutes">Ziel: %1$d Min</string>
     <string name="fitness_dashboard_goal_calories">Ziel: %1$d kcal</string>
@@ -2242,6 +2256,11 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="fitness_history_total_workouts">Workouts gesamt</string>
     <string name="fitness_history_total_minutes">Minuten gesamt</string>
     <string name="fitness_history_total_calories">Kalorien gesamt</string>
+    <string name="fitness_history_total_distance">Strecke gesamt</string>
+    <string name="fitness_history_speed_value">%1$.1f km/h</string>
+    <string name="fitness_history_explore_source">Explore</string>
+    <string name="fitness_history_explore_readonly">Automatisch aufgezeichnet – nicht löschbar</string>
+    <string name="fitness_history_explore_detail">%1$.1f km · %2$d Min · %3$.1f km/h</string>
 
     <string name="fitness_workout_title">Push-up-Zähler</string>
     <string name="fitness_workout_open_camera">Push-up-Kamera öffnen</string>
@@ -2870,6 +2889,28 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="fitness_ex_cardio_skipping_mistake_1">Mit den Füßen aufstampfen – bleib leichtfüßig.</string>
     <string name="fitness_ex_cardio_skipping_mistake_2">Runder Rücken; Brust bleibt aufrecht!</string>
 
+    <string name="fitness_ex_cardio_walking">Gehen / Spazieren</string>
+    <string name="fitness_ex_cardio_walking_desc">Wird automatisch aus deiner Explore-Aufzeichnung übernommen – jede zu Fuß zurückgelegte Strecke zählt als Grundlagenausdauer.</string>
+    <string name="fitness_ex_cardio_walking_step_1">Geh aufrecht, Blick nach vorn, Schultern locker.</string>
+    <string name="fitness_ex_cardio_walking_step_2">Roll den Fuß von der Ferse über den Ballen ab.</string>
+    <string name="fitness_ex_cardio_walking_step_3">Lass die Arme gegengleich mitschwingen.</string>
+    <string name="fitness_ex_cardio_walking_step_4">Halte ein Tempo, bei dem du noch reden, aber nicht mehr singen kannst.</string>
+    <string name="fitness_ex_cardio_walking_tip_1">Schon 30 Minuten zügiges Gehen am Tag verbessern Ausdauer und Regeneration.</string>
+    <string name="fitness_ex_cardio_walking_tip_2">Steigungen erhöhen die Intensität, ohne die Gelenke zu belasten.</string>
+    <string name="fitness_ex_cardio_walking_mistake_1">Schlurfen statt aktiv abzurollen.</string>
+    <string name="fitness_ex_cardio_walking_mistake_2">Nach vorn gebeugte Haltung durch Blick aufs Handy.</string>
+
+    <string name="fitness_ex_cardio_cycling">Fahrradfahren</string>
+    <string name="fitness_ex_cardio_cycling_desc">Wird automatisch aus deiner Explore-Aufzeichnung übernommen – gelenkschonendes Ausdauertraining für Beine und Kreislauf.</string>
+    <string name="fitness_ex_cardio_cycling_step_1">Stell den Sattel so ein, dass das Knie unten leicht gebeugt bleibt.</string>
+    <string name="fitness_ex_cardio_cycling_step_2">Tritt rund und gleichmäßig statt in Stößen.</string>
+    <string name="fitness_ex_cardio_cycling_step_3">Halte eine Trittfrequenz von etwa 70–90 Umdrehungen pro Minute.</string>
+    <string name="fitness_ex_cardio_cycling_step_4">Wechsle rechtzeitig den Gang, bevor die Steigung dich ausbremst.</string>
+    <string name="fitness_ex_cardio_cycling_tip_1">Leichter Gang mit hoher Frequenz schont die Knie.</string>
+    <string name="fitness_ex_cardio_cycling_tip_2">Auch der Arbeitsweg zählt – Alltagskilometer summieren sich.</string>
+    <string name="fitness_ex_cardio_cycling_mistake_1">Zu tiefer Sattel führt zu Knieschmerzen.</string>
+    <string name="fitness_ex_cardio_cycling_mistake_2">Dauerhaft im schwersten Gang kurbeln.</string>
+
     <!-- ====== GANZKÖRPER ====== -->
     <string name="fitness_ex_fullbody_thruster">Kurzhantel-Thruster</string>
     <string name="fitness_ex_fullbody_thruster_desc">Frontkniebeuge und Schulterdrücken in einem – trifft jede große Muskelgruppe und raubt dir den Atem.</string>
@@ -2981,4 +3022,155 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <!-- ====== ÜBUNGSAUSWAHL ====== -->
     <string name="fitness_picker_title">Übung auswählen</string>
 
+    <!-- ====== FAHRRAD-TAB ====== -->
+    <string name="fitness_nav_bike">Fahrrad</string>
+    <string name="fitness_bike_title">Fahrradtouren</string>
+    <string name="fitness_bike_reload">Fahrten neu laden</string>
+    <string name="fitness_bike_back">Zurück</string>
+    <string name="fitness_bike_loading">Fahrten werden geladen…</string>
+    <string name="fitness_bike_empty">Noch keine Fahrten erkannt.\nDas Explore-Tracking legt Touren automatisch an.</string>
+    <string name="fitness_bike_empty_filtered">Keine Fahrten mit diesem Filter.</string>
+    <string name="fitness_bike_range_days">%1$d Tage</string>
+    <string name="fitness_bike_filter_all">Alle</string>
+    <string name="fitness_bike_filter_bike">Fahrrad</string>
+    <string name="fitness_bike_filter_ebike">E-Bike</string>
+    <string name="fitness_bike_mode_auto">Automatisch</string>
+    <string name="fitness_bike_summary_split">%1$d× Fahrrad · %2$d× E-Bike</string>
+    <string name="fitness_bike_summary_total_distance">Gesamtstrecke</string>
+    <string name="fitness_bike_stat_rides">Fahrten</string>
+    <string name="fitness_bike_stat_duration">Dauer</string>
+    <string name="fitness_bike_stat_distance">Strecke</string>
+    <string name="fitness_bike_stat_calories">Kalorien</string>
+    <string name="fitness_bike_stat_elevation">Höhenmeter</string>
+    <string name="fitness_bike_stat_avg_speed">Ø Tempo</string>
+    <string name="fitness_bike_stat_max_speed">Max. Tempo</string>
+    <string name="fitness_bike_stat_moving">Bewegungszeit</string>
+    <string name="fitness_bike_stat_ascent">Aufstieg</string>
+    <string name="fitness_bike_stat_descent">Abstieg</string>
+    <string name="fitness_bike_stat_longest">Längste Tour</string>
+    <string name="fitness_bike_stat_fastest">Schnellste Tour</string>
+    <string name="fitness_bike_value_meters">%1$.0f m</string>
+    <string name="fitness_bike_value_kcal">%1$.0f kcal</string>
+    <string name="fitness_bike_value_minutes">%1$d min</string>
+    <string name="fitness_bike_value_hours">%1$d h %2$d min</string>
+    <string name="fitness_bike_default_mode_title">Standard für alle Fahrten</string>
+    <string name="fitness_bike_default_mode_hint">Gilt für Fahrten ohne eigene Auswahl.</string>
+    <string name="fitness_bike_type_title">Fahrradtyp</string>
+    <string name="fitness_bike_type_hint_auto">Automatisch erkannt: %1$s (%2$d %% sicher)</string>
+    <string name="fitness_bike_type_hint_undecided">Zu kurz für die automatische Erkennung – Fahrrad angenommen.</string>
+    <string name="fitness_bike_type_hint_manual">Manuell auf %1$s gesetzt.</string>
+    <string name="fitness_bike_ebike_note">E-Bike: Kalorien werden mit reduziertem Aufwand berechnet.</string>
+    <string name="fitness_bike_detail_speed">Tempoverlauf</string>
+    <string name="fitness_bike_detail_elevation">Höhenprofil</string>
+    <string name="fitness_bike_detail_no_route">Keine Routenpunkte für diese Fahrt gespeichert.</string>
+    <string name="fitness_bike_detail_no_elevation">Keine Höhendaten für diese Fahrt.</string>
+
+    <string name="applock_fehler_titel">App-Sperre nicht möglich</string>
+    <string name="applock_fehler_none_enrolled">Auf diesem Gerät ist keine starke Biometrie (Klasse 3) eingerichtet. Eine reine Gesichtsentsperrung oder die Geräte-PIN genügen dafür nicht.\n\nRichte in den Systemeinstellungen einen Fingerabdruck ein und aktiviere die Sperre danach erneut.</string>
+    <string name="applock_fehler_no_hardware">Dieses Gerät besitzt keinen biometrischen Sensor, den die App verwenden darf.\n\nDie App-Sperre lässt sich hier leider nicht aktivieren.</string>
+    <string name="applock_fehler_hw_unavailable">Der Sensor ist gerade nicht ansprechbar. Das passiert typischerweise direkt nach einem Neustart, solange das Gerät noch nie mit PIN entsperrt wurde, oder nach zu vielen Fehlversuchen.\n\nEntsperre das Gerät einmal mit PIN, warte kurz und versuche es dann erneut.</string>
+    <string name="applock_fehler_security_update">Android stuft den Sensor als unsicher ein, weil ein Sicherheitsupdate fehlt.\n\nInstalliere die ausstehenden Systemupdates und versuche es danach erneut.</string>
+    <string name="applock_fehler_unsupported">Diese Android-Version unterstützt keine starke Biometrie für Apps.\n\nDie App-Sperre lässt sich hier leider nicht aktivieren.</string>
+    <string name="applock_fehler_unbekannt">Android meldet keinen eindeutigen Status für den Sensor (Code %1$d).\n\nPrüfe die Biometrie-Einstellungen des Geräts und versuche es dann erneut.</string>
+    <string name="applock_fehler_lockout">Zu viele Fehlversuche. Der Sensor ist für etwa 30 Sekunden gesperrt.\n\nWarte kurz und versuche es dann erneut.</string>
+    <string name="applock_fehler_lockout_permanent">Der Sensor ist nach zu vielen Fehlversuchen dauerhaft gesperrt.\n\nEntsperre das Gerät einmal mit PIN, Muster oder Passwort, danach funktioniert die Biometrie wieder.</string>
+    <string name="applock_fehler_timeout">Zeitüberschreitung – es wurde zu lange kein Finger erkannt.\n\nTippe auf „Erneut versuchen“.</string>
+    <string name="applock_fehler_key_invalidated">Die hinterlegten Biometriedaten haben sich geändert, etwa weil ein Fingerabdruck hinzugefügt oder entfernt wurde. Aus Sicherheitsgründen wurde der Schlüssel der App verworfen.\n\nEr wird beim nächsten Versuch neu erzeugt – tippe einfach auf „Erneut versuchen“.</string>
+    <string name="applock_fehler_allgemein">Die Authentifizierung ist fehlgeschlagen: %1$s\n\nVersuche es erneut oder prüfe die Biometrie-Einstellungen des Geräts.</string>
+    <string name="applock_einstellungen_offnen">Einstellungen öffnen</string>
+    <string name="focusguard_tab">FocusGuard</string>
+    <string name="focusguard_channel_name">FocusGuard</string>
+    <string name="focusguard_channel_desc">Sperr-Hinweise, Tageszusammenfassung, Schlaf- und Lern-Erinnerungen</string>
+    <string name="focusguard_service_channel_name">FocusGuard Dienst</string>
+    <string name="focusguard_service_notif_title">🛡️ FocusGuard aktiv</string>
+    <string name="focusguard_service_notif_text">Überwacht deine Nutzung und blockiert gesperrte Apps</string>
+    <string name="focusguard_blocked_title">%1$s geblockt</string>
+    <string name="focusguard_blocked_big">%1$s ist gerade geblockt.\n%2$s\nGesperrt bis %3$s</string>
+    <string name="focusguard_reason_afternoon">Nachmittags-Sperre ab %1$d Uhr</string>
+    <string name="focusguard_reason_custom">Zeitfenster für diese Kategorie aktiv</string>
+    <string name="focusguard_reason_resting">Ruhe-Kontext erkannt</string>
+    <string name="focusguard_reason_quota">Erst Vokabeln lernen, dann entspannen</string>
+    <string name="focusguard_overlay_title">FocusGuard</string>
+    <string name="focusguard_overlay_body">%1$s ist gerade gesperrt.</string>
+    <string name="focusguard_overlay_reason">Grund: %1$s</string>
+    <string name="focusguard_overlay_until">Gesperrt bis %1$s</string>
+    <string name="focusguard_continue">Trotzdem weiter (%1$d Min)</string>
+    <string name="focusguard_settings">Einstellungen</string>
+    <string name="focusguard_daily_summary_title">📊 FocusGuard Tageszusammenfassung</string>
+    <string name="focusguard_daily_summary_body">%1$s\n%2$s\n%3$s</string>
+    <string name="focusguard_summary_sleep">😴 Letzte Nacht:</string>
+    <string name="focusguard_summary_no_sleep">😴 Keine Schlafdaten vorhanden</string>
+    <string name="focusguard_summary_social">Social</string>
+    <string name="focusguard_summary_gaming">Gaming</string>
+    <string name="focusguard_summary_entertainment">Entertainment</string>
+    <string name="focusguard_summary_no_usage">📱 Heute kaum genutzt</string>
+    <string name="focusguard_summary_no_goal">📚 Kein Lernziel gesetzt</string>
+    <string name="focusguard_summary_goal_done">📚 Lernziel erledigt! 🎉</string>
+    <string name="focusguard_summary_goal_progress">📚 Vokabeln: %1$d/%2$d Karten</string>
+    <string name="focusguard_sleep_warning_title">😴 Zu wenig Schlaf</string>
+    <string name="focusguard_sleep_warning_body">Letzte Nacht nur %1$s geschlafen. Dein Ziel sind %2$s.</string>
+    <string name="focusguard_study_reminder_title">📚 Lern-Erinnerung</string>
+    <string name="focusguard_study_reminder_body">Heute sind noch %1$d Vokabelkarten offen. Schaffst du das?</string>
+    <string name="focusguard_nav_dashboard">Dashboard</string>
+    <string name="focusguard_nav_config">Einstellungen</string>
+    <string name="focusguard_nav_stats">Statistik</string>
+    <string name="focusguard_dash_usage_today">Heutige Nutzung</string>
+    <string name="focusguard_dash_sleep">Schlaf</string>
+    <string name="focusguard_dash_goal">Lernziel</string>
+    <string name="focusguard_dash_points">Punkte</string>
+    <string name="focusguard_dash_streak">Streak</string>
+    <string name="focusguard_dash_achievements">Erfolge</string>
+    <string name="focusguard_dash_no_usage">Noch keine Nutzung erfasst</string>
+    <string name="focusguard_status_active">Sperren aktiv</string>
+    <string name="focusguard_status_inactive">Sperren inaktiv</string>
+    <string name="focusguard_status_school_day">Schultag – keine Sperre</string>
+    <string name="focusguard_status_override">Sperre pausiert</string>
+    <string name="focusguard_cat_social">Social Media</string>
+    <string name="focusguard_cat_gaming">Gaming</string>
+    <string name="focusguard_cat_entertainment">Unterhaltung</string>
+    <string name="focusguard_cat_productivity">Produktivität</string>
+    <string name="focusguard_cat_other">Sonstiges</string>
+    <string name="focusguard_config_apps">Zu überwachende Apps</string>
+    <string name="focusguard_config_apps_hint">Wähle Apps aus, die gesperrt werden sollen</string>
+    <string name="focusguard_config_category">Kategorie</string>
+    <string name="focusguard_config_threshold">Nachmittags-Schwelle</string>
+    <string name="focusguard_config_threshold_hint">Ab dieser Uhrzeit werden Social Media &amp; Co. gesperrt</string>
+    <string name="focusguard_config_windows">Zeitfenster</string>
+    <string name="focusguard_config_window_hint">Eigene Sperr-Fenster pro Kategorie</string>
+    <string name="focusguard_config_window_start">Start</string>
+    <string name="focusguard_config_window_end">Ende</string>
+    <string name="focusguard_config_window_enabled">Fenster aktiv</string>
+    <string name="focusguard_config_goal">Lernziel</string>
+    <string name="focusguard_config_goal_target">Tagesziel (Karten)</string>
+    <string name="focusguard_config_goal_add">+ Karte gelernt</string>
+    <string name="focusguard_config_goal_deadline">Deadline</string>
+    <string name="focusguard_config_reminder_interval">Erinnerungs-Intervall (Min)</string>
+    <string name="focusguard_config_sleep_threshold">Schlaf-Ziel (Std)</string>
+    <string name="focusguard_config_overlay">Overlay-Sperre</string>
+    <string name="focusguard_config_overlay_hint">Vollbild-Sperre über gesperrten Apps</string>
+    <string name="focusguard_config_cooldown">Cooldown (Min)</string>
+    <string name="focusguard_config_school_calendar">Schulkalender (Bayern)</string>
+    <string name="focusguard_config_school_calendar_hint">An Schultagen wird nicht geblockt</string>
+    <string name="focusguard_config_notifications">Benachrichtigungen</string>
+    <string name="focusguard_config_summary_hour">Zusammenfassung um (Uhr)</string>
+    <string name="focusguard_config_excessive_threshold">Nutzungs-Warnung ab (Min/Tag)</string>
+    <string name="focusguard_permission_usage">Nutzungszugriff</string>
+    <string name="focusguard_permission_usage_hint">Zum Erfassen der App-Nutzung nötig</string>
+    <string name="focusguard_permission_overlay">Overlay-Berechtigung</string>
+    <string name="focusguard_permission_overlay_hint">Zum Anzeigen der Sperre über anderen Apps</string>
+    <string name="focusguard_config_save">Speichern</string>
+    <string name="focusguard_stats_usage_week">Nutzung pro Woche</string>
+    <string name="focusguard_stats_sleep_week">Schlaf pro Woche</string>
+    <string name="focusguard_stats_goal_rate">Ziel-Erfüllung</string>
+    <string name="focusguard_stats_minutes">Minuten</string>
+    <string name="focusguard_stats_no_data">Keine Daten</string>
+    <string name="focusguard_goals_reset">Zurücksetzen</string>
+    <string name="focusguard_restricted_empty">Noch keine Apps gesperrt</string>
+    <string name="focusguard_stats_days">Tage</string>
+    <string name="so_bedienst_du_den_focusguard">So bedienst du den FocusGuard:\n\n1. Öffne den Tab „FocusGuard“.\n2. Vergib in den Einstellungen den Nutzungszugriff und die Overlay-Berechtigung.\n3. Wähle die Apps aus, die gesperrt werden sollen.\n4. An Schultagen (Bayern) wird nicht geblockt – an Wochenenden und in den Ferien schon.\n5. Nach der Nachmittags-Schwelle sind Social Media, Gaming &amp; Entertainment gesperrt, bis das Vokabel-Ziel erfüllt ist.\n6. „Trotzdem weiter“ pausiert die Sperre für die Cooldown-Zeit.</string>
+    <string name="focusguard_perm_usage_desc">FocusGuard: Erfasst die Nutzung von Apps (Nutzungszeiten, Sperr-Fenster, Schlafanalyse).</string>
+    <string name="focusguard_perm_overlay_desc">FocusGuard: Zeigt eine Vollbild-Sperre über gesperrten Apps an, bis die Sperrzeit endet.</string>
+    <string name="focusguard_perm_notifications_desc">FocusGuard: Erklärt Sperren, sendet die Tageszusammenfassung sowie Schlaf- und Lern-Erinnerungen.</string>
+    <string name="focusguard_service_subtitle">Blockiert gesperrte Apps nach der Nachmittags-Schwelle (außer an Schultagen)</string>
+    <string name="focusguard_summary_excessive">⚠️ %1$s: heute über %2$d Minuten!</string>
 </resources>
