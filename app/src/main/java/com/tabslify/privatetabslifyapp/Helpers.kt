@@ -308,14 +308,14 @@ fun getMimeType(fileName: String): String {
 }
 
 fun getVideoFirstFrame(file: File): Bitmap? {
+    val retriever = MediaMetadataRetriever()
     return try {
-        val retriever = MediaMetadataRetriever()
         retriever.setDataSource(file.absolutePath)
-        val bitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-        retriever.release()
-        bitmap
+        retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
     } catch (_: Exception) {
         null
+    } finally {
+        retriever.release()
     }
 }
 
