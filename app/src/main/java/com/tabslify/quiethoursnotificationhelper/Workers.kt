@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import androidx.work.Worker
 import androidx.work.WorkerParameters
+import com.tabslify.core.activities.Tabslify
+import com.tabslify.core.objects.CloudBackup
 import com.tabslify.services.QuietHoursNotificationService
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_DAILY_MUSIC_SUMMARY
 import com.tabslify.services.QuietHoursNotificationService.Companion.MAX_MESSAGES_PER_CONTACT
@@ -19,6 +21,8 @@ class DailySummaryReceiver : BroadcastReceiver() {
                 action = ACTION_DAILY_MUSIC_SUMMARY
             }
         )
+        // Gleichzeitig mit der Music-AI-Summary: einmal täglich Cloud-Backup (Prefs + Batterie).
+        CloudBackup.backupNow(context.applicationContext, Tabslify.appScope)
         scheduledailysummaryalarm(context)
     }
 }
