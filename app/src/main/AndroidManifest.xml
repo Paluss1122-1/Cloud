@@ -164,6 +164,17 @@
             android:foregroundServiceType="specialUse"
             tools:ignore="ExportedService" />
 
+        <service
+            android:name=".tabs.focusguard.FocusGuardService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            tools:ignore="ExportedService">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="focusguard_monitoring_and_blocking" />
+        </service>
+
         <receiver
             android:name=".quiethoursnotificationhelper.QuietHoursAlarmReceiver"
             android:exported="false" />
@@ -292,6 +303,9 @@
             android:foregroundServiceType="location" />
         <receiver
             android:name=".quiethoursnotificationhelper.DailySummaryReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".tabs.focusguard.monitoring.FocusGuardDailySummaryReceiver"
             android:exported="false" />
         <receiver
             android:name=".quiethoursnotificationhelper.FinishedPdDownload"
