@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.update
 
 data class TabNavigationState(
     val canNavigateBack: Boolean = false,
-    val onNavigateBack: () -> Unit = {}
+    val onNavigateBack: (() -> Unit)? = null
 )
 
 class TabNavigationViewModel : ViewModel() {
@@ -23,7 +23,7 @@ class TabNavigationViewModel : ViewModel() {
         _navigationState.update {
             it.copy(
                 canNavigateBack = canNavigateBack,
-                onNavigateBack = onNavigateBack ?: it.onNavigateBack
+                onNavigateBack = if (canNavigateBack) onNavigateBack else null
             )
         }
     }
@@ -33,6 +33,6 @@ class TabNavigationViewModel : ViewModel() {
     }
 
     fun triggerBack() {
-        _navigationState.value.onNavigateBack()
+        _navigationState.value.onNavigateBack?.invoke()
     }
 }
