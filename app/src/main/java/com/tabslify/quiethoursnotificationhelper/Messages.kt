@@ -429,12 +429,19 @@ fun extractLastMessage(context: Context) {
         .setAutoCancel(true)
     if (msg.imageUri != null) {
         try {
-            val bmp = ImageDecoder.decodeBitmap(
-                ImageDecoder.createSource(
-                    context.contentResolver,
-                    msg.imageUri
-                )
-            )
+            val source = ImageDecoder.createSource(context.contentResolver, msg.imageUri)
+            val bmp = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                val targetSize = 1024
+                if (info.size.width > targetSize || info.size.height > targetSize) {
+                    val scale =
+                        (info.size.width.toFloat() / targetSize).coerceAtLeast(info.size.height.toFloat() / targetSize)
+                    decoder.setTargetSize(
+                        (info.size.width / scale).toInt(),
+                        (info.size.height / scale).toInt()
+                    )
+                }
+                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            }
             builder.setStyle(
                 NotificationCompat.BigPictureStyle().bigPicture(bmp).bigLargeIcon(null as Bitmap?)
             )
