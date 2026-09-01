@@ -167,13 +167,13 @@
     <string name="tabslify_berechtigungen">Tabslify Permissions</string>
     <string name="close">Close</string>
     <string name="tabslify_ist">Tabslify is </string>
-    <string name="nicht_nur_irgendeine_app">not just any app</string>
+    <string name="nicht_nur_irgendeine_app"> not just any app</string>
     <string name="sie_ist_ein">, it is a </string>
-    <string name="mix_aus_ganz_vielen">mix of a great many</string>
+    <string name="mix_aus_ganz_vielen"> mix of a great many </string>
     <string name="apps_unter_anderem_fur_die"> apps, among other things for school, tracking your own success or listening to podcasts. \nThis mix of functions requires </string>
-    <string name="jeweils_viele_berechtigungen">many permissions each</string>
+    <string name="jeweils_viele_berechtigungen"> many permissions each </string>
     <string name="um_das_benutzererlebnis"> to keep the user experience </string>
-    <string name="moglichst_unkompliziert">as hassle-free as possible</string>
+    <string name="moglichst_unkompliziert"> as hassle-free as possible </string>
     <string name="zu_halten">.</string>
     <string name="schliesen">Close</string>
     <string name="erteilen">Grant</string>
