@@ -1,10 +1,12 @@
 package com.tabslify.tabs.exploretab
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Looper
 import androidx.core.content.ContextCompat
@@ -248,7 +250,10 @@ object ExploreLocationTracker {
                 onArrivedHome(appCtx)
                 return@getHomeWifiStatus
             }
-            if (isEnabled && !isNightTime()) {
+            if (isEnabled && !isNightTime() &&
+                (ContextCompat.checkSelfPermission(appCtx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                    ContextCompat.checkSelfPermission(appCtx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+            ) {
                 ContextCompat.startForegroundService(appCtx, Intent(appCtx, ExploreForegroundService::class.java))
             }
         }
@@ -575,6 +580,12 @@ object ExploreLocationTracker {
         startActivityRecognitionUpdates(appCtx)
         ExploreWorker.schedule(appCtx)
         _trackerStatus.value = "Läuft aktiv"
+    }
+
+    fun onServiceStartDenied() {
+        isEnabled = false
+        _trackerStatus.value = "Inaktiv (FGS nicht gestartet)"
+        _trackerInfo.value = _trackerInfo.value.copy(isEnabled = false)
     }
 
     fun onServiceDestroyed() {

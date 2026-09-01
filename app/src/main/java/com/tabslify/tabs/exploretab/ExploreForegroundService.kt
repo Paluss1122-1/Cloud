@@ -16,7 +16,13 @@ class ExploreForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        startForeground(Config.EXPLORE_TRACKING, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+        try {
+            startForeground(Config.EXPLORE_TRACKING, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+        } catch (_: SecurityException) {
+            stopSelf()
+            ExploreLocationTracker.onServiceStartDenied()
+            return
+        }
         ExploreLocationTracker.onServiceStarted(this)
     }
 
