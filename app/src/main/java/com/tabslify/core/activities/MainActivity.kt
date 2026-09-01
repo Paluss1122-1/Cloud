@@ -14,6 +14,7 @@ import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -36,9 +37,9 @@ import com.tabslify.core.ui.rememberAppColor
 import com.tabslify.inactive.ChatService
 import com.tabslify.quicksettingsfunctions.startBatteryWorker
 import com.tabslify.services.QuietHoursNotificationService
+import com.tabslify.core.ui.SharedViewModel
 import com.tabslify.tabs.JsonEditorContent
 import com.tabslify.tabs.pendingApkmUri
-import com.tabslify.tabs.pendingEmailOpen
 import com.tabslify.tabs.virustotal.pendingVirusTotalReport
 import io.github.jan.supabase.storage.storage
 import java.io.File
@@ -47,6 +48,7 @@ class MyDeviceAdminReceiver : DeviceAdminReceiver()
 
 class MainActivity : FragmentActivity() {
     val sbclient = Config.client
+    private val sharedViewModel: SharedViewModel by viewModels()
     private var startTarget by mutableStateOf<String?>(null)
 
     private var jsonFilePath by mutableStateOf<String?>(null)
@@ -192,7 +194,7 @@ class MainActivity : FragmentActivity() {
         val account = intent.getStringExtra("email_account")
         val uid = intent.getStringExtra("email_uid")
         if (account != null && uid != null) {
-            pendingEmailOpen = account to uid
+            sharedViewModel.setPendingEmailOpen(account to uid)
         }
     }
 
