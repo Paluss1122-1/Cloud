@@ -79,6 +79,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -128,6 +129,7 @@ import com.tabslify.quiethoursnotificationhelper.loadTodayOrYesterdayEntry
 import com.tabslify.services.MediaPlayerService
 import com.tabslify.tabs.audiorecordertab.AudioRecorderTab
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -187,6 +189,11 @@ fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
 
     LaunchedEffect(Unit) {
         viewModel.checkAndRefresh()
+    }
+
+    DisposableEffect(Unit) {
+        viewModel.startNowPlayingPoller()
+        onDispose { viewModel.stopNowPlayingPoller() }
     }
 
     var analyticsTarget by remember { mutableStateOf<Any?>(null) }
@@ -3126,6 +3133,7 @@ data class SearchResults(
 
 class MediaViewModel(app: Application) : AndroidViewModel(app) {
 
+    private var refreshJob: Job? = null
     private val _uiState = MutableStateFlow(MediaUiState(isLoading = true))
     val uiState: StateFlow<MediaUiState> = _uiState.asStateFlow()
 
@@ -3149,7 +3157,7 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
         PodcastShowManager.init(app)
         FavoritesPlaylist.setContext(app)
         // refresh() wird erst nach Permission-Check aus dem Composable aufgerufen
-        startNowPlayingPoller()
+        // Poller startet über DisposableEffect in MediaTab (Sichtbarkeits-gekoppelt)
     }
 
     private fun hasAudioPermission(): Boolean {
@@ -3173,8 +3181,11 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
         else _uiState.value = _uiState.value.copy(isLoading = false)
     }
 
+    private var nowPlayingPollerJob: Job? = null
+
     fun startNowPlayingPoller() {
-        viewModelScope.launch {
+        if (nowPlayingPollerJob?.isActive == true) return
+        nowPlayingPollerJob = viewModelScope.launch {
             while (isActive) {
                 _nowPlaying.value = readNowPlayingFromPrefs()
                 delay(1000.milliseconds)
@@ -3182,12 +3193,23 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun stopNowPlayingPoller() {
+        nowPlayingPollerJob?.cancel()
+        nowPlayingPollerJob = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        stopNowPlayingPoller()
+    }
+
     fun refresh() {
         if (!hasAudioPermission()) {
             _uiState.value = _uiState.value.copy(permissionGranted = false, isLoading = false)
             return
         }
-        viewModelScope.launch {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
             val songs = withContext(Dispatchers.IO) { loadSongsFromMediaStore() }
             val rawEpisodes = withContext(Dispatchers.IO) { loadEpisodesFromMediaStore() }
             val shows = PodcastShowManager.getShows()
