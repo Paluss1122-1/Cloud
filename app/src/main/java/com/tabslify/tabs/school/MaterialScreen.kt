@@ -886,14 +886,12 @@ fun MaterialienScreen(
             fileUrl = resolveFileUrl(context, selectedSubject!!, selectedFile!!)
 
             if (!analysisStarted && isImageFile(selectedFile!!)) {
-                scope.launch {
-                    runOcrAndSummary(
-                        fileKey,
-                        selectedSubject!!,
-                        selectedFile!!,
-                        forceRefresh = false
-                    )
-                }
+                runOcrAndSummary(
+                    fileKey,
+                    selectedSubject!!,
+                    selectedFile!!,
+                    forceRefresh = false
+                )
             }
         }
 
@@ -1379,8 +1377,12 @@ private fun compressToJpgIfImage(
     } else bitmap
 
     val out = ByteArrayOutputStream()
-    scaled.compress(Bitmap.CompressFormat.JPEG, quality, out)
-    if (scaled != bitmap) bitmap.recycle()
+    try {
+        scaled.compress(Bitmap.CompressFormat.JPEG, quality, out)
+    } finally {
+        if (scaled !== bitmap) runCatching { scaled.recycle() }
+        bitmap.recycle()
+    }
 
     val jpgName = fileName.substringBeforeLast(".") + ".jpg"
     return out.toByteArray() to jpgName
