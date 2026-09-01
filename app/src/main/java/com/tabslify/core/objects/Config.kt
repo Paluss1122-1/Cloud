@@ -531,44 +531,6 @@ fun prvt(): Boolean {
     ) || !Config.realDevice) && BuildConfig.IS_DEV
 }
 
-fun hasStarred(
-    username: String,
-    callback: (Boolean) -> Unit
-) {
-    Thread {
-        try {
-            val client = OkHttpClient()
-
-            val request = Request.Builder()
-                .url("https://api.github.com/repos/Paluss1122-1/Tabslify/stargazers")
-                .addHeader("Accept", "application/vnd.github+json")
-                .build()
-
-            val response = client.newCall(request).execute()
-
-            if (!response.isSuccessful) {
-                callback(false)
-                return@Thread
-            }
-
-            val json = JSONArray(response.body.string())
-
-            for (i in 0 until json.length()) {
-                val login = json.getJSONObject(i).getString("login")
-                if (login == username) {
-                    callback(true)
-                    return@Thread
-                }
-            }
-
-            callback(false)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            callback(false)
-        }
-    }.start()
-}
-
 fun tNotify(ctx: Context, notificationId: Int, notification: Any, tag: String? = null) {
     if (!canNotify(ctx)) return
 
