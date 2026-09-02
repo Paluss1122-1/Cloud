@@ -37,7 +37,8 @@ class ExploreWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ct
                         bearing = if (loc.hasBearing()) loc.bearing else null,
                         activityType = "UNKNOWN",
                         activityConfidence = 0,
-                        timestamp = System.currentTimeMillis()
+                        timestamp = System.currentTimeMillis(),
+                        altitude = if (loc.hasAltitude()) loc.altitude else null
                     )
                 )
             }

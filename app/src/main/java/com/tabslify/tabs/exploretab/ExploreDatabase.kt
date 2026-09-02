@@ -39,7 +39,8 @@ data class RawPoint(
     val bearing: Float?,
     val activityType: String,
     val activityConfidence: Int,
-    val timestamp: Long
+    val timestamp: Long,
+    val altitude: Double? = null
 )
 
 @Entity(
