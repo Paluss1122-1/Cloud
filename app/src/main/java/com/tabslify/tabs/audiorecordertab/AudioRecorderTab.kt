@@ -209,7 +209,7 @@ private fun AudioRecorderTabContent(
 
     DisposableEffect(Unit) {
         onDispose {
-            vm.mediaPlayer?.release()
+            vm.onStop()
         }
     }
 
