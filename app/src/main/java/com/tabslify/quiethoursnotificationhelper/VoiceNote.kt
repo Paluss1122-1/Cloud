@@ -101,8 +101,10 @@ fun playVoiceNoteAtIndex(index: Int, context: Context) {
                 voiceNotePlayer = null
                 showVoiceNotePlayerNotification(file, false, context)
             }
-            setOnErrorListener { _, what, extra ->
+            setOnErrorListener { mp, what, extra ->
                 Log.e("QuietHoursService", "MediaPlayer error: what=$what, extra=$extra")
+                mp.release()
+                voiceNotePlayer = null
                 showSimpleNotificationExtern(context.getString(R.string.fehler), context.getString(R.string.fehler_beim_abspielen), context = context)
                 true
             }
