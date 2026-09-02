@@ -149,7 +149,6 @@ dependencies {
     implementation(libs.multiplatform.markdown.renderer.android)
     implementation(libs.multiplatform.markdown.renderer.m3)
     implementation(libs.firebase.config)
-    implementation(libs.firebase.analytics)
     implementation(libs.firebase.appcheck.playintegrity)
     implementation(libs.firebase.appcheck.debug)
     implementation(libs.rhino)
