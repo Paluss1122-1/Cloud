@@ -20,7 +20,9 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.NetworkInterface
 import java.net.URL
-import java.util.concurrent.Executors
+import com.tabslify.core.activities.Tabslify.Companion.appScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 
 @SuppressLint("MissingPermission")
@@ -141,7 +143,7 @@ fun showNetworkInfo(context: Context) {
 
     val notId = cms()
 
-    Executors.newSingleThreadExecutor().execute {
+    appScope.launch(Dispatchers.IO) {
         var publicIp: String
         try {
             val url = URL("https://api.ipify.org")
