@@ -31,6 +31,7 @@ import com.tabslify.quiethoursnotificationhelper.syncTodosWithLaptop
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -100,6 +101,7 @@ object ExploreLocationTracker {
     private const val NIGHT_END_HOUR = 5
 
     private const val MAX_ACCURACY_METERS = 50f
+    private const val MAX_VERTICAL_ACCURACY_METERS = 15f
     private const val UNIVERSAL_SPEED_CEILING_MPS = 55f
     private const val AR_UPDATE_INTERVAL_MS = 30_000L
     private const val AR_CONFIDENCE_FLOOR = 50
@@ -116,7 +118,7 @@ object ExploreLocationTracker {
     private var currentMode: String = "UNKNOWN"
     private var currentProfile: String = requestProfile("UNKNOWN")
     private var serviceContext: Context? = null
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private var lastConfidentMode = "UNKNOWN"
     private var lastConfidentAt = 0L
@@ -349,6 +351,12 @@ object ExploreLocationTracker {
         else -> "DEFAULT"
     }
 
+    private fun usableAltitude(location: Location): Double? {
+        if (!location.hasAltitude()) return null
+        if (location.hasVerticalAccuracy() && location.verticalAccuracyMeters > MAX_VERTICAL_ACCURACY_METERS) return null
+        return location.altitude
+    }
+
     private fun activityTypeToMode(type: Int): String = when (type) {
         DetectedActivity.STILL -> "STILL"
         DetectedActivity.WALKING -> "WALKING"
@@ -380,6 +388,7 @@ object ExploreLocationTracker {
         val modes = listOf("STILL", "WALKING", "ON_FOOT", "ON_BICYCLE", "IN_VEHICLE", "UNKNOWN")
         return mapOf(
             "maxAccuracyMeters" to MAX_ACCURACY_METERS,
+            "maxVerticalAccuracyMeters" to MAX_VERTICAL_ACCURACY_METERS,
             "universalSpeedCeilingMps" to UNIVERSAL_SPEED_CEILING_MPS,
             "arUpdateIntervalMs" to AR_UPDATE_INTERVAL_MS,
             "arConfidenceFloor" to AR_CONFIDENCE_FLOOR,
@@ -554,7 +563,8 @@ object ExploreLocationTracker {
                                 bearing = if (loc.hasBearing()) loc.bearing else null,
                                 activityType = _currentActivity.value.mode,
                                 activityConfidence = _currentActivity.value.confidence,
-                                timestamp = System.currentTimeMillis()
+                                timestamp = System.currentTimeMillis(),
+                                altitude = usableAltitude(loc)
                             )
                         )
                     } catch (_: Exception) {
@@ -575,6 +585,8 @@ object ExploreLocationTracker {
 
     fun onServiceStarted(context: Context) {
         val appCtx = context.applicationContext
+        scope.cancel()
+        scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         serviceContext = appCtx
         startLocationUpdates(appCtx, ExploreRepository(appCtx))
         startActivityRecognitionUpdates(appCtx)
@@ -589,6 +601,7 @@ object ExploreLocationTracker {
     }
 
     fun onServiceDestroyed() {
+        scope.cancel()
         val appCtx = serviceContext
         if (appCtx != null) {
             locationCallback?.let {
@@ -614,6 +627,18 @@ object ExploreLocationTracker {
         val appCtx = context.applicationContext
         isEnabled = false
         _trackerInfo.value = _trackerInfo.value.copy(isEnabled = false)
+
+        try {
+            LocationServices.getGeofencingClient(appCtx).removeGeofences(listOf(GEOFENCE_ID))
+        } catch (_: Exception) {
+        }
+        locationCallback?.let {
+            try {
+                getClient(appCtx).removeLocationUpdates(it)
+            } catch (_: Exception) {
+            }
+        }
+        stopActivityRecognitionUpdates(appCtx)
 
         try {
             appCtx.stopService(Intent(appCtx, ExploreForegroundService::class.java))

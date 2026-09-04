@@ -37,9 +37,16 @@ class FitnessStorage(context: Context) {
         return loadAllSessions().filter { ymdOf(it.dateStartMs) == ymd }
     }
 
-    fun loadLastNDays(days: Int): Map<String, DayStats> {
+    fun mergeWithStored(extraSessions: List<WorkoutSession>): List<WorkoutSession> {
+        val stored = loadAllSessions()
+        if (extraSessions.isEmpty()) return stored
+        val storedIds = stored.mapTo(mutableSetOf()) { it.sessionId }
+        return stored + extraSessions.filter { it.sessionId !in storedIds }
+    }
+
+    fun loadLastNDays(days: Int, extraSessions: List<WorkoutSession> = emptyList()): Map<String, DayStats> {
         val result = mutableMapOf<String, DayStats>()
-        val sessions = loadAllSessions()
+        val sessions = mergeWithStored(extraSessions)
         val sessionsByDay = sessions.groupBy { ymdOf(it.dateStartMs) }
 
         val cal = Calendar.getInstance()
@@ -56,8 +63,8 @@ class FitnessStorage(context: Context) {
         return result
     }
 
-    fun getFitnessStats(): FitnessStats {
-        val all = loadAllSessions()
+    fun getFitnessStats(extraSessions: List<WorkoutSession> = emptyList()): FitnessStats {
+        val all = mergeWithStored(extraSessions)
         val todayYmd = ymdOf(System.currentTimeMillis())
         val todaySessions = all.filter { ymdOf(it.dateStartMs) == todayYmd }
         val today = buildDayStats(todayYmd, todaySessions)
@@ -65,12 +72,14 @@ class FitnessStorage(context: Context) {
         val streak = calcStreak(all)
         val totalMinutes = all.sumOf { sessionMinutes(it) }
         val totalCalories = all.sumOf { it.totalCalories.toDouble() }.toFloat()
+        val totalDistanceKm = all.sumOf { sessionDistanceKm(it).toDouble() }.toFloat()
 
         return FitnessStats(
             streakDays = streak,
             totalWorkouts = all.size,
             totalMinutes = totalMinutes,
             totalCalories = totalCalories,
+            totalDistanceKm = totalDistanceKm,
             lastWorkoutMs = all.maxOfOrNull { it.dateEndMs } ?: 0L,
             today = today
         )
@@ -196,9 +205,13 @@ class FitnessStorage(context: Context) {
             workoutsCount = sessions.size,
             exercisesCount = exercisesCount,
             totalReps = totalReps,
+            totalDistanceKm = sessions.sumOf { sessionDistanceKm(it).toDouble() }.toFloat(),
             sessionIds = sessions.map { it.sessionId }
         )
     }
+
+    private fun sessionDistanceKm(s: WorkoutSession): Float =
+        s.entries.sumOf { e -> e.sets.sumOf { it.distanceKm.toDouble() } }.toFloat()
 
     private fun calcStreak(sessions: List<WorkoutSession>): Int {
         if (sessions.isEmpty()) return 0

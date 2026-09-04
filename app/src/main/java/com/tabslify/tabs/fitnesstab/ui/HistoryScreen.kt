@@ -52,7 +52,9 @@ import com.tabslify.core.ui.TextSecondary
 import com.tabslify.core.ui.TextTertiary
 import com.tabslify.tabs.fitnesstab.FitnessViewModel
 import com.tabslify.tabs.fitnesstab.data.DayStats
+import com.tabslify.tabs.fitnesstab.data.EXERCISE_ID_CYCLING
 import com.tabslify.tabs.fitnesstab.data.ExerciseRepository
+import com.tabslify.tabs.fitnesstab.data.ExploreActivityBridge
 import com.tabslify.tabs.fitnesstab.data.MuscleGroup
 import com.tabslify.tabs.fitnesstab.data.WorkoutSession
 import java.text.SimpleDateFormat
@@ -275,6 +277,17 @@ private fun SessionCard(
     val end = timeFmt.format(Date(session.dateEndMs))
     val minutes = ((session.dateEndMs - session.dateStartMs) / 60_000L).coerceAtLeast(0L).toInt()
     val isPushup = session.sessionId.startsWith("pushup_")
+    val isExplore = ExploreActivityBridge.isExploreSession(session.sessionId)
+    val exploreExercise = if (isExplore) {
+        session.entries.firstOrNull()?.let { ExerciseRepository.findById(it.exerciseId) }
+    } else {
+        null
+    }
+    val isCycling = session.entries.firstOrNull()?.exerciseId == EXERCISE_ID_CYCLING
+    val distanceKm = session.entries.sumOf { e ->
+        e.sets.sumOf { it.distanceKm.toDouble() }
+    }.toFloat()
+    val speedKmh = if (minutes > 0) distanceKm / (minutes / 60f) else 0f
     val nEx = session.entries.size
     val nSets = session.entries.sumOf { it.sets.size }
     val nReps = session.entries.sumOf { e -> e.sets.sumOf { s -> s.reps } }
@@ -285,7 +298,11 @@ private fun SessionCard(
     NeonBox(
         modifier = Modifier.fillMaxWidth(),
         cornerRadius = RoundedCornerShape(16.dp),
-        neonColors = if (isPushup) listOf(AccentOrange, AccentViolet) else listOf(AccentBlue, AccentViolet),
+        neonColors = when {
+            isExplore -> listOf(AccentBlue, AccentGreen)
+            isPushup -> listOf(AccentOrange, AccentViolet)
+            else -> listOf(AccentBlue, AccentViolet)
+        },
         backgroundAlpha = 0.12f,
         borderWidth = 2.dp
     ) {
@@ -301,12 +318,20 @@ private fun SessionCard(
                         .background(Color.Black.copy(alpha = 0.35f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(if (isPushup) "📷" else "🏋️", fontSize = 22.sp)
+                    Text(
+                        text = when {
+                            isExplore -> if (isCycling) "🚴" else "🚶"
+                            isPushup -> "📷"
+                            else -> "🏋️"
+                        },
+                        fontSize = 22.sp
+                    )
                 }
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         text = when {
+                            exploreExercise != null -> stringResource(exploreExercise.nameRes)
                             isPushup -> stringResource(R.string.fitness_history_workout_pushup)
                             session.name.isNotBlank() -> session.name
                             else -> stringResource(R.string.fitness_history_workout_manual)
@@ -354,32 +379,80 @@ private fun SessionCard(
                     .padding(top = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                MetaChip(
-                    "${if (isPushup) 1 else nEx} " + stringResource(R.string.fitness_history_session_exercises).replace("%1\$d ",""),
-                    AccentBlue
-                )
-                if (isPushup) {
+                if (isExplore) {
                     MetaChip(
-                        stringResource(R.string.fitness_history_entry_sets, 1, nReps),
+                        stringResource(R.string.fitness_dashboard_distance_value, distanceKm),
+                        AccentBlue
+                    )
+                    MetaChip(
+                        stringResource(R.string.fitness_history_speed_value, speedKmh),
+                        AccentGreen
+                    )
+                    MetaChip(
+                        stringResource(R.string.fitness_history_explore_source),
                         AccentViolet
                     )
                 } else {
                     MetaChip(
-                        stringResource(R.string.fitness_history_entry_sets, nSets, nReps),
-                        AccentViolet
+                        "${if (isPushup) 1 else nEx} " + stringResource(R.string.fitness_history_session_exercises).replace("%1\$d ",""),
+                        AccentBlue
                     )
-                }
-                if (!isPushup && volumeKg > 0.0) {
-                    MetaChip(
-                        stringResource(R.string.fitness_history_entry_volume, volumeKg.toFloat()),
-                        AccentGreen
-                    )
+                    if (isPushup) {
+                        MetaChip(
+                            stringResource(R.string.fitness_history_entry_sets, 1, nReps),
+                            AccentViolet
+                        )
+                    } else {
+                        MetaChip(
+                            stringResource(R.string.fitness_history_entry_sets, nSets, nReps),
+                            AccentViolet
+                        )
+                    }
+                    if (!isPushup && volumeKg > 0.0) {
+                        MetaChip(
+                            stringResource(R.string.fitness_history_entry_volume, volumeKg.toFloat()),
+                            AccentGreen
+                        )
+                    }
                 }
             }
 
             AnimatedVisibility(visible = expanded) {
                 Column(Modifier.padding(top = 10.dp)) {
-                    if (isPushup && session.entries.isEmpty()) {
+                    if (isExplore) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(BgSoft)
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        Brush.linearGradient(MuscleGroup.CARDIO.groupColors().map { it.copy(alpha = 0.3f) })
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) { Text(if (isCycling) "🚴" else "🚶", fontSize = 18.sp) }
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = if (exploreExercise != null) stringResource(exploreExercise.nameRes) else "",
+                                    color = TextPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = stringResource(R.string.fitness_history_explore_detail, distanceKm, minutes, speedKmh),
+                                    color = TextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    } else if (isPushup && session.entries.isEmpty()) {
                         val repsGuess = maxOf(nReps, (session.totalCalories / 0.35f).toInt())
                         Row(
                             Modifier
@@ -502,18 +575,27 @@ private fun SessionCard(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
                     ) {
-                        IconButton(onClick = onDelete) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Icon(
-                                    Icons.Default.DeleteOutline,
-                                    contentDescription = stringResource(R.string.fitness_history_session_delete),
-                                    tint = AccentPink
-                                )
-                                Text(
-                                    stringResource(R.string.fitness_history_session_delete),
-                                    color = AccentPink,
-                                    fontSize = 11.sp
-                                )
+                        if (isExplore) {
+                            Text(
+                                stringResource(R.string.fitness_history_explore_readonly),
+                                color = TextTertiary,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(end = 8.dp, top = 6.dp)
+                            )
+                        } else {
+                            IconButton(onClick = onDelete) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Icon(
+                                        Icons.Default.DeleteOutline,
+                                        contentDescription = stringResource(R.string.fitness_history_session_delete),
+                                        tint = AccentPink
+                                    )
+                                    Text(
+                                        stringResource(R.string.fitness_history_session_delete),
+                                        color = AccentPink,
+                                        fontSize = 11.sp
+                                    )
+                                }
                             }
                         }
                     }
@@ -602,6 +684,13 @@ private fun StatsOverview(
                     value = "%.0f".format(stats.totalCalories) + " " + stringResource(R.string.fitness_history_chart_kcal),
                     accent = Color(0xFFFF8A4C)
                 )
+                if (stats.totalDistanceKm > 0f) {
+                    StatRow(
+                        label = stringResource(R.string.fitness_history_total_distance),
+                        value = stringResource(R.string.fitness_dashboard_distance_value, stats.totalDistanceKm),
+                        accent = AccentBlue
+                    )
+                }
             }
         }
     }

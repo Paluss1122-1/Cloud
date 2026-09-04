@@ -13,10 +13,16 @@ import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tabslify.R
+import com.tabslify.tabs.fitnesstab.data.BIKE_MODE_AUTO
+import com.tabslify.tabs.fitnesstab.data.BikeModeOverrides
+import com.tabslify.tabs.fitnesstab.data.BikeRide
+import com.tabslify.tabs.fitnesstab.data.BikeRideRepository
+import com.tabslify.tabs.fitnesstab.data.BikeStats
 import com.tabslify.tabs.fitnesstab.data.DayStats
 import com.tabslify.tabs.fitnesstab.data.Exercise
 import com.tabslify.tabs.fitnesstab.data.ExerciseRepository
 import com.tabslify.tabs.fitnesstab.data.ExerciseSet
+import com.tabslify.tabs.fitnesstab.data.ExploreActivityBridge
 import com.tabslify.tabs.fitnesstab.data.FitnessStats
 import com.tabslify.tabs.fitnesstab.data.FitnessStorage
 import com.tabslify.tabs.fitnesstab.data.TrackingType
@@ -36,9 +42,11 @@ private const val KEY_SEEN_HINT = "seen_pushup_hint"
 
 enum class TrackingIssue { NONE, NO_BODY, ARMS_HIDDEN, CALIBRATING }
 
-enum class FitnessScreen { DASHBOARD, EXERCISES, WORKOUT, HISTORY }
+enum class FitnessScreen { DASHBOARD, EXERCISES, WORKOUT, BIKE, HISTORY }
 
 enum class WorkoutMode { CAMERA_POSE, MANUAL }
+
+enum class BikeFilter { ALL, BIKE, EBIKE }
 
 class FitnessViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -134,6 +142,100 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
         userAgeYears = ageYears
         userWeightKg = weightKg
         profileDialogVisible = false
+    }
+
+    private val _bikeRides = MutableStateFlow<List<BikeRide>>(emptyList())
+    val bikeRides: StateFlow<List<BikeRide>> = _bikeRides.asStateFlow()
+
+    private val _bikeStats = MutableStateFlow(BikeStats())
+    val bikeStats: StateFlow<BikeStats> = _bikeStats.asStateFlow()
+
+    var bikeLoading by mutableStateOf(false)
+        private set
+
+    var bikeRangeDays by mutableIntStateOf(DEFAULT_BIKE_RANGE_DAYS)
+        private set
+
+    var bikeFilter by mutableStateOf(BikeFilter.ALL)
+        private set
+
+    var bikeDefaultMode by mutableStateOf(BikeModeOverrides.defaultMode(application))
+        private set
+
+    var selectedRideId: String? by mutableStateOf(null)
+        private set
+
+    private var loadedBikeRangeDays = 0
+
+    fun loadBikeRides(force: Boolean = false) {
+        if (bikeLoading) return
+        if (!force && loadedBikeRangeDays == bikeRangeDays) return
+        bikeLoading = true
+        viewModelScope.launch {
+            val rides = runCatching {
+                BikeRideRepository.ridesForLastDays(
+                    getApplication<Application>(),
+                    bikeRangeDays,
+                    storage.calorieFactor()
+                )
+            }.getOrDefault(emptyList())
+            _bikeRides.value = rides
+            _bikeStats.value = BikeRideRepository.statsFor(rides)
+            loadedBikeRangeDays = bikeRangeDays
+            bikeLoading = false
+        }
+    }
+
+    fun changeBikeRange(days: Int) {
+        if (days == bikeRangeDays) return
+        bikeRangeDays = days
+        selectedRideId = null
+        loadBikeRides(force = true)
+    }
+
+    fun changeBikeFilter(filter: BikeFilter) {
+        bikeFilter = filter
+    }
+
+    fun openRide(rideId: String) {
+        selectedRideId = rideId
+    }
+
+    fun closeRide() {
+        selectedRideId = null
+    }
+
+    fun setRideMode(rideId: String, mode: String?) {
+        BikeModeOverrides.setMode(getApplication<Application>(), rideId, mode)
+        val factor = storage.calorieFactor()
+        _bikeRides.value = _bikeRides.value.map { ride ->
+            if (ride.rideId != rideId) {
+                ride
+            } else {
+                val resolved = mode
+                    ?: if (bikeDefaultMode == BIKE_MODE_AUTO) ride.autoMode else bikeDefaultMode
+                ride.copy(
+                    mode = resolved,
+                    overridden = mode != null,
+                    calories = BikeRideRepository.caloriesFor(
+                        resolved,
+                        ride.distanceKm,
+                        ride.durationMs,
+                        factor
+                    )
+                )
+            }
+        }
+        _bikeStats.value = BikeRideRepository.statsFor(_bikeRides.value)
+        refreshStats()
+    }
+
+    fun changeBikeDefaultMode(mode: String) {
+        if (mode == bikeDefaultMode) return
+        BikeModeOverrides.setDefaultMode(getApplication<Application>(), mode)
+        bikeDefaultMode = mode
+        loadBikeRides(force = true)
+        refreshStats()
     }
 
     val exercises: List<Exercise> = ExerciseRepository.all()
@@ -259,15 +361,19 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    private fun startManualWorkoutTimer() {
-        workoutStartedAtMs = System.currentTimeMillis()
+    private fun startWorkoutTicker() {
         workoutTimerJob?.cancel()
         workoutTimerJob = viewModelScope.launch {
-            while (true) {
+            while (workoutStartedAtMs > 0L) {
                 workoutElapsedMs = System.currentTimeMillis() - workoutStartedAtMs
                 delay(500L)
             }
         }
+    }
+
+    private fun startManualWorkoutTimer() {
+        workoutStartedAtMs = System.currentTimeMillis()
+        startWorkoutTicker()
     }
 
     fun startRestTimer() {
@@ -345,6 +451,7 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun deleteSession(sessionId: String) {
+        if (ExploreActivityBridge.isExploreSession(sessionId)) return
         storage.deleteSession(sessionId)
         refreshStats()
     }
@@ -359,8 +466,29 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun switchTo(screen: FitnessScreen) {
+        val wasWorkoutScreen = currentScreen == FitnessScreen.WORKOUT
         currentScreen = screen
         selectedExerciseId = null
+        selectedRideId = null
+        if (screen == FitnessScreen.BIKE) loadBikeRides()
+        if (wasWorkoutScreen && screen != FitnessScreen.WORKOUT) {
+            timerJob?.cancel()
+            timerJob = null
+            workoutTimerJob?.cancel()
+            workoutTimerJob = null
+        } else if (screen == FitnessScreen.WORKOUT) {
+            if (isRunning && timerJob == null) {
+                timerJob = viewModelScope.launch {
+                    while (isRunning) {
+                        elapsedMs = System.currentTimeMillis() - sessionStartedAtMs
+                        delay(250L)
+                    }
+                }
+            }
+            if (workoutStartedAtMs > 0L && workoutTimerJob == null) {
+                startWorkoutTicker()
+            }
+        }
     }
 
     fun openManualWorkout(startExerciseId: String? = null) {
@@ -384,9 +512,19 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
 
     fun refreshStats() {
         viewModelScope.launch {
-            _stats.value = storage.getFitnessStats()
-            _recentDays.value = storage.loadLastNDays(7)
-            _sessions.value = storage.loadAllSessions().take(50)
+            val exploreSessions = runCatching {
+                ExploreActivityBridge.sessionsForLastDays(
+                    getApplication<Application>(),
+                    EXPLORE_HISTORY_DAYS,
+                    storage.calorieFactor()
+                )
+            }.getOrDefault(emptyList())
+
+            _stats.value = storage.getFitnessStats(exploreSessions)
+            _recentDays.value = storage.loadLastNDays(7, exploreSessions)
+            _sessions.value = storage.mergeWithStored(exploreSessions)
+                .sortedByDescending { it.dateStartMs }
+                .take(50)
         }
     }
 
@@ -564,5 +702,7 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
     companion object {
         private const val LOST_FRAME_GRACE = 8
         private const val REP_REFRACTORY_MS = 700L
+        private const val EXPLORE_HISTORY_DAYS = 30
+        private const val DEFAULT_BIKE_RANGE_DAYS = 30
     }
 }

@@ -65,6 +65,7 @@ data class DayStats(
     val workoutsCount: Int = 0,
     val exercisesCount: Int = 0,
     val totalReps: Int = 0,
+    val totalDistanceKm: Float = 0f,
     val sessionIds: List<String> = emptyList()
 )
 
@@ -73,6 +74,7 @@ data class FitnessStats(
     val totalWorkouts: Int = 0,
     val totalMinutes: Int = 0,
     val totalCalories: Float = 0f,
+    val totalDistanceKm: Float = 0f,
     val lastWorkoutMs: Long = 0L,
     val today: DayStats = DayStats(dateYmd = "")
 )

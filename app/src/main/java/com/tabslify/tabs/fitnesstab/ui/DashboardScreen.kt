@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Repeat
@@ -360,6 +361,16 @@ private fun TodayStatsGrid(vm: FitnessViewModel) {
                 label = stringResource(R.string.fitness_dashboard_reps),
                 value = stringResource(R.string.fitness_dashboard_reps_value, today.totalReps),
                 bg = Color(0xFF4CFCC1).copy(alpha = 0.15f)
+            )
+        }
+        if (today.totalDistanceKm > 0f) {
+            StatCard(
+                modifier = Modifier.fillMaxWidth(),
+                icon = Icons.Default.DirectionsWalk,
+                iconColor = Color(0xFF4CC9FF),
+                label = stringResource(R.string.fitness_dashboard_distance),
+                value = stringResource(R.string.fitness_dashboard_distance_value, today.totalDistanceKm),
+                bg = Color(0xFF4CC9FF).copy(alpha = 0.15f)
             )
         }
     }

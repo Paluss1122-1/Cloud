@@ -82,7 +82,7 @@ object ExploreSegmentBuilder {
                 )
             } else {
                 segments += Segment(
-                    mode = run.mode,
+                    mode = resolveMode(run),
                     startTime = first.timestamp,
                     endTime = last.timestamp,
                     startLat = first.lat,
@@ -97,6 +97,13 @@ object ExploreSegmentBuilder {
 
         return segments to stays
     }
+
+    private fun resolveMode(run: Run): String =
+        if (run.mode == ExploreBikeClassifier.MODE_BICYCLE) {
+            ExploreBikeClassifier.classify(run.points).mode
+        } else {
+            run.mode
+        }
 
     private fun groupRuns(points: List<RawPoint>): MutableList<Run> {
         val runs = mutableListOf<Run>()

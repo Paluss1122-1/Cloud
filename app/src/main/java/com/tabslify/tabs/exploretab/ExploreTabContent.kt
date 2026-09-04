@@ -419,6 +419,7 @@ private fun formatDuration(ms: Long): String {
 
 private fun modeIcon(mode: String): String = when (mode) {
     "IN_VEHICLE" -> "🚗"
+    "ON_EBIKE" -> "🚴⚡"
     "ON_BICYCLE" -> "🚲"
     "WALKING", "ON_FOOT" -> "🚶"
     else -> "❔"
@@ -426,6 +427,7 @@ private fun modeIcon(mode: String): String = when (mode) {
 
 private fun segmentAccentColor(mode: String): Color = when (mode) {
     "IN_VEHICLE" -> Color(0xFF00CCFF)
+    "ON_EBIKE" -> Color(0xFFB388FF)
     "ON_BICYCLE" -> Color(0xFF00FFAA)
     "WALKING", "ON_FOOT" -> Color(0xFFFFAB00)
     else -> Color(0xFF9090A0)
@@ -433,6 +435,7 @@ private fun segmentAccentColor(mode: String): Color = when (mode) {
 
 private fun colorForMode(mode: String): Int = when (mode) {
     "IN_VEHICLE" -> android.graphics.Color.rgb(0, 204, 255)
+    "ON_EBIKE" -> android.graphics.Color.rgb(179, 136, 255)
     "ON_BICYCLE" -> android.graphics.Color.rgb(0, 255, 170)
     "WALKING", "ON_FOOT" -> android.graphics.Color.rgb(255, 171, 0)
     else -> android.graphics.Color.rgb(144, 144, 160)
@@ -441,6 +444,7 @@ private fun colorForMode(mode: String): Int = when (mode) {
 @Composable
 private fun modeLabel(mode: String): String = when (mode) {
     "IN_VEHICLE" -> stringResource(R.string.modus_auto)
+    "ON_EBIKE" -> stringResource(R.string.modus_ebike)
     "ON_BICYCLE" -> stringResource(R.string.modus_fahrrad)
     "WALKING", "ON_FOOT" -> stringResource(R.string.modus_zu_fuss)
     else -> stringResource(R.string.modus_unbekannt)
@@ -480,6 +484,16 @@ private fun SegmentCard(segment: Segment, modifier: Modifier = Modifier) {
             Column(horizontalAlignment = Alignment.End) {
                 Text(text = "%.1f km".format(segment.distanceMeters / 1000f), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 Text(text = formatDuration(segment.endTime - segment.startTime), color = Color(0xFF9090A0), fontSize = 11.sp)
+                if (ExploreBikeClassifier.isBikeMode(segment.mode)) {
+                    val hours = (segment.endTime - segment.startTime) / 3_600_000f
+                    if (hours > 0f) {
+                        Text(
+                            text = "Ø %.1f km/h".format(segment.distanceMeters / 1000f / hours),
+                            color = segmentAccentColor(segment.mode),
+                            fontSize = 11.sp
+                        )
+                    }
+                }
             }
         }
     }

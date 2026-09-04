@@ -1283,6 +1283,54 @@ object ExerciseRepository {
             ),
             caloriesPerMinute = 7f
         ),
+        Exercise(
+            id = EXERCISE_ID_WALKING,
+            nameRes = R.string.fitness_ex_cardio_walking,
+            muscleGroup = MuscleGroup.CARDIO,
+            difficulty = Difficulty.BEGINNER,
+            equipment = Equipment.NONE,
+            trackingType = TrackingType.DISTANCE,
+            descriptionRes = R.string.fitness_ex_cardio_walking_desc,
+            stepsRes = listOf(
+                R.string.fitness_ex_cardio_walking_step_1,
+                R.string.fitness_ex_cardio_walking_step_2,
+                R.string.fitness_ex_cardio_walking_step_3,
+                R.string.fitness_ex_cardio_walking_step_4
+            ),
+            tipsRes = listOf(
+                R.string.fitness_ex_cardio_walking_tip_1,
+                R.string.fitness_ex_cardio_walking_tip_2
+            ),
+            mistakesRes = listOf(
+                R.string.fitness_ex_cardio_walking_mistake_1,
+                R.string.fitness_ex_cardio_walking_mistake_2
+            ),
+            caloriesPerMinute = 4.5f
+        ),
+        Exercise(
+            id = EXERCISE_ID_CYCLING,
+            nameRes = R.string.fitness_ex_cardio_cycling,
+            muscleGroup = MuscleGroup.CARDIO,
+            difficulty = Difficulty.BEGINNER,
+            equipment = Equipment.NONE,
+            trackingType = TrackingType.DISTANCE,
+            descriptionRes = R.string.fitness_ex_cardio_cycling_desc,
+            stepsRes = listOf(
+                R.string.fitness_ex_cardio_cycling_step_1,
+                R.string.fitness_ex_cardio_cycling_step_2,
+                R.string.fitness_ex_cardio_cycling_step_3,
+                R.string.fitness_ex_cardio_cycling_step_4
+            ),
+            tipsRes = listOf(
+                R.string.fitness_ex_cardio_cycling_tip_1,
+                R.string.fitness_ex_cardio_cycling_tip_2
+            ),
+            mistakesRes = listOf(
+                R.string.fitness_ex_cardio_cycling_mistake_1,
+                R.string.fitness_ex_cardio_cycling_mistake_2
+            ),
+            caloriesPerMinute = 7f
+        ),
 
         // ==== FULL BODY ====
         Exercise(

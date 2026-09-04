@@ -18,9 +18,9 @@ import java.time.ZoneId
 
 object ExploreExport {
 
-    private const val EXPORT_VERSION = 1
+    private const val EXPORT_VERSION = 2
 
-    private val pointColumns = listOf("t", "lat", "lon", "acc", "spd", "brg", "act", "conf", "dt", "dist", "vImplied")
+    private val pointColumns = listOf("t", "lat", "lon", "acc", "spd", "brg", "act", "conf", "dt", "dist", "vImplied", "alt")
     private val eventColumns = listOf("t", "type", "mode", "conf", "detail")
 
     suspend fun export(context: Context, lastDay: LocalDate, days: Int): File = withContext(Dispatchers.IO) {
@@ -38,6 +38,7 @@ object ExploreExport {
         root.put("rangeTo", lastDay.toString())
         root.put("tracker", toJson(ExploreLocationTracker.tuningSnapshot()))
         root.put("segmentBuilder", toJson(ExploreSegmentBuilder.tuningSnapshot()))
+        root.put("bikeClassifier", toJson(ExploreBikeClassifier.tuningSnapshot()))
         root.put("pointColumns", JSONArray(pointColumns))
         root.put("eventColumns", JSONArray(eventColumns))
 
@@ -55,7 +56,7 @@ object ExploreExport {
                     put("date", day.toString())
                     put("points", pointsToJson(points))
                     put("events", eventsToJson(events))
-                    put("segments", segmentsToJson(segments))
+                    put("segments", segmentsToJson(segments, points))
                     put("stays", staysToJson(stays))
                 })
             }
@@ -107,6 +108,7 @@ object ExploreExport {
                 put(round(deltaSeconds, 1))
                 put(round(meters, 1))
                 put(round(implied, 2))
+                put(point.altitude?.let { round(it, 1) } ?: JSONObject.NULL)
             })
         }
         return array
@@ -126,7 +128,7 @@ object ExploreExport {
         return array
     }
 
-    private fun segmentsToJson(segments: List<Segment>): JSONArray {
+    private fun segmentsToJson(segments: List<Segment>, points: List<RawPoint>): JSONArray {
         val array = JSONArray()
         segments.forEach { segment ->
             val durationSeconds = (segment.endTime - segment.startTime) / 1000.0
@@ -142,9 +144,28 @@ object ExploreExport {
                 put("startLon", round(segment.startLon, 6))
                 put("endLat", round(segment.endLat, 6))
                 put("endLon", round(segment.endLon, 6))
+                if (ExploreBikeClassifier.isBikeMode(segment.mode)) {
+                    val segmentPoints = points.filter { it.timestamp in segment.startTime..segment.endTime }
+                    put("bike", bikeClassificationToJson(ExploreBikeClassifier.classify(segmentPoints)))
+                }
             })
         }
         return array
+    }
+
+    private fun bikeClassificationToJson(classification: BikeClassification): JSONObject = JSONObject().apply {
+        put("mode", classification.mode)
+        put("score", round(classification.score, 3))
+        put("decided", classification.decided)
+        put("movingSeconds", round(classification.movingSeconds, 0))
+        put("sampleCount", classification.sampleCount)
+        put("medianSpeedMps", round(classification.medianSpeedMps, 2))
+        put("p85SpeedMps", round(classification.p85SpeedMps, 2))
+        put("cruiseShare", round(classification.cruiseShare, 3))
+        put("fastShare", round(classification.fastShare, 3))
+        put("speedVariation", round(classification.speedVariation, 3))
+        put("climbSeconds", round(classification.climbSeconds, 0))
+        put("climbSpeedRatio", classification.climbSpeedRatio?.let { round(it, 3) } ?: JSONObject.NULL)
     }
 
     private fun staysToJson(stays: List<Stay>): JSONArray {

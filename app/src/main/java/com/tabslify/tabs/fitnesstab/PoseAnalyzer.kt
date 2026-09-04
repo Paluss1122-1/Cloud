@@ -37,6 +37,8 @@ class PoseAnalyzer(
     private var lastTimestampMs = 0L
     private var closed = false
 
+    private val inFlightBitmaps = java.util.ArrayDeque<Bitmap>()
+
     init {
         landmarker = createLandmarker(context, Delegate.GPU)
             ?: createLandmarker(context, Delegate.CPU)
@@ -64,7 +66,12 @@ class PoseAnalyzer(
     }.getOrNull()
 
     private fun publish(result: PoseLandmarkerResult, input: MPImage) {
-        if (closed) return
+        val bmp = synchronized(inFlightBitmaps) { inFlightBitmaps.pollFirst() }
+        if (closed) {
+            runCatching { input.close() }
+            bmp?.let { if (!it.isRecycled) it.recycle() }
+            return
+        }
         onFrame(
             PoseFrame(
                 landmarks = result.landmarks().firstOrNull().orEmpty(),
@@ -73,6 +80,8 @@ class PoseAnalyzer(
                 imageHeight = input.height
             )
         )
+        runCatching { input.close() }
+        bmp?.let { if (!it.isRecycled) it.recycle() }
     }
 
     override fun analyze(imageProxy: ImageProxy) {
@@ -83,8 +92,9 @@ class PoseAnalyzer(
         }
 
         var bitmap: Bitmap? = null
+        var raw: Bitmap? = null
         try {
-            val raw = imageProxy.toBitmap()
+            raw = imageProxy.toBitmap()
             val matrix = Matrix().apply {
                 postRotate(imageProxy.imageInfo.rotationDegrees.toFloat())
                 if (isFrontCamera) postScale(-1f, 1f, raw.width / 2f, raw.height / 2f)
@@ -94,6 +104,7 @@ class PoseAnalyzer(
             onFailure(t)
         } finally {
             imageProxy.close()
+            raw?.recycle()
         }
 
         val rotated = bitmap ?: return
@@ -101,14 +112,24 @@ class PoseAnalyzer(
         val timestamp = SystemClock.uptimeMillis().coerceAtLeast(lastTimestampMs + 1)
         lastTimestampMs = timestamp
 
+        synchronized(inFlightBitmaps) { inFlightBitmaps.addLast(rotated) }
         runCatching { detector.detectAsync(BitmapImageBuilder(rotated).build(), timestamp) }
-            .onFailure { onFailure(it) }
+            .onFailure {
+                val failed = synchronized(inFlightBitmaps) { inFlightBitmaps.remove(rotated) }
+                if (failed) rotated.recycle()
+                onFailure(it)
+            }
     }
 
     fun close() {
         closed = true
         runCatching { landmarker?.close() }
         landmarker = null
+        synchronized(inFlightBitmaps) {
+            while (inFlightBitmaps.isNotEmpty()) {
+                inFlightBitmaps.pollFirst()?.let { if (!it.isRecycled) it.recycle() }
+            }
+        }
     }
 
     companion object {

@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.DirectionsBike
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material3.ButtonDefaults
@@ -67,6 +68,7 @@ import com.tabslify.core.ui.AppBackground
 import com.tabslify.core.ui.PloppingButton
 import com.tabslify.core.ui.TextPrimary
 import com.tabslify.core.ui.TextSecondary
+import com.tabslify.tabs.fitnesstab.ui.BikeScreen
 import com.tabslify.tabs.fitnesstab.ui.DashboardScreen
 import com.tabslify.tabs.fitnesstab.ui.ExerciseDetailScreen
 import com.tabslify.tabs.fitnesstab.ui.ExerciseListScreen
@@ -136,7 +138,7 @@ fun FitnessTabContent(vm: FitnessViewModel = viewModel()) {
         )
     }
 
-    AppBackground(
+    Box(
         modifier = Modifier.fillMaxSize()
     ) {
         Box(Modifier.fillMaxSize()) {
@@ -217,6 +219,9 @@ fun FitnessTabContent(vm: FitnessViewModel = viewModel()) {
                             }
                         }
                     }
+                    FitnessScreen.BIKE -> {
+                        BikeScreen(vm = vm)
+                    }
                     FitnessScreen.HISTORY -> {
                         HistoryScreen(vm = vm)
                     }
@@ -242,6 +247,7 @@ private fun BottomNav(vm: FitnessViewModel, modifier: Modifier = Modifier) {
         BottomNavItem(FitnessScreen.DASHBOARD, Icons.Default.Dashboard, R.string.fitness_nav_dashboard, listOf(Color(0xFF6B4CFC), Color(0xFFB45CFC))),
         BottomNavItem(FitnessScreen.EXERCISES, Icons.Default.ListAlt, R.string.fitness_nav_exercises, listOf(Color(0xFF4CFCC1), Color(0xFF2196F3))),
         BottomNavItem(FitnessScreen.WORKOUT, Icons.Default.FitnessCenter, R.string.fitness_nav_workout, listOf(Color(0xFFFF8A4C), Color(0xFFFF5C9A))),
+        BottomNavItem(FitnessScreen.BIKE, Icons.Default.DirectionsBike, R.string.fitness_nav_bike, listOf(Color(0xFF00FFAA), Color(0xFF00CCFF))),
         BottomNavItem(FitnessScreen.HISTORY, Icons.Default.CalendarMonth, R.string.fitness_nav_history, listOf(Color(0xFFFFC107), Color(0xFFFF6B4C)))
     )
     Row(

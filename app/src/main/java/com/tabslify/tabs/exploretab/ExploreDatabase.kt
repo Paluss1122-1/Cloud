@@ -170,7 +170,7 @@ interface TrackerEventDao {
 
 @Database(
     entities = [ExploredTile::class, RawPoint::class, Segment::class, Stay::class, TrackerEvent::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class ExploreDatabase : RoomDatabase() {
@@ -258,13 +258,19 @@ abstract class ExploreDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `raw_points` ADD COLUMN `altitude` REAL")
+            }
+        }
+
         fun get(context: Context): ExploreDatabase =
             INSTANCE ?: synchronized(this) {
                 Room.databaseBuilder(
                     context.applicationContext,
                     ExploreDatabase::class.java,
                     "explore_db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .fallbackToDestructiveMigration(true)
                     .build().also { INSTANCE = it }
             }
