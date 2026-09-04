@@ -2,6 +2,7 @@ package com.tabslify.tabs
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -120,8 +122,8 @@ fun PCManagerTab() {
         editingName = null
     }
 
-    LaunchedEffect(Unit) {
-        while (true) {
+    DisposableEffect(prefs, uuidPrefs, secretsPrefs, pendingPrefs, displayNamesPrefs) {
+        fun rebuild() {
             val allPcs = prefs.all.map { (name, regInfo) ->
                 val uuid = uuidPrefs.getString(name, null) ?: "NO_UUID"
                 val secret = resolveSyncSecret(context, name).orEmpty()
@@ -147,9 +149,31 @@ fun PCManagerTab() {
                 )
             }
             pendingList = pending
-            
-            triggerStatus = getTriggerListenerStatus()
 
+            triggerStatus = getTriggerListenerStatus()
+        }
+
+        rebuild()
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> rebuild() }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        uuidPrefs.registerOnSharedPreferenceChangeListener(listener)
+        secretsPrefs.registerOnSharedPreferenceChangeListener(listener)
+        pendingPrefs.registerOnSharedPreferenceChangeListener(listener)
+        displayNamesPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            prefs.unregisterOnSharedPreferenceChangeListener(listener)
+            uuidPrefs.unregisterOnSharedPreferenceChangeListener(listener)
+            secretsPrefs.unregisterOnSharedPreferenceChangeListener(listener)
+            pendingPrefs.unregisterOnSharedPreferenceChangeListener(listener)
+            displayNamesPrefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            pcDetailsList = pcDetailsList.map {
+                it.copy(liveCode = if (it.secret.isNotEmpty()) TotpGenerator.generateTOTP(it.secret) else "?")
+            }
             delay(1000L.milliseconds)
         }
     }
