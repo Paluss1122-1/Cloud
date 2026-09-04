@@ -715,8 +715,7 @@ private fun ExerciseEntryCard(
 
             Spacer(Modifier.height(10.dp))
 
-            // SET HEADER
-            val useTime = trackingType == TrackingType.TIME
+            val useTime = trackingType == TrackingType.TIME || trackingType == TrackingType.DISTANCE
             Row(
                 Modifier
                     .fillMaxWidth()
