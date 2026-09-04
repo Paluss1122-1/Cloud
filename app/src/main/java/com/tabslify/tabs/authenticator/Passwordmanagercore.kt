@@ -112,20 +112,29 @@ abstract class PasswordDatabase : RoomDatabase() {
 
 object CloudCrypto {
 
-    private val cachedKey: SecretKey by lazy {
-        val fixedSalt = "cloud_sync_salt_v1".toByteArray(Charsets.UTF_8).copyOf(16)
-        Config.deriveKey(Config.masterPassword, fixedSalt)
+    private val fixedSalt = "cloud_sync_salt_v1".toByteArray(Charsets.UTF_8).copyOf(16)
+    private var cachedKeyPassword: String = ""
+    private var cachedKeyValue: SecretKey? = null
+
+    @Synchronized
+    private fun cachedKey(): SecretKey {
+        val currentPassword = Config.masterPassword
+        return cachedKeyValue?.takeIf { cachedKeyPassword == currentPassword }
+            ?: Config.deriveKey(currentPassword, fixedSalt).also {
+                cachedKeyValue = it
+                cachedKeyPassword = currentPassword
+            }
     }
 
     fun encryptForCloud(plaintext: String): String {
         if (plaintext.isEmpty() || prvt()) return ""
-        return encryptWithKey(plaintext, cachedKey)
+        return encryptWithKey(plaintext, cachedKey())
     }
 
     fun decryptFromCloud(ciphertext: String): String? {
         if (ciphertext.isEmpty() || prvt()) return ""
         return try {
-            decryptWithKey(ciphertext, cachedKey)
+            decryptWithKey(ciphertext, cachedKey())
         } catch (e: Exception) {
             errorInsert(
                 "CloudCrypto",
