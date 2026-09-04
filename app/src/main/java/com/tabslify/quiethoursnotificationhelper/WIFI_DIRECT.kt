@@ -232,9 +232,30 @@ fun connectBluetoothDevice(
 
     val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
     val adapter = bm?.adapter
-    if (adapter == null || !adapter.isEnabled) {
-        onResult?.invoke(false, "Bluetooth ist ausgeschaltet")
+    if (adapter == null) {
+        onResult?.invoke(false, "Kein Bluetooth-Adapter verfügbar")
         return
+    }
+
+    if (!adapter.isEnabled) {
+        val enabled = try {
+            adapter.enable()
+        } catch (e: SecurityException) {
+            false
+        }
+        if (!enabled) {
+            onResult?.invoke(false, "Bluetooth konnte nicht eingeschaltet werden")
+            return
+        }
+        var waited = 0L
+        while (!adapter.isEnabled && waited < 10000) {
+            Thread.sleep(200)
+            waited += 200
+        }
+        if (!adapter.isEnabled) {
+            onResult?.invoke(false, "Bluetooth wurde nicht rechtzeitig eingeschaltet")
+            return
+        }
     }
 
     val target = try {
@@ -297,6 +318,86 @@ fun connectBluetoothDevice(
     }
 }
 
+@SuppressLint("MissingPermission")
+fun disconnectBluetoothDevice(
+    context: Context,
+    nameOrAddress: String,
+    onResult: ((Boolean, String) -> Unit)? = null
+) {
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
+        != PackageManager.PERMISSION_GRANTED
+    ) {
+        onResult?.invoke(false, "Keine BLUETOOTH_CONNECT-Berechtigung")
+        return
+    }
+
+    val bm = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+    val adapter = bm?.adapter
+    if (adapter == null || !adapter.isEnabled) {
+        onResult?.invoke(false, "Bluetooth ist ausgeschaltet")
+        return
+    }
+
+    val target = try {
+        adapter.bondedDevices.firstOrNull {
+            it.address.equals(nameOrAddress, ignoreCase = true) ||
+                it.name?.equals(nameOrAddress, ignoreCase = true) == true
+        }
+    } catch (e: SecurityException) {
+        Log.e("CLOUDSA", "[BT] Zugriff auf gekoppelte Geräte verweigert", e)
+        null
+    }
+
+    if (target == null) {
+        onResult?.invoke(false, "Gerät \"$nameOrAddress\" nicht gekoppelt")
+        return
+    }
+
+    if (!connectedBluetoothDevices.contains(target.address)) {
+        onResult?.invoke(true, "\"${target.name}\" ist bereits getrennt")
+        return
+    }
+
+    var handled = false
+    val profiles = intArrayOf(BluetoothProfile.A2DP, BluetoothProfile.HEADSET)
+    val remaining = profiles.toMutableList()
+
+    val listener = object : BluetoothProfile.ServiceListener {
+        override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
+            try {
+                val method = proxy.javaClass.getMethod("disconnect", BluetoothDevice::class.java)
+                method.isAccessible = true
+                val started = method.invoke(proxy, target) as? Boolean == true
+                if (started && !handled) {
+                    handled = true
+                    onResult?.invoke(true, "Verbindung zu \"${target.name}\" getrennt")
+                }
+            } catch (e: Exception) {
+                Log.e("CLOUDSA", "[BT] disconnect() fehlgeschlagen für Profil $profile", e)
+            } finally {
+                adapter.closeProfileProxy(profile, proxy)
+                remaining.remove(profile)
+                if (remaining.isEmpty() && !handled) {
+                    handled = true
+                    onResult?.invoke(false, "Trennung von \"${target.name}\" fehlgeschlagen")
+                }
+            }
+        }
+
+        override fun onServiceDisconnected(profile: Int) {}
+    }
+
+    for (profile in profiles) {
+        if (!adapter.getProfileProxy(context, listener, profile)) {
+            remaining.remove(profile)
+        }
+    }
+
+    if (remaining.isEmpty() && !handled) {
+        onResult?.invoke(false, "Kein passendes Bluetooth-Profil verfügbar")
+    }
+}
+
 val isLaptopConnectedFlow = MutableStateFlow(false)
 val aiResponseFlow = MutableStateFlow<AiResponseEntry?>(null)
 val flashcardVokabelnFlow = MutableStateFlow<List<Vokabel>?>(null)
@@ -320,11 +421,52 @@ private val syncScope = CoroutineScope(
 private val pcCallFailures = java.util.concurrent.atomic.AtomicInteger(0)
 @Volatile
 private var reconnectAttempted = false
+@Volatile
+private var laptopUnreachableNotified = false
+@Volatile
+private var missingIpNotified = false
 private const val MAX_PC_CALL_FAILURES = 3
 
 fun onPcCallSuccess() {
     pcCallFailures.set(0)
     reconnectAttempted = false
+    laptopUnreachableNotified = false
+    missingIpNotified = false
+    resetReconnectBackoff()
+}
+
+fun resetReconnectBackoff() {
+    reconnectFailures = 0
+    reconnectBackoff = RECONNECT_HEARTBEAT_INTERVAL
+    reconnectSuspended = false
+    lastReconnectHeartbeat = 0L
+}
+
+private fun registerReconnectFailure() {
+    reconnectFailures++
+    reconnectBackoff = (reconnectBackoff * 2).coerceAtMost(RECONNECT_BACKOFF_MAX)
+    if (reconnectFailures >= MAX_RECONNECT_FAILURES) {
+        reconnectSuspended = true
+        Log.w("CLOUDSA", "Reconnect nach $reconnectFailures Fehlversuchen ausgesetzt")
+    }
+}
+
+private fun notifyLaptopUnreachableOnce(context: Context, e: Exception) {
+    if (laptopUnreachableNotified) {
+        Log.w("CLOUDSA", "Laptop nicht erreichbar: ${e.message}")
+        return
+    }
+    laptopUnreachableNotified = true
+    showSimpleNotificationExtern("Error", "${e.message}", 10.seconds, context)
+}
+
+private fun notifyMissingIpOnce(context: Context, detail: String) {
+    if (missingIpNotified) {
+        Log.w("CLOUDSA", "Keine IP gefunden: $detail")
+        return
+    }
+    missingIpNotified = true
+    showSimpleNotificationExtern("❌ Keine IP gefunden", detail, 10.seconds, context)
 }
 
 fun onPcCallFailure(context: Context) {
@@ -358,12 +500,35 @@ private var flashcardResponseSocket: ServerSocket? = null
 private var mediaCommandJob: Job? = null
 private var mediaStateJob: Job? = null
 private var clipboardJob: Job? = null
-private var mailNotifyJob: Job? = null
 private var executeJob: Job? = null
 private var smsJob: Job? = null
 private var spotifyHistoryJob: Job? = null
 
 private val activeServers = mutableListOf<ServerSocket>()
+
+private val listenerUnboundSince = java.util.concurrent.ConcurrentHashMap<Int, Long>()
+private const val LISTENER_UNBOUND_GRACE = 15_000L
+
+private fun isServerBound(port: Int): Boolean = synchronized(activeServers) {
+    activeServers.any { runCatching { it.localPort == port && !it.isClosed }.getOrDefault(false) }
+}
+
+private fun listenerNeedsRestart(job: Job?, port: Int): Boolean {
+    if (job?.isActive != true) {
+        listenerUnboundSince.remove(port)
+        return true
+    }
+    if (isServerBound(port)) {
+        listenerUnboundSince.remove(port)
+        return false
+    }
+    val since = listenerUnboundSince.putIfAbsent(port, System.currentTimeMillis()) ?: return false
+    if (System.currentTimeMillis() - since < LISTENER_UNBOUND_GRACE) return false
+    listenerUnboundSince.remove(port)
+    Log.w("CLOUDSA", "Listener auf Port $port ist aktiv, aber kein Socket gebunden - wird abgebrochen")
+    job.cancel()
+    return true
+}
 
 private var cpuWakeLock: PowerManager.WakeLock? = null
 private var appContext: Context? = null
@@ -380,9 +545,20 @@ private var lastTriggerTime = 0L
 private const val MIN_TRIGGER_INTERVAL = 15_000L
 private var lastReconnectHeartbeat = 0L
 private const val RECONNECT_HEARTBEAT_INTERVAL = 120_000L
+private const val RECONNECT_BACKOFF_MAX = 1_800_000L
+private const val MAX_RECONNECT_FAILURES = 6
+@Volatile
+private var reconnectFailures = 0
+@Volatile
+private var reconnectBackoff = RECONNECT_HEARTBEAT_INTERVAL
+@Volatile
+private var reconnectSuspended = false
 private const val WIFI_AP_STATE_CHANGED_ACTION = "android.net.wifi.WIFI_AP_STATE_CHANGED"
 
 private val syncInProgress = AtomicBoolean(false)
+private const val SYNC_SUCCESS_COOLDOWN = 120_000L
+@Volatile
+private var lastSuccessfulSync = 0L
 
 private fun PowerManager.WakeLock?.safeRelease() {
     if (this != null && isHeld) release()
@@ -448,7 +624,6 @@ fun shutdownAllWifiDirectServices(context: Context) {
     aiResponseJob?.cancel(); aiResponseJob = null
     flashcardResponseJob?.cancel(); flashcardResponseJob = null
     clipboardJob?.cancel(); clipboardJob = null
-    mailNotifyJob?.cancel(); mailNotifyJob = null
     executeJob?.cancel(); executeJob = null
     smsJob?.cancel(); smsJob = null
 
@@ -468,6 +643,7 @@ fun shutdownAllWifiDirectServices(context: Context) {
     unregisterDeviceInfoNetworkListeners(context)
     cpuWakeLock.safeRelease(); cpuWakeLock = null
     syncInProgress.set(false)
+    lastSuccessfulSync = 0L
     isLaptopConnected = false
 }
 
@@ -496,7 +672,7 @@ private fun launchServer(
                 server = ServerSocket()
                 server.reuseAddress = true
                 server.bind(InetSocketAddress(port))
-                server.soTimeout = 100
+                server.soTimeout = 5000
                 synchronized(activeServers) { activeServers.add(server) }
                 consecutiveFailures = 0
                 Log.d("CLOUDSA", "$errorTag: Server started on port $port")
@@ -563,6 +739,19 @@ fun ensureRandomSyncSecret(context: Context, pcName: String): String {
     val secret = base32Encode(randomBytes)
     secretsPrefs.edit { putString(pcName, secret) }
     return secret
+}
+
+private const val PREFS_PC_DISPLAY_NAMES = "pc_display_names"
+
+fun resolveDisplayName(context: Context, pcName: String): String? {
+    if (pcName.isEmpty()) return null
+    return context.getSharedPreferences(PREFS_PC_DISPLAY_NAMES, MODE_PRIVATE).getString(pcName, null)
+}
+
+fun setDisplayName(context: Context, pcName: String, displayName: String) {
+    val prefs = context.getSharedPreferences(PREFS_PC_DISPLAY_NAMES, MODE_PRIVATE)
+    if (displayName.isBlank()) prefs.edit { remove(pcName) }
+    else prefs.edit { putString(pcName, displayName.trim()) }
 }
 
 private fun todosToJsonArray(todos: List<TodoItem>): JSONArray = JSONArray().apply {
@@ -647,6 +836,7 @@ suspend fun callNvidiaVisionApi(
         }
     } catch (_: Exception) {
         onError("API keine Antwort – prüfe Key & Netzwerk")
+        if (scaledBmp !== bmp) scaledBmp.recycle()
         return
     }
 
@@ -668,6 +858,7 @@ suspend fun callNvidiaVisionApi(
     } else {
         onError("API keine Antwort – prüfe Key & Netzwerk")
     }
+    if (scaledBmp !== bmp) scaledBmp.recycle()
 }
 
 @Volatile
@@ -692,8 +883,6 @@ fun startTriggerListenerIfHomeWifi(context: Context) {
     startTriggerListener(context)
     registerWifiReconnectReceiver(context)
 
-    checkIfNearLocation(context) { }
-
     syncScope.launch {
         val ip = fetchIpFromSupabase()
         if (!ip.isNullOrEmpty()) laptopIp = ip
@@ -701,7 +890,8 @@ fun startTriggerListenerIfHomeWifi(context: Context) {
 }
 
 fun registerWifiReconnectReceiver(context: Context) {
-    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val appContext = context.applicationContext
+    val cm = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     networkCallback?.let {
         try {
             cm.unregisterNetworkCallback(it)
@@ -738,13 +928,12 @@ fun registerWifiReconnectReceiver(context: Context) {
             val isWifi = cm.getNetworkCapabilities(network)
                 ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
             if (isWifi) {
-                checkIfNearLocation(context) { atHome ->
+                checkIfNearLocation(appContext, unknownLocationCountsAsHome = false) { atHome ->
                     if (atHome && !isLaptopConnected) {
-                        syncTodosWithLaptop(context)
+                        resetReconnectBackoff()
+                        syncTodosWithLaptop(appContext)
                     }
                 }
-            } else if (!isLaptopConnected) {
-                syncTodosWithLaptop(context)
             }
         }
 
@@ -752,13 +941,13 @@ fun registerWifiReconnectReceiver(context: Context) {
             syncInProgress.set(false)
             pendingSyncJob?.cancel()
             if (isLaptopConnected) {
-                stopAllSyncServices(context)
+                stopAllSyncServices(appContext)
             }
             // Nach Connection Verlust: Trigger Listener wieder starten
             syncScope.launch {
                 delay(2000.milliseconds)
                 if (triggerJob?.isActive != true) {
-                    startTriggerListener(context)
+                    startTriggerListener(appContext)
                 }
             }
         }
@@ -793,12 +982,13 @@ fun registerWifiReconnectReceiver(context: Context) {
 
 @SuppressLint("Wakelock", "WakelockTimeout")
 fun startTriggerListener(context: Context) {
+    val ctx = context.applicationContext
     if (triggerJob?.isActive == true) return
-    appContext = context.applicationContext
+    appContext = ctx.applicationContext
     
     // Start trigger listener
     triggerJob = launchServer(syncScope, Config.TRIGGER_PORT, "startTriggerListener") { client ->
-        val pm = context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+        val pm = ctx.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
         val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TodoSync:AcceptWakeLock")
         wl.acquire(30_000L)
 
@@ -820,22 +1010,22 @@ fun startTriggerListener(context: Context) {
                     val pcUuid = parts.getOrNull(3) ?: "NO_UUID"
 
                     if (pcName.isNotEmpty()) {
-                        val prefs = context.getSharedPreferences("registered_pcs", MODE_PRIVATE)
+                        val prefs = ctx.getSharedPreferences("registered_pcs", MODE_PRIVATE)
 
                         if (!prefs.contains(pcName)) {
-                            val pendingPrefs = context.getSharedPreferences("pending_pcs", MODE_PRIVATE)
+                            val pendingPrefs = ctx.getSharedPreferences("pending_pcs", MODE_PRIVATE)
                             pendingPrefs.edit { putString(pcName, "$pcIp|$pcUuid") }
 
                             showSimpleNotificationExtern(
                                 "🆕 Verbindungsanfrage",
                                 "PC $pcName möchte sich verbinden. Bitte im PC Manager freigeben.",
                                 10.seconds,
-                                context
+                                ctx
                             )
                             writer.println("PENDING")
-                            stopAllSyncServices(context)
+                            stopAllSyncServices(ctx)
                         } else {
-                            val secret = resolveSyncSecret(context, pcName)
+                            val secret = resolveSyncSecret(ctx, pcName)
                             val now = System.currentTimeMillis()
                             val totpValid = secret != null && listOf(
                                 generateTOTP(secret, now - 30000),
@@ -844,15 +1034,15 @@ fun startTriggerListener(context: Context) {
                             ).contains(totpCode)
 
                             if (totpValid) {
-                                ensureRandomSyncSecret(context, pcName)
+                                ensureRandomSyncSecret(ctx, pcName)
                                 laptopIp = pcIp
                                 laptopName = pcName
 
                                 showSimpleNotificationExtern(
                                     "📡 CONNECT",
-                                    "PC $pcName verbunden",
+                                    "PC ${resolveDisplayName(ctx, pcName) ?: pcName} verbunden",
                                     10.seconds,
-                                    context
+                                    ctx
                                 )
 
                                 val syncWl =
@@ -860,7 +1050,7 @@ fun startTriggerListener(context: Context) {
                                 syncWl.acquire(60_000L)
                                 syncScope.launch {
                                     try {
-                                        syncTodosWithLaptop(context, true)
+                                        syncTodosWithLaptop(ctx, true)
                                     } finally {
                                         syncWl.safeRelease()
                                     }
@@ -906,27 +1096,28 @@ fun startTriggerListener(context: Context) {
 }
 
 private fun startTriggerWatchdog(context: Context) {
+    val ctx = context.applicationContext
     triggerWatchdogJob?.cancel()
     triggerWatchdogJob = syncScope.launch {
         while (isActive) {
-            delay(5000L.milliseconds) // Check every 5 seconds
+            delay(20_000L.milliseconds)
             if (triggerJob == null || triggerJob?.isActive != true) {
                 Log.w("CLOUDSA", "Trigger listener not active, restarting...")
                 showSimpleNotificationExtern(
                     "⚠️ Trigger Listener",
                     "Neustart des Trigger Listeners...",
                     5.seconds,
-                    context
+                    ctx
                 )
-                startTriggerListener(context)
+                startTriggerListener(ctx)
             }
             if (isLaptopConnected) {
-                ensureSyncListenersAlive(context)
-            } else if (laptopIp.isNotEmpty()) {
+                ensureSyncListenersAlive(ctx)
+            } else if (laptopIp.isNotEmpty() && !reconnectSuspended) {
                 val now = System.currentTimeMillis()
-                if (now - lastReconnectHeartbeat >= RECONNECT_HEARTBEAT_INTERVAL) {
+                if (now - lastReconnectHeartbeat >= reconnectBackoff) {
                     lastReconnectHeartbeat = now
-                    syncTodosWithLaptop(context)
+                    syncTodosWithLaptop(ctx)
                 }
             }
         }
@@ -934,35 +1125,37 @@ private fun startTriggerWatchdog(context: Context) {
 }
 
 private fun ensureSyncListenersAlive(context: Context) {
-    if (mediaCommandJob?.isActive != true) {
+    val ctx = context.applicationContext
+    if (listenerNeedsRestart(mediaCommandJob, Config.MEDIA_COMMAND_PORT)) {
         Log.w("CLOUDSA", "Media command listener not active, restarting...")
-        startMediaCommandListener(context)
+        startMediaCommandListener(ctx)
     }
-    if (mediaStateJob?.isActive != true) {
+    if (listenerNeedsRestart(mediaStateJob, Config.MEDIA_STATE_PORT)) {
         Log.w("CLOUDSA", "Media state listener not active, restarting...")
         startMediaStateServer(context)
     }
-    if (clipboardJob?.isActive != true) {
+    if (listenerNeedsRestart(clipboardJob, Config.CLIPBOARD_PORT)) {
         Log.w("CLOUDSA", "Clipboard listener not active, restarting...")
         startClipboardListener(context)
     }
-    if (executeJob?.isActive != true) {
+    if (listenerNeedsRestart(executeJob, Config.EXECUTE_PORT)) {
         Log.w("CLOUDSA", "Execute listener not active, restarting...")
         startExecuteListener(context)
     }
-    if (smsJob?.isActive != true) {
+    if (listenerNeedsRestart(smsJob, Config.SMS_PORT)) {
         Log.w("CLOUDSA", "SMS listener not active, restarting...")
         startSmsListener(context)
     }
-    if (spotifyHistoryJob?.isActive != true) {
+    if (listenerNeedsRestart(spotifyHistoryJob, Config.SPOTIFY_HISTORY_PORT)) {
         Log.w("CLOUDSA", "Spotify history listener not active, restarting...")
         startSpotifyHistoryListener(context)
     }
 }
 
 fun restoreSyncIfNeeded(context: Context) {
-    appContext = context.applicationContext
-    val prefs = context.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)
+    val ctx = context.applicationContext
+    appContext = ctx.applicationContext
+    val prefs = ctx.getSharedPreferences(PREFS_SYNC, MODE_PRIVATE)
     val syncActive = prefs.getBoolean(KEY_SYNC_ACTIVE, false)
     val lastSync = prefs.getLong(KEY_LAST_SYNC, 0L)
     val thirtyMinutesMs = 30 * 60 * 1000L
@@ -971,24 +1164,24 @@ fun restoreSyncIfNeeded(context: Context) {
     if (syncActive && timeSinceLastSync <= thirtyMinutesMs) {
         val minutesAgo = (timeSinceLastSync / 60_000L).toInt().coerceAtLeast(1)
         isLaptopConnected = true
-        startUpdateListener(context)
-        startMediaCommandListener(context)
-        startExecuteListener(context)
-        startMediaStateServer(context)
-        startClipboardListener(context)
-        startSmsListener(context)
-        startSpotifyHistoryListener(context)
-        context.registerReceiver(
+        startUpdateListener(ctx)
+        startMediaCommandListener(ctx)
+        startExecuteListener(ctx)
+        startMediaStateServer(ctx)
+        startClipboardListener(ctx)
+        startSmsListener(ctx)
+        startSpotifyHistoryListener(ctx)
+        ctx.registerReceiver(
             akkuReceiver,
             IntentFilter(Intent.ACTION_BATTERY_CHANGED),
             Context.RECEIVER_NOT_EXPORTED
         )
-        context.registerReceiver(bluetoothReceiver, bluetoothIntentFilter, Context.RECEIVER_NOT_EXPORTED)
-        context.registerReceiver(volumeChangeReceiver, volumeChangeIntentFilter, Context.RECEIVER_NOT_EXPORTED)
-        registerDeviceInfoNetworkListeners(context)
+        ctx.registerReceiver(bluetoothReceiver, bluetoothIntentFilter, Context.RECEIVER_NOT_EXPORTED)
+        ctx.registerReceiver(volumeChangeReceiver, volumeChangeIntentFilter, Context.RECEIVER_NOT_EXPORTED)
+        registerDeviceInfoNetworkListeners(ctx)
         syncScope.launch {
             delay(5_000.milliseconds)
-            syncTodosWithLaptop(context)
+            syncTodosWithLaptop(ctx)
         }
         showSimpleNotificationExtern(
             "🔁 Sync wiederhergestellt",
@@ -1014,17 +1207,18 @@ fun stopUpdateListener(b: Boolean = true) {
 }
 
 fun stopAllSyncServices(context: Context) {
+    val ctx = context.applicationContext
     stopUpdateListener()
 
     listOf(
         mediaCommandJob, mediaStateJob, aiResponseJob, flashcardResponseJob,
-        clipboardJob, mailNotifyJob, executeJob, smsJob
+        clipboardJob, executeJob, smsJob
     ).forEach { it?.cancel() }
 
     mediaCommandJob = null; mediaStateJob = null; aiResponseJob = null
-    flashcardResponseJob = null; clipboardJob = null; mailNotifyJob = null; executeJob = null
+    flashcardResponseJob = null; clipboardJob = null; executeJob = null
 
-    val nm = context.getSystemService(NotificationManager::class.java)
+    val nm = ctx.getSystemService(NotificationManager::class.java)
     nm.cancel(99999)
 
     aiResponseServerSocket?.close(); aiResponseServerSocket = null
@@ -1091,16 +1285,22 @@ fun getTriggerListenerStatus(): String {
 }
 
 fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
+    val ctx = context.applicationContext
     if (triggerJob?.isActive != true) {
-        startTriggerListener(context)
+        startTriggerListener(ctx)
     }
-    if (syncInProgress.getAndSet(true) || !Config.realDevice || !prvt()) {
-        if (!Config.realDevice) syncInProgress.set(false)
+    if (!connected && System.currentTimeMillis() - lastSuccessfulSync < SYNC_SUCCESS_COOLDOWN) {
+        Log.d("CLOUDSA", "Sync übersprungen, letzter Erfolg vor ${(System.currentTimeMillis() - lastSuccessfulSync) / 1000}s")
         return
     }
-    if (!prvt()) return
+    if (syncInProgress.getAndSet(true)) return
+    if (!Config.realDevice || !prvt()) {
+        syncInProgress.set(false)
+        return
+    }
 
     syncScope.launch {
+        var attemptFailed = true
         try {
             val localip = getHotspotIp()
             if (localip != null) insertMobileIpToSupabase(localip)
@@ -1110,19 +1310,10 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                     fetchIpFromSupabase()
                 }
                 if (fetched.isNullOrEmpty()) {
-                    showSimpleNotificationExtern(
-                        "❌ Keine IP gefunden", "Supabase lieferte keine IP", 10.seconds, context
-                    )
+                    notifyMissingIpOnce(context, "Supabase lieferte keine IP")
                     return@launch
                 }
                 laptopIp = fetched
-                val insertedIp = fetchIpFromSupabase(true)
-                showSimpleNotificationExtern(
-                    "Fetched laptopIp, inserted ip",
-                    "$fetched, $insertedIp",
-                    10.seconds,
-                    context
-                )
             }
 
             val currentIp = if (laptopIp.contains("|")) {
@@ -1131,9 +1322,7 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
             } else laptopIp
 
             if (currentIp.isEmpty()) {
-                showSimpleNotificationExtern(
-                    "❌ Keine IP gefunden", "IP ist leer nach Bereinigung", 10.seconds, context
-                )
+                notifyMissingIpOnce(context, "IP ist leer nach Bereinigung")
                 return@launch
             }
 
@@ -1183,6 +1372,8 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
 
             when (response) {
                 "OK" -> {
+                    attemptFailed = false
+                    lastSuccessfulSync = System.currentTimeMillis()
                     isLaptopConnected = true
                     onPcCallSuccess()
 
@@ -1230,9 +1421,9 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
                 else -> throw IOException("Unbekannte Antwort: $response")
             }
         } catch (e: ConnectException) {
-            showSimpleNotificationExtern("Error", "${e.message}", 10.seconds, context)
+            notifyLaptopUnreachableOnce(context, e)
         } catch (e: SocketTimeoutException) {
-            showSimpleNotificationExtern("Error", "${e.message}", 10.seconds, context)
+            notifyLaptopUnreachableOnce(context, e)
         } catch (e: Exception) {
             val msg = e.message
             if (msg == null || !msg.contains("Connection reset") || !msg.contains("IOException")) {
@@ -1248,6 +1439,10 @@ fun syncTodosWithLaptop(context: Context, connected: Boolean = false) {
             }
         } finally {
             syncInProgress.set(false)
+            if (attemptFailed) {
+                registerReconnectFailure()
+                onPcCallFailure(context)
+            }
         }
     }
 }
@@ -1260,7 +1455,7 @@ fun startUpdateListener(context: Context) {
         try {
             updateServerSocket = ServerSocket().apply {
                 reuseAddress = true
-                soTimeout = 100
+                soTimeout = 5000
                 bind(InetSocketAddress(UPDATE_PORT))
             }
 
@@ -2130,12 +2325,13 @@ fun checkIfNearLocation(
     targetLat: Double = Config.LAT,
     targetLon: Double = Config.LON,
     radiusMeters: Float = 550f,
+    unknownLocationCountsAsHome: Boolean = true,
     callback: (Boolean) -> Unit
 ) {
     if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
     ) {
-        callback(true)
+        callback(unknownLocationCountsAsHome)
         return
     }
 
@@ -2152,10 +2348,10 @@ fun checkIfNearLocation(
                     ) <= radiusMeters
                 )
             } else {
-                callback(true)
+                callback(unknownLocationCountsAsHome)
             }
         }
-        .addOnFailureListener { callback(true) }
+        .addOnFailureListener { callback(unknownLocationCountsAsHome) }
 }
 
 fun distanceBetween(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
@@ -2239,30 +2435,6 @@ fun startClipboardListener(context: Context) {
                         context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     cm.setPrimaryClip(ClipData.newPlainText("sync", content))
                 }
-            }
-        }
-}
-
-@Suppress("KotlinUnreachableCode")
-fun startMailNotifyListener(context: Context) {
-    mailNotifyJob?.cancel()
-    return
-    mailNotifyJob =
-        launchServer(syncScope, Config.MAIL_NOTIFY_PORT, "startMailNotifyListener") { client ->
-            val text = client.inputStream.readBytes().toString(Charsets.UTF_8)
-            client.close()
-            val parts = text.split("|", limit = 4)
-            val sender = parts.getOrNull(1)?.trim() ?: "Unbekannt"
-            val subject = parts.getOrNull(2)?.trim() ?: "(kein Betreff)"
-            val summary = parts.getOrNull(3)?.trim() ?: text
-            val senderShort = sender.substringBefore("<").trim().ifEmpty { sender }
-            withContext(Dispatchers.Main) {
-                showSimpleNotificationExtern(
-                    title = "📧 $senderShort",
-                    text = "**$subject**\n$summary",
-                    duration = 60.seconds,
-                    context = context
-                )
             }
         }
 }
@@ -2529,6 +2701,28 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
             }
         }
 
+        "disconnect_bluetooth" -> {
+            val devices = mutableListOf<String>()
+            args.optJSONArray("devices")?.let { arr ->
+                for (i in 0 until arr.length()) {
+                    arr.optString(i).takeIf { it.isNotBlank() }?.let { devices.add(it) }
+                }
+            }
+            args.optString("device").takeIf { it.isNotBlank() }?.let { devices.add(it) }
+
+            syncScope.launch(Dispatchers.IO) {
+                for (device in devices.distinct()) {
+                    if (connectedBluetoothDevices.isEmpty()) break
+                    val result = CompletableDeferred<Boolean>()
+                    disconnectBluetoothDevice(context, device) { ok, msg ->
+                        Log.d("CLOUDSA", "[BT] disconnect $device -> $msg")
+                        result.complete(ok)
+                    }
+                    withTimeoutOrNull(8000) { result.await() }
+                }
+            }
+        }
+
         else -> {}
     }
 }
@@ -2539,16 +2733,29 @@ fun showCredentialsOverlay(context: Context, us: String, pw: String, totp: Strin
         return
     }
 
-    val windowManager = context.getSystemService(WINDOW_SERVICE) as WindowManager
-    val overlayLifecycle = OverlayLifecycleOwner().also {
-        it.onCreate()
-        it.onResume()
-    }
+    val appContext = context.applicationContext
+    val windowManager = appContext.getSystemService(WINDOW_SERVICE) as WindowManager
     var testOverlayView: ComposeView? = null
     var testOverlayLifecycle: OverlayLifecycleOwner? =
         OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
+    var autoCloseRunnable: Runnable? = null
 
-    testOverlayView = ComposeView(context).apply {
+    fun tearDownOverlay() {
+        autoCloseRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+        try {
+            testOverlayView?.let { windowManager.removeView(it) }
+        } catch (_: Exception) {
+        }
+        try {
+            testOverlayLifecycle?.onDestroy()
+        } catch (_: Exception) {
+        }
+        testOverlayView = null
+        testOverlayLifecycle = null
+        autoCloseRunnable = null
+    }
+
+    testOverlayView = ComposeView(appContext).apply {
         setViewTreeLifecycleOwner(testOverlayLifecycle)
         setViewTreeSavedStateRegistryOwner(testOverlayLifecycle)
         setViewTreeViewModelStoreOwner(testOverlayLifecycle)
@@ -2577,7 +2784,7 @@ fun showCredentialsOverlay(context: Context, us: String, pw: String, totp: Strin
                                 .background(MaterialTheme.colorScheme.primary)
                                 .clickable {
                                     val clipboard =
-                                        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                     clipboard.setPrimaryClip(
                                         ClipData.newPlainText(
                                             "username",
@@ -2599,18 +2806,7 @@ fun showCredentialsOverlay(context: Context, us: String, pw: String, totp: Strin
                 }
 
                 IconButton(
-                    onClick = {
-                        try {
-                            testOverlayView?.let { windowManager.removeView(it) }
-                        } catch (_: Exception) {
-                        }
-                        try {
-                            testOverlayLifecycle?.onDestroy()
-                        } catch (_: Exception) {
-                        }
-                        testOverlayView = null
-                        testOverlayLifecycle = null
-                    },
+                    onClick = { tearDownOverlay() },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
@@ -2640,8 +2836,13 @@ fun showCredentialsOverlay(context: Context, us: String, pw: String, totp: Strin
 
     try {
         windowManager.addView(testOverlayView, params)
+        val runnable = Runnable { tearDownOverlay() }
+        autoCloseRunnable = runnable
+        Handler(Looper.getMainLooper()).postDelayed(runnable, 30_000L)
     } catch (_: Exception) {
-        overlayLifecycle.onDestroy()
+        testOverlayLifecycle?.onDestroy()
+        testOverlayView = null
+        testOverlayLifecycle = null
     }
 }
 
@@ -2706,9 +2907,13 @@ private suspend fun fetchIpFromSupabase(mobile: Boolean = false): String? =
         null
     }
 
+@Volatile
+private var lastInsertedMobileIp = ""
+
 private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
     withContext(Dispatchers.IO) {
         if (!Config.realDevice) return@withContext true
+        if (ipAddress == lastInsertedMobileIp) return@withContext true
         try {
             Config.safeCall {
                 Config.client
@@ -2720,6 +2925,7 @@ private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
                         filter { eq("device_id", "handy") }
                     }
             }
+            lastInsertedMobileIp = ipAddress
             true
         } catch (e: Exception) {
             logError("SupabaseInsert", e)
