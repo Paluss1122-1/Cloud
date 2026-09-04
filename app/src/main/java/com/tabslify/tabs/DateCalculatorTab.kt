@@ -1,7 +1,6 @@
 package com.tabslify.tabs
 
 import android.annotation.SuppressLint
-import android.app.DatePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,8 +13,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,7 +37,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tabslify.R
 import com.tabslify.core.ui.APP_COLOR
+import com.tabslify.core.ui.AccentViolet
+import com.tabslify.core.ui.BgSurface
+import com.tabslify.core.ui.TextPrimary
+import com.tabslify.core.ui.TextSecondary
+import com.tabslify.core.ui.TextTertiary
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.Calendar
 
@@ -137,11 +149,12 @@ fun DateCalculatorContent(modifier: Modifier = Modifier) {
                 daysDifference = null
             },
             colors = ButtonDefaults.buttonColors(
-                containerColor = APP_COLOR
+                containerColor = APP_COLOR,
+                contentColor = TextPrimary
             ),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(stringResource(R.string.zurucksetzen), fontSize = 16.sp, color = Color.Gray)
+            Text(stringResource(R.string.zurucksetzen), fontSize = 16.sp)
         }
     }
 }
@@ -153,7 +166,7 @@ fun DateSelectionCard(
     selectedDate: LocalDate?,
     onDateSelected: (LocalDate) -> Unit
 ) {
-    val context = LocalContext.current
+    var showPicker by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -169,31 +182,16 @@ fun DateSelectionCard(
             Text(
                 text = label,
                 fontSize = 16.sp,
-                color = Color.Gray,
+                color = TextSecondary,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
             Button(
-                onClick = {
-                    val calendar = Calendar.getInstance()
-                    if (selectedDate != null) {
-                        calendar.set(
-                            selectedDate.year,
-                            selectedDate.monthValue - 1,
-                            selectedDate.dayOfMonth
-                        )
-                    }
-
-                    DatePickerDialog(
-                        context,
-                        { _, year, month, dayOfMonth ->
-                            onDateSelected(LocalDate.of(year, month + 1, dayOfMonth))
-                        },
-                        calendar.get(Calendar.YEAR),
-                        calendar.get(Calendar.MONTH),
-                        calendar.get(Calendar.DAY_OF_MONTH)
-                    ).show()
-                },
+                onClick = { showPicker = true },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AccentViolet,
+                    contentColor = Color.White
+                ),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
@@ -211,5 +209,84 @@ fun DateSelectionCard(
                 )
             }
         }
+    }
+
+    if (showPicker) {
+        AppDatePickerDialog(
+            initialDate = selectedDate,
+            onDismiss = { showPicker = false },
+            onDateSelected = {
+                onDateSelected(it)
+                showPicker = false
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AppDatePickerDialog(
+    initialDate: LocalDate?,
+    onDismiss: () -> Unit,
+    onDateSelected: (LocalDate) -> Unit
+) {
+    val state = rememberDatePickerState(
+        initialSelectedDateMillis = (initialDate ?: LocalDate.now())
+            .atStartOfDay(ZoneOffset.UTC)
+            .toInstant()
+            .toEpochMilli()
+    )
+
+    val colors = DatePickerDefaults.colors(
+        containerColor = BgSurface,
+        titleContentColor = TextSecondary,
+        headlineContentColor = TextPrimary,
+        weekdayContentColor = TextSecondary,
+        subheadContentColor = TextSecondary,
+        navigationContentColor = TextPrimary,
+        yearContentColor = TextSecondary,
+        currentYearContentColor = AccentViolet,
+        selectedYearContentColor = Color.White,
+        selectedYearContainerColor = AccentViolet,
+        dayContentColor = TextPrimary,
+        disabledDayContentColor = TextTertiary,
+        selectedDayContentColor = Color.White,
+        selectedDayContainerColor = AccentViolet,
+        todayContentColor = AccentViolet,
+        todayDateBorderColor = AccentViolet,
+        dayInSelectionRangeContentColor = TextPrimary,
+        dayInSelectionRangeContainerColor = AccentViolet.copy(alpha = 0.3f),
+        dividerColor = Color.White.copy(alpha = 0.12f)
+    )
+
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        colors = colors,
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    state.selectedDateMillis?.let { millis ->
+                        onDateSelected(
+                            Instant.ofEpochMilli(millis)
+                                .atZone(ZoneOffset.UTC)
+                                .toLocalDate()
+                        )
+                    } ?: onDismiss()
+                }
+            ) {
+                Text(stringResource(android.R.string.ok), color = AccentViolet)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.cancel), color = TextSecondary)
+            }
+        }
+    ) {
+        DatePicker(
+            state = state,
+            showModeToggle = false,
+            colors = colors
+        )
     }
 }
