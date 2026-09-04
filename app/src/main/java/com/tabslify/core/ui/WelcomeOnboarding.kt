@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -76,20 +77,12 @@ import com.tabslify.core.objects.prvt
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
-/* ------------------------------------------------------------------ */
-/*  Palette (shared with the welcome flow)                            */
-/* ------------------------------------------------------------------ */
-
 private val TextPrimaryOnboarding = Color(0xFFF7F5FB)
-private val TextSecondaryOnboarding = Color(0xB3FFFFFF) // white @ 70%
-private val ChipBg = Color(0x0DFFFFFF)        // white @ 5%
+private val TextSecondaryOnboarding = Color(0xB3FFFFFF)
+private val ChipBg = Color(0x0DFFFFFF)
 
-private val AccentColors = listOf(Color(0xFFFF8A4C), Color(0xFFB45CFC), Color(0xFF6B4CFC))
+private val AccentColors = listOf(Color(0xFF484848), Color(0xFF252525))
 private val AccentBrush = Brush.linearGradient(AccentColors)
-
-/* ------------------------------------------------------------------ */
-/*  Page model                                                        */
-/* ------------------------------------------------------------------ */
 
 private enum class PageKind { LOGO, LANGUAGE, GRID, BULLETS, BULLETS_ALT, NOTIFICATION_PERMISSION, PERMISSIONS }
 
@@ -141,7 +134,6 @@ private val pages = listOf(
             R.string.tracking_funktionen_nur_optional
         )
     ),
-    // "Überspringen" on earlier pages jumps straight here.
     OnboardPage(
         kind = PageKind.NOTIFICATION_PERMISSION,
         titleRes = R.string.notification_permission_title,
@@ -149,14 +141,12 @@ private val pages = listOf(
         icon = Icons.Filled.Notifications,
         iconBrush = Brush.linearGradient(listOf(Color(0xFFFF8A4C), Color(0xFFFF5C7A)))
     ),
-    // Last page — NOT skippable.
     OnboardPage(
         kind = PageKind.PERMISSIONS,
         titleRes = R.string.tabslify_berechtigungen
     )
 )
 
-/* Icon tiles for the grid page */
 private data class GridTile(val icon: ImageVector, val brush: Brush)
 
 private val gridTiles = listOf(
@@ -214,8 +204,6 @@ fun WelcomeOnboardingScreen(
     AppBackground(
         modifier = Modifier
             .systemGestureExclusion()
-            // Onboarding hebt sich beim Beenden leicht an, zoomt weg und blendet aus,
-            // sodass die App darunter zum Vorschein kommt.
             .graphicsLayer {
                 val p = exitProgress.value
                 alpha = 1f - p
@@ -226,19 +214,51 @@ fun WelcomeOnboardingScreen(
             },
         scrim = AppBgScrim.STRONG
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .padding(horizontal = 20.dp),
-                contentAlignment = Alignment.CenterEnd
-            ) {
-                if (!isLast) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) { page ->
+                    PageContent(
+                        page = pages[page],
+                        isActive = pagerState.currentPage == page
+                    )
+                }
+
+                DotsIndicator(
+                    count = pages.size,
+                    current = pagerState.currentPage,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                )
+
+                GradientButton(
+                    label = if (isLast) stringResource(R.string.los_geht_s) else stringResource(R.string.weiter),
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .fillMaxWidth()
+                        .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 28.dp)
+                ) {
+                    if (isLast) {
+                        if (!finishing) finishing = true
+                    } else scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                }
+            }
+
+            if (!isLast) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .statusBarsPadding()
+                        .height(48.dp)
+                        .padding(horizontal = 20.dp),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
                     Text(
                         text = stringResource(R.string.uberspringen),
                         color = Color(0x8CFFFFFF),
@@ -253,46 +273,9 @@ fun WelcomeOnboardingScreen(
                     )
                 }
             }
-
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            ) { page ->
-                PageContent(
-                    page = pages[page],
-                    isActive = pagerState.currentPage == page
-                )
-            }
-
-            // Dots
-            DotsIndicator(
-                count = pages.size,
-                current = pagerState.currentPage,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-            )
-
-            // Primary action
-            GradientButton(
-                label = if (isLast) stringResource(R.string.los_geht_s) else stringResource(R.string.weiter),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 28.dp)
-            ) {
-                if (isLast) {
-                    if (!finishing) finishing = true
-                } else scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
-            }
         }
     }
 }
-
-/* ------------------------------------------------------------------ */
-/*  Page content + entrance animation                                 */
-/* ------------------------------------------------------------------ */
 
 @Composable
 private fun PageContent(page: OnboardPage, isActive: Boolean) {
@@ -303,13 +286,12 @@ private fun PageContent(page: OnboardPage, isActive: Boolean) {
 
     val context = LocalContext.current
 
-    // Bounce-in when the page becomes the current one.
     val scale = remember(page) { Animatable(0.35f) }
     val alpha = remember(page) { Animatable(0f) }
 
     var mediaAnalyticsEnabled by remember { mutableStateOf(true) }
     LaunchedEffect(context) {
-        com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.init(context)
+        com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.init(context.applicationContext)
         mediaAnalyticsEnabled = com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.isAnalyticsEnabled()
     }
 
