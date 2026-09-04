@@ -17,6 +17,8 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
 import java.io.File
@@ -98,7 +100,7 @@ class ApkmInstaller(private val context: Context) {
     // Schritt 1: Bundle in den Cache kopieren
     // ---------------------------------------------------------------------------------------------
 
-    fun copyToCache(uri: Uri, onProgress: (Long, Long) -> Unit): File {
+    suspend fun copyToCache(uri: Uri, onProgress: (Long, Long) -> Unit): File {
         val name = queryDisplayName(uri) ?: "bundle_${System.currentTimeMillis()}.apkm"
         log("Kopiere \"$name\" in den Cache…")
         val total = querySize(uri)
@@ -114,6 +116,7 @@ class ApkmInstaller(private val context: Context) {
                 val buf = ByteArray(1 shl 16)
                 var copied = 0L
                 while (true) {
+                    currentCoroutineContext().ensureActive()
                     val read = ins.read(buf)
                     if (read < 0) break
                     out.write(buf, 0, read)
@@ -402,7 +405,7 @@ class ApkmInstaller(private val context: Context) {
                             (message?.contains("INSTALL_FAILED_UPDATE_INCOMPATIBLE", true) == true) ||
                             (message?.contains("INCONSISTENT_CERTIFICATES", true) == true)
                         log("❌ Installation fehlgeschlagen (Status $status): ${message ?: "unbekannt"}")
-                        if (sessionId >= 0) runCatching { installer.openSession(sessionId).abandon() }
+                        if (sessionId >= 0) runCatching { installer.openSession(sessionId).use { it.abandon() } }
                         log("↩ Session verworfen – keine Teilinstallation zurückgeblieben (Rollback).")
                         finish(InstallOutcome.Failure(status, message, signatureConflict))
                     }
@@ -454,13 +457,13 @@ class ApkmInstaller(private val context: Context) {
             }
         } catch (e: Exception) {
             log("❌ Fehler beim Schreiben der Session: ${e.message}")
-            if (sessionId >= 0) runCatching { installer.openSession(sessionId) }
+            if (sessionId >= 0) runCatching { installer.openSession(sessionId).use { it.abandon() } }
             log("↩ Session verworfen (Rollback).")
             finish(InstallOutcome.Failure(Int.MIN_VALUE, e.message, false))
         }
 
         cont.invokeOnCancellation {
-            if (sessionId >= 0) runCatching { installer.openSession(sessionId) }
+            if (sessionId >= 0) runCatching { installer.openSession(sessionId).use { it.abandon() } }
             runCatching { context.unregisterReceiver(receiver) }
         }
     }
@@ -478,7 +481,14 @@ class ApkmInstaller(private val context: Context) {
         if (iconEntry != null) {
             runCatching {
                 val bytes = zf.getInputStream(iconEntry).use { it.readBytes() }
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.let { return it.asImageBitmap() }
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                val opts = BitmapFactory.Options().apply {
+                    inSampleSize = calcInSampleSize(bounds.outWidth, bounds.outHeight, 256)
+                }
+                val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+                    ?: return@runCatching null
+                return bmp.asImageBitmap()
             }
         }
         // 2) App-Icon aus der Basis-APK rendern
@@ -538,6 +548,19 @@ class ApkmInstaller(private val context: Context) {
 
     private fun safeName(name: String): String =
         name.replace(Regex("[^a-zA-Z0-9._-]"), "_").ifBlank { "split_${System.nanoTime()}.apk" }
+
+    private fun calcInSampleSize(w: Int, h: Int, maxSize: Int): Int {
+        var sample = 1
+        if (w <= 0 || h <= 0) return sample
+        var scaledW = w
+        var scaledH = h
+        while (scaledW / 2 >= maxSize && scaledH / 2 >= maxSize) {
+            scaledW /= 2
+            scaledH /= 2
+            sample *= 2
+        }
+        return sample
+    }
 
     fun canRequestInstalls(): Boolean =
         context.packageManager.canRequestPackageInstalls()
