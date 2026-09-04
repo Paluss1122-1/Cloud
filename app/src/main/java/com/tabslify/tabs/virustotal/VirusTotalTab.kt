@@ -7,6 +7,7 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,18 +17,26 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -58,8 +67,13 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 import androidx.compose.runtime.DisposableEffect
 
@@ -71,12 +85,14 @@ fun VirusTotalTabContent() {
     val jobs by VirusTotalScanManager.jobs.collectAsState()
 
     DisposableEffect(Unit) {
+        VirusTotalScanManager.ensureLoaded(context)
         VirusTotalScanManager.vtTabVisible = true
         onDispose { VirusTotalScanManager.vtTabVisible = false }
     }
 
     var mode by rememberSaveable { mutableStateOf(VirusTotalMode.URL) }
     var input by rememberSaveable { mutableStateOf("") }
+    var selectedJobId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedFileUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     var selectedFileName by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -116,6 +132,7 @@ fun VirusTotalTabContent() {
                         input = ""
                         selectedFileUri = null
                         selectedFileName = null
+                        selectedJobId = null
                     },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
@@ -145,7 +162,10 @@ fun VirusTotalTabContent() {
                 )
                 Spacer(Modifier.height(12.dp))
                 Button(
-                    onClick = { VirusTotalScanManager.startUrl(context, input) },
+                    onClick = {
+                        selectedJobId = null
+                        VirusTotalScanManager.startUrl(context, input)
+                    },
                     enabled = input.isNotBlank(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -164,7 +184,10 @@ fun VirusTotalTabContent() {
                 )
                 Spacer(Modifier.height(12.dp))
                 Button(
-                    onClick = { VirusTotalScanManager.startHash(context, input) },
+                    onClick = {
+                        selectedJobId = null
+                        VirusTotalScanManager.startHash(context, input)
+                    },
                     enabled = input.isNotBlank(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -187,8 +210,11 @@ fun VirusTotalTabContent() {
                     onClick = {
                         val uri = selectedFileUri ?: return@Button
                         val name = selectedFileName ?: "file"
+                        selectedJobId = null
                         scope.launch {
-                            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                            val bytes = withContext(Dispatchers.IO) {
+                                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                            }
                             if (bytes != null) VirusTotalScanManager.startFile(context, name, bytes)
                         }
                     },
@@ -202,14 +228,15 @@ fun VirusTotalTabContent() {
 
         Spacer(Modifier.height(24.dp))
 
-        val relevantJob = pendingVirusTotalReport?.let { id -> jobs.find { it.id == id } }
-            ?: jobs.lastOrNull { it.mode == mode }
-
-        androidx.compose.runtime.LaunchedEffect(relevantJob) {
-            if (pendingVirusTotalReport != null && relevantJob != null && relevantJob.id == pendingVirusTotalReport) {
+        androidx.compose.runtime.LaunchedEffect(pendingVirusTotalReport) {
+            pendingVirusTotalReport?.let { id ->
+                selectedJobId = id
                 pendingVirusTotalReport = null
             }
         }
+
+        val relevantJob = selectedJobId?.let { id -> jobs.find { it.id == id } }
+            ?: jobs.lastOrNull { it.mode == mode }
 
         when (val current = relevantJob?.state ?: VirusTotalState.Idle) {
             VirusTotalState.Idle -> {}
@@ -232,10 +259,176 @@ fun VirusTotalTabContent() {
             }
 
             is VirusTotalState.Result -> {
+                relevantJob?.let {
+                    Text(
+                        text = it.target,
+                        color = TextSecondary,
+                        fontSize = 13.sp,
+                        maxLines = 2,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
                 VirusTotalResultCard(current.stats, current.permalink)
             }
         }
+
+        Spacer(Modifier.height(28.dp))
+
+        VirusTotalHistorySection(
+            jobs = jobs,
+            selectedId = relevantJob?.id,
+            onSelect = { selectedJobId = it },
+            onDelete = { id ->
+                if (selectedJobId == id) selectedJobId = null
+                VirusTotalScanManager.deleteReport(context, id)
+            },
+            onClear = {
+                selectedJobId = null
+                VirusTotalScanManager.clearHistory(context)
+            }
+        )
     }
+}
+
+@Composable
+private fun VirusTotalHistorySection(
+    jobs: List<VirusTotalScanJob>,
+    selectedId: String?,
+    onSelect: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onClear: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = stringResource(R.string.virustotal_verlauf),
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp
+        )
+        if (jobs.any { it.state !is VirusTotalState.Loading }) {
+            TextButton(onClick = onClear) {
+                Text(stringResource(R.string.virustotal_verlauf_leeren), color = TextSecondary, fontSize = 13.sp)
+            }
+        }
+    }
+
+    Spacer(Modifier.height(8.dp))
+
+    if (jobs.isEmpty()) {
+        Text(
+            text = stringResource(R.string.virustotal_verlauf_leer),
+            color = TextSecondary,
+            fontSize = 13.sp
+        )
+        return
+    }
+
+    jobs.sortedByDescending { it.startedAt }.forEach { job ->
+        VirusTotalHistoryRow(
+            job = job,
+            selected = job.id == selectedId,
+            onSelect = { onSelect(job.id) },
+            onDelete = { onDelete(job.id) }
+        )
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun VirusTotalHistoryRow(
+    job: VirusTotalScanJob,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val statusColor = when (val state = job.state) {
+        is VirusTotalState.Result -> when {
+            state.stats.malicious > 0 -> Color(0xFFF44336)
+            state.stats.suspicious > 0 -> Color(0xFFFFAB00)
+            else -> Color(0xFF4CAF50)
+        }
+        is VirusTotalState.Error -> Color(0xFFF44336)
+        else -> Color(0xFF6B6BFF)
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelect() },
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) Color(0xFF2A2A3A) else BgCard
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (job.state is VirusTotalState.Loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    color = statusColor,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .background(statusColor, CircleShape)
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = job.target.ifBlank { job.label },
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 14.sp,
+                    maxLines = 1
+                )
+                val subText = when (val state = job.state) {
+                    is VirusTotalState.Loading -> stringResource(R.string.virustotal_wird_gescannt)
+                    is VirusTotalState.Result -> stringResource(
+                        R.string.virustotal_verlauf_treffer,
+                        state.stats.malicious,
+                        state.stats.total
+                    )
+                    is VirusTotalState.Error -> state.message
+                    else -> ""
+                }
+                Text(
+                    text = "${formatScanTime(job.startedAt)} · $subText",
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    maxLines = 2
+                )
+            }
+
+            if (job.state !is VirusTotalState.Loading) {
+                IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = stringResource(R.string.virustotal_bericht_loschen),
+                        tint = TextSecondary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun formatScanTime(millis: Long): String {
+    if (millis <= 0L) return ""
+    return SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(millis))
 }
 
 @Composable
