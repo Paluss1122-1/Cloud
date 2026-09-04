@@ -3,6 +3,7 @@ package com.tabslify.tabs
 import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
+import androidx.activity.compose.BackHandler
 import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
 import android.net.wifi.WifiManager
@@ -202,6 +203,10 @@ class RemoteDesktopViewModel : ViewModel() {
     // Bitmap reuse: pre-allocated RGB_565 bitmap pool (latest only)
     private val reuseBitmapRef = AtomicReference<Bitmap?>(null)
 
+    // Erhöht bei disconnect(), damit in-flight-Decodes ihre Ergebnisse nicht mehr veröffentlichen
+    @Volatile
+    private var decodeGeneration = 0L
+
     private val perfMonitor = PerformanceMonitor()
 
     private val moveThrottleMs = 16L
@@ -220,10 +225,12 @@ class RemoteDesktopViewModel : ViewModel() {
     }
 
     fun selectConnectMode() {
+        disconnect()
         _state.value = RemoteDesktopState.Discovering
     }
 
     fun selectHostMode() {
+        disconnect()
         _state.value =
             RemoteDesktopState.Error("Host-Modus nicht verfügbar auf Android", canRetry = false)
     }
@@ -324,6 +331,8 @@ class RemoteDesktopViewModel : ViewModel() {
 
     fun connectToHost(host: RemoteHost, pin: String) {
         Log.i(TAG, "[CONN] Verbinde zu ${host.ip}:${host.port}")
+        webSocket?.close(1000, "New connection")
+        webSocket = null
         _state.value = RemoteDesktopState.Connecting(host)
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -385,13 +394,14 @@ class RemoteDesktopViewModel : ViewModel() {
                         pendingDecodes.incrementAndGet()
 
                         viewModelScope.launch(Dispatchers.Default) {
+                            val genAtStart = decodeGeneration
                             try {
                                 val decodeStart = System.currentTimeMillis()
 
                                 val opts = BitmapFactory.Options().apply {
                                     inPreferredConfig = Bitmap.Config.RGB_565
                                     reuseBitmapRef.get()?.let { prev ->
-                                        if (!prev.isRecycled) {
+                                        if (!prev.isRecycled && decodeGeneration == genAtStart) {
                                             inBitmap = prev
                                             inMutable = true
                                         }
@@ -420,25 +430,30 @@ class RemoteDesktopViewModel : ViewModel() {
                                         "[DECODE] ✓ ${decodeTime}ms (${bitmap.width}x${bitmap.height})"
                                     )
 
-                                    reuseBitmapRef.getAndSet(bitmap)
+                                    if (decodeGeneration != genAtStart) {
+                                        // Verbindung während des Decodes getrennt: Ergebnis verwerfen
+                                        if (!bitmap.isRecycled) bitmap.recycle()
+                                    } else {
+                                        reuseBitmapRef.getAndSet(bitmap)
 
-                                    _currentFrame.value = bitmap
-                                    frameCounter++
+                                        _currentFrame.value = bitmap
+                                        frameCounter++
 
-                                    val latency =
-                                        (System.currentTimeMillis() - lastFrameTime).toInt()
-                                    lastFrameTime = System.currentTimeMillis()
+                                        val latency =
+                                            (System.currentTimeMillis() - lastFrameTime).toInt()
+                                        lastFrameTime = System.currentTimeMillis()
 
-                                    perfMonitor.recordFrame(decodeTime, receiveTime - lastFrameTime)
-                                    if (perfMonitor.shouldLog()) Log.i(
-                                        TAG,
-                                        "[STATS] ${perfMonitor.getStats()}"
-                                    )
+                                        perfMonitor.recordFrame(decodeTime, receiveTime - lastFrameTime)
+                                        if (perfMonitor.shouldLog()) Log.i(
+                                            TAG,
+                                            "[STATS] ${perfMonitor.getStats()}"
+                                        )
 
-                                    val cur = _state.value
-                                    if (cur is RemoteDesktopState.Connected) {
-                                        launch(Dispatchers.Main.immediate) {
-                                            _state.value = cur.copy(latencyMs = latency)
+                                        val cur = _state.value
+                                        if (cur is RemoteDesktopState.Connected) {
+                                            launch(Dispatchers.Main.immediate) {
+                                                _state.value = cur.copy(latencyMs = latency)
+                                            }
                                         }
                                     }
                                 } else {
@@ -540,6 +555,11 @@ class RemoteDesktopViewModel : ViewModel() {
         webSocket?.close(1000, "User disconnect")
         webSocket = null
         _currentFrame.value = null
+        decodeGeneration++
+        // Pool-Referenz ohne recycle() freigeben: eine evtl. laufende Decode-Coroutine
+        // nutzt das gepoolte Bitmap noch als inBitmap-Ziel. Es wird danach vom GC oder
+        // von der in-flight-Decode (Generation-Guard) freigegeben.
+        reuseBitmapRef.getAndSet(null)
         frameCounter = 0
         pendingDecodes.set(0)
         discoveryJob?.cancel()
@@ -563,8 +583,21 @@ fun RemoteDesktopTabContent() {
     }
     val viewModel: RemoteDesktopViewModel = viewModel()
     val state by viewModel.state.collectAsState()
+    val activity = context as? Activity
 
     val alpha = remember { Animatable(0f) }
+    val leaveTab: () -> Unit = {
+        viewModel.backToModeSelection()
+        activity?.moveTaskToBack(true)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { viewModel.disconnect() }
+    }
+
+    BackHandler {
+        leaveTab()
+    }
     LaunchedEffect(Unit) {
         delay(100.milliseconds)
         alpha.animateTo(1f, animationSpec = tween(300, easing = FastOutSlowInEasing))
@@ -582,21 +615,21 @@ fun RemoteDesktopTabContent() {
                 onHost = { viewModel.selectHostMode() }
             )
 
-            is RemoteDesktopState.Discovering -> DiscoveryScreen(onCancel = { viewModel.backToModeSelection() })
+            is RemoteDesktopState.Discovering -> DiscoveryScreen(onCancel = leaveTab)
             is RemoteDesktopState.HostList -> HostListScreen(
                 hosts = s.hosts,
                 onSelectHost = { host, pin -> viewModel.connectToHost(host, pin) },
                 onRetry = { viewModel.retryDiscovery(context) },
-                onBack = { viewModel.backToModeSelection() }
+                onBack = leaveTab
             )
 
             is RemoteDesktopState.Connecting -> ConnectingScreen(
                 host = s.host,
-                onCancel = { viewModel.backToModeSelection() })
+                onCancel = leaveTab)
 
             is RemoteDesktopState.Connected -> ConnectedScreen(
                 viewModel = viewModel, host = s.host, latencyMs = s.latencyMs,
-                onDisconnect = { viewModel.backToModeSelection() }
+                onDisconnect = leaveTab
             )
 
             is RemoteDesktopState.Hosting -> HostingScreen(
@@ -604,13 +637,13 @@ fun RemoteDesktopTabContent() {
                 pin = s.pin,
                 connected = s.connected,
                 clientIp = s.clientIp,
-                onStop = { viewModel.backToModeSelection() })
+                onStop = leaveTab)
 
             is RemoteDesktopState.Error -> ErrorScreen(
                 message = s.message,
                 canRetry = s.canRetry,
                 onRetry = { viewModel.retryDiscovery(context) },
-                onBack = { viewModel.backToModeSelection() })
+                onBack = leaveTab)
         }
     }
 }

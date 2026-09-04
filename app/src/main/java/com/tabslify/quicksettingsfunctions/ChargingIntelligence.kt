@@ -192,6 +192,8 @@ object ChargeSessionRepository {
 
 class ChargingTrackerService : Service() {
     private var detailedLogging = false
+    private var batteryRegistered = false
+    private var allowRegistered = false
 
     private val allowReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context, intent: Intent) {
@@ -263,7 +265,9 @@ class ChargingTrackerService : Service() {
         }
         ChargeSessionRepository.init(this)
         registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        batteryRegistered = true
         registerReceiver(allowReceiver, IntentFilter(ACTION_ALLOW))
+        allowRegistered = true
 
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
@@ -298,8 +302,14 @@ class ChargingTrackerService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(batteryReceiver)
-        unregisterReceiver(allowReceiver)
+        if (batteryRegistered) {
+            runCatching { unregisterReceiver(batteryReceiver) }
+            batteryRegistered = false
+        }
+        if (allowRegistered) {
+            runCatching { unregisterReceiver(allowReceiver) }
+            allowRegistered = false
+        }
         getSystemService(NotificationManager::class.java).cancel(NOTIF_PERMISSION_ID)
     }
 
@@ -345,8 +355,7 @@ suspend fun predictChargingTime(context: Context): Int? {
         Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128)
     }.getOrDefault(128)
 
-    val recentSamples = BatteryDataRepository.samples.value
-        .filter { System.currentTimeMillis() - it.timestamp < 15 * 60 * 1000 }
+    val recentSamples = BatteryDataRepository.recentSamples(15 * 60 * 1000L)
     val liveRate: Float? = if (recentSamples.size >= 2) {
         val levelDiff = recentSamples.last().level - recentSamples.first().level
         val timeDiff = (recentSamples.last().timestamp - recentSamples.first().timestamp) / 60000f

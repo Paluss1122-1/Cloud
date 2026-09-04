@@ -157,6 +157,7 @@ fun getHomeWifiStatus(
             if (hasFired) return
             hasFired = true
             onResult(false)
+            cm.unregisterNetworkCallback(this)
         }
     }
 
@@ -406,9 +407,11 @@ private fun getAvailableCommands(context: Context): List<Command> {
             aliases = listOf("bw", "btw", "b"),
             description = "Bw MP!"
         ) {
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val appContext = context.applicationContext
+            val clipboard =
+                appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             serviceScope.launch {
-                val clip = ClipData.newPlainText("BWMP", fetchBWMP(context)).apply {
+                val clip = ClipData.newPlainText("BWMP", fetchBWMP(appContext)).apply {
                     description.extras = PersistableBundle().apply {
                         putBoolean("android.content.extra.IS_SENSITIVE", true)
                     }
@@ -730,6 +733,11 @@ private fun getAvailableCommands(context: Context): List<Command> {
 
             val windowManager = context.getSystemService(WINDOW_SERVICE) as WindowManager
 
+            testOverlayView?.let { runCatching { windowManager.removeView(it) } }
+            testOverlayLifecycle?.onDestroy()
+            testOverlayView = null
+            testOverlayLifecycle = null
+
             testOverlayLifecycle = OverlayLifecycleOwner().also { it.onCreate(); it.onResume() }
 
             testOverlayView = ComposeView(context).apply {
@@ -915,17 +923,18 @@ fun executeCommand(commandText: String, context: Context) {
                     }
 
                     if (day != null && dayNum in 0..2) {
+                        val appContext = context.applicationContext
                         Handler(Looper.getMainLooper()).post {
                             serviceScope.launch {
                                 try {
                                     val loc =
-                                        getLastKnownLocation(context)
+                                        getLastKnownLocation(appContext)
                                     if (loc == null) {
                                         showSimpleNotificationExtern(
                                             "❌ Standort-Fehler",
                                             "Standort nicht verfügbar",
                                             20.seconds,
-                                            context
+                                            appContext
                                         )
                                         return@launch
                                     }
@@ -935,11 +944,11 @@ fun executeCommand(commandText: String, context: Context) {
                                             loc.latitude,
                                             loc.longitude,
                                             days = 14,
-                                            apiKey = Config.userApiKey(context, "weatherapi")
+                                            apiKey = Config.userApiKey(appContext, "weatherapi")
                                         )
 
                                     weathernot(
-                                        context,
+                                        appContext,
                                         day,
                                         hour,
                                         weatherData
@@ -950,7 +959,7 @@ fun executeCommand(commandText: String, context: Context) {
                                         "❌ Wetter-Fehler",
                                         "Wetterdaten konnten nicht abgerufen werden: ${e.message}",
                                         20.seconds,
-                                        context
+                                        appContext
                                     )
                                 }
                             }
@@ -1323,9 +1332,10 @@ fun executeCommand(commandText: String, context: Context) {
                     silent = false
                 )
             } else {
+                val appContext = context.applicationContext
                 Handler(Looper.getMainLooper()).post {
                     serviceScope.launch {
-                        checkBahnZuege(context, daysAhead)
+                        checkBahnZuege(appContext, daysAhead)
                     }
                 }
             }
@@ -1952,6 +1962,7 @@ private fun parseCommandWithQuotes(input: String): List<String> {
 }
 
 private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
+    val appContext = context.applicationContext
     appScope.launch {
         try {
             val stationName = "Geltendorf"
@@ -1987,8 +1998,8 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
                         put("hour", hour)
                         put("targetDepartureTime", targetDepartureTime)
                         put("targetDestination", targetDestination)
-                        put("clientId", Config.userApiKey(context, "db_client_id"))
-                        put("apiKey", Config.userApiKey(context, "db_api_key"))
+                        put("clientId", Config.userApiKey(appContext, "db_client_id"))
+                        put("apiKey", Config.userApiKey(appContext, "db_api_key"))
                     }
                 )
             }
@@ -2004,7 +2015,7 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
                         "❌ Bahn API Fehler",
                         error,
                         20.seconds,
-                        context,
+                        appContext,
                         silent = false
                     )
                 } else {
@@ -2012,7 +2023,7 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
                         "ℹ️ Kein 07:05-Zug",
                         "In den Plan-Daten wurde kein passender Zug um 07:05 Uhr nach $targetDestination in $stationName $dayLabel gefunden.",
                         20.seconds,
-                        context,
+                        appContext,
                         silent = false
                     )
                 }
@@ -2031,7 +2042,7 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
             showSimpleNotificationExtern(
                 "🚆 $trainDisplay ($dayLabel)",
                 "📍 $stationName → $destination\n⏰ Abfahrt: $departureTime Uhr (Plan $targetDepartureTime)\n🚪 Gleis: $platform\n$statusText",
-                context = context,
+                context = appContext,
                 silent = false
             )
         } catch (e: Exception) {
@@ -2039,7 +2050,7 @@ private fun checkBahnZuege(context: Context, daysAhead: Int = 1) {
                 "❌ Bahn-Fehler",
                 "Verbindungsfehler: ${e.message}",
                 20.seconds,
-                context,
+                appContext,
                 silent = false
             )
             e.printStackTrace()

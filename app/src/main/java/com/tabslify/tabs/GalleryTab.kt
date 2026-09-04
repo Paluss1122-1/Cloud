@@ -88,14 +88,14 @@ data class GalleryMediaItem(
 )
 
 private fun getVideoFirstFrame(uri: String, context: Context): Bitmap? {
+    val retriever = MediaMetadataRetriever()
     return try {
-        val retriever = MediaMetadataRetriever()
         retriever.setDataSource(context, uri.toUri())
-        val bitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-        retriever.release()
-        bitmap
+        retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
     } catch (_: Exception) {
         null
+    } finally {
+        retriever.release()
     }
 }
 
@@ -109,6 +109,13 @@ fun GalleryTab() {
     var fullscreenMediaUri by remember { mutableStateOf<String?>(null) }
     var isFullscreenVideo by remember { mutableStateOf(false) }
     val thumbnailCache = remember { mutableStateMapOf<String, Bitmap>() }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            thumbnailCache.values.forEach { it.recycle() }
+            thumbnailCache.clear()
+        }
+    }
 
     val requiredPermissions = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
         arrayOf(

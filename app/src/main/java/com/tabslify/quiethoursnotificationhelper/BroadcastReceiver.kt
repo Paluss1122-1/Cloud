@@ -63,11 +63,12 @@ val markReadReceiver = object : BroadcastReceiver() {
         if (intent?.action == ACTION_MARK_PARTS_READ) {
             val messageId = intent.getStringExtra(EXTRA_MESSAGE_ID)
             if (messageId != null && context != null) {
+                val appContext = context.applicationContext
                 Handler(Looper.getMainLooper()).post {
                     markMessageAsRead(
                         messageId,
                         readMessageIds,
-                        context
+                        appContext
                     )
                 }
             }
@@ -86,8 +87,9 @@ val messageSentReceiver = object : BroadcastReceiver() {
             resultCode = Activity.RESULT_OK
 
             if (replyText != null && context != null) {
+                val appContext = context.applicationContext
                 Handler(Looper.getMainLooper()).post {
-                    handleMessageSent(sender, replyText, context)
+                    handleMessageSent(sender, replyText, appContext)
                 }
             }
         }
@@ -100,12 +102,13 @@ val notificationDismissReceiver = object : BroadcastReceiver() {
             val notificationId = intent.getIntExtra("notification_id", -1)
 
             if (notificationId == NOTIFICATION_ID) {
+                val appContext = context.applicationContext
                 Handler(Looper.getMainLooper()).postDelayed({
                     val serviceIntent =
-                        Intent(context, QuietHoursNotificationService::class.java).apply {
+                        Intent(appContext, QuietHoursNotificationService::class.java).apply {
                             action = ACTION_RESTORE_NOTIFICATION
                         }
-                    context.startForegroundService(serviceIntent)
+                    appContext.startForegroundService(serviceIntent)
                 }, 100)
             } else if (notificationId == com.tabslify.core.objects.Config.GAL) {
                 QuietHoursNotificationService.galleryImages = emptyList()
@@ -183,8 +186,9 @@ val commandReceiver = object : BroadcastReceiver() {
             context.startForegroundService(serviceIntent)
 
             if (commandText != null) {
+                val appContext = context.applicationContext
                 Handler(Looper.getMainLooper()).post {
-                    executeCommand(commandText.trim(), context)
+                    executeCommand(commandText.trim(), appContext)
                 }
             }
         }

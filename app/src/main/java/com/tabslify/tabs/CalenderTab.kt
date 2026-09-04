@@ -92,7 +92,6 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.edit
 import com.google.gson.GsonBuilder
 import com.tabslify.R
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -139,13 +138,6 @@ data class CalendarEntry(
     val createdAt: Long = System.currentTimeMillis()
 )
 
-/** Typed event fired whenever an entry is created / updated / deleted. */
-sealed class CalendarEvent {
-    data class Created(val entry: CalendarEntry) : CalendarEvent()
-    data class Updated(val old: CalendarEntry, val new: CalendarEntry) : CalendarEvent()
-    data class Deleted(val entry: CalendarEntry) : CalendarEvent()
-}
-
 // ─────────────────────────────────────────────
 // REPOSITORY  (SharedPreferences + StateFlow)
 // ─────────────────────────────────────────────
@@ -159,10 +151,8 @@ object CalendarRepository {
     private val _entries = MutableStateFlow<List<CalendarEntry>>(emptyList())
     val entries: StateFlow<List<CalendarEntry>> = _entries.asStateFlow()
 
-    /** Cold flow of calendar events for external integrations. */
-    val eventFlow = MutableSharedFlow<CalendarEvent>(extraBufferCapacity = 64)
-
     fun init(context: Context) {
+        _entries.value = emptyList()
         _entries.value = load(context)
     }
 
@@ -178,21 +168,18 @@ object CalendarRepository {
         val updated = _entries.value + entry
         _entries.value = updated
         save(context, updated)
-        eventFlow.tryEmit(CalendarEvent.Created(entry))
     }
 
     fun update(context: Context, old: CalendarEntry, new: CalendarEntry) {
         val updated = _entries.value.map { if (it.id == old.id) new else it }
         _entries.value = updated
         save(context, updated)
-        eventFlow.tryEmit(CalendarEvent.Updated(old, new))
     }
 
     fun delete(context: Context, entry: CalendarEntry) {
         val updated = _entries.value.filter { it.id != entry.id }
         _entries.value = updated
         save(context, updated)
-        eventFlow.tryEmit(CalendarEvent.Deleted(entry))
     }
 
     private fun save(context: Context, list: List<CalendarEntry>) {

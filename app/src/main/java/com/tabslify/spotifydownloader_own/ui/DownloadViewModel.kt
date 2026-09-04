@@ -19,10 +19,16 @@ import kotlinx.coroutines.launch
 
 class DownloadViewModel(
     private val repository: DownloadRepository,
-    context: Context
+    context: Context,
+    private val httpClient: java.io.Closeable? = null
 ) : ViewModel() {
 
     private val appContext: Context = context.applicationContext
+
+    override fun onCleared() {
+        runCatching { httpClient?.close() }
+        super.onCleared()
+    }
 
     private val _downloadState = MutableStateFlow<DownloadState>(DownloadState.Idle)
     val downloadState: StateFlow<DownloadState> = _downloadState.asStateFlow()

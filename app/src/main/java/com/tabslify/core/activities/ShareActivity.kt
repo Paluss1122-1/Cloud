@@ -46,8 +46,11 @@ import com.tabslify.quiethoursnotificationhelper.isLaptopConnected
 import com.tabslify.quiethoursnotificationhelper.isLaptopConnectedFlow
 import com.tabslify.quiethoursnotificationhelper.laptopIp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.cancellation.CancellationException
 import java.io.File
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -122,6 +125,7 @@ class ShareActivity : ComponentActivity() {
 
             for (uri in uris) {
                 try {
+                    currentCoroutineContext().ensureActive()
                     val bytes = withContext(Dispatchers.IO) {
                         contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     } ?: continue
@@ -134,6 +138,8 @@ class ShareActivity : ComponentActivity() {
                     }
 
                     if (sent) successCount++
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (_: Exception) {
                 }
             }
@@ -208,6 +214,7 @@ class ShareActivity : ComponentActivity() {
 
                 for (uri in uris) {
                     try {
+                        currentCoroutineContext().ensureActive()
                         val fileName = getFileNameFromUri(uri)
 
                         val targetFile = getUniqueFile(privateDir, fileName)
@@ -227,6 +234,8 @@ class ShareActivity : ComponentActivity() {
                         } else {
                             failCount++
                         }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (_: Exception) {
                         failCount++
                     }
@@ -242,6 +251,8 @@ class ShareActivity : ComponentActivity() {
                     finish()
                 }
 
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     Toast.makeText(this@ShareActivity, getString(R.string.fehler_msg, e.message), Toast.LENGTH_LONG)

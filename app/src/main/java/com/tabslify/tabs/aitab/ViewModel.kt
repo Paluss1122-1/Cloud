@@ -30,6 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.ByteArrayOutputStream
@@ -210,7 +211,7 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val effectivePic = if (selectedModel.vision && selectedImageUri != null) {
-                    selectedImageUri?.let { encodeImage(ctx, it) }
+                    withContext(Dispatchers.IO) { selectedImageUri?.let { encodeImage(ctx, it) } }
                 } else null
                 val response = withContext(Dispatchers.IO) {
                     send(
@@ -237,6 +238,8 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
                     title = ctx.getString(R.string.aitab_answer),
                     message = response
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 if (placeholderIndex < history.size) {
                     history[placeholderIndex] = ChatMessage(
@@ -297,13 +300,30 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun encodeImage(ctx: Context, uri: Uri): String? = try {
+        val (outWidth, outHeight) = ctx.contentResolver.openInputStream(uri)?.use { input ->
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeStream(input, null, bounds)
+            bounds.outWidth to bounds.outHeight
+        } ?: return null
+        if (outWidth <= 0 || outHeight <= 0) return null
+
+        val targetDimension = 1280
+        val maxDimension = maxOf(outWidth, outHeight)
+        var sampleSize = 1
+        while (maxDimension / (sampleSize * 2) >= targetDimension) sampleSize *= 2
+
         ctx.contentResolver.openInputStream(uri)?.use { input ->
-            val bmp = BitmapFactory.decodeStream(input)
-            val output = ByteArrayOutputStream()
-            android.util.Base64OutputStream(output, Base64.NO_WRAP).use { base64Out ->
-                bmp.compress(Bitmap.CompressFormat.JPEG, 90, base64Out)
+            val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+            val bmp = BitmapFactory.decodeStream(input, null, opts) ?: return null
+            try {
+                val output = ByteArrayOutputStream()
+                android.util.Base64OutputStream(output, Base64.NO_WRAP).use { base64Out ->
+                    bmp.compress(Bitmap.CompressFormat.JPEG, 90, base64Out)
+                }
+                output.toString("UTF-8")
+            } finally {
+                bmp.recycle()
             }
-            output.toString("UTF-8")
         }
     } catch (_: Exception) {
         null

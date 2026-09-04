@@ -106,6 +106,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.LinkedHashMap
 import kotlin.math.abs
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.ExperimentalTime
@@ -150,7 +151,19 @@ fun OtherBucketViewer(
     var currentVideoIndex by rememberSaveable { mutableIntStateOf(0) }
     var currentImageIndex by rememberSaveable { mutableIntStateOf(0) }
     var favorites by remember { mutableStateOf<Set<String>>(emptySet()) }
-    val thumbnailCache = remember { mutableMapOf<String, Bitmap?>() }
+    val thumbnailCache = remember {
+        object : LinkedHashMap<String, Bitmap?>(64, 0.75f, true) {
+            override fun removeEldestEntry(
+                eldest: MutableMap.MutableEntry<String, Bitmap?>
+            ): Boolean = size > 64
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            thumbnailCache.values.forEach { it?.recycle() }
+            thumbnailCache.clear()
+        }
+    }
     val imageLoader = remember {
         ImageLoader.Builder(context)
             .crossfade(true)
@@ -177,14 +190,22 @@ fun OtherBucketViewer(
         )
     }
 
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.updateBackState(canNavigateBack = false, onNavigateBack = null)
+            imageLoader.shutdown()
+        }
+    }
+
     BackHandler {
         onBackPressed()
     }
 
-    imageLoader.memoryCache?.clear()
-
-    val cacheDirectory = context.cacheDir.resolve("image_cache")
-    cacheDirectory.deleteRecursively()
+    LaunchedEffect(Unit) {
+        imageLoader.memoryCache?.clear()
+        val cacheDirectory = context.cacheDir.resolve("image_cache")
+        cacheDirectory.deleteRecursively()
+    }
 
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current

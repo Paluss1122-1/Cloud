@@ -17,6 +17,8 @@ import com.tabslify.services.QuietHoursNotificationService
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
+private val ssnMainHandler = Handler(Looper.getMainLooper())
+
 @SuppressLint("LaunchActivityFromNotification")
 fun showSimpleNotificationExtern(
     title: String,
@@ -57,7 +59,8 @@ fun showSimpleNotificationExtern(
 
     val id = cms()
 
-    val notificationManager = context.getSystemService(NotificationManager::class.java)
+    val notificationManager =
+        context.applicationContext.getSystemService(NotificationManager::class.java)
 
     if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
         == PackageManager.PERMISSION_GRANTED
@@ -65,8 +68,8 @@ fun showSimpleNotificationExtern(
         tNotify(context, id, notification)
 
         if (duration > Duration.ZERO) {
-            Handler(Looper.getMainLooper()).postDelayed(
-                { notificationManager.cancel(id) },
+            ssnMainHandler.postDelayed(
+                { notificationManager?.cancel(id) },
                 duration.inWholeMilliseconds
             )
         }

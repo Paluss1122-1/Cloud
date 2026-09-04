@@ -83,8 +83,10 @@ import com.tabslify.apkm.ParseError
 import com.tabslify.apkm.SignatureState
 import com.tabslify.core.ui.NeonBox
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 
 var pendingApkmUri: Uri? by mutableStateOf(null)
 
@@ -123,6 +125,10 @@ fun ApkmInstallerTabContent(uri: Uri, onDone: () -> Unit) {
     var needsInstallPermission by remember(uri) { mutableStateOf(false) }
     var signatureAcknowledged by remember(uri) { mutableStateOf(false) }
     val selection = remember(uri) { mutableStateMapOf<String, Boolean>() }
+
+    DisposableEffect(Unit) {
+        onDispose { pendingApkmUri = null }
+    }
 
     fun recomputePermission() {
         needsInstallPermission = !installer.canRequestInstalls()
@@ -194,9 +200,16 @@ fun ApkmInstallerTabContent(uri: Uri, onDone: () -> Unit) {
         installStatusText = installationWirdVorbereitetMsg
         scope.launch {
             val outcome = withContext(Dispatchers.IO) {
-                installer.install(current, selected) { confirmIntent ->
-                    installStatusText = bitteBestaetiigenMsg
-                    runCatching { context.startActivity(confirmIntent) }
+                try {
+                    withTimeout(10 * 60_000L) {
+                        installer.install(current, selected) { confirmIntent ->
+                            installStatusText = bitteBestaetiigenMsg
+                            runCatching { context.startActivity(confirmIntent) }
+                        }
+                    }
+                } catch (e: TimeoutCancellationException) {
+                    installer.log("❌ Timeout: Kein Installationsstatus empfangen (10 Min).")
+                    InstallOutcome.Failure(Int.MIN_VALUE, "Timeout: Kein Installationsstatus empfangen", false)
                 }
             }
             when (outcome) {
