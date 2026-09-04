@@ -1,10 +1,12 @@
 package com.tabslify.core.ui
 
 import android.Manifest
+import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Paint
+import android.net.TrafficStats
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
@@ -14,6 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -29,6 +32,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,8 +44,10 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -150,6 +157,10 @@ import com.tabslify.quicksettingsfunctions.ChargingTrackerService
 import com.tabslify.quicksettingsfunctions.startBatteryWorker
 import com.tabslify.quicksettingsfunctions.stopBatteryWorker
 import com.tabslify.services.QuietHoursNotificationService
+import com.tabslify.tabs.focusguard.FocusGuardService
+import com.tabslify.tabs.focusguard.monitoring.cancelFocusGuardWorkers
+import com.tabslify.tabs.focusguard.monitoring.scheduleFocusGuardDailySummary
+import com.tabslify.tabs.focusguard.monitoring.scheduleFocusGuardWorkers
 import com.tabslify.services.WhatsAppNotificationListener
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
 import com.tabslify.tabs.virustotal.VirusTotalScanBar
@@ -172,10 +183,14 @@ import java.util.Calendar
 import kotlin.time.Duration.Companion.milliseconds
 
 val inAppNotifications = mutableStateListOf<String>()
+private const val MAX_IN_APP_NOTIFICATIONS = 20
 
 @Suppress("unused")
 fun sendInAppNotification(message: String) {
     inAppNotifications.add(0, message)
+    if (inAppNotifications.size > MAX_IN_APP_NOTIFICATIONS) {
+        inAppNotifications.removeRange(MAX_IN_APP_NOTIFICATIONS, inAppNotifications.size)
+    }
 }
 
 fun saveRecentTab(context: Context, menuItem: MenuItem) {
@@ -740,7 +755,7 @@ fun LandingPage(
     val allTabsSorted = remember(titleMap) {
         MenuItem.entries.filter {
             it != MenuItem.APKM_INSTALLER &&
-                    (prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD && it != MenuItem.REMOTEDESKTOP && it != MenuItem.PC_MANAGER && it != MenuItem.HEISE_NEWS))
+                    (prvt() || (it != MenuItem.GMAIL && it != MenuItem.PRIVATE_CLOUD && it != MenuItem.REMOTEDESKTOP && it != MenuItem.PC_MANAGER && it != MenuItem.FOCUSGUARD && it != MenuItem.HEISE_NEWS))
         }.sortedBy { titleMap[it] }
     }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
@@ -748,26 +763,6 @@ fun LandingPage(
     val neonGlow = when (currentHour) {
         in 11..16 -> Color(0xFF2C2C2C)
         else -> Color(0xFF00177E)
-    }
-
-    val glowPaint = remember {
-        Paint().apply {
-            color = neonGlow.copy(alpha = 0.6f).toArgb()
-            isAntiAlias = true
-            maskFilter = android.graphics.BlurMaskFilter(
-                18f, android.graphics.BlurMaskFilter.Blur.OUTER
-            )
-        }
-    }
-
-    val orangePaint = remember {
-        Paint().apply {
-            color = neonOrange.copy(alpha = 0.75f).toArgb()
-            isAntiAlias = true
-            maskFilter = android.graphics.BlurMaskFilter(
-                10f, android.graphics.BlurMaskFilter.Blur.OUTER
-            )
-        }
     }
 
     val txtcolors = Color.White
@@ -871,8 +866,7 @@ fun LandingPage(
                             TabCard(
                                 menuItem = menuItem,
                                 onClick = { onTabSelected(menuItem) },
-                                glowPaint,
-                                orangePaint,
+                                neonGlow,
                                 neonOrange
                             )
                         }
@@ -894,8 +888,7 @@ fun LandingPage(
                         TabCard(
                             menuItem = menuItem,
                             onClick = { onTabSelected(menuItem) },
-                            glowPaint,
-                            orangePaint,
+                            neonGlow,
                             neonOrange
                         )
                     }
@@ -965,11 +958,38 @@ fun LanguageSelectionDialog(onDismiss: () -> Unit) {
 fun TabCard(
     menuItem: MenuItem,
     onClick: () -> Unit,
-    glowPaint: Paint,
-    orangePaint: Paint,
+    neonGlow: Color,
     neonOrange: Color
 ) {
     val alpha = remember { Animatable(0f) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    var isClicked by remember { mutableStateOf(false) }
+    val glowAlphaState = animateFloatAsState(
+        targetValue = when {
+            isClicked -> 0f
+            isPressed -> 0.4f
+            else -> 1f
+        },
+        animationSpec = tween(if (isClicked) 200 else if (isPressed) 80 else 250)
+    )
+
+    val glowPaint = remember {
+        Paint().apply {
+            isAntiAlias = true
+            maskFilter = android.graphics.BlurMaskFilter(
+                18f, android.graphics.BlurMaskFilter.Blur.OUTER
+            )
+        }
+    }
+    val orangePaint = remember {
+        Paint().apply {
+            isAntiAlias = true
+            maskFilter = android.graphics.BlurMaskFilter(
+                10f, android.graphics.BlurMaskFilter.Blur.OUTER
+            )
+        }
+    }
 
     LaunchedEffect(Unit) {
         alpha.animateTo(1f, animationSpec = tween(300))
@@ -977,7 +997,12 @@ fun TabCard(
 
     Box(
         Modifier
+            .graphicsLayer { this.alpha = alpha.value }
             .drawBehind {
+                val a = glowAlphaState.value
+                glowPaint.color = neonGlow.copy(alpha = 0.6f * a).toArgb()
+                orangePaint.color = neonOrange.copy(alpha = 0.75f * a).toArgb()
+
                 val canvasSize = size
                 val cornerRadius = 8.dp.toPx()
 
@@ -996,7 +1021,7 @@ fun TabCard(
             }
             .border(
                 width = 1.5.dp,
-                color = neonOrange,
+                color = neonOrange.copy(alpha = glowAlphaState.value),
                 shape = RoundedCornerShape(8.dp)
             )
     ) {
@@ -1010,7 +1035,11 @@ fun TabCard(
                 )
             ),
             shape = RoundedCornerShape(8.dp),
-            onClick = onClick
+            onClick = {
+                isClicked = true
+                onClick()
+            },
+            interactionSource = interactionSource
         ) {
             Row(
                 modifier = Modifier
@@ -1055,6 +1084,13 @@ fun isPermissionGranted(context: Context, key: String): Boolean {
         "ACTIVITY_RECOGNITION" -> granted(Manifest.permission.ACTIVITY_RECOGNITION)
 
         "SYSTEM_ALERT_WINDOW" -> Settings.canDrawOverlays(context)
+
+        "PACKAGE_USAGE_STATS" -> {
+            val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+            val now = System.currentTimeMillis()
+            val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 60_000, now)
+            stats != null && stats.isNotEmpty()
+        }
 
         "FOREGROUND_SERVICE" -> granted(Manifest.permission.FOREGROUND_SERVICE)
 
@@ -1168,6 +1204,9 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
     val setAlarm1 = stringResource(R.string.wifi_direct_set_alarm_befehl_vom_notebook)
     val wifiState1 = stringResource(R.string.reportdeviceinformation_wlan_status_hotspot)
     val networkState1 = stringResource(R.string.reportdeviceinformation_netzwerkstatus_konnektivitat)
+    val focusguardUsageDesc = stringResource(R.string.focusguard_perm_usage_desc)
+    val focusguardOverlayDesc = stringResource(R.string.focusguard_perm_overlay_desc)
+    val focusguardNotifDesc = stringResource(R.string.focusguard_perm_notifications_desc)
 
     val permissionUsages = remember(
         readMediaAudio1,
@@ -1199,7 +1238,10 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
         readSms1,
         setAlarm1,
         wifiState1,
-        networkState1
+        networkState1,
+        focusguardUsageDesc,
+        focusguardOverlayDesc,
+        focusguardNotifDesc
     ) {
         mapOf(
             "READ_MEDIA_AUDIO" to listOf(
@@ -1212,7 +1254,8 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                 postNotifications3,
                 postNotifications4,
                 postNotifications5,
-                postNotifications6
+                postNotifications6,
+                focusguardNotifDesc
             ),
             "ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION" to listOf(
                 location1,
@@ -1226,7 +1269,11 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                 activityRecognition1
             ),
             "SYSTEM_ALERT_WINDOW" to listOf(
-                systemAlertWindow1
+                systemAlertWindow1,
+                focusguardOverlayDesc
+            ),
+            "PACKAGE_USAGE_STATS" to listOf(
+                focusguardUsageDesc
             ),
             "FOREGROUND_SERVICE" to listOf(
                 foregroundService1,
@@ -1279,9 +1326,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
             .fillMaxSize()
             .then(
                 if (onboarding) Modifier.systemGestureExclusion()
-                else Modifier
-                    .background(Color(0xFF0C1017))
-                    .windowInsetsPadding(WindowInsets.systemBars)
+                else Modifier.background(Color(0xFF0C1017))
             )
     ) {
         val hazeState = remember { HazeState() }
@@ -1386,6 +1431,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                     add("ACCESS_BACKGROUND_LOCATION")
                     add("ACTIVITY_RECOGNITION")
                     add("SYSTEM_ALERT_WINDOW")
+                    add("PACKAGE_USAGE_STATS")
                     add("FOREGROUND_SERVICE")
                     add("READ_MEDIA_IMAGES / READ_MEDIA_VIDEO")
                     add("READ_CONTACTS / WRITE_CONTACTS")
@@ -1412,6 +1458,10 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                     .fillMaxSize()
                     .hazeSource(state = hazeState)
                     .verticalScroll(rememberScrollState())
+                    .then(
+                        if (!onboarding) Modifier.windowInsetsPadding(WindowInsets.navigationBars)
+                        else Modifier
+                    )
                     .padding(horizontal = 15.dp)
             ) {
                 Spacer(Modifier.height(headerHeightDp))
@@ -1435,6 +1485,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                 PermissionButton("ACCESS_BACKGROUND_LOCATION")
                 PermissionButton("ACTIVITY_RECOGNITION")
                 PermissionButton("SYSTEM_ALERT_WINDOW")
+                PermissionButton("PACKAGE_USAGE_STATS")
                 PermissionButton("FOREGROUND_SERVICE")
                 PermissionButton("READ_MEDIA_IMAGES / READ_MEDIA_VIDEO")
                 PermissionButton("READ_CONTACTS / WRITE_CONTACTS")
@@ -1485,12 +1536,10 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                     .drawWithContent {
                         drawContent()
                         val fadePx = 24.dp.toPx()
-                        val topStop = (fadePx / size.height).coerceIn(0f, 1f)
                         val bottomStop = (1f - fadePx / size.height).coerceIn(0f, 1f)
                         drawRect(
                             brush = Brush.verticalGradient(
-                                0f to Color.Transparent,
-                                topStop to Color.Black,
+                                0f to Color.Black,
                                 bottomStop to Color.Black,
                                 1f to Color.Transparent
                             ),
@@ -1501,6 +1550,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
 
             Column(
                 modifier = Modifier
+                    .statusBarsPadding()
                     .padding(horizontal = 15.dp)
                     .padding(bottom = 16.dp)
             ) {
@@ -1631,6 +1681,80 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
     }
 }
 
+private fun formatBytes(bytes: Long): String {
+    val kb = bytes / 1024.0
+    val mb = kb / 1024.0
+    val gb = mb / 1024.0
+    return when {
+        gb >= 1f -> String.format("%.2f GB", gb)
+        mb >= 1f -> String.format("%.2f MB", mb)
+        kb >= 1f -> String.format("%.2f KB", kb)
+        else -> "$bytes B"
+    }
+}
+
+@Composable
+fun LiveTrafficPanel(modifier: Modifier = Modifier) {
+    var rxRate by remember { mutableStateOf(0f) }
+    var txRate by remember { mutableStateOf(0f) }
+    var rxTotal by remember { mutableStateOf(TrafficStats.getTotalRxBytes()) }
+    var txTotal by remember { mutableStateOf(TrafficStats.getTotalTxBytes()) }
+
+    LaunchedEffect(Unit) {
+        var lastRx = TrafficStats.getTotalRxBytes()
+        var lastTx = TrafficStats.getTotalTxBytes()
+        while (true) {
+            delay(1000)
+            val curRx = TrafficStats.getTotalRxBytes()
+            val curTx = TrafficStats.getTotalTxBytes()
+            rxRate = (curRx - lastRx).coerceAtLeast(0).toFloat()
+            txRate = (curTx - lastTx).coerceAtLeast(0).toFloat()
+            rxTotal = curRx
+            txTotal = curTx
+            lastRx = curRx
+            lastTx = curTx
+        }
+    }
+
+    NeonBox(
+        modifier = modifier.fillMaxWidth(),
+        neonColors = listOf(Color(0xFFFF8A00), Color(0xFFFF0066)),
+        backgroundAlpha = 0.15f
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
+            Text(
+                "📶 Live Traffic (Test)",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "Starte einen Download - unten sollte Rx/s hochschießen.",
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 12.sp
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("⬇️ Rx", color = Color(0xFF4CAF50), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("${formatBytes(rxRate.toLong())}/s", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("total ${formatBytes(rxTotal)}", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("⬆️ Tx", color = Color(0xFF2196F3), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("${formatBytes(txRate.toLong())}/s", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("total ${formatBytes(txTotal)}", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun SettingsFrame(
     visible: Boolean,
@@ -1679,6 +1803,7 @@ fun SettingsFrame(
     var serviceWh by remember { mutableStateOf(prefs.getBoolean("service_wh", true)) }
     var serviceCharge by remember { mutableStateOf(prefs.getBoolean("service_charge", true)) }
     var serviceBattery by remember { mutableStateOf(prefs.getBoolean("service_battery", true)) }
+    var serviceFocusguard by remember { mutableStateOf(prefs.getBoolean("service_focusguard", true)) }
 
     var aiPrefGlobal by remember {
         mutableStateOf(
@@ -1742,7 +1867,7 @@ fun SettingsFrame(
     var mediaAnalyticsEnabled by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
-        MediaAnalyticsManager.init(context)
+        MediaAnalyticsManager.init(context.applicationContext)
         mediaAnalyticsEnabled = MediaAnalyticsManager.isAnalyticsEnabled()
     }
 
@@ -1751,12 +1876,15 @@ fun SettingsFrame(
 
         val intent = Intent(context, cls)
         val permissionOk =
-            if (cls == QuietHoursNotificationService::class.java) hasNotificationPermission else true
+            if (cls == QuietHoursNotificationService::class.java ||
+                cls == FocusGuardService::class.java
+            ) hasNotificationPermission else true
 
         if (enabled && masterEnabled && permissionOk) {
             when (cls) {
                 QuietHoursNotificationService::class.java,
-                ChargingTrackerService::class.java -> ContextCompat.startForegroundService(
+                ChargingTrackerService::class.java,
+                FocusGuardService::class.java -> ContextCompat.startForegroundService(
                     context,
                     intent
                 )
@@ -1775,6 +1903,7 @@ fun SettingsFrame(
                 .putBoolean("service_wh", serviceWh)
                 .putBoolean("service_charge", serviceCharge)
                 .putBoolean("service_battery", serviceBattery)
+                .putBoolean("service_focusguard", serviceFocusguard)
                 .putString("ai_pref_global", aiPrefGlobal)
                 .putString("ai_pref_service_chat", aiPrefChat)
                 .putString("ai_pref_service_music_summary", aiPrefMusicSummary)
@@ -1784,11 +1913,19 @@ fun SettingsFrame(
 
         applyService(QuietHoursNotificationService::class.java, serviceQhns)
         applyService(ChargingTrackerService::class.java, serviceCharge)
+        applyService(FocusGuardService::class.java, serviceFocusguard)
 
         if (masterEnabled && serviceBattery) {
             startBatteryWorker(context)
         } else {
             stopBatteryWorker(context)
+        }
+
+        if (masterEnabled && serviceFocusguard) {
+            scheduleFocusGuardWorkers(context)
+            scheduleFocusGuardDailySummary(context)
+        } else {
+            cancelFocusGuardWorkers(context)
         }
     }
 
@@ -1803,9 +1940,11 @@ fun SettingsFrame(
 
         if (permitted) {
             serviceQhns = if (intendedToEnableQhns) true else prefs.getBoolean("service_qhns", true)
+            serviceFocusguard = prefs.getBoolean("service_focusguard", true)
             intendedToEnableQhns = false
         } else {
             serviceQhns = false
+            serviceFocusguard = false
             intendedToEnableQhns = false
         }
         save()
@@ -2172,6 +2311,11 @@ fun SettingsFrame(
                                         "BatterySamplingWorker",
                                         stringResource(R.string.hintergrund_aufzeichnung_der_batteriedaten),
                                         serviceBattery
+                                    ),
+                                    Triple(
+                                        "FocusGuardService",
+                                        stringResource(R.string.focusguard_service_subtitle),
+                                        serviceFocusguard
                                     )
                                 )
 
@@ -2222,6 +2366,10 @@ fun SettingsFrame(
 
                                                     "BatterySamplingWorker" -> {
                                                         serviceBattery = v
+                                                    }
+
+                                                    "FocusGuardService" -> {
+                                                        serviceFocusguard = v
                                                     }
                                                 }
                                                 save()
@@ -2297,6 +2445,10 @@ fun SettingsFrame(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                LiveTrafficPanel()
 
                 Spacer(modifier = Modifier.height(16.dp))
 
