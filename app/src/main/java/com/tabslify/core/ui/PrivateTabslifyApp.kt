@@ -33,6 +33,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
+import androidx.activity.ComponentActivity
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -145,6 +146,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import androidx.core.content.edit
 import androidx.core.net.toUri
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
 import com.tabslify.R
@@ -185,6 +188,7 @@ import com.tabslify.tabs.audiorecordertab.AudioRecorderTab
 import com.tabslify.tabs.authenticator.AuthenticatorTab
 import com.tabslify.tabs.exploretab.ExploreTabContent
 import com.tabslify.tabs.fitnesstab.FitnessTabContent
+import com.tabslify.tabs.focusguard.FocusGuardTabContent
 import com.tabslify.tabs.mediaplayer.AiResponseHistorySheet
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
 import com.tabslify.tabs.mediaplayer.MediaTab
@@ -367,6 +371,11 @@ enum class MenuItem(
         "💪",
         { FitnessTabContent() }
     ),
+    FOCUSGUARD(
+        R.string.focusguard_tab,
+        "🛡️",
+        { FocusGuardTabContent() }
+    ),
 }
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -416,6 +425,9 @@ fun PrivateTabslifyApp(
         if (startTarget == "weather") {
             selectedMenuItem = MenuItem.WEATHER
         }
+        if (startTarget == "focusguard") {
+            selectedMenuItem = MenuItem.FOCUSGUARD
+        }
     }
 
     val activity = context as? Activity
@@ -449,13 +461,7 @@ fun PrivateTabslifyApp(
             when (selectedMenuItem) {
                 MenuItem.WEATHER -> WeatherTabContent(viewModel = viewModel)
                 MenuItem.HEISE_NEWS -> HeiseNewsTabContent(viewModel = viewModel)
-                MenuItem.BROWSER -> {
-                    BrowserTabContent(
-                        url = webViewUrl,
-                        onUrlChange = { webViewUrl = it },
-                        onEnterFullScreen = { isFullScreen = true }
-                    )
-                }
+                MenuItem.BROWSER -> Unit
 
                 MenuItem.PRIVATE_CLOUD -> {
                     MainTabslifyScreen(storage = storage)
@@ -644,6 +650,7 @@ fun PrivateTabslifyApp(
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
+            val downloadReceivers = remember { mutableSetOf<BroadcastReceiver>() }
             val webView = remember {
                 WebView(context).apply {
                     webChromeClient = object : WebChromeClient() {
@@ -730,6 +737,8 @@ fun PrivateTabslifyApp(
                             "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
                     }
 
+                    setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_BOUND, true)
+
                     val cookieManager = CookieManager.getInstance()
                     cookieManager.setAcceptCookie(true)
                     cookieManager.setAcceptThirdPartyCookies(this, true)
@@ -769,6 +778,7 @@ fun PrivateTabslifyApp(
 
                                 // Receiver sofort wieder abmelden
                                 ctx.unregisterReceiver(this)
+                                downloadReceivers.remove(this)
 
                                 val query = DownloadManager.Query().setFilterById(downloadId)
                                 val cursor = dm.query(query)
@@ -813,12 +823,7 @@ fun PrivateTabslifyApp(
                             IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
                             Context.RECEIVER_NOT_EXPORTED
                         )
-
-                        context.registerReceiver(
-                            receiver,
-                            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-                            Context.RECEIVER_NOT_EXPORTED
-                        )
+                        downloadReceivers += receiver
 
                         Toast.makeText(context, downloadGestartMsg, Toast.LENGTH_SHORT).show()
                     }
@@ -826,12 +831,37 @@ fun PrivateTabslifyApp(
                     loadUrl(webViewUrl)
                 }
             }
+            DisposableEffect(webView, activity) {
+                val observer = LifecycleEventObserver { _, event ->
+                    when (event) {
+                        Lifecycle.Event.ON_STOP -> {
+                            webView.onPause()
+                            webView.pauseTimers()
+                        }
+                        Lifecycle.Event.ON_START -> {
+                            webView.resumeTimers()
+                            webView.onResume()
+                        }
+                        else -> Unit
+                    }
+                }
+                (activity as? ComponentActivity)?.lifecycle?.addObserver(observer)
+                onDispose {
+                    (activity as? ComponentActivity)?.lifecycle?.removeObserver(observer)
+                }
+            }
+
             DisposableEffect(isFullScreen) {
                 onDispose {
                     if (!isFullScreen) {
+                        downloadReceivers.forEach { receiver ->
+                            runCatching { context.unregisterReceiver(receiver) }
+                        }
+                        downloadReceivers.clear()
                         webView.stopLoading()
                         webView.onPause()
                         webView.destroy()
+                        webViewState = null
                     }
                 }
             }
