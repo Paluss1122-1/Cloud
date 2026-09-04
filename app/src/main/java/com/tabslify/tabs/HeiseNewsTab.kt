@@ -88,6 +88,7 @@ import com.mikepenz.markdown.m3.markdownTypography
 import com.tabslify.R
 import com.tabslify.core.TabNavigationViewModel
 import com.tabslify.core.objects.Config
+import com.tabslify.core.objects.prvt
 import com.tabslify.quiethoursnotificationhelper.AiProvider
 import com.tabslify.quiethoursnotificationhelper.sendAiRequest
 import com.tabslify.tabs.aitab.ChatMessage
@@ -111,20 +112,58 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private const val HEISE_DEVELOPER_FEED_URL = "https://www.heise.de/developer/feed.xml"
 private const val HEISE_IT_FEED_URL = "https://www.heise.de/rss/heise-Rubrik-IT-atom.xml"
+private const val SRF_INTERNATIONAL_FEED_URL = "https://www.srf.ch/news/bnf/rss/1922"
+private const val SRF_WIRTSCHAFT_FEED_URL = "https://www.srf.ch/news/bnf/rss/1926"
+private const val SRF_TECHNIK_FEED_URL = "https://www.srf.ch/bnf/rss/19920122"
+private const val SRF_IMAGE_SMALL_SEGMENT = "/320ws/"
+private const val SRF_IMAGE_LARGE_SEGMENT = "/640ws/"
 private const val ARTICLE_TEXT_LIMIT_FOR_AI = 18_000
 private const val PARAGRAPH_BREAK_MARKER = "@@HEISE_PARA_BREAK@@"
 
 private const val EMAIL_ARTICLE_LINK_PREFIX = "tabslify-email://"
 private const val HEISE_DAILY_NEWSLETTER_SENDER = "heise-online-daily@newsletter.heise.de"
-private val NEWSLETTER_EMAIL_SENDERS = listOf(HEISE_DAILY_NEWSLETTER_SENDER)
-private const val NEWSLETTER_EMAIL_LIMIT = 7L
+private const val HEISE_DEVELOPER_NEWSLETTER_SENDER = "newsletter@newsletter.heise.de"
+private const val NEWSLETTER_EMAIL_LIMIT = 16L
 private const val NEWSLETTER_EMAIL_SUMMARY_LIMIT = 260
+
+private data class NewsletterSource(
+    val senderFragment: String,
+    val label: String,
+    val useHeiseLogo: Boolean = false
+)
+
+private val NEWSLETTER_SOURCES = listOf(
+    NewsletterSource(HEISE_DAILY_NEWSLETTER_SENDER, "📧 heise daily", useHeiseLogo = true),
+    NewsletterSource(HEISE_DEVELOPER_NEWSLETTER_SENDER, "📧 heise Developer", useHeiseLogo = true)
+)
+
+private fun newsletterSourceFor(fromAddr: String): NewsletterSource? =
+    NEWSLETTER_SOURCES.firstOrNull { fromAddr.contains(it.senderFragment, ignoreCase = true) }
+
+private enum class NewsFeedFormat { ATOM, RSS }
+
+private data class NewsFeed(
+    val url: String,
+    val source: String,
+    val format: NewsFeedFormat,
+    val maxItems: Int = Int.MAX_VALUE
+)
+
+private val NEWS_FEEDS = listOf(
+    NewsFeed(HEISE_DEVELOPER_FEED_URL, "heise developer", NewsFeedFormat.ATOM),
+    NewsFeed(HEISE_IT_FEED_URL, "heise IT", NewsFeedFormat.ATOM),
+    NewsFeed(SRF_INTERNATIONAL_FEED_URL, "SRF International", NewsFeedFormat.RSS, maxItems = 25),
+    NewsFeed(SRF_WIRTSCHAFT_FEED_URL, "SRF Wirtschaft", NewsFeedFormat.RSS, maxItems = 25),
+    NewsFeed(SRF_TECHNIK_FEED_URL, "SRF Technik", NewsFeedFormat.RSS, maxItems = 15)
+)
 
 private data class MdLink(val range: IntRange, val url: String)
 
@@ -316,8 +355,12 @@ private data class HeiseNewsItem(
     val imageUrl: String?,
     val publishedAt: String,
     val rawTimestamp: Long,
+    val source: String = "",
     val emailBody: String? = null
 )
+
+private fun HeiseNewsItem.metaLine(): String =
+    if (source.isBlank()) publishedAt else "$source · $publishedAt"
 
 private data class HeiseChatMessage(
     val text: String,
@@ -402,6 +445,7 @@ private fun saveArticlesToPrefs(context: Context, articles: List<HeiseNewsItem>)
             put("imageUrl", article.imageUrl)
             put("publishedAt", article.publishedAt)
             put("rawTimestamp", article.rawTimestamp)
+            put("source", article.source)
             put("emailBody", article.emailBody)
         }
         jsonArray.put(jsonObj)
@@ -431,6 +475,7 @@ private fun loadArticlesFromPrefs(context: Context): Pair<List<HeiseNewsItem>, L
                     imageUrl = jsonObj.optString("imageUrl", null),
                     publishedAt = jsonObj.getString("publishedAt"),
                     rawTimestamp = jsonObj.getLong("rawTimestamp"),
+                    source = jsonObj.optString("source", ""),
                     emailBody = jsonObj.optString("emailBody", null)
                 )
             )
@@ -489,6 +534,13 @@ fun HeiseNewsTabContent(
     var askingArticleLink by remember { mutableStateOf<String?>(null) }
     var chatError by remember { mutableStateOf<String?>(null) }
 
+    fun <K, V> MutableMap<K, V>.cap(maxSize: Int) {
+        if (size > maxSize) {
+            val toRemove = keys.take(size - maxSize)
+            toRemove.forEach { remove(it) }
+        }
+    }
+
     LaunchedEffect(selectedArticle) {
         val canGoBack = selectedArticle != null
         viewModel.updateBackState(
@@ -533,6 +585,7 @@ fun HeiseNewsTabContent(
         if (articleTextCache.containsKey(article.link) || loadingArticleLink == article.link) return
         if (article.emailBody != null) {
             articleTextCache[article.link] = article.emailBody
+            articleTextCache.cap(20)
             return
         }
         scope.launch {
@@ -540,6 +593,7 @@ fun HeiseNewsTabContent(
             articleError = null
             try {
                 articleTextCache[article.link] = fetchFullArticleText(article.link)
+                articleTextCache.cap(20)
             } catch (e: Exception) {
                 articleError = e.message ?: artikeltextKonntNichtGeladenMsg
             } finally {
@@ -556,7 +610,7 @@ fun HeiseNewsTabContent(
             summaryError = null
             try {
                 val prompt = buildString {
-                    appendLine("Du bekommst den Volltext eines heise-Artikels. Erstelle daraus eine sehr knappe, gut lesbare deutsche Zusammenfassung.")
+                    appendLine("Du bekommst den Volltext eines Artikels${article.source.takeIf { it.isNotBlank() }?.let { " von $it" } ?: ""}. Erstelle daraus eine sehr knappe, gut lesbare deutsche Zusammenfassung.")
                     appendLine()
                     appendLine("Format der Zusammenfassung:")
                     appendLine("- Maximal 3 bis 4 kurze Bulletpoints (je maximal ein Satz) mit den wichtigsten Fakten, Zahlen, Produkt-/Versionsnamen und Auswirkungen.")
@@ -587,6 +641,7 @@ fun HeiseNewsTabContent(
                 )
                 val summaryResult = response?.ifBlank { null } ?: keineZusammenfassungMsg
                 summaryCache[article.link] = summaryResult
+                summaryCache.cap(20)
                 saveSummaryToPrefs(context, article.link, summaryResult)
             } catch (e: Exception) {
                 summaryError = e.message ?: zusammenfassungFehlgeschlagenMsg
@@ -603,6 +658,7 @@ fun HeiseNewsTabContent(
         if (summarizingArticleLink == article.link || askingArticleLink == article.link) return
 
         val messages = chatCache.getOrPut(article.link) { mutableStateListOf() }
+        chatCache.cap(20)
         val priorHistory = messages.map { ChatMessage(text = it.text, ts = 0L, own = it.own) }
         messages.add(HeiseChatMessage(text = trimmedQuestion, own = true))
         saveChatToPrefs(context, article.link, messages)
@@ -614,7 +670,7 @@ fun HeiseNewsTabContent(
             chatError = null
             try {
                 val prompt = buildString {
-                    appendLine("Beantworte die folgende Frage eines Nutzers zu einem heise-Artikel kurz, präzise und auf Deutsch (2-5 Sätze, bei Bedarf mit Stichpunkten).")
+                    appendLine("Beantworte die folgende Frage eines Nutzers zu einem Artikel${article.source.takeIf { it.isNotBlank() }?.let { " von $it" } ?: ""} kurz, präzise und auf Deutsch (2-5 Sätze, bei Bedarf mit Stichpunkten).")
                     appendLine("Nutze primär den Artikeltext als Quelle. Ergänze offensichtliches Allgemeinwissen nur wenn nötig und sag klar, wenn etwas nicht im Artikel steht.")
                     appendLine()
                     appendLine("Titel: ${article.title}")
@@ -675,6 +731,7 @@ fun HeiseNewsTabContent(
                 val savedSummary = loadSummaryFromPrefs(context, article.link)
                 if (savedSummary != null) {
                     summaryCache[article.link] = savedSummary
+                    summaryCache.cap(20)
                 }
             }
             if (!chatCache.containsKey(article.link)) {
@@ -683,6 +740,7 @@ fun HeiseNewsTabContent(
                     val list = mutableStateListOf<HeiseChatMessage>()
                     list.addAll(savedChat)
                     chatCache[article.link] = list
+                    chatCache.cap(20)
                 }
             }
         }
@@ -738,7 +796,7 @@ fun HeiseNewsTabContent(
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "heise developer News",
+                    text = "heise & SRF News",
                     color = Color.White,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
@@ -835,7 +893,7 @@ private fun HeiseNewsCard(
             )
             Spacer(Modifier.height(10.dp))
             Text(
-                text = article.publishedAt,
+                text = article.metaLine(),
                 color = Color.White.copy(alpha = 0.52f),
                 fontSize = 12.sp
             )
@@ -913,7 +971,7 @@ private fun HeiseArticleDetail(
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = article.publishedAt,
+                    text = article.metaLine(),
                     color = Color.White.copy(alpha = 0.55f),
                     fontSize = 12.sp
                 )
@@ -1329,21 +1387,29 @@ private fun EmptyNewsState(onRetry: () -> Unit) {
 
 private suspend fun fetchHeiseNews(packageName: String): List<HeiseNewsItem> =
     withContext(Dispatchers.IO) {
-        val urls = listOf(HEISE_DEVELOPER_FEED_URL, HEISE_IT_FEED_URL)
         val feedItems = mutableListOf<HeiseNewsItem>()
 
-        for (feedUrl in urls) {
-            val connection = (URL(feedUrl).openConnection() as HttpURLConnection).apply {
+        for (feed in NEWS_FEEDS) {
+            val connection = (URL(feed.url).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 12_000
                 readTimeout = 12_000
                 requestMethod = "GET"
-                setRequestProperty("Accept", "application/atom+xml, application/xml, text/xml")
+                setRequestProperty(
+                    "Accept",
+                    "application/atom+xml, application/rss+xml, application/xml, text/xml"
+                )
                 setRequestProperty("User-Agent", "Tabslify/1.0")
             }
 
             try {
                 if (connection.responseCode in 200..299) {
-                    connection.inputStream.use { feedItems += parseHeiseAtomFeed(it) }
+                    connection.inputStream.use { stream ->
+                        val parsed = when (feed.format) {
+                            NewsFeedFormat.ATOM -> parseAtomFeed(stream, feed.source)
+                            NewsFeedFormat.RSS -> parseRssFeed(stream, feed.source)
+                        }
+                        feedItems += parsed.take(feed.maxItems)
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -1360,43 +1426,49 @@ private suspend fun fetchHeiseNews(packageName: String): List<HeiseNewsItem> =
 private suspend fun fetchNewsletterEmailItems(packageName: String): List<HeiseNewsItem> =
     withContext(Dispatchers.IO) {
         val items = mutableListOf<HeiseNewsItem>()
-        for (sender in NEWSLETTER_EMAIL_SENDERS) {
-            try {
-                val raw = Config.safeCall {
-                    Config.client.from("emails")
-                        .select(Columns.list("account,uid,subject,from_addr,timestamp,body,summary")) {
-                            filter { ilike("from_addr", "%$sender%") }
-                            order("timestamp", Order.DESCENDING)
-                            limit(NEWSLETTER_EMAIL_LIMIT)
+        if (NEWSLETTER_SOURCES.isEmpty() || !prvt()) return@withContext items
+
+        try {
+            val raw = Config.safeCall {
+                Config.client.from("emails")
+                    .select(Columns.list("account,uid,subject,from_addr,timestamp,body,summary")) {
+                        filter {
+                            ilikeAny(
+                                "from_addr",
+                                NEWSLETTER_SOURCES.map { "%${it.senderFragment}%" }
+                            )
                         }
-                        .data
-                }
-                val jsonArray = JSONArray(raw)
-                val imageUrl = if (sender == HEISE_DAILY_NEWSLETTER_SENDER) {
-                    "android.resource://$packageName/${R.drawable.heise_logo}"
-                } else null
-                for (i in 0 until jsonArray.length()) {
-                    val obj = jsonArray.getJSONObject(i)
-                    val uid = obj.optString("uid")
-                    val account = obj.optString("account")
-                    if (uid.isBlank() || account.isBlank()) continue
-                    val body = obj.optString("body")
-                    val aiSummary = obj.optString("summary").takeIf { it.isNotBlank() }
-                    val timestamp = obj.optLong("timestamp", 0L)
-                    items += HeiseNewsItem(
-                        id = "email:$account:$uid",
-                        title = obj.optString("subject").ifBlank { sender },
-                        summary = aiSummary ?: body.trim().take(NEWSLETTER_EMAIL_SUMMARY_LIMIT),
-                        link = "$EMAIL_ARTICLE_LINK_PREFIX$account/$uid",
-                        imageUrl = imageUrl,
-                        publishedAt = "📧 " + formatEmailPublishedAt(timestamp),
-                        rawTimestamp = timestamp,
-                        emailBody = body
-                    )
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
+                        order("timestamp", Order.DESCENDING)
+                        limit(NEWSLETTER_EMAIL_LIMIT)
+                    }
+                    .data
             }
+            val heiseLogoUrl = "android.resource://$packageName/${R.drawable.heise_logo}"
+            val jsonArray = JSONArray(raw)
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                val uid = obj.optString("uid")
+                val account = obj.optString("account")
+                if (uid.isBlank() || account.isBlank()) continue
+                val fromAddr = obj.optString("from_addr")
+                val newsletterSource = newsletterSourceFor(fromAddr) ?: continue
+                val body = obj.optString("body")
+                val aiSummary = obj.optString("summary").takeIf { it.isNotBlank() }
+                val timestamp = obj.optLong("timestamp", 0L)
+                items += HeiseNewsItem(
+                    id = "email:$account:$uid",
+                    title = obj.optString("subject").ifBlank { newsletterSource.label },
+                    summary = aiSummary ?: body.trim().take(NEWSLETTER_EMAIL_SUMMARY_LIMIT),
+                    link = "$EMAIL_ARTICLE_LINK_PREFIX$account/$uid",
+                    imageUrl = if (newsletterSource.useHeiseLogo) heiseLogoUrl else null,
+                    publishedAt = formatEmailPublishedAt(timestamp),
+                    rawTimestamp = timestamp,
+                    source = newsletterSource.label,
+                    emailBody = body
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
         items
     }
@@ -1472,7 +1544,7 @@ private fun XmlPullParser.readElementTextSafely(): String {
     return builder.toString().trim()
 }
 
-private fun parseHeiseAtomFeed(inputStream: InputStream): List<HeiseNewsItem> {
+private fun parseAtomFeed(inputStream: InputStream, source: String): List<HeiseNewsItem> {
     val parser = XmlPullParserFactory.newInstance().apply {
         isNamespaceAware = true
     }.newPullParser()
@@ -1531,7 +1603,8 @@ private fun parseHeiseAtomFeed(inputStream: InputStream): List<HeiseNewsItem> {
                         link = link,
                         imageUrl = extractImageUrl(content),
                         publishedAt = formatFeedDate(rawDate),
-                        rawTimestamp = parseRawTimestamp(rawDate)
+                        rawTimestamp = parseRawTimestamp(rawDate),
+                        source = source
                     )
                     items += item
                 }
@@ -1544,15 +1617,106 @@ private fun parseHeiseAtomFeed(inputStream: InputStream): List<HeiseNewsItem> {
     return items
 }
 
-private fun extractDivByClass(html: String, className: String): String? {
+private fun parseRssFeed(inputStream: InputStream, source: String): List<HeiseNewsItem> {
+    val parser = XmlPullParserFactory.newInstance().apply {
+        isNamespaceAware = true
+    }.newPullParser()
+    parser.setInput(inputStream, null)
+
+    val items = mutableListOf<HeiseNewsItem>()
+    var inItem = false
+    var guid = ""
+    var title = ""
+    var description = ""
+    var content = ""
+    var link = ""
+    var pubDate = ""
+    var enclosureUrl = ""
+
+    var eventType = parser.eventType
+    while (eventType != XmlPullParser.END_DOCUMENT) {
+        when (eventType) {
+            XmlPullParser.START_TAG -> when (parser.name) {
+                "item" -> {
+                    inItem = true
+                    guid = ""
+                    title = ""
+                    description = ""
+                    content = ""
+                    link = ""
+                    pubDate = ""
+                    enclosureUrl = ""
+                }
+
+                "guid" -> if (inItem) guid = parser.readElementTextSafely()
+                "title" -> if (inItem) title = parser.readElementTextSafely()
+                "description" -> if (inItem) description = parser.readElementTextSafely()
+                "encoded" -> if (inItem) content = parser.readElementTextSafely()
+                "link" -> if (inItem && link.isBlank()) {
+                    link = parser.getAttributeValue(null, "href").orEmpty()
+                        .ifBlank { parser.readElementTextSafely() }
+                }
+
+                "pubDate" -> if (inItem) pubDate = parser.readElementTextSafely()
+                "enclosure", "thumbnail" -> if (inItem && enclosureUrl.isBlank()) {
+                    enclosureUrl = parser.getAttributeValue(null, "url").orEmpty()
+                }
+
+                "content" -> if (inItem && enclosureUrl.isBlank()) {
+                    enclosureUrl = parser.getAttributeValue(null, "url").orEmpty()
+                }
+            }
+
+            XmlPullParser.END_TAG -> if (parser.name == "item" && inItem) {
+                val cleanedTitle = cleanHtml(title)
+                val imageSource = description.ifBlank { content }
+                val cleanedSummary = cleanHtml(description).ifBlank { cleanHtml(content) }
+                if (cleanedTitle.isNotBlank() && link.isNotBlank()) {
+                    items += HeiseNewsItem(
+                        id = guid.ifBlank { link },
+                        title = cleanedTitle,
+                        summary = cleanedSummary,
+                        link = link,
+                        imageUrl = upscaleFeedImageUrl(
+                            extractImageUrl(imageSource) ?: enclosureUrl.ifBlank { null }
+                        ),
+                        publishedAt = formatFeedDate(pubDate),
+                        rawTimestamp = parseRawTimestamp(pubDate),
+                        source = source
+                    )
+                }
+                inItem = false
+            }
+        }
+        eventType = parser.next()
+    }
+
+    return items
+}
+
+private fun upscaleFeedImageUrl(url: String?): String? =
+    url?.replace(SRF_IMAGE_SMALL_SEGMENT, SRF_IMAGE_LARGE_SEGMENT)
+
+private fun extractDivByClass(html: String, className: String): String? =
+    extractElementByAttribute(
+        html,
+        "div",
+        """class=["'][^"']*\b${Regex.escape(className)}\b[^"']*["']"""
+    )
+
+private fun extractElementByAttribute(
+    html: String,
+    tag: String,
+    attributePattern: String
+): String? {
     val openTagRegex = Regex(
-        """<div\b[^>]*class=["'][^"']*\b${Regex.escape(className)}\b[^"']*["'][^>]*>""",
+        """<$tag\b[^>]*$attributePattern[^>]*>""",
         RegexOption.IGNORE_CASE
     )
     val openMatch = openTagRegex.find(html) ?: return null
     val contentStart = openMatch.range.last + 1
 
-    val tagRegex = Regex("""<div\b[^>]*>|</div\s*>""", RegexOption.IGNORE_CASE)
+    val tagRegex = Regex("""<$tag\b[^>]*>|</$tag\s*>""", RegexOption.IGNORE_CASE)
     var depth = 1
     var searchFrom = contentStart
     var tagsScanned = 0
@@ -1584,6 +1748,18 @@ private fun extractArticleText(html: String): String {
     val articleContentDiv = extractDivByClass(html, "article-content")
     if (articleContentDiv != null) {
         val converted = htmlCandidateToArticleText(articleContentDiv)
+        if (isUsableArticleText(converted)) {
+            return converted
+        }
+    }
+
+    val itemPropBody = extractElementByAttribute(
+        html,
+        "section",
+        """itemprop=["']articleBody["']"""
+    ) ?: extractElementByAttribute(html, "div", """itemprop=["']articleBody["']""")
+    if (itemPropBody != null) {
+        val converted = htmlCandidateToArticleText(itemPropBody)
         if (isUsableArticleText(converted)) {
             return converted
         }
@@ -1830,17 +2006,29 @@ private fun extractImageUrl(content: String): String? = Regex(
     ?.getOrNull(1)
     ?.replace("&amp;", "&")
 
+private fun parseFeedInstant(value: String): Instant? {
+    val trimmed = value.trim()
+    if (trimmed.isBlank()) return null
+    runCatching { return Instant.parse(trimmed) }
+    runCatching {
+        return OffsetDateTime.parse(trimmed, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant()
+    }
+    runCatching { return OffsetDateTime.parse(trimmed).toInstant() }
+    runCatching {
+        return LocalDateTime.parse(trimmed).atZone(ZoneId.systemDefault()).toInstant()
+    }
+    return null
+}
+
 private fun formatFeedDate(value: String): String {
-    if (value.isBlank()) return ""
+    val instant = parseFeedInstant(value) ?: return value
     return runCatching {
         val formatter = DateTimeFormatter
             .ofPattern("dd. MMM yyyy, HH:mm", Locale.GERMANY)
             .withZone(ZoneId.systemDefault())
-        formatter.format(Instant.parse(value))
+        formatter.format(instant)
     }.getOrDefault(value)
 }
 
-private fun parseRawTimestamp(value: String): Long {
-    if (value.isBlank()) return 0L
-    return runCatching { Instant.parse(value).toEpochMilli() }.getOrDefault(0L)
-}
+private fun parseRawTimestamp(value: String): Long =
+    parseFeedInstant(value)?.toEpochMilli() ?: 0L
