@@ -88,6 +88,8 @@ object SpotifyPlaybackTracker {
 
             override fun onSessionDestroyed() {
                 finalizeSession()
+                controllerCallback?.let { cb -> activeController?.unregisterCallback(cb) }
+                controllerCallback = null
                 activeController = null
             }
         }

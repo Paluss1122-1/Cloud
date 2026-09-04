@@ -87,6 +87,10 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.OnFailureListener
+import com.google.android.gms.tasks.OnSuccessListener
+import com.google.android.gms.tasks.Task
+import com.google.android.gms.tasks.Tasks
 import com.tabslify.R
 import com.tabslify.core.TabNavigationViewModel
 import com.tabslify.core.objects.Config
@@ -96,10 +100,13 @@ import com.tabslify.core.objects.tNotify
 import com.tabslify.core.objects.toast
 import io.github.jan.supabase.functions.functions
 import io.ktor.client.statement.bodyAsText
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.doubleOrNull
@@ -110,7 +117,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import java.util.concurrent.CountDownLatch
 import kotlin.time.Duration.Companion.milliseconds
 import androidx.core.content.edit
 
@@ -257,31 +263,29 @@ suspend fun fetchCoordsForCity(city: String): Pair<Double, Double>? = withContex
     }
 }
 
+private fun hasLocationPermission(context: Context): Boolean =
+    ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+        ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+private suspend fun <T> awaitLocationTask(task: Task<T>): T? =
+    withTimeout(10_000L) {
+        withContext(Dispatchers.Default) {
+            try {
+                Tasks.await(task)
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
 suspend fun getCurrentLocation(context: Context): Location? {
     return withContext(Dispatchers.IO) {
         try {
+            if (!hasLocationPermission(context)) return@withContext null
             val fused = LocationServices.getFusedLocationProviderClient(context)
-            if (ActivityCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                return@withContext null
-            }
-            var loc: Location? = null
-            val task = fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
-            val latch = CountDownLatch(1)
-            task.addOnSuccessListener {
-                loc = it
-                latch.countDown()
-            }.addOnFailureListener {
-                latch.countDown()
-            }
-            latch.await()
-            loc
+            awaitLocationTask(fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null))
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             null
         }
@@ -291,28 +295,11 @@ suspend fun getCurrentLocation(context: Context): Location? {
 suspend fun getLastKnownLocation(context: Context): Location? {
     return withContext(Dispatchers.IO) {
         try {
+            if (!hasLocationPermission(context)) return@withContext null
             val fused = LocationServices.getFusedLocationProviderClient(context)
-            if (ActivityCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                return@withContext null
-            }
-            var loc: Location? = null
-            val task = fused.lastLocation
-            val latch = CountDownLatch(1)
-            task.addOnSuccessListener {
-                loc = it
-                latch.countDown()
-            }.addOnFailureListener {
-                latch.countDown()
-            }
-            latch.await()
-            loc
+            awaitLocationTask(fused.lastLocation)
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             null
         }

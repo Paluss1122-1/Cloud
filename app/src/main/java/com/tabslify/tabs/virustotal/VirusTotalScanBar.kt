@@ -38,8 +38,9 @@ import com.tabslify.core.ui.TextSecondary
 
 @Composable
 fun VirusTotalScanBar(onOpenReport: (String) -> Unit, modifier: Modifier = Modifier) {
-    val jobs by VirusTotalScanManager.jobs.collectAsState()
+    val allJobs by VirusTotalScanManager.jobs.collectAsState()
     val context = LocalContext.current
+    val jobs = allJobs.filter { !it.hiddenInBar }
 
     if (jobs.isEmpty()) return
 
@@ -110,9 +111,9 @@ fun VirusTotalScanBar(onOpenReport: (String) -> Unit, modifier: Modifier = Modif
                             maxLines = 1
                         )
                         val subText = when (val state = job.state) {
-                            is VirusTotalState.Loading -> "Wird gescannt..."
+                            is VirusTotalState.Loading -> stringResource(R.string.virustotal_wird_gescannt)
                             is VirusTotalState.Result -> stringResource(R.string.virustotal_ergebnis, state.stats.malicious, state.stats.total)
-                            is VirusTotalState.Error -> "Fehler beim Scan"
+                            is VirusTotalState.Error -> stringResource(R.string.virustotal_scan_fehler)
                             else -> ""
                         }
                         if (subText.isNotEmpty()) {
@@ -133,7 +134,7 @@ fun VirusTotalScanBar(onOpenReport: (String) -> Unit, modifier: Modifier = Modif
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Schließen",
+                            contentDescription = stringResource(R.string.virustotal_ausblenden),
                             tint = TextSecondary,
                             modifier = Modifier.size(18.dp)
                         )

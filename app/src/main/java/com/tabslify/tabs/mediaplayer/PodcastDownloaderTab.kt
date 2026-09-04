@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -120,18 +121,29 @@ fun PodcastTab() {
         }
     }
 
+    val engineInUse = remember { arrayOfNulls<HttpClient>(1) }
+
     val factory = remember(context, httpClient) {
         object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val repo = DownloadRepositoryImpl(httpClient, context.applicationContext as Context)
-                return DownloadViewModel(repo, context.applicationContext as Context) as T
+                engineInUse[0] = httpClient
+                return DownloadViewModel(repo, context.applicationContext as Context, httpClient) as T
             }
         }
     }
 
     val vm: DownloadViewModel = viewModel(factory = factory)
     val downloadState by vm.downloadState.collectAsState()
+
+    DisposableEffect(Unit) {
+        onDispose {
+            if (engineInUse[0] !== httpClient) {
+                runCatching { httpClient.close() }
+            }
+        }
+    }
 
     var query by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }

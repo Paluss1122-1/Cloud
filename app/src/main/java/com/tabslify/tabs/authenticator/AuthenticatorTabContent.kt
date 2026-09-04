@@ -172,6 +172,14 @@ fun AuthenticatorTab() {
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     var shouldShowPrompt by remember { mutableStateOf(false) }
+    var activeBiometricPrompt by remember { mutableStateOf<BiometricPrompt?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            activeBiometricPrompt?.cancelAuthentication()
+            activeBiometricPrompt = null
+        }
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -186,6 +194,7 @@ fun AuthenticatorTab() {
     LaunchedEffect(shouldShowPrompt) {
         if (shouldShowPrompt && lockEnabled && !isAuthenticated) {
             delay(100.milliseconds)
+            activeBiometricPrompt?.cancelAuthentication()
             showBiometricPrompt(
                 activity = activity,
                 onSuccess = { _ ->
@@ -209,7 +218,8 @@ fun AuthenticatorTab() {
                     } else {
                         shouldShowPrompt = false
                     }
-                }
+                },
+                onPromptCreated = { activeBiometricPrompt = it }
             )
         }
     }
@@ -238,8 +248,8 @@ fun AuthenticatorTab() {
 
 @Composable
 private fun AuthenticatedContent(context: Context) {
-    val passwordDb = remember { PasswordDatabase.getDatabase(context) }
-    val twoFaDb = remember { TwoFADatabase.getDatabase(context) }
+    val passwordDb = remember { PasswordDatabase.getDatabase(context.applicationContext) }
+    val twoFaDb = remember { TwoFADatabase.getDatabase(context.applicationContext) }
     var showSettings by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -333,10 +343,46 @@ private fun ErrorScreen(message: String, onRetry: () -> Unit, onUnlock: () -> Un
 }
 
 
+fun biometricUnavailableMessage(context: Context, status: Int): String = when (status) {
+    BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED ->
+        context.getString(R.string.applock_fehler_none_enrolled)
+
+    BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE ->
+        context.getString(R.string.applock_fehler_no_hardware)
+
+    BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE ->
+        context.getString(R.string.applock_fehler_hw_unavailable)
+
+    BiometricManager.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED ->
+        context.getString(R.string.applock_fehler_security_update)
+
+    BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED ->
+        context.getString(R.string.applock_fehler_unsupported)
+
+    else -> context.getString(R.string.applock_fehler_unbekannt, status)
+}
+
+fun biometricStatusIsFixableBySetup(status: Int): Boolean =
+    status == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED ||
+            status == BiometricManager.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED
+
+fun openBiometricEnrollment(context: Context) {
+    val enroll = Intent(Settings.ACTION_BIOMETRIC_ENROLL).apply {
+        putExtra(
+            Settings.EXTRA_BIOMETRIC_AUTHENTICATORS_ALLOWED,
+            Authenticators.BIOMETRIC_STRONG
+        )
+    }
+    runCatching { context.startActivity(enroll) }.onFailure {
+        runCatching { context.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS)) }
+    }
+}
+
 private fun showBiometricPrompt(
     activity: FragmentActivity,
     onSuccess: (Cipher) -> Unit,
-    onError: (error: String, isCritical: Boolean) -> Unit
+    onError: (error: String, isCritical: Boolean) -> Unit,
+    onPromptCreated: (BiometricPrompt) -> Unit
 ) {
     if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
         onError(activity.getString(R.string.activity_nicht_bereit), true); return
@@ -345,28 +391,9 @@ private fun showBiometricPrompt(
     val bm = BiometricManager.from(activity)
     val canAuth =
         bm.canAuthenticate(Authenticators.BIOMETRIC_STRONG)
-    when (canAuth) {
-        BiometricManager.BIOMETRIC_SUCCESS -> { /* proceed */
-        }
-
-        BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
-            onError(
-                activity.getString(R.string.keine_authentifizierung_eingerichtet_bitte_richte),
-                true
-            ); return
-        }
-
-        BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> {
-            onError(activity.getString(R.string.biometrische_hardware_nicht_verfugbar), true); return
-        }
-
-        BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> {
-            onError(activity.getString(R.string.hardware_temporar_nicht_verfugbar), true); return
-        }
-
-        else -> {
-            onError(activity.getString(R.string.authentifizierung_nicht_verfugbar), true); return
-        }
+    if (canAuth != BiometricManager.BIOMETRIC_SUCCESS) {
+        onError(biometricUnavailableMessage(activity, canAuth), true)
+        return
     }
 
     val executor = ContextCompat.getMainExecutor(activity)
@@ -375,7 +402,8 @@ private fun showBiometricPrompt(
     try {
         cipher.init(Cipher.ENCRYPT_MODE, BiometricKeyHelper.getOrCreateKey())
     } catch (_: KeyPermanentlyInvalidatedException) {
-        onError(activity.getString(R.string.biometriedaten_haben_sich_geandert_bitte), true)
+        BiometricKeyHelper.deleteKey()
+        onError(activity.getString(R.string.applock_fehler_key_invalidated), true)
         return
     }
 
@@ -393,30 +421,38 @@ private fun showBiometricPrompt(
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                 super.onAuthenticationError(errorCode, errString)
                 when (errorCode) {
-                    BiometricPrompt.ERROR_NO_BIOMETRICS,
+                    BiometricPrompt.ERROR_NO_BIOMETRICS ->
+                        onError(activity.getString(R.string.applock_fehler_none_enrolled), true)
+
+                    BiometricPrompt.ERROR_HW_NOT_PRESENT ->
+                        onError(activity.getString(R.string.applock_fehler_no_hardware), true)
+
                     BiometricPrompt.ERROR_HW_UNAVAILABLE,
-                    BiometricPrompt.ERROR_HW_NOT_PRESENT,
                     BiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL ->
-                        onError(activity.getString(R.string.biometrische_authentifizierung_nicht_verfugbar), true)
+                        onError(activity.getString(R.string.applock_fehler_hw_unavailable), true)
 
                     BiometricPrompt.ERROR_USER_CANCELED,
                     BiometricPrompt.ERROR_NEGATIVE_BUTTON,
                     BiometricPrompt.ERROR_CANCELED ->
                         onError(activity.getString(R.string.authentifizierung_abgebrochen), false)
 
-                    BiometricPrompt.ERROR_LOCKOUT,
+                    BiometricPrompt.ERROR_LOCKOUT ->
+                        onError(activity.getString(R.string.applock_fehler_lockout), true)
+
                     BiometricPrompt.ERROR_LOCKOUT_PERMANENT ->
-                        onError(activity.getString(R.string.zu_viele_fehlversuche_bitte_warte), true)
+                        onError(activity.getString(R.string.applock_fehler_lockout_permanent), true)
 
                     BiometricPrompt.ERROR_TIMEOUT ->
-                        onError(activity.getString(R.string.zeituberschreitung), false)
+                        onError(activity.getString(R.string.applock_fehler_timeout), false)
 
                     else ->
-                        onError(activity.getString(R.string.fehler_msg, errString), false)
+                        onError(activity.getString(R.string.applock_fehler_allgemein, errString), false)
                 }
             }
         }
     )
+
+    onPromptCreated(prompt)
 
     val promptInfo = BiometricPrompt.PromptInfo.Builder()
         .setTitle(activity.getString(R.string.tabslify_passwort_manager))
@@ -429,7 +465,7 @@ private fun showBiometricPrompt(
         prompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
     } catch (_: KeyPermanentlyInvalidatedException) {
         BiometricKeyHelper.deleteKey()
-        onError(activity.getString(R.string.biometriedaten_haben_sich_geandert_bitte), true)
+        onError(activity.getString(R.string.applock_fehler_key_invalidated), true)
         return
     } catch (e: Exception) {
         onError(activity.getString(R.string.fehler_beim_starten, e.message), true)
@@ -457,10 +493,6 @@ fun SettingsScreenWithScreenshotProtection() {
     val activity = LocalActivity.current
     val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
-    val noEnrolledMsg = stringResource(R.string.keine_authentifizierung_eingerichtet_bitte_richte)
-    val noHardwareMsg = stringResource(R.string.biometrische_hardware_nicht_verfugbar)
-    val hwUnavailableMsg = stringResource(R.string.hardware_temporar_nicht_verfugbar)
-    val authUnavailableMsg = stringResource(R.string.authentifizierung_nicht_verfugbar)
     val screenshotsLockedMsg = stringResource(R.string.screenshots_gesperrt)
     val screenshotsAllowedMsg = stringResource(R.string.screenshots_erlaubt)
 
@@ -475,10 +507,22 @@ fun SettingsScreenWithScreenshotProtection() {
     }
     var showBiometricInfoDialog by remember { mutableStateOf(false) }
     var biometricErrorMsg by remember { mutableStateOf("") }
+    var biometricErrorFixable by remember { mutableStateOf(false) }
 
-    val bm = BiometricManager.from(context)
-    val canAuth = bm.canAuthenticate(Authenticators.BIOMETRIC_STRONG)
+    val bm = remember { BiometricManager.from(context) }
+    var canAuth by remember { mutableStateOf(bm.canAuthenticate(Authenticators.BIOMETRIC_STRONG)) }
     val isBiometricAvailable = canAuth == BiometricManager.BIOMETRIC_SUCCESS
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                canAuth = bm.canAuthenticate(Authenticators.BIOMETRIC_STRONG)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Box(
         modifier = Modifier
@@ -525,23 +569,22 @@ fun SettingsScreenWithScreenshotProtection() {
                                         putBoolean("authenticated", !enabled)
                                     }
                                 } else {
-                                    biometricErrorMsg = when (canAuth) {
-                                        BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED ->
-                                            noEnrolledMsg
-
-                                        BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE ->
-                                            noHardwareMsg
-
-                                        BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE ->
-                                            hwUnavailableMsg
-
-                                        else ->
-                                            authUnavailableMsg
+                                    canAuth = bm.canAuthenticate(Authenticators.BIOMETRIC_STRONG)
+                                    if (canAuth == BiometricManager.BIOMETRIC_SUCCESS) {
+                                        lockEnabled = true
+                                        prefs.edit(commit = true) {
+                                            putBoolean("lockEnabled", true)
+                                            putBoolean("authenticated", false)
+                                        }
+                                    } else {
+                                        biometricErrorMsg =
+                                            biometricUnavailableMessage(context, canAuth)
+                                        biometricErrorFixable =
+                                            biometricStatusIsFixableBySetup(canAuth)
+                                        showBiometricInfoDialog = true
                                     }
-                                    showBiometricInfoDialog = true
                                 }
                             },
-                            enabled = isBiometricAvailable || lockEnabled,
                             colors = SwitchDefaults.colors(checkedTrackColor = AccentBlue)
                         )
                     }
@@ -612,13 +655,29 @@ fun SettingsScreenWithScreenshotProtection() {
             AlertDialog(
                 onDismissRequest = { showBiometricInfoDialog = false },
                 containerColor = Surface1,
-                title = { Text(stringResource(R.string.biometrie_nicht_verfugbar), color = TextP) },
+                title = { Text(stringResource(R.string.applock_fehler_titel), color = TextP) },
                 text = { Text(biometricErrorMsg, color = TextS) },
                 confirmButton = {
-                    TextButton(onClick = { showBiometricInfoDialog = false }) {
-                        Text("OK", color = AccentBlue)
+                    if (biometricErrorFixable) {
+                        TextButton(onClick = {
+                            showBiometricInfoDialog = false
+                            openBiometricEnrollment(context)
+                        }) {
+                            Text(stringResource(R.string.applock_einstellungen_offnen), color = AccentBlue)
+                        }
+                    } else {
+                        TextButton(onClick = { showBiometricInfoDialog = false }) {
+                            Text("OK", color = AccentBlue)
+                        }
                     }
-                }
+                },
+                dismissButton = if (biometricErrorFixable) {
+                    {
+                        TextButton(onClick = { showBiometricInfoDialog = false }) {
+                            Text(stringResource(R.string.abbrechen), color = TextS)
+                        }
+                    }
+                } else null
             )
         }
     }
@@ -720,7 +779,7 @@ fun SilentCaptureScreen(
                                         }
 
                                         // Altverhalten: direkt in DB speichern
-                                        val db = TwoFADatabase.getDatabase(context)
+                                        val db = TwoFADatabase.getDatabase(context.applicationContext)
                                         val existing = db.twoFADao().getAll()
                                         if (existing.any {
                                                 it.secret == secretParam || it.name.equals(
@@ -782,6 +841,9 @@ fun SilentCaptureScreen(
                     })
                     resume()
                 }
+            },
+            onRelease = { barcodeView ->
+                barcodeView.pause()
             },
             modifier = Modifier.fillMaxSize()
         )
