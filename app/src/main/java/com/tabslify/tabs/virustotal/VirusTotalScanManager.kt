@@ -5,16 +5,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
+import com.tabslify.R
 import com.tabslify.core.activities.Tabslify
 import com.tabslify.tabs.aitab.isAppInForeground
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import org.json.JSONArray
 import org.json.JSONObject
@@ -26,12 +29,17 @@ data class VirusTotalScanJob(
     val id: String,
     val mode: VirusTotalMode,
     val label: String,
+    val target: String,
     val state: VirusTotalState,
-    val startedAt: Long
+    val startedAt: Long,
+    val finishedAt: Long = 0L,
+    val hiddenInBar: Boolean = false
 )
 
 object VirusTotalScanManager {
     private const val PREFS_NAME = "virustotal_reports"
+    private const val HISTORY_LIMIT = 50
+    private const val SCAN_TIMEOUT_MS = 300_000L
     private const val MISSING_API_KEY_MESSAGE = "Kein VirusTotal API-Key konfiguriert. Bitte VIRUSTOTAL_API_KEY in local.properties eintragen."
 
     private val httpClient by lazy {
@@ -51,10 +59,12 @@ object VirusTotalScanManager {
 
     private fun ensureInitialized(context: Context) {
         if (!initialized) {
-            _jobs.value = loadJobsFromPrefs(context)
+            _jobs.value = loadJobsFromPrefs(context.applicationContext)
             initialized = true
         }
     }
+
+    fun ensureLoaded(context: Context) = ensureInitialized(context)
 
     fun startUrl(context: Context, url: String) {
         if (url.isBlank()) return
@@ -78,23 +88,50 @@ object VirusTotalScanManager {
         scanAction: suspend () -> VirusTotalState
     ) {
         ensureInitialized(context)
+        if (_jobs.value.any {
+                it.state is VirusTotalState.Loading && it.mode == mode && it.target == rawInput
+            }
+        ) {
+            return
+        }
+        val appContext = context.applicationContext
         val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
         if (!repository.hasApiKey) {
-            val job = VirusTotalScanJob(id, mode, label, VirusTotalState.Error(MISSING_API_KEY_MESSAGE), System.currentTimeMillis())
+            val job = VirusTotalScanJob(
+                id = id,
+                mode = mode,
+                label = label,
+                target = rawInput,
+                state = VirusTotalState.Error(MISSING_API_KEY_MESSAGE),
+                startedAt = now,
+                finishedAt = now
+            )
             _jobs.value = _jobs.value + job
-            persistJobs(context)
+            persistJobs(appContext)
             return
         }
 
-        val initialJob = VirusTotalScanJob(id, mode, label, VirusTotalState.Loading, System.currentTimeMillis())
+        val initialJob = VirusTotalScanJob(
+            id = id,
+            mode = mode,
+            label = label,
+            target = rawInput,
+            state = VirusTotalState.Loading,
+            startedAt = now
+        )
         _jobs.value = _jobs.value + initialJob
-        persistJobs(context)
+        persistJobs(appContext)
 
         Tabslify.serviceScope.launch {
-            val result = scanAction()
-            val updatedJob = initialJob.copy(state = result)
-            updateJob(id, result, context)
-            onJobComplete(context, updatedJob)
+            val result = try {
+                withTimeout(SCAN_TIMEOUT_MS) { scanAction() }
+            } catch (e: TimeoutCancellationException) {
+                VirusTotalState.Error("Scan-Zeitüberschreitung (5 Min)")
+            }
+            val updatedJob = initialJob.copy(state = result, finishedAt = System.currentTimeMillis())
+            updateJob(id, result, appContext)
+            onJobComplete(appContext, updatedJob)
         }
     }
 
@@ -104,7 +141,7 @@ object VirusTotalScanManager {
         val index = currentList.indexOfFirst { it.id == id }
         if (index != -1) {
             val newList = currentList.toMutableList()
-            newList[index] = newList[index].copy(state = newState)
+            newList[index] = newList[index].copy(state = newState, finishedAt = System.currentTimeMillis())
             _jobs.value = newList
             persistJobs(context)
         }
@@ -118,8 +155,19 @@ object VirusTotalScanManager {
 
     fun dismiss(context: Context, id: String) {
         ensureInitialized(context)
-        val newList = _jobs.value.filter { it.id != id }
-        _jobs.value = newList
+        _jobs.value = _jobs.value.map { if (it.id == id) it.copy(hiddenInBar = true) else it }
+        persistJobs(context)
+    }
+
+    fun deleteReport(context: Context, id: String) {
+        ensureInitialized(context)
+        _jobs.value = _jobs.value.filter { it.id != id }
+        persistJobs(context)
+    }
+
+    fun clearHistory(context: Context) {
+        ensureInitialized(context)
+        _jobs.value = _jobs.value.filter { it.state is VirusTotalState.Loading }
         persistJobs(context)
     }
 
@@ -133,15 +181,21 @@ object VirusTotalScanManager {
     private fun persistJobs(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val jsonArray = JSONArray()
-        val recentJobs = _jobs.value.sortedByDescending { it.startedAt }.take(20)
-        
+        if (_jobs.value.size > HISTORY_LIMIT) {
+            val keep = _jobs.value.sortedByDescending { it.startedAt }.take(HISTORY_LIMIT).map { it.id }.toSet()
+            _jobs.value = _jobs.value.filter { it.id in keep }
+        }
+        val recentJobs = _jobs.value.sortedByDescending { it.startedAt }
+
         for (job in recentJobs) {
             val jsonObj = JSONObject().apply {
                 put("id", job.id)
                 put("mode", job.mode.name)
                 put("label", job.label)
+                put("target", job.target)
                 put("startedAt", job.startedAt)
-                
+                put("finishedAt", job.finishedAt)
+
                 when (val state = job.state) {
                     is VirusTotalState.Loading -> {
                         put("type", "loading")
@@ -156,7 +210,7 @@ object VirusTotalScanManager {
                         put("suspicious", state.stats.suspicious)
                         put("harmless", state.stats.harmless)
                         put("undetected", state.stats.undetected)
-                        put("total", state.stats.total)
+                        put("timeout", state.stats.timeout)
                         put("permalink", state.permalink)
                     }
                     is VirusTotalState.Idle -> {
@@ -180,15 +234,17 @@ object VirusTotalScanManager {
                 val id = jsonObj.optString("id")
                 val modeStr = jsonObj.optString("mode")
                 val label = jsonObj.optString("label")
+                val target = jsonObj.optString("target", label)
                 val startedAt = jsonObj.optLong("startedAt")
+                val finishedAt = jsonObj.optLong("finishedAt")
                 val type = jsonObj.optString("type")
-                
+
                 if (id.isEmpty() || modeStr.isEmpty()) continue
-                
+
                 val mode = try { VirusTotalMode.valueOf(modeStr) } catch (e: Exception) { continue }
-                
+
                 val state = when (type) {
-                    "loading" -> VirusTotalState.Loading
+                    "loading" -> VirusTotalState.Error(context.getString(R.string.virustotal_scan_abgebrochen))
                     "error" -> VirusTotalState.Error(jsonObj.optString("errorMessage"))
                     "result" -> VirusTotalState.Result(
                         stats = VirusTotalStats(
@@ -196,14 +252,25 @@ object VirusTotalScanManager {
                             suspicious = jsonObj.optInt("suspicious"),
                             undetected = jsonObj.optInt("undetected"),
                             harmless = jsonObj.optInt("harmless"),
-                            timeout = 0
+                            timeout = jsonObj.optInt("timeout")
                         ),
                         permalink = jsonObj.optString("permalink")
                     )
                     else -> VirusTotalState.Idle
                 }
-                
-                list.add(VirusTotalScanJob(id, mode, label, state, startedAt))
+
+                list.add(
+                    VirusTotalScanJob(
+                        id = id,
+                        mode = mode,
+                        label = label,
+                        target = target,
+                        state = state,
+                        startedAt = startedAt,
+                        finishedAt = finishedAt,
+                        hiddenInBar = true
+                    )
+                )
             }
             list.sortedBy { it.startedAt }
         } catch (e: Exception) {
