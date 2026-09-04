@@ -30,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -76,6 +77,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -94,100 +96,191 @@ data class BatterySample(
 
 @SuppressLint("StaticFieldLeak")
 object BatteryDataRepository {
+    private const val FILE_NAME = "battery_samples.jsonl"
+    private const val PREF_LAST_SYNC_MS = "last_battery_sync_ms"
+    private const val PREF_LAST_SYNC_COUNT = "last_battery_sync_count"
+    private const val SYNC_MIN_INTERVAL_MS = 60L * 60 * 1000
+
     private lateinit var context: Context
     private val json = Json { ignoreUnknownKeys = true }
+
     @Suppress("ObjectPropertyName")
     internal val _samples = MutableStateFlow<List<BatterySample>>(emptyList())
     val samples = _samples.asStateFlow()
+
     @Volatile
     private var initialized = false
+
+    @Volatile
+    private var uiActive = false
+
+    @Volatile
+    private var lastSample: BatterySample? = null
+
+    private val fileLock = Any()
 
     fun init(ctx: Context) {
         context = ctx.applicationContext
         if (initialized) return
-        initialized = true
-        appScope.launch {
-            val local = loadSamples()
-            if (local.isEmpty()) {
-                val remote = fetchSamplesFromSupabase()
-                if (remote.isNotEmpty()) {
-                    _samples.value = remote
-                    saveSamplesLocal(remote)
-                }
-            } else {
-                _samples.value = local
-                appScope.launch(Dispatchers.IO) {
-                    val remote = fetchSamplesFromSupabase()
-                    if (remote.size > _samples.value.size) {
-                        _samples.value = remote
-                        saveSamplesLocal(remote)
-                    }
+        synchronized(fileLock) {
+            if (initialized) return
+            initialized = true
+            val file = File(context.filesDir, FILE_NAME)
+            if (!file.exists() || file.length() == 0L) {
+                migrateLegacyPrefs(file)
+            }
+        }
+    }
+
+    private fun migrateLegacyPrefs(file: File) {
+        runCatching {
+            val prefs = context.getSharedPreferences("battery_data", Context.MODE_PRIVATE)
+            val old = prefs.getString("samples", null)
+            if (!old.isNullOrEmpty()) {
+                val list = json.decodeFromString<List<BatterySample>>(old)
+                if (list.isNotEmpty()) {
+                    file.appendText(list.joinToString("\n") { json.encodeToString(it) } + "\n")
+                    lastSample = list.last()
+                    prefs.edit { remove("samples") }
                 }
             }
         }
+    }
+
+    fun loadForUi(ctx: Context) {
+        init(ctx)
+        if (!initialized) return
+        uiActive = true
+        appScope.launch(Dispatchers.IO) {
+            var list = readAllSamples()
+            val remote = fetchSamplesFromSupabase()
+            if (remote.isNotEmpty()) {
+                val merged = mergeSamples(list, remote)
+                if (merged.size > list.size) {
+                    writeAllSamples(merged)
+                    list = merged
+                }
+            }
+            lastSample = list.lastOrNull()
+            if (uiActive) {
+                _samples.value = list
+            }
+        }
+    }
+
+    fun releaseFromUi() {
+        uiActive = false
+        _samples.value = emptyList()
+    }
+
+    suspend fun recentSamples(maxAgeMs: Long): List<BatterySample> = withContext(Dispatchers.IO) {
+        val cutoff = System.currentTimeMillis() - maxAgeMs
+        readAllSamples().filter { it.timestamp >= cutoff }
     }
 
     fun addSample(sample: BatterySample) {
-        var updated: List<BatterySample>? = null
-        _samples.update { current ->
-            val last = current.lastOrNull()
-            if (last != null && (sample.temperature - last.temperature).absoluteValue < 1f) {
-                updated = null
-                current
-            } else {
-                (current + sample).also { updated = it }
-            }
+        if (!initialized) init(context)
+        var shouldAppend = false
+        val prev = lastSample
+        if (prev == null || (sample.temperature - prev.temperature).absoluteValue >= 1f) {
+            shouldAppend = true
         }
-        updated?.let { saveSamples(it) }
-    }
+        if (!shouldAppend) return
 
-    private fun saveSamples(samples: List<BatterySample>) = appScope.launch {
-        saveSamplesLocal(samples)
-        syncToSupabase(samples)
-    }
+        lastSample = sample
 
-    private suspend fun saveSamplesLocal(samples: List<BatterySample>) =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                context.getSharedPreferences("battery_data", Context.MODE_PRIVATE)
-                    .edit { putString("samples", json.encodeToString(samples)) }
-            }
+        if (uiActive) {
+            _samples.update { it + sample }
         }
 
-    private fun syncToSupabase(samples: List<BatterySample>) = appScope.launch(Dispatchers.IO) {
+        appScope.launch(Dispatchers.IO) {
+            appendSample(sample)
+        }
+    }
+
+    private fun mergeSamples(a: List<BatterySample>, b: List<BatterySample>): List<BatterySample> {
+        if (a.isEmpty()) return b
+        if (b.isEmpty()) return a
+        val byTs = HashMap<Long, BatterySample>(a.size + b.size)
+        (a + b).forEach { byTs[it.timestamp] = it }
+        return byTs.values.sortedBy { it.timestamp }
+    }
+
+    suspend fun syncToSupabase(context: Context): Boolean = withContext(Dispatchers.IO) {
         runCatching {
-            if (!prvt()) {
-                Toast.makeText(context, context.getString(R.string.forbidden), Toast.LENGTH_SHORT).show()
-                return@runCatching
-            }
+            if (!prvt()) return@withContext false
+
+            val local = readAllSamples()
+            val remote = fetchSamplesFromSupabase()
+
+            val merged = mergeSamples(local, remote)
+            if (merged.size < remote.size) return@withContext false
+
             client.from("Tabslify").upsert(buildJsonObject {
                 put("id", 1)
-                put("battery_samples", json.encodeToString(samples))
+                put("battery_samples", json.encodeToString(merged))
             })
+
+            val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            prefs.edit()
+                .putLong(PREF_LAST_SYNC_MS, System.currentTimeMillis())
+                .putInt(PREF_LAST_SYNC_COUNT, merged.size)
+                .apply()
+            true
+        }.getOrElse { false }
+    }
+
+    fun trySync(context: Context) = appScope.launch(Dispatchers.IO) {
+        runCatching {
+            val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            val last = prefs.getLong(PREF_LAST_SYNC_MS, 0L)
+            if (System.currentTimeMillis() - last < SYNC_MIN_INTERVAL_MS) return@launch
+            syncToSupabase(context)
         }
+    }
+
+    private fun sampleFile(): File = File(context.filesDir, FILE_NAME)
+
+    private fun appendSample(sample: BatterySample) {
+        synchronized(fileLock) {
+            runCatching {
+                sampleFile().appendText(json.encodeToString(sample) + "\n")
+            }
+        }
+    }
+
+    private fun writeAllSamples(samples: List<BatterySample>) {
+        synchronized(fileLock) {
+            runCatching {
+                sampleFile().writeText(
+                    samples.joinToString("\n") { json.encodeToString(it) } + "\n"
+                )
+            }
+        }
+    }
+
+    private fun readAllSamples(): List<BatterySample> = synchronized(fileLock) {
+        runCatching {
+            val file = sampleFile()
+            if (!file.exists()) return@runCatching emptyList()
+            file.readLines().mapNotNull { line ->
+                if (line.isBlank()) null else runCatching {
+                    json.decodeFromString<BatterySample>(line)
+                }.getOrNull()
+            }
+        }.getOrElse { emptyList() }
     }
 
     private suspend fun fetchSamplesFromSupabase(): List<BatterySample> =
         withContext(Dispatchers.IO) {
             runCatching {
-                if (!prvt()) {
-                    Toast.makeText(context, context.getString(R.string.forbidden), Toast.LENGTH_SHORT).show()
-                    return@withContext emptyList()
-                }
+                if (!prvt()) return@withContext emptyList()
                 val row = client.from("Tabslify").select().decodeSingle<JsonObject>()
                 val str =
                     row["battery_samples"]?.jsonPrimitive?.content ?: return@withContext emptyList()
                 json.decodeFromString<List<BatterySample>>(str)
             }.getOrElse { emptyList() }
         }
-
-    private suspend fun loadSamples(): List<BatterySample> = withContext(Dispatchers.IO) {
-        runCatching {
-            val prefs = context.getSharedPreferences("battery_data", Context.MODE_PRIVATE)
-            val jsonStr = prefs.getString("samples", null)
-            if (jsonStr != null) json.decodeFromString<List<BatterySample>>(jsonStr) else emptyList()
-        }.getOrElse { emptyList() }
-    }
 }
 
 fun readBatterySample(context: Context): BatterySample? {
@@ -223,6 +316,14 @@ fun stopBatteryWorker(context: Context) {
 @Composable
 fun BatteryChartScreen(onDismiss: () -> Unit) {
     val context = LocalContext.current
+
+    DisposableEffect(Unit) {
+        BatteryDataRepository.loadForUi(context)
+        onDispose {
+            BatteryDataRepository.releaseFromUi()
+        }
+    }
+
     LaunchedEffect(Unit) {
         BatteryDataRepository.init(context)
         val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
