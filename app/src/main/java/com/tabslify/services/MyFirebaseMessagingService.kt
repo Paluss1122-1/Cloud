@@ -65,9 +65,10 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             return
         }
         val scriptName = remoteMessage.data["script_name"] ?: return
+        val appContext = applicationContext
         Tabslify.serviceScope.launch {
             try {
-                fetchAndRun(scriptName, applicationContext)
+                fetchAndRun(scriptName, appContext)
             } catch (_: Exception) {
             }
         }

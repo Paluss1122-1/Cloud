@@ -140,6 +140,7 @@ import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.getSessions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -151,6 +152,7 @@ import org.json.JSONObject
 import org.xml.sax.InputSource
 import java.io.File
 import java.io.StringReader
+import java.lang.ref.WeakReference
 import java.net.URL
 import java.time.Instant
 import java.time.ZoneId
@@ -306,7 +308,14 @@ class QuietHoursNotificationService : Service() {
         val handlerThread = HandlerThread("QuietHoursWorker").apply { start() }
         val workerHandler = Handler(handlerThread.looper)
         val mainHandler = Handler(Looper.getMainLooper())
-        var galleryImages: List<GalleryImage> = emptyList()
+        private var galleryImagesRef: WeakReference<List<GalleryImage>> =
+            WeakReference(emptyList())
+
+        var galleryImages: List<GalleryImage>
+            get() = galleryImagesRef.get() ?: emptyList()
+            set(value) {
+                galleryImagesRef = WeakReference(value)
+            }
         var currentGalleryIndex = 0
         var isCurrentlyQuietHours = false
         val handler = Handler(Looper.getMainLooper())
@@ -749,7 +758,7 @@ class QuietHoursNotificationService : Service() {
                 }
 
                 ACTION_DAILY_MUSIC_SUMMARY -> {
-                    appScope.launch {
+                    dailyMusicSummaryJob = appScope.launch {
                         try {
                             kotlinx.coroutines.delay(500.milliseconds)
                             MediaAnalyticsManager.init(this@QuietHoursNotificationService)
@@ -808,7 +817,7 @@ class QuietHoursNotificationService : Service() {
                 ACTION_PODCAST_CHECK -> {
                     try {
                         if (isWifiConnected()) {
-                            appScope.launch(Dispatchers.IO) {
+                            podcastJob = appScope.launch(Dispatchers.IO) {
                                 try {
                                     checkPodcastsAndNotify(this@QuietHoursNotificationService)
                                 } catch (e: Exception) {
@@ -827,7 +836,7 @@ class QuietHoursNotificationService : Service() {
                 ACTION_PODCAST_RETRY -> {
                     try {
                         if (isWifiConnected()) {
-                            appScope.launch(Dispatchers.IO) {
+                            podcastJob = appScope.launch(Dispatchers.IO) {
                                 try {
                                     checkPodcastsAndNotify(this@QuietHoursNotificationService)
                                 } catch (e: Exception) {
@@ -922,6 +931,40 @@ class QuietHoursNotificationService : Service() {
 
     private var testOverlayView: ComposeView? = null
     private var testOverlayLifecycle: OverlayLifecycleOwner? = null
+    private var testOverlayWebView: WebView? = null
+    private var dailyMusicSummaryJob: Job? = null
+    private var podcastJob: Job? = null
+
+    private fun tearDownOverlay() {
+        try {
+            testOverlayView?.let { view ->
+                (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(view)
+            }
+        } catch (e: Exception) {
+            reportServiceError("showTestOverlay:removeView", e)
+        }
+        try {
+            testOverlayWebView?.apply {
+                stopLoading()
+                clearHistory()
+                clearCache(true)
+                loadUrl("about:blank")
+                onPause()
+                removeAllViews()
+                destroy()
+            }
+        } catch (e: Exception) {
+            reportServiceError("showTestOverlay:webView:destroy", e)
+        }
+        try {
+            testOverlayLifecycle?.onDestroy()
+        } catch (e: Exception) {
+            reportServiceError("showTestOverlay:overlayLifecycle:onDestroy", e)
+        }
+        testOverlayView = null
+        testOverlayLifecycle = null
+        testOverlayWebView = null
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun showTestOverlay() {
@@ -929,6 +972,8 @@ class QuietHoursNotificationService : Service() {
             showSimpleNotification(getString(R.string.fehler), getString(R.string.overlay_berechtigung_fehlt))
             return
         }
+
+        if (testOverlayView != null) tearDownOverlay()
 
         val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
@@ -1046,6 +1091,7 @@ class QuietHoursNotificationService : Service() {
                         loadUrl(currentUrl)
                     }
                 }
+                testOverlayWebView = webView
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     AndroidView(
@@ -1086,35 +1132,7 @@ class QuietHoursNotificationService : Service() {
                     }
 
                     IconButton(
-                        onClick = {
-                            try {
-                                testOverlayView?.let { windowManager.removeView(it) }
-                            } catch (e: Exception) {
-                                reportServiceError("showTestOverlay:removeView", e)
-                            }
-                            try {
-                                testOverlayLifecycle?.onDestroy()
-                            } catch (e: Exception) {
-                                reportServiceError("showTestOverlay:overlayLifecycle:onDestroy", e)
-                            }
-
-                            try {
-                                webView.apply {
-                                    stopLoading()
-                                    clearHistory()
-                                    clearCache(true)
-                                    loadUrl("about:blank")
-                                    onPause()
-                                    removeAllViews()
-                                    destroy()
-                                }
-                            } catch (e: Exception) {
-                                reportServiceError("showTestOverlay:webView:destroy", e)
-                            }
-
-                            testOverlayView = null
-                            testOverlayLifecycle = null
-                        },
+                        onClick = { tearDownOverlay() },
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(8.dp)
@@ -1180,7 +1198,12 @@ class QuietHoursNotificationService : Service() {
     override fun onDestroy() {
         super.onDestroy()
 
+        tearDownOverlay()
+        dailyMusicSummaryJob?.cancel()
+        podcastJob?.cancel()
+
         handler.removeCallbacksAndMessages(null)
+        workerHandler.removeCallbacksAndMessages(null)
 
         voiceNotePlayer?.apply {
             try {

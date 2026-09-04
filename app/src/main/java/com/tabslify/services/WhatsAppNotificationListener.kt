@@ -36,6 +36,16 @@ data class WhatsAppMessage(
     val timestamp: Long
 )
 
+private fun StatusBarNotification.isGroupSummary(): Boolean =
+    (notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY) != 0
+
+private fun StatusBarNotification.hasContent(): Boolean {
+    val extras = notification.extras
+    val title = extras.getCharSequence("android.title")?.toString().orEmpty()
+    val text = extras.getCharSequence("android.text")?.toString().orEmpty()
+    return title.isNotBlank() || text.isNotBlank()
+}
+
 class WhatsAppNotificationListener : NotificationListenerService() {
 
     @Volatile
@@ -106,10 +116,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             return false
         }
 
-        /**
-         * Verwirft eine Notification exakt anhand ihres stabilen [sbn.key].
-         * Bevorzugt gegenüber der ID, da diese nicht app-übergreifend eindeutig ist.
-         */
         fun cancelExternalNotificationByKey(key: String): Boolean {
             val svc = instance?.get() ?: return false
             if (!svc.listenerConnected) return false
@@ -164,8 +170,16 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             lastForwardTime = System.currentTimeMillis()
 
             val jsonArray = org.json.JSONArray()
-            notifications
+            val relevant = notifications
                 .filter { it.packageName != "com.paluss1122.tabslify" && it.packageName != "com.paluss1122.tabslify.private" && it.packageName != "com.android.systemui" }
+
+            val packagesWithChildren = relevant
+                .filter { !it.isGroupSummary() && it.hasContent() }
+                .map { it.packageName }
+                .toSet()
+
+            relevant
+                .filter { !(it.isGroupSummary() && it.packageName in packagesWithChildren) }
                 .sortedByDescending { it.postTime }
                 .forEach { sbn ->
                     val extras = sbn.notification.extras
@@ -292,6 +306,14 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                     .take(replyActions.size - 50)
                     .map { it.key }
                 oldestKeys.forEach { replyActions.remove(it) }
+            }
+
+            if (messagesByContact.size > 200) {
+                val oldestKeys = messagesByContact.entries
+                    .sortedBy { it.value.lastOrNull()?.timestamp ?: 0L }
+                    .take(messagesByContact.size - 200)
+                    .map { it.key }
+                oldestKeys.forEach { messagesByContact.remove(it) }
             }
 
             notification.actions?.forEach { action ->

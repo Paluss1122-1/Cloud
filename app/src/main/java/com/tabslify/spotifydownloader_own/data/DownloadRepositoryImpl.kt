@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -115,13 +116,19 @@ class DownloadRepositoryImpl(
             }
 
             send(DownloadState.Downloading(20))
-            val audioResponse: HttpResponse = httpClient.get(downloadUrl)
+            val audioResponse: HttpResponse = httpClient.get(downloadUrl) {
+                timeout {
+                    requestTimeoutMillis = 120_000
+                    connectTimeoutMillis = 60_000
+                    socketTimeoutMillis = 120_000
+                }
+            }
             val channel: ByteReadChannel = audioResponse.bodyAsChannel()
             val contentLength = audioResponse.contentLength() ?: 0L
 
             val coverBytes: ByteArray? = coverUrl?.let {
                 try {
-                    URL(it).readBytes()
+                    withTimeout(30_000L) { URL(it).readBytes() }
                 } catch (_: Exception) {
                     null
                 }
