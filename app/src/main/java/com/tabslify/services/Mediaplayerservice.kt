@@ -71,6 +71,7 @@ import com.tabslify.tabs.mediaplayer.PodcastShowManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -915,7 +916,8 @@ class MediaPlayerService : MediaSessionService() {
 
             ACTION_PLAY_ALL_SONGS_AT_INDEX -> {
                 val path = intent.getStringExtra(EXTRA_SONG_PATH)
-                appScope.launch {
+                serviceScope.launch {
+                    if (isServiceDestroyed) return@launch
                     activeAlgorithmicPlaylistId = null
                     algorithmicPlaylistSongs = emptyList()
                     activePlaylistId = null
@@ -1012,6 +1014,9 @@ class MediaPlayerService : MediaSessionService() {
         cancelAutoPause()
 
         if (!wasInitialized) {
+            updateNotJob?.cancel()
+            updateNotJob = null
+            serviceScope.coroutineContext[Job]?.cancel()
             super.onDestroy()
             return
         }
@@ -1048,6 +1053,11 @@ class MediaPlayerService : MediaSessionService() {
 
         val nm: NotificationManager? = getSystemService(NotificationManager::class.java)
         nm?.cancel(MEDIA_PLAYER)
+
+        updateNotJob?.cancel()
+        updateNotJob = null
+
+        serviceScope.coroutineContext[Job]?.cancel()
 
         super.onDestroy()
     }
@@ -1337,8 +1347,9 @@ class MediaPlayerService : MediaSessionService() {
                 musicPrefs.editAsync { putBoolean("is_playing", true) }
 
                 // Extract metadata and update media session
-                appScope.launch(Dispatchers.IO) {
+                serviceScope.launch {
                     try {
+                        if (isServiceDestroyed) return@launch
                         val retriever = MediaMetadataRetriever()
                         try {
                             retriever.setDataSource(applicationContext, song.uri)
@@ -1918,6 +1929,8 @@ class MediaPlayerService : MediaSessionService() {
     var updateNotJob: Job? = null
     var pendingUpdateTime = 0L
     val cooldownMs = 400L
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private fun updateNotification(important: Boolean = true, instantUpdate: Boolean = true) {
         var cooldownMsIntern = cooldownMs
@@ -2898,9 +2911,10 @@ class MediaPlayerService : MediaSessionService() {
 
         saveMusicState()
         updateNotification()
-        appScope.launch {
+        serviceScope.launch {
             val resolvedUrl = resolveRedirect(url)
             val (episodeTitle, showName) = resolveStreamMeta(url)
+            if (isServiceDestroyed) return@launch
 
             // Stream-Titel für Anzeige und Analytics ermitteln
             currentStreamName = when {
