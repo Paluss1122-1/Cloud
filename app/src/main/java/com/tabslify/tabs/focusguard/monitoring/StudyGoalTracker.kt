@@ -21,5 +21,4 @@ object StudyGoalTracker {
         return System.currentTimeMillis() - last >= intervalMin * 60_000L
     }
 
-    fun markReminderSent() = FocusGuardRepository.markGoalReminderSent()
 }
