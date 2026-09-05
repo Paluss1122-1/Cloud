@@ -37,9 +37,9 @@ import com.tabslify.core.ui.BgCard
 import com.tabslify.core.ui.TextPrimary
 import com.tabslify.core.ui.TextSecondary
 import com.tabslify.tabs.focusguard.FocusGuardViewModel
-import com.tabslify.tabs.focusguard.formatDurationMs
 import com.tabslify.tabs.focusguard.data.FOCUSGUARD_RESTRICTED_CATEGORIES
 import com.tabslify.tabs.focusguard.data.SleepRecord
+import com.tabslify.tabs.focusguard.formatDurationMs
 
 @Composable
 fun FocusGuardDashboardScreen(vm: FocusGuardViewModel, modifier: Modifier = Modifier) {
@@ -197,7 +197,7 @@ private fun PointsStreakRow(vm: FocusGuardViewModel) {
         )
         StatBox(
             label = stringResource(R.string.focusguard_dash_streak),
-            value = "${vm.currentStreak} ${stringResource(R.string.focusguard_stats_days)}".let { it },
+            value = "${vm.currentStreak} ${stringResource(R.string.focusguard_stats_days)}",
             emoji = "🔥",
             modifier = Modifier.weight(1f)
         )
