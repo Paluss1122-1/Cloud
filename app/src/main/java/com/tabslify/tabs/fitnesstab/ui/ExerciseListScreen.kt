@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -28,18 +27,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -56,21 +50,23 @@ import com.tabslify.tabs.fitnesstab.data.MuscleGroup
 
 @Composable
 fun ExerciseListScreen(vm: FitnessViewModel, modifier: Modifier = Modifier) {
-    val ctx = LocalContext.current
     val search = vm.exercisesSearch
     val grp = vm.exercisesGroupFilter
     val diff = vm.exercisesDifficultyFilter
     val eq = vm.exercisesEquipmentFilter
 
     val allEx = vm.exercises
-    val filtered = remember(allEx, search, grp, diff, eq) {
+    val nameLookup = remember(allEx) {
+        allEx.distinctBy { it.nameRes }
+    }.associate { it.nameRes to stringResource(it.nameRes) }
+    val filtered = remember(allEx, search, grp, diff, eq, nameLookup) {
         allEx.filter { ex ->
             if (grp != null && ex.muscleGroup != grp) return@filter false
             if (diff != null && ex.difficulty != diff) return@filter false
             if (eq != null && ex.equipment != eq) return@filter false
             if (search.isNotBlank()) {
                 val q = search.trim().lowercase()
-                val name = ctx.getString(ex.nameRes).lowercase()
+                val name = (nameLookup[ex.nameRes] ?: "").lowercase()
                 if (q !in name) return@filter false
             }
             true
@@ -110,8 +106,8 @@ fun ExerciseListScreen(vm: FitnessViewModel, modifier: Modifier = Modifier) {
                     MuscleGroup.FULLBODY to R.string.fitness_exercises_group_fullbody
                 ),
                 selected = grp,
-                onSelect = { vm.exercisesGroupFilter = it as MuscleGroup? },
-                accentFor = { g -> groupAccent(g as MuscleGroup?) }
+                onSelect = { vm.exercisesGroupFilter = it },
+                accentFor = { g -> groupAccent(g) }
             )
 
             Row(
@@ -128,8 +124,8 @@ fun ExerciseListScreen(vm: FitnessViewModel, modifier: Modifier = Modifier) {
                         Difficulty.ADVANCED to R.string.fitness_ex_difficulty_advanced
                     ),
                     selected = diff,
-                    onSelect = { vm.exercisesDifficultyFilter = it as Difficulty? },
-                    accentFor = { d -> difficultyAccent(d as Difficulty?) }
+                    onSelect = { vm.exercisesDifficultyFilter = it },
+                    accentFor = { d -> difficultyAccent(d) }
                 )
             }
 
@@ -146,8 +142,8 @@ fun ExerciseListScreen(vm: FitnessViewModel, modifier: Modifier = Modifier) {
                     Equipment.BENCH to R.string.fitness_ex_gear_bench
                 ),
                 selected = eq,
-                onSelect = { vm.exercisesEquipmentFilter = it as Equipment? },
-                accentFor = { e -> equipmentAccent(e as Equipment?) }
+                onSelect = { vm.exercisesEquipmentFilter = it },
+                accentFor = { e -> equipmentAccent(e) }
             )
         }
 
@@ -175,7 +171,7 @@ fun ExerciseListScreen(vm: FitnessViewModel, modifier: Modifier = Modifier) {
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                MuscleGroup.values().forEach { group ->
+                MuscleGroup.entries.forEach { group ->
                     val list = grouped[group].orEmpty()
                     if (list.isEmpty()) return@forEach
                     item {
