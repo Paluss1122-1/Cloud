@@ -1,7 +1,6 @@
 package com.tabslify.tabs.focusguard.monitoring
 
 import android.content.Context
-import com.tabslify.tabs.focusguard.data.AppUsageLog
 import com.tabslify.tabs.focusguard.data.SleepRecord
 import java.time.LocalDate
 
@@ -31,7 +30,7 @@ object SleepTracker {
 
         if (bestGap < MIN_GAP_MS) return null
         val duration = bestEnd - bestStart
-        if (duration < MIN_SLEEP_MS || duration > MAX_SLEEP_MS) return null
+        if (duration !in MIN_SLEEP_MS..MAX_SLEEP_MS) return null
 
         return SleepRecord(
             date = nightOf.toString(),
@@ -41,5 +40,4 @@ object SleepTracker {
         )
     }
 
-    fun findFirstUsage(sessions: List<AppUsageLog>): Long? = sessions.minOfOrNull { it.sessionStartMs }
 }
