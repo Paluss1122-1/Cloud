@@ -91,6 +91,15 @@ interface SleepRecordDao {
 
     @Query("UPDATE sleep_records SET synced = 1 WHERE id IN (:ids)")
     suspend fun markSynced(ids: List<String>)
+
+    @Query(
+        "DELETE FROM sleep_records AS s WHERE EXISTS (" +
+            "SELECT 1 FROM sleep_records AS o WHERE o.date = s.date AND (" +
+            "o.wakeMs > s.wakeMs OR " +
+            "(o.wakeMs = s.wakeMs AND o.bedtimeMs > s.bedtimeMs) OR " +
+            "(o.wakeMs = s.wakeMs AND o.bedtimeMs = s.bedtimeMs AND o.id > s.id)))"
+    )
+    suspend fun deleteDuplicates()
 }
 
 @Dao
