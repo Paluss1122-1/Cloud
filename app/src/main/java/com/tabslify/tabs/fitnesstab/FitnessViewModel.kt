@@ -3,6 +3,7 @@ package com.tabslify.tabs.fitnesstab
 import android.app.Application
 import android.content.Context
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -25,7 +26,6 @@ import com.tabslify.tabs.fitnesstab.data.ExerciseSet
 import com.tabslify.tabs.fitnesstab.data.ExploreActivityBridge
 import com.tabslify.tabs.fitnesstab.data.FitnessStats
 import com.tabslify.tabs.fitnesstab.data.FitnessStorage
-import com.tabslify.tabs.fitnesstab.data.TrackingType
 import com.tabslify.tabs.fitnesstab.data.WorkoutEntry
 import com.tabslify.tabs.fitnesstab.data.WorkoutSession
 import kotlinx.coroutines.Job
@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.milliseconds
 
 private const val PREFS_NAME = "fitness_pushups"
 private const val KEY_BEST = "best_reps"
@@ -122,7 +123,7 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
     var userAgeYears by mutableIntStateOf(storage.getUserAgeYears())
         private set
 
-    var userWeightKg by mutableStateOf(storage.getUserWeightKg())
+    var userWeightKg by mutableFloatStateOf(storage.getUserWeightKg())
         private set
 
     var profileDialogVisible by mutableStateOf(false)
@@ -174,7 +175,7 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             val rides = runCatching {
                 BikeRideRepository.ridesForLastDays(
-                    getApplication<Application>(),
+                    getApplication(),
                     bikeRangeDays,
                     storage.calorieFactor()
                 )
@@ -206,7 +207,7 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setRideMode(rideId: String, mode: String?) {
-        BikeModeOverrides.setMode(getApplication<Application>(), rideId, mode)
+        BikeModeOverrides.setMode(getApplication(), rideId, mode)
         val factor = storage.calorieFactor()
         _bikeRides.value = _bikeRides.value.map { ride ->
             if (ride.rideId != rideId) {
@@ -232,7 +233,7 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
 
     fun changeBikeDefaultMode(mode: String) {
         if (mode == bikeDefaultMode) return
-        BikeModeOverrides.setDefaultMode(getApplication<Application>(), mode)
+        BikeModeOverrides.setDefaultMode(getApplication(), mode)
         bikeDefaultMode = mode
         loadBikeRides(force = true)
         refreshStats()
@@ -274,8 +275,8 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
         val sets: SnapshotStateList<ExerciseSet> = mutableStateListOf()
     )
 
-    private val _editableEntries = mutableStateListOf<EditableWorkoutEntry>()
-    val editableEntries: List<EditableWorkoutEntry> get() = _editableEntries
+    val editableEntries: List<EditableWorkoutEntry>
+        field = mutableStateListOf<EditableWorkoutEntry>()
 
     var exercisePickerVisible by mutableStateOf(false)
         private set
@@ -296,16 +297,12 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun openExercisePicker() {
-        exercisePickerVisible = true
-    }
-
     fun closeExercisePicker() {
         exercisePickerVisible = false
     }
 
     fun addExerciseToWorkout(exerciseId: String) {
-        val existing = _editableEntries.find { it.exerciseId == exerciseId }
+        val existing = editableEntries.find { it.exerciseId == exerciseId }
         if (existing != null) {
             existing.sets.add(
                 ExerciseSet(setNumber = existing.sets.size + 1)
@@ -318,22 +315,22 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
             exerciseId = exerciseId,
             sets = mutableStateListOf(ExerciseSet(setNumber = 1))
         )
-        _editableEntries.add(entry)
+        editableEntries.add(entry)
         if (workoutStartedAtMs == 0L) startManualWorkoutTimer()
     }
 
     fun removeWorkoutEntry(entryId: String) {
-        val idx = _editableEntries.indexOfFirst { it.entryId == entryId }
-        if (idx >= 0) _editableEntries.removeAt(idx)
+        val idx = editableEntries.indexOfFirst { it.entryId == entryId }
+        if (idx >= 0) editableEntries.removeAt(idx)
     }
 
     fun addSetToEntry(entryId: String) {
-        val entry = _editableEntries.find { it.entryId == entryId } ?: return
+        val entry = editableEntries.find { it.entryId == entryId } ?: return
         entry.sets.add(ExerciseSet(setNumber = entry.sets.size + 1))
     }
 
     fun removeSetFromEntry(entryId: String, setIndex: Int) {
-        val entry = _editableEntries.find { it.entryId == entryId } ?: return
+        val entry = editableEntries.find { it.entryId == entryId } ?: return
         if (setIndex in entry.sets.indices) {
             entry.sets.removeAt(setIndex)
             entry.sets.forEachIndexed { i, s ->
@@ -350,7 +347,7 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
         durationSeconds: Int? = null,
         completed: Boolean? = null
     ) {
-        val entry = _editableEntries.find { it.entryId == entryId } ?: return
+        val entry = editableEntries.find { it.entryId == entryId } ?: return
         if (setIndex !in entry.sets.indices) return
         val old = entry.sets[setIndex]
         entry.sets[setIndex] = old.copy(
@@ -366,7 +363,7 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
         workoutTimerJob = viewModelScope.launch {
             while (workoutStartedAtMs > 0L) {
                 workoutElapsedMs = System.currentTimeMillis() - workoutStartedAtMs
-                delay(500L)
+                delay(500L.milliseconds)
             }
         }
     }
@@ -382,7 +379,7 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
         restTimerJob?.cancel()
         restTimerJob = viewModelScope.launch {
             while (restTimerRemaining > 0) {
-                delay(1000L)
+                delay(1000L.milliseconds)
                 restTimerRemaining--
             }
             restTimerRunning = false
@@ -396,10 +393,10 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun saveWorkoutSession() {
-        if (_editableEntries.isEmpty()) return
+        if (editableEntries.isEmpty()) return
         val now = System.currentTimeMillis()
         val start = if (workoutStartedAtMs > 0L) workoutStartedAtMs else now
-        val entries = _editableEntries.map { e ->
+        val entries = editableEntries.map { e ->
             WorkoutEntry(
                 entryId = e.entryId,
                 exerciseId = e.exerciseId,
@@ -411,7 +408,7 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
 
         var calories = 0f
         val minutes = ((now - start) / 60_000f).coerceAtLeast(1f)
-        val exIds = _editableEntries.map { it.exerciseId }.distinct()
+        val exIds = editableEntries.map { it.exerciseId }.distinct()
         val factor = storage.calorieFactor()
         for (exId in exIds) {
             val ex = ExerciseRepository.findById(exId)
@@ -438,7 +435,7 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun discardWorkoutInternal() {
-        _editableEntries.clear()
+        editableEntries.clear()
         workoutName = ""
         workoutStartedAtMs = 0L
         workoutElapsedMs = 0L
@@ -481,7 +478,7 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
                 timerJob = viewModelScope.launch {
                     while (isRunning) {
                         elapsedMs = System.currentTimeMillis() - sessionStartedAtMs
-                        delay(250L)
+                        delay(250L.milliseconds)
                     }
                 }
             }
@@ -514,7 +511,7 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             val exploreSessions = runCatching {
                 ExploreActivityBridge.sessionsForLastDays(
-                    getApplication<Application>(),
+                    getApplication(),
                     EXPLORE_HISTORY_DAYS,
                     storage.calorieFactor()
                 )
@@ -593,7 +590,7 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
         timerJob = viewModelScope.launch {
             while (isRunning) {
                 elapsedMs = System.currentTimeMillis() - sessionStartedAtMs
-                delay(250L)
+                delay(250L.milliseconds)
             }
         }
     }
@@ -693,7 +690,6 @@ class FitnessViewModel(application: Application) : AndroidViewModel(application)
     }
 
     override fun onCleared() {
-        super.onCleared()
         timerJob?.cancel()
         workoutTimerJob?.cancel()
         restTimerJob?.cancel()
