@@ -12,12 +12,12 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.tabslify.core.activities.Tabslify.Companion.appScope
-import com.tabslify.tabs.focusguard.formatDurationMs
 import com.tabslify.tabs.focusguard.FocusGuardNotifications
 import com.tabslify.tabs.focusguard.data.FocusGuardConfig
 import com.tabslify.tabs.focusguard.data.FocusGuardDatabase
 import com.tabslify.tabs.focusguard.data.FocusGuardRepository
 import com.tabslify.tabs.focusguard.data.todayYmd
+import com.tabslify.tabs.focusguard.formatDurationMs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -76,13 +76,12 @@ class FocusGuardDailyResetWorker(context: Context, params: WorkerParameters) :
             val alreadyProcessed = FocusGuardConfig.lastActiveDayYmd == yesterdayYmd
             if (!alreadyProcessed) {
                 val rules = db.restrictionRuleDao().all()
-                val logs = sessions
                 val schoolDay = FocusGuardConfig.schoolCalendarEnabled &&
                     BavarianSchoolCalendar.isSchoolDay(yesterday)
                 val goal = db.studyGoalDao().forDate(yesterdayYmd)
                 val quotaDone = goal != null && goal.completedCount >= goal.targetCount
                 val result = GamificationEngine.evaluateDay(
-                    logs = logs,
+                    logs = sessions,
                     rules = rules,
                     afternoonThresholdMin = FocusGuardConfig.afternoonThresholdMin,
                     quotaDone = quotaDone,
@@ -90,13 +89,13 @@ class FocusGuardDailyResetWorker(context: Context, params: WorkerParameters) :
                     date = yesterday
                 )
 
-                FocusGuardConfig.points = FocusGuardConfig.points + result.points
+                FocusGuardConfig.points += result.points
 
                 val previousExpected = yesterday.minusDays(1).toString()
                 val lastActive = FocusGuardConfig.lastActiveDayYmd
-                val newStreak = when {
-                    lastActive == yesterdayYmd -> FocusGuardConfig.currentStreak
-                    lastActive == previousExpected ->
+                val newStreak = when (lastActive) {
+                    yesterdayYmd -> FocusGuardConfig.currentStreak
+                    previousExpected ->
                         if (result.success) FocusGuardConfig.currentStreak + 1 else 0
 
                     else -> if (result.success) 1 else 0
@@ -215,8 +214,9 @@ object FocusGuardSummaryRunner {
         ).firstOrNull { (category, _) -> (totals[category] ?: 0L) > threshold }
 
         return if (excessive != null) {
-            "$result\n${context.getString(
-                com.tabslify.R.string.focusguard_summary_excessive,
+            "$result\n${context.resources.getQuantityString(
+                com.tabslify.R.plurals.focusguard_summary_excessive,
+                FocusGuardConfig.excessiveUsageThresholdMin,
                 context.getString(excessive.second),
                 FocusGuardConfig.excessiveUsageThresholdMin
             )}"
