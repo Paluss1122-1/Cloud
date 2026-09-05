@@ -24,7 +24,6 @@ object FocusGuardRepository {
     val todayUsage: StateFlow<Map<String, Long>> = _todayUsage.asStateFlow()
 
     private val _todayPackages = MutableStateFlow<List<PackageTotal>>(emptyList())
-    val todayPackages: StateFlow<List<PackageTotal>> = _todayPackages.asStateFlow()
 
     private val _sleepWeek = MutableStateFlow<List<SleepRecord>>(emptyList())
     val sleepWeek: StateFlow<List<SleepRecord>> = _sleepWeek.asStateFlow()
@@ -79,24 +78,6 @@ object FocusGuardRepository {
         }
     }
 
-    fun logUsage(packageName: String, category: String, sessionStartMs: Long, sessionEndMs: Long) {
-        val start = minOf(sessionStartMs, sessionEndMs)
-        val end = maxOf(sessionStartMs, sessionEndMs)
-        if (end - start <= 0L) return
-        val log = AppUsageLog(
-            packageName = packageName,
-            category = category,
-            date = ymdOf(end),
-            sessionStartMs = start,
-            sessionEndMs = end,
-            durationMs = end - start
-        )
-        appScope.launch(Dispatchers.IO) {
-            runCatching { db.appUsageLogDao().insert(log) }
-            refreshUsage()
-        }
-    }
-
     fun saveRules(rules: List<RestrictionRule>) {
         appScope.launch(Dispatchers.IO) {
             runCatching { db.restrictionRuleDao().upsertAll(rules) }
@@ -106,7 +87,20 @@ object FocusGuardRepository {
 
     suspend fun upsertSleep(record: SleepRecord) {
         withContext(Dispatchers.IO) {
-            runCatching { db.sleepRecordDao().upsert(record) }
+            runCatching {
+                val existing = db.sleepRecordDao().forDate(record.date)
+                val changed = existing != null && (existing.bedtimeMs != record.bedtimeMs
+                    || existing.wakeMs != record.wakeMs || existing.durationMs != record.durationMs)
+                when {
+                    existing == null -> db.sleepRecordDao().upsert(record)
+                    changed -> db.sleepRecordDao().upsert(existing.copy(
+                        bedtimeMs = record.bedtimeMs,
+                        wakeMs = record.wakeMs,
+                        durationMs = record.durationMs,
+                        synced = false
+                    ))
+                }
+            }
         }
         refresh()
     }
@@ -187,7 +181,7 @@ object FocusGuardRepository {
                 meta = meta
             )
             runCatching { db.userAchievementDao().insert(achievement) }
-            FocusGuardConfig.points = FocusGuardConfig.points + points
+            FocusGuardConfig.points += points
             refresh()
         }
     }
@@ -210,19 +204,25 @@ object FocusGuardRepository {
                     )
                     db.restrictionRuleDao().markSynced(rules.map { it.id })
                 }
+                db.sleepRecordDao().deleteDuplicates()
                 val sleeps = db.sleepRecordDao().unsynced()
                 if (sleeps.isNotEmpty()) {
+                    val uniqueSleeps = sleeps.sortedWith(
+                        compareByDescending<SleepRecord> { it.wakeMs }
+                            .thenByDescending { it.bedtimeMs }
+                    ).distinctBy { it.date }
                     Config.client.from("sleep_records").upsert(
-                        buildJsonArray { sleeps.forEach { add(sleepToJson(it)) } }
-                    )
-                    db.sleepRecordDao().markSynced(sleeps.map { it.id })
+                        buildJsonArray { uniqueSleeps.forEach { add(sleepToJson(it)) } }
+                    ) { onConflict = "date" }
+                    db.sleepRecordDao().markSynced(uniqueSleeps.map { it.id })
                 }
                 val goals = db.studyGoalDao().unsynced()
                 if (goals.isNotEmpty()) {
+                    val uniqueGoals = goals.distinctBy { it.date }
                     Config.client.from("study_goals").upsert(
-                        buildJsonArray { goals.forEach { add(goalToJson(it)) } }
-                    )
-                    db.studyGoalDao().markSynced(goals.map { it.id })
+                        buildJsonArray { uniqueGoals.forEach { add(goalToJson(it)) } }
+                    ) { onConflict = "date" }
+                    db.studyGoalDao().markSynced(uniqueGoals.map { it.id })
                 }
                 val achievements = db.userAchievementDao().unsynced()
                 if (achievements.isNotEmpty()) {
