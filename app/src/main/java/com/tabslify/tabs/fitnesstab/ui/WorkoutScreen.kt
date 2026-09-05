@@ -1,9 +1,9 @@
 package com.tabslify.tabs.fitnesstab.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,22 +14,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RestartAlt
@@ -42,19 +41,16 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,7 +58,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -135,7 +131,6 @@ fun WorkoutScreen(
             Box(Modifier.fillMaxSize()) {
                 cameraScreen()
                 ModeSwitchOverlay(
-                    current = vm.workoutMode,
                     onSwitch = { vm.changeWorkoutMode(WorkoutMode.MANUAL) },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -177,7 +172,6 @@ fun WorkoutScreen(
 
 @Composable
 private fun ModeSwitchOverlay(
-    current: WorkoutMode,
     onSwitch: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -424,8 +418,9 @@ private fun ManualWorkoutContent(
                 ) {
                     Column {
                         Text(
-                            stringResource(
-                                R.string.fitness_history_session_exercises,
+                            pluralStringResource(
+                                R.plurals.fitness_history_session_exercises,
+                                vm.editableEntries.size,
                                 vm.editableEntries.size
                             ),
                             color = TextSecondary,
@@ -1026,9 +1021,9 @@ private fun ExercisePickerDialog(
     onDismiss: () -> Unit
 ) {
     var search by remember { mutableStateOf(vm.exercisesSearch.ifBlank { "" }) }
-    var groupFilter by remember { mutableStateOf<MuscleGroup?>(vm.exercisesGroupFilter) }
-    var diffFilter by remember { mutableStateOf<Difficulty?>(vm.exercisesDifficultyFilter) }
-    var eqFilter by remember { mutableStateOf<Equipment?>(vm.exercisesEquipmentFilter) }
+    var groupFilter by remember { mutableStateOf(vm.exercisesGroupFilter) }
+    var diffFilter by remember { mutableStateOf(vm.exercisesDifficultyFilter) }
+    var eqFilter by remember { mutableStateOf(vm.exercisesEquipmentFilter) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1094,11 +1089,11 @@ private fun ExercisePickerDialog(
                 // FILTER CHIPS
                 val allRes = R.string.fitness_exercises_filters_all
                 val groups: List<Pair<Int, MuscleGroup?>> =
-                    listOf(allRes to null) + MuscleGroup.values().map { it.nameRes() to it }
+                    listOf(allRes to null) + MuscleGroup.entries.map { it.nameRes() to it }
                 val diffs: List<Pair<Int, Difficulty?>> =
-                    listOf(allRes to null) + Difficulty.values().map { it.nameRes() to it }
+                    listOf(allRes to null) + Difficulty.entries.map { it.nameRes() to it }
                 val eqs: List<Pair<Int, Equipment?>> =
-                    listOf(allRes to null) + Equipment.values().map { it.nameRes() to it }
+                    listOf(allRes to null) + Equipment.entries.map { it.nameRes() to it }
 
                 FilterChipRow(
                     options = groups,
@@ -1122,8 +1117,8 @@ private fun ExercisePickerDialog(
 
                 // LIST
                 val allEx = remember { ExerciseRepository.all() }
-                val ctx = LocalContext.current
-                val filtered by remember(search, groupFilter, diffFilter, eqFilter, allEx, ctx) {
+                val namesById = allEx.associate { ex -> ex.id to stringResource(ex.nameRes).lowercase() }
+                val filtered by remember(search, groupFilter, diffFilter, eqFilter, allEx, namesById) {
                     derivedStateOf {
                         allEx.filter { ex ->
                             if (groupFilter != null && ex.muscleGroup != groupFilter) return@filter false
@@ -1131,7 +1126,7 @@ private fun ExercisePickerDialog(
                             if (eqFilter != null && ex.equipment != eqFilter) return@filter false
                             if (search.isNotBlank()) {
                                 val s = search.trim().lowercase()
-                                val name = runCatching { ctx.resources.getString(ex.nameRes) }.getOrDefault("").lowercase()
+                                val name = namesById[ex.id].orEmpty()
                                 if (s !in name && s !in ex.id.lowercase()) return@filter false
                             }
                             true
@@ -1169,7 +1164,7 @@ private fun <T> FilterChipRow(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(end = 10.dp)
     ) {
         items(options) { opt ->
-            val isSelected = opt.second == selected || (opt.second == null && selected == null)
+            val isSelected = opt.second == selected
             val bg = if (isSelected) Brush.linearGradient(listOf(AccentViolet, AccentBlue)) else null
             Box(
                 Modifier
