@@ -15,26 +15,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DirectionsBike
+import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.DirectionsBike
 import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -51,8 +45,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -64,9 +59,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tabslify.R
 import com.tabslify.core.objects.Config
 import com.tabslify.core.ui.AlertDialogTabslify
-import com.tabslify.core.ui.AppBackground
 import com.tabslify.core.ui.PloppingButton
-import com.tabslify.core.ui.TextPrimary
 import com.tabslify.core.ui.TextSecondary
 import com.tabslify.tabs.fitnesstab.ui.BikeScreen
 import com.tabslify.tabs.fitnesstab.ui.DashboardScreen
@@ -78,7 +71,7 @@ import com.tabslify.tabs.fitnesstab.ui.WorkoutScreen
 @Composable
 fun FitnessTabContent(vm: FitnessViewModel = viewModel()) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     var hasPermission by remember {
         mutableStateOf(
@@ -245,9 +238,11 @@ fun FitnessTabContent(vm: FitnessViewModel = viewModel()) {
 private fun BottomNav(vm: FitnessViewModel, modifier: Modifier = Modifier) {
     val items = listOf(
         BottomNavItem(FitnessScreen.DASHBOARD, Icons.Default.Dashboard, R.string.fitness_nav_dashboard, listOf(Color(0xFF6B4CFC), Color(0xFFB45CFC))),
-        BottomNavItem(FitnessScreen.EXERCISES, Icons.Default.ListAlt, R.string.fitness_nav_exercises, listOf(Color(0xFF4CFCC1), Color(0xFF2196F3))),
+        BottomNavItem(FitnessScreen.EXERCISES,
+            Icons.AutoMirrored.Filled.ListAlt, R.string.fitness_nav_exercises, listOf(Color(0xFF4CFCC1), Color(0xFF2196F3))),
         BottomNavItem(FitnessScreen.WORKOUT, Icons.Default.FitnessCenter, R.string.fitness_nav_workout, listOf(Color(0xFFFF8A4C), Color(0xFFFF5C9A))),
-        BottomNavItem(FitnessScreen.BIKE, Icons.Default.DirectionsBike, R.string.fitness_nav_bike, listOf(Color(0xFF00FFAA), Color(0xFF00CCFF))),
+        BottomNavItem(FitnessScreen.BIKE,
+            Icons.AutoMirrored.Filled.DirectionsBike, R.string.fitness_nav_bike, listOf(Color(0xFF00FFAA), Color(0xFF00CCFF))),
         BottomNavItem(FitnessScreen.HISTORY, Icons.Default.CalendarMonth, R.string.fitness_nav_history, listOf(Color(0xFFFFC107), Color(0xFFFF6B4C)))
     )
     Row(
