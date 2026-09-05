@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -162,7 +163,7 @@ fun BikeScreen(vm: FitnessViewModel, modifier: Modifier = Modifier) {
                 options = BIKE_RANGES.map { days ->
                     BikeChip(
                         key = days.toString(),
-                        label = stringResource(R.string.fitness_bike_range_days, days),
+                        label = pluralStringResource(R.plurals.fitness_bike_range_days, days, days),
                         selected = vm.bikeRangeDays == days,
                         colors = listOf(BikeAccentSecondary, EbikeAccentSecondary)
                     )
