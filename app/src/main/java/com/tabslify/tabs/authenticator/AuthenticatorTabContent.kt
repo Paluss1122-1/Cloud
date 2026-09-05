@@ -46,6 +46,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -510,7 +511,7 @@ fun SettingsScreenWithScreenshotProtection() {
     var biometricErrorFixable by remember { mutableStateOf(false) }
 
     val bm = remember { BiometricManager.from(context) }
-    var canAuth by remember { mutableStateOf(bm.canAuthenticate(Authenticators.BIOMETRIC_STRONG)) }
+    var canAuth by remember { mutableIntStateOf(bm.canAuthenticate(Authenticators.BIOMETRIC_STRONG)) }
     val isBiometricAvailable = canAuth == BiometricManager.BIOMETRIC_SUCCESS
     val lifecycleOwner = LocalLifecycleOwner.current
 
