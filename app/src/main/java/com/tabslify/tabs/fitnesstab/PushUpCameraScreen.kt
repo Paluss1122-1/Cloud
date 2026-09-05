@@ -1,5 +1,6 @@
 package com.tabslify.tabs.fitnesstab
 
+import android.util.Size
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
@@ -9,7 +10,6 @@ import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import android.util.Size
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -141,7 +141,7 @@ fun PushUpCameraScreen(vm: FitnessViewModel) {
                 }
                 if (bound.isSuccess) {
                     analysis.setAnalyzer(executor, analyzer)
-                    preview.setSurfaceProvider(previewView.surfaceProvider)
+                    preview.surfaceProvider = previewView.surfaceProvider
                     boundUseCases += listOf(preview, analysis)
                     analysisHolder.value = analysis
                     bindError = null
