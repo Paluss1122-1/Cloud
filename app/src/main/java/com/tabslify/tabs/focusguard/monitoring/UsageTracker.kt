@@ -57,9 +57,6 @@ object UsageTracker {
             ?: curatedDefaults[packageName]
             ?: CATEGORY_OTHER
 
-    fun isRestricted(packageName: String): Boolean =
-        packageName in FocusGuardConfig.restrictedApps()
-
     @SuppressLint("MissingPermission")
     fun currentForegroundPackage(ctx: Context): String? {
         val usm = ctx.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
@@ -69,9 +66,7 @@ object UsageTracker {
         val event = UsageEvents.Event()
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
-            if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND ||
-                event.eventType == UsageEvents.Event.ACTIVITY_RESUMED
-            ) {
+            if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
                 last = event.packageName
             }
         }
@@ -94,12 +89,10 @@ object UsageTracker {
 
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
-            if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED ||
-                event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND
-            ) {
+            if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
                 val pkg = event.packageName
                 if (currentPackage != null && currentStart > 0L && currentPackage != pkg) {
-                    appendSession(logs, currentPackage!!, currentStart, event.timeStamp, date)
+                    appendSession(logs, currentPackage, currentStart, event.timeStamp, date)
                 }
                 currentPackage = pkg
                 currentStart = event.timeStamp
@@ -108,7 +101,7 @@ object UsageTracker {
 
         val end = minOf(System.currentTimeMillis(), dayEnd)
         if (currentPackage != null && currentStart > 0L && end > currentStart) {
-            appendSession(logs, currentPackage!!, currentStart, end, date)
+            appendSession(logs, currentPackage, currentStart, end, date)
         }
 
         return logs
