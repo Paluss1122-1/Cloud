@@ -1,19 +1,20 @@
 package com.tabslify.core.objects
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.LocaleManager
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.LocaleList
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.core.app.NotificationCompat
+import androidx.core.content.edit
 import androidx.core.net.toUri
 import com.tabslify.BuildConfig
 import com.tabslify.R
@@ -33,9 +34,6 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.websocket.WebSockets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -176,7 +174,7 @@ object Config {
         val systemLanguage = java.util.Locale.getDefault().language
         val defaultLang = if (systemLanguage == "de") "de" else "en"
         setAppLanguage(context, defaultLang)
-        prefs.edit().putBoolean("language_initialized", true).apply()
+        prefs.edit { putBoolean("language_initialized", true) }
     }
 
     fun cms(): Int = System.currentTimeMillis().toInt()
@@ -213,24 +211,13 @@ object Config {
         when (target) {
             "audio" -> launcher.launch(arrayOf(Manifest.permission.READ_MEDIA_AUDIO))
             "img" -> {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    launcher.launch(
-                        arrayOf(
-                            Manifest.permission.READ_MEDIA_IMAGES,
-                            Manifest.permission.READ_MEDIA_VIDEO,
-                            Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
-                        )
+                launcher.launch(
+                    arrayOf(
+                        Manifest.permission.READ_MEDIA_IMAGES,
+                        Manifest.permission.READ_MEDIA_VIDEO,
+                        Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
                     )
-                } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    launcher.launch(
-                        arrayOf(
-                            Manifest.permission.READ_MEDIA_IMAGES,
-                            Manifest.permission.READ_MEDIA_VIDEO
-                        )
-                    )
-                } else {
-                    launcher.launch(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE))
-                }
+                )
             }
 
             "loc" -> launcher.launch(
@@ -264,16 +251,9 @@ object Config {
                     Manifest.permission.POST_NOTIFICATIONS,
                     Manifest.permission.BLUETOOTH_CONNECT
                 )
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
-                    permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
-                    permissions.add(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
-                } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
-                    permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
-                } else {
-                    permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-                }
+                permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
+                permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
+                permissions.add(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
                 launcher.launch(permissions.toTypedArray())
             }
 
@@ -294,6 +274,7 @@ object Config {
         key != "ACCESS_SUPERUSER" && key != "SET_ALARM" &&
                 key != "ACCESS_WIFI_STATE" && key != "ACCESS_NETWORK_STATE"
 
+    @SuppressLint("BatteryLife")
     fun requestPermissionForKey(
         context: Context,
         key: String,
@@ -340,14 +321,13 @@ object Config {
                     .apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
             )
 
-            "MANAGE_EXTERNAL_STORAGE" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            "MANAGE_EXTERNAL_STORAGE" ->
                 context.startActivity(
                     Intent(
                         Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
                         "package:${context.packageName}".toUri()
                     ).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
                 )
-            }
 
             "PACKAGE_USAGE_STATS" -> context.startActivity(
                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
@@ -361,20 +341,11 @@ object Config {
         }
     }
 
-    private fun mediaImagesVideoPermissions(): List<String> = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> listOf(
-            Manifest.permission.READ_MEDIA_IMAGES,
-            Manifest.permission.READ_MEDIA_VIDEO,
-            Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
-        )
-
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> listOf(
-            Manifest.permission.READ_MEDIA_IMAGES,
-            Manifest.permission.READ_MEDIA_VIDEO
-        )
-
-        else -> listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-    }
+    private fun mediaImagesVideoPermissions(): List<String> = listOf(
+        Manifest.permission.READ_MEDIA_IMAGES,
+        Manifest.permission.READ_MEDIA_VIDEO,
+        Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+    )
 
     fun requestAllRuntimePermissions(
         keys: List<String>,
@@ -436,7 +407,7 @@ object Config {
                     if (allowedHashes.contains(toRet)) {
                         return toRet
                     } else {
-                        android.util.Log.e(
+                        Log.e(
                             "Config",
                             "Invalid App Signature SHA256: $toRet. Please add this hash to BuildConfig if it is valid."
                         )
@@ -444,7 +415,7 @@ object Config {
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.e("Config", "Error getting signature: ${e.message}")
+            Log.e("Config", "Error getting signature: ${e.message}")
         }
         return null
     }
