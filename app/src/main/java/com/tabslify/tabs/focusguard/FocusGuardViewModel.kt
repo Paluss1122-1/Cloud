@@ -2,7 +2,6 @@ package com.tabslify.tabs.focusguard
 
 import android.app.Application
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.provider.Settings
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -37,8 +36,6 @@ class FocusGuardViewModel(application: Application) : AndroidViewModel(applicati
         private set
 
     val todayUsage: StateFlow<Map<String, Long>> = FocusGuardRepository.todayUsage
-    val todayPackages: StateFlow<List<com.tabslify.tabs.focusguard.data.PackageTotal>> =
-        FocusGuardRepository.todayPackages
     val sleepWeek: StateFlow<List<SleepRecord>> = FocusGuardRepository.sleepWeek
     val todayGoal: StateFlow<StudyGoal?> = FocusGuardRepository.todayGoal
     val achievements: StateFlow<List<UserAchievement>> = FocusGuardRepository.achievements
@@ -209,9 +206,6 @@ class FocusGuardViewModel(application: Application) : AndroidViewModel(applicati
                 now
             )
         }
-
-    val restrictionEnabled: Boolean
-        get() = FocusGuardConfig.restrictedApps().isNotEmpty()
 
     fun categories(): List<String> = FOCUSGUARD_CATEGORIES
 
