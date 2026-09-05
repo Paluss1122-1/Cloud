@@ -27,7 +27,6 @@ class DownloadViewModel(
 
     override fun onCleared() {
         runCatching { httpClient?.close() }
-        super.onCleared()
     }
 
     private val _downloadState = MutableStateFlow<DownloadState>(DownloadState.Idle)
