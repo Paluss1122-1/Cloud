@@ -7,31 +7,24 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,7 +41,6 @@ import com.tabslify.core.ui.NeonBox
 import com.tabslify.core.ui.PloppingButton
 import com.tabslify.core.ui.TextPrimary
 import com.tabslify.core.ui.TextSecondary
-import com.tabslify.tabs.fitnesstab.FitnessScreen
 import com.tabslify.tabs.fitnesstab.FitnessViewModel
 import com.tabslify.tabs.fitnesstab.data.Difficulty
 import com.tabslify.tabs.fitnesstab.data.Equipment
@@ -116,7 +108,7 @@ private fun TopBar(title: String, onBack: () -> Unit) {
     ) {
         IconButton(onClick = onBack) {
             Icon(
-                imageVector = Icons.Default.ArrowBack,
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = stringResource(R.string.fitness_ex_detail_back),
                 tint = TextPrimary,
                 modifier = Modifier.size(22.dp)
