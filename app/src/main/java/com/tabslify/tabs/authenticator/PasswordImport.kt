@@ -2,7 +2,6 @@ package com.tabslify.tabs.authenticator
 
 import android.content.Context
 import android.net.Uri
-import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult

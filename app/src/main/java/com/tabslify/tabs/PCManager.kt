@@ -37,10 +37,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Color.Companion.Transparent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Color.Companion.Transparent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +51,7 @@ import androidx.core.content.edit
 import com.tabslify.R
 import com.tabslify.core.objects.prvt
 import com.tabslify.quiethoursnotificationhelper.ensureRandomSyncSecret
+import com.tabslify.quiethoursnotificationhelper.getTriggerListenerStatus
 import com.tabslify.quiethoursnotificationhelper.laptopIp
 import com.tabslify.quiethoursnotificationhelper.laptopName
 import com.tabslify.quiethoursnotificationhelper.resolveDisplayName
@@ -58,7 +59,6 @@ import com.tabslify.quiethoursnotificationhelper.resolveSyncSecret
 import com.tabslify.quiethoursnotificationhelper.setDisplayName
 import com.tabslify.quiethoursnotificationhelper.stopAllSyncServices
 import com.tabslify.quiethoursnotificationhelper.syncTodosWithLaptop
-import com.tabslify.quiethoursnotificationhelper.getTriggerListenerStatus
 import com.tabslify.tabs.authenticator.TotpGenerator
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat

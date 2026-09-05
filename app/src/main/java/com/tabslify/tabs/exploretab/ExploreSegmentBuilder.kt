@@ -6,9 +6,9 @@ import android.location.Geocoder
 import android.location.Location
 import com.tabslify.core.objects.Config
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
 import java.time.LocalDate
 import java.util.Locale
+import kotlin.coroutines.resume
 
 object ExploreSegmentBuilder {
 

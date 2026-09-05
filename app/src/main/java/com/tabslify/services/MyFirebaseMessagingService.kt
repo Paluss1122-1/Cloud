@@ -11,7 +11,6 @@ import com.tabslify.core.activities.Tabslify
 import com.tabslify.core.activities.fetchAndRun
 import com.tabslify.core.objects.prvt
 import com.tabslify.core.objects.tNotify
-import com.tabslify.core.objects.toast
 import kotlinx.coroutines.launch
 
 class MyFirebaseMessagingService : FirebaseMessagingService() {

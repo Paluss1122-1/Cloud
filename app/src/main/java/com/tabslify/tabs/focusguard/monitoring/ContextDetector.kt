@@ -6,8 +6,6 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.abs
 import kotlin.math.sqrt
 
@@ -17,7 +15,6 @@ object ContextDetector {
     private const val HORIZONTAL_RATIO = 0.7f
 
     private val _resting = MutableStateFlow(false)
-    val resting: StateFlow<Boolean> = _resting.asStateFlow()
 
     @Volatile
     private var running = false

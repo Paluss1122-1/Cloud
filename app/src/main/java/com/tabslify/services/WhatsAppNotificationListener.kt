@@ -9,9 +9,9 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
+import com.tabslify.R
 import com.tabslify.core.objects.Config.BLOCKED_MESSAGES
 import com.tabslify.core.objects.Config.NOTIFICATION_PORT
-import com.tabslify.R
 import com.tabslify.core.objects.NotificationRepository
 import com.tabslify.core.objects.prvt
 import com.tabslify.core.objects.tNotify

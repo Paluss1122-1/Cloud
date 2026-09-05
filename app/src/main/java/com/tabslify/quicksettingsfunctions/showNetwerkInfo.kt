@@ -12,17 +12,17 @@ import android.telephony.TelephonyManager
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import com.tabslify.R
+import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.objects.Config.cms
 import com.tabslify.core.objects.tNotify
 import com.tabslify.services.QuietHoursNotificationService.Companion.SSN_CHANNEL_ID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.NetworkInterface
 import java.net.URL
-import com.tabslify.core.activities.Tabslify.Companion.appScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 
 @SuppressLint("MissingPermission")

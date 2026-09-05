@@ -62,7 +62,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -70,12 +69,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import com.tabslify.R
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.prvt
 import kotlinx.coroutines.launch
-import java.util.Calendar
 
 private val TextPrimaryOnboarding = Color(0xFFF7F5FB)
 private val TextSecondaryOnboarding = Color(0xB3FFFFFF)

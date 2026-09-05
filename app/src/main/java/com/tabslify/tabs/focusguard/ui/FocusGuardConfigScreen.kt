@@ -1,7 +1,6 @@
 package com.tabslify.tabs.focusguard.ui
 
 import android.content.Intent
-import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -47,6 +46,7 @@ import com.tabslify.tabs.focusguard.FocusGuardViewModel
 import com.tabslify.tabs.focusguard.data.CATEGORY_ENTERTAINMENT
 import com.tabslify.tabs.focusguard.data.CATEGORY_GAMING
 import com.tabslify.tabs.focusguard.data.CATEGORY_SOCIAL
+import androidx.core.net.toUri
 
 @Composable
 fun FocusGuardConfigScreen(vm: FocusGuardViewModel, modifier: Modifier = Modifier) {
@@ -93,7 +93,7 @@ fun FocusGuardConfigScreen(vm: FocusGuardViewModel, modifier: Modifier = Modifie
                     onClick = {
                         context.startActivity(
                             Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                                data = Uri.parse("package:${context.packageName}")
+                                data = "package:${context.packageName}".toUri()
                                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             }
                         )
