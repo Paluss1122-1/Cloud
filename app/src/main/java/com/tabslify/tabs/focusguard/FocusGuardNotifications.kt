@@ -109,7 +109,7 @@ object FocusGuardNotifications {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_edit)
             .setContentTitle(context.getString(R.string.focusguard_study_reminder_title))
-            .setContentText(context.getString(R.string.focusguard_study_reminder_body, remaining))
+            .setContentText(context.resources.getQuantityString(R.plurals.focusguard_study_reminder_body, remaining, remaining))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .setContentIntent(contentIntent)

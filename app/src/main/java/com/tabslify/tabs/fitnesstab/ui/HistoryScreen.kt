@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -61,6 +62,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import androidx.compose.ui.platform.LocalLocale
 
 private val AccentOrange = Color(0xFFFF8A4C)
 private val AccentGreen = Color(0xFF5BE388)
@@ -133,7 +135,7 @@ fun HistoryScreen(vm: FitnessViewModel, modifier: Modifier = Modifier) {
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                HistoryTab.values().forEach { t ->
+                HistoryTab.entries.forEach { t ->
                     val selected = tab == t
                     Box(
                         modifier = Modifier
@@ -259,7 +261,7 @@ private fun DayHeader(displayDate: String, nWorkouts: Int, minutes: Int, kcal: F
             fontWeight = FontWeight.Bold
         )
         Text(
-            stringResource(R.string.fitness_history_day_summary, nWorkouts, minutes, kcal),
+            pluralStringResource(R.plurals.fitness_history_day_summary, nWorkouts, nWorkouts, minutes, kcal),
             color = TextTertiary,
             fontSize = 11.sp
         )
@@ -394,17 +396,21 @@ private fun SessionCard(
                     )
                 } else {
                     MetaChip(
-                        "${if (isPushup) 1 else nEx} " + stringResource(R.string.fitness_history_session_exercises).replace("%1\$d ",""),
+                        pluralStringResource(
+                            R.plurals.fitness_history_session_exercises,
+                            if (isPushup) 1 else nEx,
+                            if (isPushup) 1 else nEx
+                        ),
                         AccentBlue
                     )
                     if (isPushup) {
                         MetaChip(
-                            stringResource(R.string.fitness_history_entry_sets, 1, nReps),
+                            pluralStringResource(R.plurals.fitness_history_entry_sets, 1, 1, nReps),
                             AccentViolet
                         )
                     } else {
                         MetaChip(
-                            stringResource(R.string.fitness_history_entry_sets, nSets, nReps),
+                            pluralStringResource(R.plurals.fitness_history_entry_sets, nSets, nSets, nReps),
                             AccentViolet
                         )
                     }
@@ -524,8 +530,9 @@ private fun SessionCard(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
-                                                stringResource(
-                                                    R.string.fitness_history_entry_sets,
+                                                pluralStringResource(
+                                                    R.plurals.fitness_history_entry_sets,
+                                                    entry.sets.size,
                                                     entry.sets.size,
                                                     entry.sets.sumOf { it.reps }
                                                 ),
@@ -549,7 +556,7 @@ private fun SessionCard(
                                     ) {
                                         entry.sets.take(3).forEach { s ->
                                             val repsStr = if (s.durationSeconds > 0) "${s.durationSeconds}s" else "${s.reps}r"
-                                            val wStr = if (s.weightKg > 0f) String.format("%.1fkg", s.weightKg) else ""
+                                            val wStr = if (s.weightKg > 0f) String.format(Locale.US, "%.1fkg", s.weightKg) else ""
                                             Text(
                                                 "$repsStr $wStr",
                                                 color = if (s.completed) AccentGreen else TextTertiary,
@@ -638,7 +645,7 @@ private fun StatsOverview(
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                HistoryRange.values().forEach { r ->
+                HistoryRange.entries.forEach { r ->
                     val selected = range == r
                     Box(
                         modifier = Modifier
@@ -702,7 +709,7 @@ private fun MiniBarChart(recentDays: Map<String, DayStats>, goalMin: Int) {
     cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
     cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
     val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-    val dayFmt = SimpleDateFormat("EEEEE", Locale.getDefault())
+    val dayFmt = SimpleDateFormat("EEEEE", LocalLocale.current.platformLocale)
     val days = (0 until 7).map {
         val c = cal.clone() as Calendar
         c.add(Calendar.DAY_OF_YEAR, -it)
