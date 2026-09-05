@@ -21,10 +21,10 @@ import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import com.tabslify.R
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.tabslify.R
 import com.tabslify.core.activities.MainActivity
 import com.tabslify.core.functions.errorInsert
 import com.tabslify.services.OverlayLifecycleOwner
@@ -302,7 +302,7 @@ class FocusGuardService : Service() {
 
     private fun appLabel(packageName: String): String = try {
         packageManager.getApplicationLabel(packageManager.getApplicationInfo(packageName, 0)).toString()
-    } catch (e: PackageManager.NameNotFoundException) {
+    } catch (_: PackageManager.NameNotFoundException) {
         packageName
     }
 
