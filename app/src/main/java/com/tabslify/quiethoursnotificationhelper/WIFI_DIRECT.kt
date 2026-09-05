@@ -105,6 +105,7 @@ import com.tabslify.tabs.mediaplayer.ListenSession
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.getSessions
 import com.tabslify.tabs.school.Vokabel
+import io.github.jan.supabase.exceptions.HttpRequestException
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.CompletableDeferred
@@ -2927,7 +2928,10 @@ private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
             }
             lastInsertedMobileIp = ipAddress
             true
-        } catch (e: Exception) {
+        } catch (_: HttpRequestException) {
+            false
+        }
+        catch (e: Exception) {
             logError("SupabaseInsert", e)
             false
         }
