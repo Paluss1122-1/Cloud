@@ -938,7 +938,10 @@
     <string name="to_dos">📝 To-dos</string>
     <string name="keine_to_dos_vorhanden">No to-dos available</string>
     <string name="erledigte_todos">Completed to-dos</string>
-    <string name="erledigte_todos_2">%1$d completed to-dos</string>
+    <plurals name="erledigte_todos_2">
+        <item quantity="one">%1$d completed to-do</item>
+        <item quantity="other">%1$d completed to-dos</item>
+    </plurals>
     <string name="to_do_hinzugefugt">✅ To-do added</string>
     <string name="gesamt_to_dos">\"%1$s\"\n\nTotal: %2$d to-dos</string>
     <string name="erledigt">✓ Done</string>
@@ -1479,7 +1482,7 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
         Build type: %9$s
         Build time: %10$s
     </string>
-    <string name="hardware_cpu_architektur_board_bootloader">
+    <string name="hardware_cpu_architektur_board_bootloader" tools:ignore="PluralsCandidate">
         ▶ Hardware:
         CPU architecture: %1$s
         Board: %2$s
@@ -1930,7 +1933,7 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="playlist_name_platzhalter">Playlist name…</string>
     <string name="show_name_platzhalter">Show name…</string>
     <string name="show_prefix">Show: %1$s</string>
-    <string name="neu_suffix"> · %1$d new</string>
+    <string name="neu_suffix" tools:ignore="PluralsCandidate"> · %1$d new</string>
     <string name="gehort_suffix"> · %1$s listened</string>
     <string name="meistgespielt">Most played</string>
     <string name="deine_absoluten_lieblinge">Your absolute favorites</string>
@@ -2114,14 +2117,14 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="virustotal_prufen">Check</string>
     <string name="virustotal_datei_auswahlen">Select file</string>
     <string name="virustotal_hochladen_prufen">Upload &amp; check</string>
-    <string name="virustotal_ergebnis">%1$d of %2$d engines flag this file as malicious</string>
+    <string name="virustotal_ergebnis" tools:ignore="PluralsCandidate">%1$d of %2$d engines flag this file as malicious</string>
     <string name="virustotal_bosartig">Malicious</string>
     <string name="virustotal_verdachtig">Suspicious</string>
     <string name="virustotal_harmlos">Harmless</string>
     <string name="virustotal_unentdeckt">Undetected</string>
     <string name="virustotal_bericht_offnen">Open full report</string>
     <string name="virustotal_scan_abgeschlossen">VirusTotal Scan Finished</string>
-    <string name="virustotal_scan_ergebnis">Scan for %1$s complete. %2$d/%3$d flagged as malicious.</string>
+    <string name="virustotal_scan_ergebnis" tools:ignore="PluralsCandidate">Scan for %1$s complete. %2$d/%3$d flagged as malicious.</string>
     <string name="virustotal_scan_abgebrochen">Scan was cancelled because the app was closed.</string>
     <string name="virustotal_wird_gescannt">Scanning…</string>
     <string name="virustotal_scan_fehler">Scan failed</string>
@@ -2129,7 +2132,7 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="virustotal_verlauf">Previous scans</string>
     <string name="virustotal_verlauf_leeren">Clear history</string>
     <string name="virustotal_verlauf_leer">No scans stored yet.</string>
-    <string name="virustotal_verlauf_treffer">%1$d/%2$d malicious</string>
+    <string name="virustotal_verlauf_treffer" tools:ignore="PluralsCandidate">%1$d/%2$d malicious</string>
     <string name="virustotal_bericht_loschen">Delete report</string>
     <string name="cloud_backup_title">☁️ Cloud backup (encrypted)</string>
     <string name="cloud_backup_now">Back up now</string>
@@ -2181,7 +2184,10 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="fitness_dashboard_greeting_day">Let\'s go 💪</string>
     <string name="fitness_dashboard_greeting_evening">Good evening 🌙</string>
     <string name="fitness_dashboard_streak">Day streak</string>
-    <string name="fitness_dashboard_streak_days">%1$d days</string>
+    <plurals name="fitness_dashboard_streak_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
 
     <string name="fitness_dashboard_minutes">Active</string>
     <string name="fitness_dashboard_minutes_value">%1$d min</string>
@@ -2195,14 +2201,17 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="fitness_dashboard_distance_value">%1$.1f km</string>
 
     <string name="fitness_dashboard_goal_minutes">Goal: %1$d min</string>
-    <string name="fitness_dashboard_goal_calories">Goal: %1$d kcal</string>
+    <string name="fitness_dashboard_goal_calories" tools:ignore="PluralsCandidate">Goal: %1$d kcal</string>
     <string name="fitness_dashboard_goal_reached">Goal reached! 🎉</string>
 
     <string name="fitness_dashboard_last_workout">Last workout</string>
     <string name="fitness_dashboard_no_last_workout">No sessions yet — start your first!</string>
     <string name="fitness_dashboard_ago_minutes">%1$d min ago</string>
     <string name="fitness_dashboard_ago_hours">%1$d h ago</string>
-    <string name="fitness_dashboard_ago_days">%1$d d ago</string>
+    <plurals name="fitness_dashboard_ago_days">
+        <item quantity="one">%1$d day ago</item>
+        <item quantity="other">%1$d days ago</item>
+    </plurals>
 
     <string name="fitness_dashboard_week_overview">This week</string>
     <string name="fitness_dashboard_week_empty">Quiet week so far — let\'s move!</string>
@@ -2214,7 +2223,10 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="fitness_profile_title">Profile</string>
     <string name="fitness_profile_hint">Age and weight help make the calorie estimate more accurate.</string>
     <string name="fitness_profile_age">Age</string>
-    <string name="fitness_profile_age_value">%1$d years</string>
+    <plurals name="fitness_profile_age_value">
+        <item quantity="one">%1$d year</item>
+        <item quantity="other">%1$d years</item>
+    </plurals>
     <string name="fitness_profile_weight">Weight</string>
     <string name="fitness_profile_weight_value">%1$d kg</string>
 
@@ -2981,28 +2993,40 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="fitness_ws_rest_start">Start timer</string>
     <string name="fitness_ws_rest_reset">Reset</string>
     <string name="fitness_ws_rest_done">Rest done 💪</string>
-    <string name="fitness_ws_set_count">%1$d sets</string>
+    <plurals name="fitness_ws_set_count">
+        <item quantity="one">%1$d set</item>
+        <item quantity="other">%1$d sets</item>
+    </plurals>
     <string name="fitness_ws_total_volume">Total volume</string>
     <string name="fitness_ws_total_volume_kg">%1$.0f kg × reps</string>
     <string name="fitness_ws_saved">Workout saved ✓</string>
 
     <!-- ====== HISTORY (Detailed) ====== -->
-    <string name="fitness_history_entry_sets">%1$d sets · %2$d reps</string>
+    <plurals name="fitness_history_entry_sets">
+        <item quantity="one">%1$d set · %2$d reps</item>
+        <item quantity="other">%1$d sets · %2$d reps</item>
+    </plurals>
     <string name="fitness_history_entry_volume">%1$.0f kg total</string>
     <string name="fitness_history_session_duration">%1$d min</string>
     <string name="fitness_history_session_calories">%1$.0f kcal</string>
-    <string name="fitness_history_session_exercises">%1$d exercises</string>
+    <plurals name="fitness_history_session_exercises">
+        <item quantity="one">%1$d exercise</item>
+        <item quantity="other">%1$d exercises</item>
+    </plurals>
     <string name="fitness_history_session_expand">Tap to expand</string>
     <string name="fitness_history_session_delete">Delete session</string>
     <string name="fitness_history_session_delete_confirm">Delete this workout?</string>
     <string name="fitness_history_session_delete_yes">Delete</string>
     <string name="fitness_history_session_delete_no">Keep</string>
     <string name="fitness_history_no_sessions_yet">No sessions saved yet.\nStart a workout from the dashboard or the exercises tab!</string>
-    <string name="fitness_history_day_summary">%1$d workouts · %2$d min · %3$.0f kcal</string>
+    <plurals name="fitness_history_day_summary">
+        <item quantity="one">%1$d workout · %2$d min · %3$.0f kcal</item>
+        <item quantity="other">%1$d workouts · %2$d min · %3$.0f kcal</item>
+    </plurals>
     <string name="fitness_history_empty_filtered">No sessions for this time range.</string>
     <string name="fitness_history_workout_pushup">Push-Up Session</string>
     <string name="fitness_history_workout_manual">Workout</string>
-    <string name="fitness_history_pushup_pose">%1$d reps via pose tracking</string>
+    <string name="fitness_history_pushup_pose" tools:ignore="PluralsCandidate">%1$d reps via pose tracking</string>
 
     <!-- ====== EXERCISE PICKER (for adding to workout) ====== -->
     <string name="fitness_picker_title">Choose an exercise</string>
@@ -3015,7 +3039,10 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="fitness_bike_loading">Loading rides…</string>
     <string name="fitness_bike_empty">No rides detected yet.\nExplore tracking creates rides automatically.</string>
     <string name="fitness_bike_empty_filtered">No rides for this filter.</string>
-    <string name="fitness_bike_range_days">%1$d days</string>
+    <plurals name="fitness_bike_range_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
     <string name="fitness_bike_filter_all">All</string>
     <string name="fitness_bike_filter_bike">Bike</string>
     <string name="fitness_bike_filter_ebike">E-bike</string>
@@ -3091,11 +3118,14 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="focusguard_summary_no_usage">📱 Hardly used today</string>
     <string name="focusguard_summary_no_goal">📚 No study goal set</string>
     <string name="focusguard_summary_goal_done">📚 Study goal done! 🎉</string>
-    <string name="focusguard_summary_goal_progress">📚 Vocab: %1$d/%2$d cards</string>
+    <string name="focusguard_summary_goal_progress" tools:ignore="PluralsCandidate">📚 Vocab: %1$d/%2$d cards</string>
     <string name="focusguard_sleep_warning_title">😴 Too little sleep</string>
     <string name="focusguard_sleep_warning_body">Only slept %1$s last night. Your target is %2$s.</string>
     <string name="focusguard_study_reminder_title">📚 Study reminder</string>
-    <string name="focusguard_study_reminder_body">%1$d vocab cards are still open today. Can you make it?</string>
+    <plurals name="focusguard_study_reminder_body">
+        <item quantity="one">%1$d vocab card is still open today. Can you make it?</item>
+        <item quantity="other">%1$d vocab cards are still open today. Can you make it?</item>
+    </plurals>
     <string name="focusguard_nav_dashboard">Dashboard</string>
     <string name="focusguard_nav_config">Settings</string>
     <string name="focusguard_nav_stats">Statistics</string>
@@ -3157,5 +3187,8 @@ Now write 3-5 casual sentences in English. Mention music AND podcasts if both ar
     <string name="focusguard_perm_overlay_desc">FocusGuard: Shows a fullscreen block over restricted apps until the block ends.</string>
     <string name="focusguard_perm_notifications_desc">FocusGuard: Explains blocks, sends the daily summary and sleep &amp; study reminders.</string>
     <string name="focusguard_service_subtitle">Blocks restricted apps after the afternoon threshold (except on school days)</string>
-    <string name="focusguard_summary_excessive">⚠️ %1$s: over %2$d minutes today!</string>
+    <plurals name="focusguard_summary_excessive">
+        <item quantity="one">⚠️ %1$s: over %2$d minute today!</item>
+        <item quantity="other">⚠️ %1$s: over %2$d minutes today!</item>
+    </plurals>
 </resources>

@@ -937,7 +937,10 @@
     <string name="to_dos">📝 To-dos</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1093 | WIFI_DIRECT.kt:1193 -->
     <string name="keine_to_dos_vorhanden">Keine To-dos vorhanden</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1094 | WIFI_DIRECT.kt:1194 -->
     <string name="erledigte_todos">Erledigte Todos</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1119 -->
-    <string name="erledigte_todos_2">%1$d Erledigte Todos</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1120  ||  %1$s=todos.size -->
+    <plurals name="erledigte_todos_2"> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1120  ||  %1$s=todos.size -->
+        <item quantity="one">%1$d Erledigtes Todo</item>
+        <item quantity="other">%1$d Erledigte Todos</item>
+    </plurals>
     <string name="to_do_hinzugefugt">✅ To-do hinzugefügt</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1149 -->
     <string name="gesamt_to_dos">\"%1$s\"\n\nGesamt: %2$d To-dos</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1150  ||  %1$s=text, %2$s=todos.size -->
     <string name="erledigt">✓ Erledigt</string> <!-- app/src/main/java/com/tabslify/quiethoursnotificationhelper/WIFI_DIRECT.kt:1161 -->
@@ -1414,7 +1417,7 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="alle_exportieren">Alle exportieren</string> <!-- app/src/main/java/com/tabslify/tabs/OtherBucketTab.kt:646 -->
     <string name="datei_hinzufugen">Datei hinzufügen</string> <!-- app/src/main/java/com/tabslify/tabs/OtherBucketTab.kt:661 | MaterialScreen.kt:851 -->
     <string name="dateien_werden_gespeichert_2">Dateien werden gespeichert</string> <!-- app/src/main/java/com/tabslify/tabs/OtherBucketTab.kt:686 -->
-    <string name="fortschritt_von">%1$d von %2$d</string> <!-- app/src/main/java/com/tabslify/tabs/OtherBucketTab.kt:690  ||  %1$s=current, %2$s=total -->
+    <string name="fortschritt_von" tools:ignore="PluralsCandidate">%1$d von %2$d</string> <!-- app/src/main/java/com/tabslify/tabs/OtherBucketTab.kt:690  ||  %1$s=current, %2$s=total -->
     <string name="mediastore_insert_fehlgeschlagen_fur">MediaStore insert fehlgeschlagen für %1$s</string> <!-- app/src/main/java/com/tabslify/tabs/OtherBucketTab.kt:822  ||  %1$s=fileInfo.fileName -->
     <string name="aktiv_verbunden_mit">Aktiv verbunden mit</string> <!-- app/src/main/java/com/tabslify/tabs/PCManager.kt:144 -->
     <string name="kein_pc_aktiv_verbunden">Kein PC aktiv verbunden</string> <!-- app/src/main/java/com/tabslify/tabs/PCManager.kt:163 -->
@@ -1483,7 +1486,7 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
             Settings.Global.DEVICE_NAME
         )
     , %2$s=Build.MODEL, %3$s=Build.MANUFACTURER, %4$s=Build.BRAND, %5$s=Build.VERSION.RELEASE, %6$s=Build.VERSION.SDK_INT, %7$s=Build.VERSION.SECURITY_PATCH, %8$s=Build.DISPLAY, %9$s=Build.TYPE, %10$s=Date(Build.TIME) -->
-    <string name="hardware_cpu_architektur_board_bootloader">
+    <string name="hardware_cpu_architektur_board_bootloader" tools:ignore="PluralsCandidate">
         ▶ Hardware:
         CPU-Architektur: %1$s
         Board: %2$s
@@ -1934,7 +1937,7 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="playlist_name_platzhalter">Playlist-Name…</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:1571 -->
     <string name="show_name_platzhalter">Show-Name…</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:1824 -->
     <string name="show_prefix">Show: %1$s</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:2327 -->
-    <string name="neu_suffix"> · %1$d neu</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:2113 -->
+    <string name="neu_suffix" tools:ignore="PluralsCandidate"> · %1$d neu</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:2113 -->
     <string name="gehort_suffix"> · %1$s gehört</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:2114 -->
     <string name="meistgespielt">Meistgespielt</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:3464 -->
     <string name="deine_absoluten_lieblinge">Deine absoluten Lieblinge</string> <!-- app/src/main/java/com/tabslify/tabs/mediaplayer/MediaPlayerTab.kt:3465 -->
@@ -2128,14 +2131,14 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="virustotal_prufen">Prüfen</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
     <string name="virustotal_datei_auswahlen">Datei auswählen</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
     <string name="virustotal_hochladen_prufen">Hochladen &amp; prüfen</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
-    <string name="virustotal_ergebnis">%1$d von %2$d Engines melden diese Datei als bösartig</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_ergebnis" tools:ignore="PluralsCandidate">%1$d von %2$d Engines melden diese Datei als bösartig</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
     <string name="virustotal_bosartig">Bösartig</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
     <string name="virustotal_verdachtig">Verdächtig</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
     <string name="virustotal_harmlos">Harmlos</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
     <string name="virustotal_unentdeckt">Unentdeckt</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
     <string name="virustotal_bericht_offnen">Vollständigen Bericht öffnen</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
     <string name="virustotal_scan_abgeschlossen">VirusTotal Scan abgeschlossen</string>
-    <string name="virustotal_scan_ergebnis">Scan für %1$s beendet. %2$d/%3$d als bösartig eingestuft.</string>
+    <string name="virustotal_scan_ergebnis" tools:ignore="PluralsCandidate">Scan für %1$s beendet. %2$d/%3$d als bösartig eingestuft.</string>
     <string name="virustotal_scan_abgebrochen">Scan wurde abgebrochen, weil die App beendet wurde.</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalScanManager.kt -->
     <string name="virustotal_wird_gescannt">Wird gescannt…</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalScanBar.kt -->
     <string name="virustotal_scan_fehler">Fehler beim Scan</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalScanBar.kt -->
@@ -2143,7 +2146,7 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="virustotal_verlauf">Frühere Scans</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
     <string name="virustotal_verlauf_leeren">Verlauf leeren</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
     <string name="virustotal_verlauf_leer">Noch keine Scans gespeichert.</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
-    <string name="virustotal_verlauf_treffer">%1$d/%2$d bösartig</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
+    <string name="virustotal_verlauf_treffer" tools:ignore="PluralsCandidate">%1$d/%2$d bösartig</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
     <string name="virustotal_bericht_loschen">Bericht löschen</string> <!-- app/src/main/java/com/tabslify/tabs/virustotal/VirusTotalTab.kt -->
     <string name="cloud_backup_title">☁️ Cloud-Backup (verschlüsselt)</string>
     <string name="cloud_backup_now">Jetzt sichern</string>
@@ -2196,10 +2199,13 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="fitness_dashboard_greeting_day">Los geht\'s 💪</string>
     <string name="fitness_dashboard_greeting_evening">Guten Abend 🌙</string>
     <string name="fitness_dashboard_streak">Tage-Serie</string>
-    <string name="fitness_dashboard_streak_days">%1$d Tage</string>
+    <plurals name="fitness_dashboard_streak_days">
+        <item quantity="one">%1$d Tag</item>
+        <item quantity="other">%1$d Tage</item>
+    </plurals>
 
     <string name="fitness_dashboard_minutes">Aktiv</string>
-    <string name="fitness_dashboard_minutes_value">%1$d Min</string>
+    <string name="fitness_dashboard_minutes_value" tools:ignore="PluralsCandidate">%1$d Min</string>
     <string name="fitness_dashboard_calories">Kalorien</string>
     <string name="fitness_dashboard_calories_value">%1$.0f kcal</string>
     <string name="fitness_dashboard_workouts">Workouts</string>
@@ -2209,15 +2215,18 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="fitness_dashboard_distance">Strecke (Fuß &amp; Rad)</string>
     <string name="fitness_dashboard_distance_value">%1$.1f km</string>
 
-    <string name="fitness_dashboard_goal_minutes">Ziel: %1$d Min</string>
-    <string name="fitness_dashboard_goal_calories">Ziel: %1$d kcal</string>
+    <string name="fitness_dashboard_goal_minutes" tools:ignore="PluralsCandidate">Ziel: %1$d Min</string>
+    <string name="fitness_dashboard_goal_calories" tools:ignore="PluralsCandidate">Ziel: %1$d kcal</string>
     <string name="fitness_dashboard_goal_reached">Ziel erreicht! 🎉</string>
 
     <string name="fitness_dashboard_last_workout">Letztes Training</string>
     <string name="fitness_dashboard_no_last_workout">Noch keine Session – leg los!</string>
-    <string name="fitness_dashboard_ago_minutes">vor %1$d Min</string>
+    <string name="fitness_dashboard_ago_minutes" tools:ignore="PluralsCandidate">vor %1$d Min</string>
     <string name="fitness_dashboard_ago_hours">vor %1$d Std</string>
-    <string name="fitness_dashboard_ago_days">vor %1$d Tagen</string>
+    <plurals name="fitness_dashboard_ago_days">
+        <item quantity="one">vor %1$d Tag</item>
+        <item quantity="other">vor %1$d Tagen</item>
+    </plurals>
 
     <string name="fitness_dashboard_week_overview">Diese Woche</string>
     <string name="fitness_dashboard_week_empty">Bisher eine ruhige Woche – Zeit für Bewegung!</string>
@@ -2229,7 +2238,10 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="fitness_profile_title">Profil</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/ui/DashboardScreen.kt -->
     <string name="fitness_profile_hint">Alter und Gewicht helfen, die Kalorienschätzung genauer zu machen.</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/ui/DashboardScreen.kt -->
     <string name="fitness_profile_age">Alter</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/ui/DashboardScreen.kt -->
-    <string name="fitness_profile_age_value">%1$d Jahre</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/ui/DashboardScreen.kt -->
+    <plurals name="fitness_profile_age_value"> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/ui/DashboardScreen.kt -->
+        <item quantity="one">%1$d Jahr</item>
+        <item quantity="other">%1$d Jahre</item>
+    </plurals>
     <string name="fitness_profile_weight">Gewicht</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/ui/DashboardScreen.kt -->
     <string name="fitness_profile_weight_value">%1$d kg</string> <!-- app/src/main/java/com/tabslify/tabs/fitnesstab/ui/DashboardScreen.kt -->
 
@@ -2260,7 +2272,7 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="fitness_history_speed_value">%1$.1f km/h</string>
     <string name="fitness_history_explore_source">Explore</string>
     <string name="fitness_history_explore_readonly">Automatisch aufgezeichnet – nicht löschbar</string>
-    <string name="fitness_history_explore_detail">%1$.1f km · %2$d Min · %3$.1f km/h</string>
+    <string name="fitness_history_explore_detail" tools:ignore="PluralsCandidate">%1$.1f km · %2$d Min · %3$.1f km/h</string>
 
     <string name="fitness_workout_title">Push-up-Zähler</string>
     <string name="fitness_workout_open_camera">Push-up-Kamera öffnen</string>
@@ -2996,24 +3008,36 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="fitness_ws_rest_start">Timer starten</string>
     <string name="fitness_ws_rest_reset">Zurücksetzen</string>
     <string name="fitness_ws_rest_done">Pause vorbei 💪</string>
-    <string name="fitness_ws_set_count">%1$d Sätze</string>
+    <plurals name="fitness_ws_set_count">
+        <item quantity="one">%1$d Satz</item>
+        <item quantity="other">%1$d Sätze</item>
+    </plurals>
     <string name="fitness_ws_total_volume">Gesamtvolumen</string>
     <string name="fitness_ws_total_volume_kg">%1$.0f kg × Wdh.</string>
     <string name="fitness_ws_saved">Workout gespeichert ✓</string>
 
     <!-- ====== VERLAUF (Details) ====== -->
-    <string name="fitness_history_entry_sets">%1$d Sätze · %2$d Wdh.</string>
+    <plurals name="fitness_history_entry_sets">
+        <item quantity="one">%1$d Satz · %2$d Wdh.</item>
+        <item quantity="other">%1$d Sätze · %2$d Wdh.</item>
+    </plurals>
     <string name="fitness_history_entry_volume">%1$.0f kg gesamt</string>
-    <string name="fitness_history_session_duration">%1$d Min</string>
+    <string name="fitness_history_session_duration" tools:ignore="PluralsCandidate">%1$d Min</string>
     <string name="fitness_history_session_calories">%1$.0f kcal</string>
-    <string name="fitness_history_session_exercises">%1$d Übungen</string>
+    <plurals name="fitness_history_session_exercises">
+        <item quantity="one">%1$d Übung</item>
+        <item quantity="other">%1$d Übungen</item>
+    </plurals>
     <string name="fitness_history_session_expand">Zum Aufklappen tippen</string>
     <string name="fitness_history_session_delete">Session löschen</string>
     <string name="fitness_history_session_delete_confirm">Dieses Workout löschen?</string>
     <string name="fitness_history_session_delete_yes">Löschen</string>
     <string name="fitness_history_session_delete_no">Behalten</string>
     <string name="fitness_history_no_sessions_yet">Noch keine Session gespeichert.\nStarte ein Workout über das Dashboard oder den Übungen-Tab!</string>
-    <string name="fitness_history_day_summary">%1$d Workouts · %2$d Min · %3$.0f kcal</string>
+    <plurals name="fitness_history_day_summary">
+        <item quantity="one">%1$d Workout · %2$d Min · %3$.0f kcal</item>
+        <item quantity="other">%1$d Workouts · %2$d Min · %3$.0f kcal</item>
+    </plurals>
     <string name="fitness_history_empty_filtered">Keine Sessions in diesem Zeitraum.</string>
     <string name="fitness_history_workout_pushup">Push-up-Session</string>
     <string name="fitness_history_workout_manual">Workout</string>
@@ -3030,7 +3054,10 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="fitness_bike_loading">Fahrten werden geladen…</string>
     <string name="fitness_bike_empty">Noch keine Fahrten erkannt.\nDas Explore-Tracking legt Touren automatisch an.</string>
     <string name="fitness_bike_empty_filtered">Keine Fahrten mit diesem Filter.</string>
-    <string name="fitness_bike_range_days">%1$d Tage</string>
+    <plurals name="fitness_bike_range_days">
+        <item quantity="one">%1$d Tag</item>
+        <item quantity="other">%1$d Tage</item>
+    </plurals>
     <string name="fitness_bike_filter_all">Alle</string>
     <string name="fitness_bike_filter_bike">Fahrrad</string>
     <string name="fitness_bike_filter_ebike">E-Bike</string>
@@ -3086,7 +3113,7 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="focusguard_service_notif_text">Überwacht deine Nutzung und blockiert gesperrte Apps</string>
     <string name="focusguard_blocked_title">%1$s geblockt</string>
     <string name="focusguard_blocked_big">%1$s ist gerade geblockt.\n%2$s\nGesperrt bis %3$s</string>
-    <string name="focusguard_reason_afternoon">Nachmittags-Sperre ab %1$d Uhr</string>
+    <string name="focusguard_reason_afternoon" tools:ignore="PluralsCandidate">Nachmittags-Sperre ab %1$d Uhr</string>
     <string name="focusguard_reason_custom">Zeitfenster für diese Kategorie aktiv</string>
     <string name="focusguard_reason_resting">Ruhe-Kontext erkannt</string>
     <string name="focusguard_reason_quota">Erst Vokabeln lernen, dann entspannen</string>
@@ -3094,7 +3121,7 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="focusguard_overlay_body">%1$s ist gerade gesperrt.</string>
     <string name="focusguard_overlay_reason">Grund: %1$s</string>
     <string name="focusguard_overlay_until">Gesperrt bis %1$s</string>
-    <string name="focusguard_continue">Trotzdem weiter (%1$d Min)</string>
+    <string name="focusguard_continue" tools:ignore="PluralsCandidate">Trotzdem weiter (%1$d Min)</string>
     <string name="focusguard_settings">Einstellungen</string>
     <string name="focusguard_daily_summary_title">📊 FocusGuard Tageszusammenfassung</string>
     <string name="focusguard_daily_summary_body">%1$s\n%2$s\n%3$s</string>
@@ -3106,11 +3133,14 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="focusguard_summary_no_usage">📱 Heute kaum genutzt</string>
     <string name="focusguard_summary_no_goal">📚 Kein Lernziel gesetzt</string>
     <string name="focusguard_summary_goal_done">📚 Lernziel erledigt! 🎉</string>
-    <string name="focusguard_summary_goal_progress">📚 Vokabeln: %1$d/%2$d Karten</string>
+    <string name="focusguard_summary_goal_progress" tools:ignore="PluralsCandidate">📚 Vokabeln: %1$d/%2$d Karten</string>
     <string name="focusguard_sleep_warning_title">😴 Zu wenig Schlaf</string>
     <string name="focusguard_sleep_warning_body">Letzte Nacht nur %1$s geschlafen. Dein Ziel sind %2$s.</string>
     <string name="focusguard_study_reminder_title">📚 Lern-Erinnerung</string>
-    <string name="focusguard_study_reminder_body">Heute sind noch %1$d Vokabelkarten offen. Schaffst du das?</string>
+    <plurals name="focusguard_study_reminder_body">
+        <item quantity="one">Heute ist noch %1$d Vokabelkarte offen. Schaffst du das?</item>
+        <item quantity="other">Heute sind noch %1$d Vokabelkarten offen. Schaffst du das?</item>
+    </plurals>
     <string name="focusguard_nav_dashboard">Dashboard</string>
     <string name="focusguard_nav_config">Einstellungen</string>
     <string name="focusguard_nav_stats">Statistik</string>
@@ -3172,5 +3202,8 @@ Schreib jetzt 3-5 lockere Sätze auf Deutsch. Musik UND Podcast erwähnen wenn b
     <string name="focusguard_perm_overlay_desc">FocusGuard: Zeigt eine Vollbild-Sperre über gesperrten Apps an, bis die Sperrzeit endet.</string>
     <string name="focusguard_perm_notifications_desc">FocusGuard: Erklärt Sperren, sendet die Tageszusammenfassung sowie Schlaf- und Lern-Erinnerungen.</string>
     <string name="focusguard_service_subtitle">Blockiert gesperrte Apps nach der Nachmittags-Schwelle (außer an Schultagen)</string>
-    <string name="focusguard_summary_excessive">⚠️ %1$s: heute über %2$d Minuten!</string>
+    <plurals name="focusguard_summary_excessive">
+        <item quantity="one">⚠️ %1$s: heute über %2$d Minute!</item>
+        <item quantity="other">⚠️ %1$s: heute über %2$d Minuten!</item>
+    </plurals>
 </resources>
