@@ -22,7 +22,6 @@ object FocusGuardConfig {
     private const val KEY_DAILY_SUMMARY_HOUR = "daily_summary_hour"
     private const val KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
     private const val KEY_EXCESSIVE_USAGE_THRESHOLD_MIN = "excessive_usage_threshold_min"
-    private const val KEY_STUDY_DEADLINE_MS = "study_deadline_ms"
 
     private lateinit var context: Context
     private val json = Json { ignoreUnknownKeys = true }
@@ -42,14 +41,6 @@ object FocusGuardConfig {
     fun setRestrictedApps(apps: Map<String, String>) {
         restrictedAppsCache = apps
         prefs().edit { putString(KEY_RESTRICTED_APPS, json.encodeToString(apps)) }
-    }
-
-    fun addRestrictedApp(packageName: String, category: String) {
-        setRestrictedApps(restrictedAppsCache + (packageName to category))
-    }
-
-    fun removeRestrictedApp(packageName: String) {
-        setRestrictedApps(restrictedAppsCache - packageName)
     }
 
     private fun loadRestrictedApps(): Map<String, String> {
@@ -114,7 +105,4 @@ object FocusGuardConfig {
         get() = prefs().getInt(KEY_EXCESSIVE_USAGE_THRESHOLD_MIN, 120)
         set(value) = prefs().edit { putInt(KEY_EXCESSIVE_USAGE_THRESHOLD_MIN, value) }
 
-    var studyDeadlineMs: Long
-        get() = prefs().getLong(KEY_STUDY_DEADLINE_MS, 0L)
-        set(value) = prefs().edit { putLong(KEY_STUDY_DEADLINE_MS, value) }
 }
