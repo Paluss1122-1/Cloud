@@ -483,6 +483,7 @@ object ExploreLocationTracker {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private fun stopActivityRecognitionUpdates(context: Context) {
         try {
             ActivityRecognition.getClient(context)
@@ -527,7 +528,7 @@ object ExploreLocationTracker {
 
                 val previous = lastLocation
                 val deltaSeconds = if (previous != null) (loc.time - previous.time) / 1000.0 else 0.0
-                val distance = if (previous != null) previous.distanceTo(loc) else 0f
+                val distance = previous?.distanceTo(loc) ?: 0f
 
                 val measuredSpeed = if (loc.hasSpeed()) loc.speed.toDouble() else null
                 val impliedSpeed = if (deltaSeconds >= MIN_IMPLIED_SPEED_INTERVAL_S) distance / deltaSeconds else null
