@@ -5,7 +5,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,10 +17,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Repeat
@@ -46,29 +44,29 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.tabslify.R
 import androidx.compose.ui.window.Dialog
+import com.tabslify.R
 import com.tabslify.core.ui.BgCard
 import com.tabslify.core.ui.BgSurface
 import com.tabslify.core.ui.NeonBox
 import com.tabslify.core.ui.PloppingButton
 import com.tabslify.core.ui.TextPrimary
 import com.tabslify.core.ui.TextSecondary
-import com.tabslify.tabs.fitnesstab.FitnessScreen
 import com.tabslify.tabs.fitnesstab.FitnessViewModel
 import com.tabslify.tabs.fitnesstab.data.DayStats
-import com.tabslify.tabs.fitnesstab.formatDuration
-import java.util.Calendar
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.roundToInt
+import androidx.compose.ui.platform.LocalLocale
 
 @Composable
 fun DashboardScreen(vm: FitnessViewModel, modifier: Modifier = Modifier) {
@@ -175,7 +173,7 @@ private fun ProfileDialog(vm: FitnessViewModel) {
             ) {
                 Text(text = stringResource(R.string.fitness_profile_age), color = TextPrimary, fontSize = 13.sp)
                 Text(
-                    text = stringResource(R.string.fitness_profile_age_value, age),
+                    text = pluralStringResource(R.plurals.fitness_profile_age_value, age, age),
                     color = TextPrimary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
@@ -289,7 +287,7 @@ private fun StreakCard(streakDays: Int) {
                     fontSize = 12.sp
                 )
                 Text(
-                    text = stringResource(R.string.fitness_dashboard_streak_days, streakDays),
+                    text = pluralStringResource(R.plurals.fitness_dashboard_streak_days, streakDays, streakDays),
                     color = TextPrimary,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold
@@ -366,7 +364,7 @@ private fun TodayStatsGrid(vm: FitnessViewModel) {
         if (today.totalDistanceKm > 0f) {
             StatCard(
                 modifier = Modifier.fillMaxWidth(),
-                icon = Icons.Default.DirectionsWalk,
+                icon = Icons.AutoMirrored.Filled.DirectionsWalk,
                 iconColor = Color(0xFF4CC9FF),
                 label = stringResource(R.string.fitness_dashboard_distance),
                 value = stringResource(R.string.fitness_dashboard_distance_value, today.totalDistanceKm),
@@ -604,7 +602,7 @@ private fun WeekBars(recentDays: Map<String, DayStats>, goalMin: Int) {
     cal.set(Calendar.SECOND, 0)
     cal.set(Calendar.MILLISECOND, 0)
     val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-    val dayFmt = SimpleDateFormat("EEEEE", Locale.getDefault())
+    val dayFmt = SimpleDateFormat("EEEEE", LocalLocale.current.platformLocale)
     val days = (0 until 7).map {
         val c = cal.clone() as Calendar
         c.add(Calendar.DAY_OF_YEAR, -it)
@@ -705,7 +703,7 @@ private fun WeekBars(recentDays: Map<String, DayStats>, goalMin: Int) {
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(
-                            text = "${weekMinutes} ${stringResource(R.string.fitness_history_chart_min)}",
+                            text = "$weekMinutes ${stringResource(R.string.fitness_history_chart_min)}",
                             color = TextPrimary,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold
