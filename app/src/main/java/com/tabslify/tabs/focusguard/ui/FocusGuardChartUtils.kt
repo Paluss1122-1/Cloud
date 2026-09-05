@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tabslify.core.ui.TextPrimary
 import com.tabslify.core.ui.TextSecondary
+import java.util.Locale
 
 @Composable
 fun FocusGuardBarChart(
@@ -43,7 +44,7 @@ fun FocusGuardBarChart(
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
     ) {
         values.forEachIndexed { index, value ->
-            val fraction = if (effectiveMax > 0f) (value / effectiveMax).coerceIn(0f, 1f) else 0f
+            val fraction = (value / effectiveMax).coerceIn(0f, 1f)
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -139,4 +140,4 @@ fun FocusGuardHorizontalBar(
 }
 
 private fun formatBarValue(value: Float): String =
-    if (value >= 1000f) "${(value / 1000f).let { String.format("%.1f", it) }}k" else value.toInt().toString()
+    if (value >= 1000f) "${(value / 1000f).let { String.format(Locale.ROOT, "%.1f", it) }}k" else value.toInt().toString()
