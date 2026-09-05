@@ -16,8 +16,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -80,9 +80,9 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -91,7 +91,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -106,7 +108,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -123,7 +124,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -144,24 +144,24 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.tabslify.BuildConfig
 import com.tabslify.R
 import com.tabslify.core.functions.canNotify
+import com.tabslify.core.objects.BackupEntry
+import com.tabslify.core.objects.BackupOutcome
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.client
 import com.tabslify.core.objects.Config.realDevice
 import com.tabslify.core.objects.PasswordStorage
 import com.tabslify.core.objects.PrefsBackup
-import com.tabslify.core.objects.BackupOutcome
-import com.tabslify.core.objects.BackupEntry
-import com.tabslify.core.objects.toast
 import com.tabslify.core.objects.prvt
+import com.tabslify.core.objects.toast
 import com.tabslify.quicksettingsfunctions.ChargingTrackerService
 import com.tabslify.quicksettingsfunctions.startBatteryWorker
 import com.tabslify.quicksettingsfunctions.stopBatteryWorker
 import com.tabslify.services.QuietHoursNotificationService
+import com.tabslify.services.WhatsAppNotificationListener
 import com.tabslify.tabs.focusguard.FocusGuardService
 import com.tabslify.tabs.focusguard.monitoring.cancelFocusGuardWorkers
 import com.tabslify.tabs.focusguard.monitoring.scheduleFocusGuardDailySummary
 import com.tabslify.tabs.focusguard.monitoring.scheduleFocusGuardWorkers
-import com.tabslify.services.WhatsAppNotificationListener
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
 import com.tabslify.tabs.virustotal.VirusTotalScanBar
 import com.tabslify.tabs.virustotal.pendingVirusTotalReport
@@ -180,7 +180,9 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
+import androidx.compose.ui.platform.LocalLocale
 
 val inAppNotifications = mutableStateListOf<String>()
 private const val MAX_IN_APP_NOTIFICATIONS = 20
@@ -1095,14 +1097,9 @@ fun isPermissionGranted(context: Context, key: String): Boolean {
         "FOREGROUND_SERVICE" -> granted(Manifest.permission.FOREGROUND_SERVICE)
 
         "READ_MEDIA_IMAGES / READ_MEDIA_VIDEO" ->
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-                granted(Manifest.permission.READ_MEDIA_IMAGES) ||
-                        granted(Manifest.permission.READ_MEDIA_VIDEO) ||
-                        granted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
-            else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                granted(Manifest.permission.READ_MEDIA_IMAGES) ||
-                        granted(Manifest.permission.READ_MEDIA_VIDEO)
-            else granted(Manifest.permission.READ_EXTERNAL_STORAGE)
+            granted(Manifest.permission.READ_MEDIA_IMAGES) ||
+                    granted(Manifest.permission.READ_MEDIA_VIDEO) ||
+                    granted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
 
         "READ_CONTACTS / WRITE_CONTACTS" ->
             granted(Manifest.permission.READ_CONTACTS) &&
@@ -1686,25 +1683,25 @@ private fun formatBytes(bytes: Long): String {
     val mb = kb / 1024.0
     val gb = mb / 1024.0
     return when {
-        gb >= 1f -> String.format("%.2f GB", gb)
-        mb >= 1f -> String.format("%.2f MB", mb)
-        kb >= 1f -> String.format("%.2f KB", kb)
+        gb >= 1f -> String.format(Locale.US, "%.2f GB", gb)
+        mb >= 1f -> String.format(Locale.US, "%.2f MB", mb)
+        kb >= 1f -> String.format(Locale.US, "%.2f KB", kb)
         else -> "$bytes B"
     }
 }
 
 @Composable
 fun LiveTrafficPanel(modifier: Modifier = Modifier) {
-    var rxRate by remember { mutableStateOf(0f) }
-    var txRate by remember { mutableStateOf(0f) }
-    var rxTotal by remember { mutableStateOf(TrafficStats.getTotalRxBytes()) }
-    var txTotal by remember { mutableStateOf(TrafficStats.getTotalTxBytes()) }
+    var rxRate by remember { mutableFloatStateOf(0f) }
+    var txRate by remember { mutableFloatStateOf(0f) }
+    var rxTotal by remember { mutableLongStateOf(TrafficStats.getTotalRxBytes()) }
+    var txTotal by remember { mutableLongStateOf(TrafficStats.getTotalTxBytes()) }
 
     LaunchedEffect(Unit) {
         var lastRx = TrafficStats.getTotalRxBytes()
         var lastTx = TrafficStats.getTotalTxBytes()
         while (true) {
-            delay(1000)
+            delay(1000.milliseconds)
             val curRx = TrafficStats.getTotalRxBytes()
             val curTx = TrafficStats.getTotalTxBytes()
             rxRate = (curRx - lastRx).coerceAtLeast(0).toFloat()
@@ -1770,20 +1767,27 @@ fun SettingsFrame(
     var showLanguageDialog by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
-    var backupLastMs by remember { mutableStateOf(prefs.getLong("last_prefs_backup_ms", 0L)) }
+    var backupLastMs by remember { mutableLongStateOf(prefs.getLong("last_prefs_backup_ms", 0L)) }
     var backupBusy by remember { mutableStateOf(false) }
     var showRestoreList by remember { mutableStateOf(false) }
     var backupList by remember { mutableStateOf<List<BackupEntry>>(emptyList()) }
     var restoreTarget by remember { mutableStateOf<BackupEntry?>(null) }
 
+    val backupDoneMsg = stringResource(R.string.cloud_backup_done)
+    val backupNoMasterMsg = stringResource(R.string.cloud_backup_no_master)
+    val backupShrinkMsg = stringResource(R.string.cloud_backup_shrink_warn)
+    val backupWrongPwMsg = stringResource(R.string.cloud_backup_wrong_pw)
+    val backupFailedMsg = stringResource(R.string.cloud_backup_failed)
+    val backupRestoredMsg = stringResource(R.string.cloud_backup_restored)
+
     fun outcomeMessage(outcome: BackupOutcome): String = when (outcome) {
-        BackupOutcome.DONE -> context.getString(R.string.cloud_backup_done)
-        BackupOutcome.NO_MASTER -> context.getString(R.string.cloud_backup_no_master)
-        BackupOutcome.SHRINK_BLOCKED -> context.getString(R.string.cloud_backup_shrink_warn)
-        BackupOutcome.WRONG_PASSWORD -> context.getString(R.string.cloud_backup_wrong_pw)
-        BackupOutcome.CORRUPT -> context.getString(R.string.cloud_backup_wrong_pw)
-        BackupOutcome.EMPTY -> context.getString(R.string.cloud_backup_failed)
-        BackupOutcome.FAILED -> context.getString(R.string.cloud_backup_failed)
+        BackupOutcome.DONE -> backupDoneMsg
+        BackupOutcome.NO_MASTER -> backupNoMasterMsg
+        BackupOutcome.SHRINK_BLOCKED -> backupShrinkMsg
+        BackupOutcome.WRONG_PASSWORD -> backupWrongPwMsg
+        BackupOutcome.CORRUPT -> backupWrongPwMsg
+        BackupOutcome.EMPTY -> backupFailedMsg
+        BackupOutcome.FAILED -> backupFailedMsg
     }
 
     BackHandler {
@@ -2160,7 +2164,7 @@ fun SettingsFrame(
                                 ) {
                                     val fmt = java.text.SimpleDateFormat(
                                         "dd.MM.yyyy HH:mm",
-                                        java.util.Locale.getDefault()
+                                        LocalLocale.current.platformLocale
                                     )
                                     backupList.forEach { entry ->
                                         Text(
@@ -2192,12 +2196,11 @@ fun SettingsFrame(
                         text = { Text(stringResource(R.string.cloud_backup_restore_confirm)) },
                         confirmButton = {
                             TextButton(onClick = {
-                                val target = entry
                                 restoreTarget = null
                                 if (backupBusy) return@TextButton
                                 backupBusy = true
                                 scope.launch {
-                                    val outcome = PrefsBackup.restore(context, target.fileName)
+                                    val outcome = PrefsBackup.restore(context, entry.fileName)
                                     if (outcome == BackupOutcome.DONE) {
                                         backupLastMs =
                                             prefs.getLong("last_prefs_backup_ms", 0L)
@@ -2205,7 +2208,7 @@ fun SettingsFrame(
                                     toast(
                                         context,
                                         if (outcome == BackupOutcome.DONE)
-                                            context.getString(R.string.cloud_backup_restored)
+                                            backupRestoredMsg
                                         else outcomeMessage(outcome)
                                     )
                                     backupBusy = false
