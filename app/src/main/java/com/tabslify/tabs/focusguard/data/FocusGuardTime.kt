@@ -16,8 +16,6 @@ fun ymdDaysAgo(days: Int): String = LocalDate.now().minusDays(days.toLong()).toS
 
 fun parseYmd(value: String): LocalDate = LocalDate.parse(value, ymdFormatter)
 
-fun ymdPlusDays(value: String, days: Long): String = parseYmd(value).plusDays(days).toString()
-
 fun minuteOfDay(ms: Long): Int {
     val t = LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(ms), ZoneId.systemDefault())
     return t.hour * 60 + t.minute
