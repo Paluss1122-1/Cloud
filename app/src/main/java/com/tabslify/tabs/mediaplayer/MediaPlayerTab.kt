@@ -3199,7 +3199,6 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
-        super.onCleared()
         stopNowPlayingPoller()
     }
 
