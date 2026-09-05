@@ -75,6 +75,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -106,7 +107,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.LinkedHashMap
 import kotlin.math.abs
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.ExperimentalTime
@@ -145,6 +145,7 @@ fun OtherBucketViewer(
     var fileList by remember { mutableStateOf<List<LocalFileInfo>>(emptyList()) }
     var isUploading by remember { mutableStateOf(false) }
     var uploadProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var uploadMessageParams by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var showFullscreenImage by remember { mutableStateOf<LocalFileInfo?>(null) }
     var showVideoPlayer by remember { mutableStateOf<LocalFileInfo?>(null) }
     var selectedFilter by remember { mutableStateOf("Alle") }
@@ -303,13 +304,7 @@ fun OtherBucketViewer(
                         }
                     }
 
-                    val message = when {
-                        failCount == 0 -> context.resources.getQuantityString(R.plurals.alle_dateien_gespeichert, successCount, successCount)
-                        successCount == 0 -> speichernFehlgeschlagenMsg
-                        else -> gespeichertFehlgeschlagenMsg.format(successCount, failCount)
-                    }
-
-                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                    uploadMessageParams = Pair(successCount, failCount)
                     loadFilesFromPrivateStorage()
 
                 } catch (e: Exception) {
@@ -744,6 +739,22 @@ fun OtherBucketViewer(
                     }
                 }
             }
+        }
+    }
+
+    uploadMessageParams?.let { (successCount, failCount) ->
+        val message = when {
+            failCount == 0 -> pluralStringResource(
+                R.plurals.alle_dateien_gespeichert,
+                successCount,
+                successCount
+            )
+            successCount == 0 -> speichernFehlgeschlagenMsg
+            else -> gespeichertFehlgeschlagenMsg.format(successCount, failCount)
+        }
+        LaunchedEffect(uploadMessageParams) {
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            uploadMessageParams = null
         }
     }
 
