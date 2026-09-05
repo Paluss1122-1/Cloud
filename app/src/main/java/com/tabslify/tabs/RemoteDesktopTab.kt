@@ -3,7 +3,6 @@ package com.tabslify.tabs
 import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
-import androidx.activity.compose.BackHandler
 import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
 import android.net.wifi.WifiManager
@@ -15,6 +14,7 @@ import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -568,7 +568,6 @@ class RemoteDesktopViewModel : ViewModel() {
     }
 
     override fun onCleared() {
-        super.onCleared()
         disconnect()
     }
 
