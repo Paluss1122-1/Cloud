@@ -136,7 +136,6 @@ class AudioRecorderTabViewModel(application: Application) : AndroidViewModel(app
     }
 
     override fun onCleared() {
-        super.onCleared()
         onStop()
     }
 
