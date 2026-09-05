@@ -226,8 +226,7 @@ fun loadGalleryImages(number: Int, context: Context) {
     Log.d("CURRENTINDEX", "$number")
     
     val hasFullAccess = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
-    val hasPartialAccess = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE && 
-            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) == PackageManager.PERMISSION_GRANTED
+    val hasPartialAccess = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) == PackageManager.PERMISSION_GRANTED
             
     if (!hasFullAccess && !hasPartialAccess) {
         showSimpleNotificationExtern(
