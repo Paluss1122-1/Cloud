@@ -263,10 +263,6 @@ class VolumeChangeReceiver : BroadcastReceiver() {
         )
 
         if (streamType == AudioManager.STREAM_MUSIC) {
-            val volume = intent.getIntExtra(
-                "android.media.EXTRA_VOLUME_STREAM_VALUE",
-                -1
-            )
             reportDeviceInformation(context, intent)
         }
     }
