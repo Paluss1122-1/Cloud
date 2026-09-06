@@ -11,6 +11,7 @@ import java.io.File
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
+import androidx.core.content.edit
 
 enum class BackupOutcome {
     DONE,
@@ -74,10 +75,10 @@ object PrefsBackup {
                 val bucket = Config.client.storage.from(Config.SUPABASE_BUCKET)
                 val fileName = "%s/backup_%013d.enc".format(FOLDER, System.currentTimeMillis())
                 bucket.upload(fileName, blob) { upsert = true }
-                prefs.edit()
-                    .putLong(KEY_LAST_MS, System.currentTimeMillis())
-                    .putInt(KEY_LAST_COUNT, count)
-                    .apply()
+                prefs.edit {
+                    putLong(KEY_LAST_MS, System.currentTimeMillis())
+                        .putInt(KEY_LAST_COUNT, count)
+                    }
                 pruneOld()
                 BackupOutcome.DONE
             } catch (_: Exception) {
@@ -199,28 +200,28 @@ object PrefsBackup {
             val name = fileNames.next()
             val fileObj = prefsObj.optJSONObject(name) ?: continue
             val sp = context.getSharedPreferences(name, Context.MODE_PRIVATE)
-            val editor = sp.edit()
-            val keys = fileObj.keys()
-            while (keys.hasNext()) {
-                val key = keys.next()
-                val entry = fileObj.optJSONObject(key) ?: continue
-                when (entry.optString("t")) {
-                    "b" -> editor.putBoolean(key, entry.optBoolean("v"))
-                    "i" -> editor.putInt(key, entry.optInt("v"))
-                    "l" -> editor.putLong(key, entry.optLong("v"))
-                    "f" -> editor.putFloat(key, entry.optDouble("v").toFloat())
-                    "s" -> editor.putString(key, entry.optString("v"))
-                    "ss" -> {
-                        val arr = entry.optJSONArray("v")
-                        val set = mutableSetOf<String>()
-                        if (arr != null) {
-                            for (i in 0 until arr.length()) set.add(arr.optString(i))
+            sp.edit {
+                val keys = fileObj.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val entry = fileObj.optJSONObject(key) ?: continue
+                    when (entry.optString("t")) {
+                        "b" -> putBoolean(key, entry.optBoolean("v"))
+                        "i" -> putInt(key, entry.optInt("v"))
+                        "l" -> putLong(key, entry.optLong("v"))
+                        "f" -> putFloat(key, entry.optDouble("v").toFloat())
+                        "s" -> putString(key, entry.optString("v"))
+                        "ss" -> {
+                            val arr = entry.optJSONArray("v")
+                            val set = mutableSetOf<String>()
+                            if (arr != null) {
+                                for (i in 0 until arr.length()) set.add(arr.optString(i))
+                            }
+                            putStringSet(key, set)
                         }
-                        editor.putStringSet(key, set)
                     }
                 }
             }
-            editor.apply()
         }
     }
 
