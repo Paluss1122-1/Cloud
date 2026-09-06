@@ -221,10 +221,10 @@ object BatteryDataRepository {
             })
 
             val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-            prefs.edit()
-                .putLong(PREF_LAST_SYNC_MS, System.currentTimeMillis())
-                .putInt(PREF_LAST_SYNC_COUNT, merged.size)
-                .apply()
+            prefs.edit {
+                putLong(PREF_LAST_SYNC_MS, System.currentTimeMillis())
+                    .putInt(PREF_LAST_SYNC_COUNT, merged.size)
+            }
             true
         }.getOrElse { false }
     }
