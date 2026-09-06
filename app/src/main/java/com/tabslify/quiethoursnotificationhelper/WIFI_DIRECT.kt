@@ -239,9 +239,10 @@ fun connectBluetoothDevice(
     }
 
     if (!adapter.isEnabled) {
+        @Suppress("DEPRECATION")
         val enabled = try {
             adapter.enable()
-        } catch (e: SecurityException) {
+        } catch (_: SecurityException) {
             false
         }
         if (!enabled) {
@@ -2691,10 +2692,10 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                         Log.d("CLOUDSA", "[BT] $device -> $msg")
                         result.complete(ok)
                     }
-                    val ok = withTimeoutOrNull(8000) { result.await() } ?: false
+                    val ok = withTimeoutOrNull(8000.milliseconds) { result.await() } ?: false
                     if (ok) {
-                        withTimeoutOrNull(10000) {
-                            while (connectedBluetoothDevices.isEmpty()) delay(500)
+                        withTimeoutOrNull(10000.milliseconds) {
+                            while (connectedBluetoothDevices.isEmpty()) delay(500.milliseconds)
                         }
                         if (connectedBluetoothDevices.isNotEmpty()) break
                     }
@@ -2719,7 +2720,7 @@ private fun handleExecuteCommand(context: Context, json: JSONObject) {
                         Log.d("CLOUDSA", "[BT] disconnect $device -> $msg")
                         result.complete(ok)
                     }
-                    withTimeoutOrNull(8000) { result.await() }
+                    withTimeoutOrNull(8000.milliseconds) { result.await() }
                 }
             }
         }
@@ -2972,6 +2973,7 @@ private fun isMobileDataActive(context: Context): Boolean {
     }
     return try {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        @Suppress("DEPRECATION")
         cm.allNetworks.any { network ->
             cm.getNetworkCapabilities(network)
                 ?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
@@ -2984,6 +2986,7 @@ private fun isMobileDataActive(context: Context): Boolean {
 private fun isWifiConnectedAndActive(context: Context): Boolean {
     return try {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        @Suppress("DEPRECATION")
         cm.allNetworks.any { network ->
             val caps = cm.getNetworkCapabilities(network) ?: return@any false
             caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) &&
