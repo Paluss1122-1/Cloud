@@ -14,6 +14,7 @@ import com.tabslify.core.objects.tNotify
 import kotlinx.coroutines.launch
 
 class MyFirebaseMessagingService : FirebaseMessagingService() {
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
     override fun onNewToken(token: String) {
         super.onNewToken(token)
         FirebaseMessaging.getInstance()
