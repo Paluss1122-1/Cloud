@@ -1,16 +1,26 @@
--keep class javax.mail.** { *; }
--keep class com.sun.mail.** { *; }
--dontwarn javax.mail.**
--dontwarn com.sun.mail.**
-
 -dontwarn java.beans.BeanDescriptor
 -dontwarn java.beans.BeanInfo
 -dontwarn java.beans.IntrospectionException
 -dontwarn java.beans.Introspector
 -dontwarn java.beans.PropertyDescriptor
 
--keep class com.google.mediapipe.** { *; }
--keep class com.google.protobuf.** { *; }
+-keepattributes Signature,InnerClasses,EnclosingMethod
+-keepclasseswithmembernames class * { native <methods>; }
+-keep class com.google.mediapipe.framework.image.BitmapImageBuilder { <init>(...); <methods>; }
+-keep class com.google.mediapipe.framework.image.MPImage { <init>(...); <methods>; }
+-keep class com.google.mediapipe.tasks.components.containers.Landmark { <init>(...); <methods>; }
+-keep class com.google.mediapipe.tasks.components.containers.NormalizedLandmark { <init>(...); <methods>; }
+-keep class com.google.mediapipe.tasks.core.BaseOptions { <init>(...); <methods>; }
+-keep class com.google.mediapipe.tasks.core.BaseOptions$Builder { <init>(...); <methods>; }
+-keep class com.google.mediapipe.tasks.core.Delegate { <init>(...); <methods>; }
+-keep class com.google.mediapipe.tasks.vision.core.RunningMode { <init>(...); <methods>; }
+-keep class com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker { <init>(...); <methods>; }
+-keep class com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker$PoseLandmarkerOptions { <init>(...); <methods>; }
+-keep class com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker$PoseLandmarkerOptions$Builder { <init>(...); <methods>; }
+-keep class com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult { <init>(...); <methods>; }
+-keepclassmembers,allowshrinking,allowobfuscation class * extends com.google.protobuf.MessageLite { <methods>; }
+-keepclassmembers class com.google.protobuf.Descriptors$* { <fields>; <methods>; }
+-keepclassmembers,allowshrinking,allowobfuscation class * extends java.lang.Enum { <fields>; public static **[] values(); public static ** valueOf(java.lang.String); }
 -dontwarn com.google.mediapipe.**
 -dontwarn com.google.protobuf.**
 -dontwarn autovalue.shaded.**
