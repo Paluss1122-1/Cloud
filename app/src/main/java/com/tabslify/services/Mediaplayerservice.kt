@@ -584,7 +584,7 @@ class MediaPlayerService : MediaSessionService() {
         if (activeAlgorithmicPlaylistId != null) {
             val src = AlgorithmicPlaylistRegistry.findById(activeAlgorithmicPlaylistId!!)
             if (src != null) {
-                algorithmicPlaylistSongs = src.getSongs(playlist, emptyMap())
+                algorithmicPlaylistSongs = src.getSongs(playlist)
                 if (algorithmicPlaylistSongs.isNotEmpty() && currentSongIndex >= algorithmicPlaylistSongs.size) {
                     currentSongIndex = 0
                     saveMusicState()
@@ -1795,7 +1795,7 @@ class MediaPlayerService : MediaSessionService() {
             savePlaybackSpeed(s)
             showSimpleNotificationExtern(
                 getString(R.string.gespeichert_2),
-                getString(R.string.geschwindigkeit_x_wird_beim_nachsten, s),
+                getString(R.string.geschwindigkeit_x_wird_beim_nachsten, s.toString()),
                 5.seconds, this
             )
         }
@@ -2797,7 +2797,7 @@ class MediaPlayerService : MediaSessionService() {
             )
             return
         }
-        val songs = source.getSongs(playlist, emptyMap())
+        val songs = source.getSongs(playlist)
         if (songs.isEmpty()) {
             showSimpleNotificationExtern(
                 getString(R.string.leer),
