@@ -22,6 +22,7 @@ import kotlinx.serialization.json.Json
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
+import kotlin.time.Duration.Companion.milliseconds
 
 var pendingVirusTotalReport: String? by mutableStateOf(null)
 
@@ -107,7 +108,7 @@ object VirusTotalScanManager {
                 startedAt = now,
                 finishedAt = now
             )
-            _jobs.value = _jobs.value + job
+            _jobs.value += job
             persistJobs(appContext)
             return
         }
@@ -120,13 +121,13 @@ object VirusTotalScanManager {
             state = VirusTotalState.Loading,
             startedAt = now
         )
-        _jobs.value = _jobs.value + initialJob
+        _jobs.value += initialJob
         persistJobs(appContext)
 
         Tabslify.serviceScope.launch {
             val result = try {
-                withTimeout(SCAN_TIMEOUT_MS) { scanAction() }
-            } catch (e: TimeoutCancellationException) {
+                withTimeout(SCAN_TIMEOUT_MS.milliseconds) { scanAction() }
+            } catch (_: TimeoutCancellationException) {
                 VirusTotalState.Error("Scan-Zeitüberschreitung (5 Min)")
             }
             val updatedJob = initialJob.copy(state = result, finishedAt = System.currentTimeMillis())
@@ -169,13 +170,6 @@ object VirusTotalScanManager {
         ensureInitialized(context)
         _jobs.value = _jobs.value.filter { it.state is VirusTotalState.Loading }
         persistJobs(context)
-    }
-
-    fun reportById(context: Context, id: String): VirusTotalScanJob? {
-        ensureInitialized(context)
-        _jobs.value.find { it.id == id }?.let { return it }
-        val loaded = loadJobsFromPrefs(context)
-        return loaded.find { it.id == id }
     }
 
     private fun persistJobs(context: Context) {
@@ -241,7 +235,7 @@ object VirusTotalScanManager {
 
                 if (id.isEmpty() || modeStr.isEmpty()) continue
 
-                val mode = try { VirusTotalMode.valueOf(modeStr) } catch (e: Exception) { continue }
+                val mode = try { VirusTotalMode.valueOf(modeStr) } catch (_: Exception) { continue }
 
                 val state = when (type) {
                     "loading" -> VirusTotalState.Error(context.getString(R.string.virustotal_scan_abgebrochen))
@@ -273,7 +267,7 @@ object VirusTotalScanManager {
                 )
             }
             list.sortedBy { it.startedAt }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyList()
         }
     }

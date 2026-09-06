@@ -21,6 +21,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlin.time.Duration.Companion.milliseconds
 
 private const val BASE_URL = "https://www.virustotal.com/api/v3"
 
@@ -130,7 +131,7 @@ class VirusTotalRepository(private val httpClient: HttpClient) {
                     return parseStats(stats).let { VirusTotalState.Result(it, permalink) }
                 }
             }
-            delay(3000)
+            delay(3000.milliseconds)
         }
         return VirusTotalState.Error("Analyse dauert zu lange, bitte später erneut versuchen")
     }

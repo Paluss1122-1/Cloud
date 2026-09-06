@@ -8,10 +8,6 @@ private val ymdFormatter = java.time.format.DateTimeFormatter.ISO_LOCAL_DATE
 
 fun todayYmd(): String = LocalDate.now().toString()
 
-fun ymdOf(ms: Long): String =
-    LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(ms), ZoneId.systemDefault())
-        .toLocalDate().toString()
-
 fun ymdDaysAgo(days: Int): String = LocalDate.now().minusDays(days.toLong()).toString()
 
 fun parseYmd(value: String): LocalDate = LocalDate.parse(value, ymdFormatter)

@@ -155,7 +155,7 @@ object ExploreBikeClassifier {
             totalWeight += WEIGHT_CLIMB
         }
 
-        val score = if (totalWeight > 0.0) weighted / totalWeight else 0.0
+        val score = weighted / totalWeight
 
         return BikeClassification(
             mode = if (score >= EBIKE_SCORE_THRESHOLD) MODE_EBIKE else MODE_BICYCLE,
@@ -187,7 +187,7 @@ object ExploreBikeClassifier {
             val previous = points[i - 1]
             val current = points[i]
             val seconds = (current.timestamp - previous.timestamp) / 1000.0
-            if (seconds < MIN_SAMPLE_GAP_S || seconds > MAX_SAMPLE_GAP_S) continue
+            if (seconds !in MIN_SAMPLE_GAP_S..MAX_SAMPLE_GAP_S) continue
 
             Location.distanceBetween(previous.lat, previous.lon, current.lat, current.lon, distance)
             val meters = distance[0].toDouble()

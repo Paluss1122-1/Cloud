@@ -6,7 +6,7 @@
         android:enabled="true"
         android:shortcutShortLabel="@string/shortcut_weather_short"
         android:shortcutLongLabel="@string/shortcut_weather_long"
-        android:icon="@drawable/app_icon_foreground">
+        android:icon="@drawable/app_icon_foreground_inset">
 
         <intent
             android:action="android.intent.action.VIEW"

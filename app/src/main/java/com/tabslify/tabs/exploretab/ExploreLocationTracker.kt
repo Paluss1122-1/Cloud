@@ -117,7 +117,6 @@ object ExploreLocationTracker {
     private var lastLocation: Location? = null
     private var currentMode: String = "UNKNOWN"
     private var currentProfile: String = requestProfile("UNKNOWN")
-    private var serviceContext: Context? = null
     private var scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private var lastConfidentMode = "UNKNOWN"
@@ -588,7 +587,6 @@ object ExploreLocationTracker {
         val appCtx = context.applicationContext
         scope.cancel()
         scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-        serviceContext = appCtx
         startLocationUpdates(appCtx, ExploreRepository(appCtx))
         startActivityRecognitionUpdates(appCtx)
         ExploreWorker.schedule(appCtx)
@@ -601,19 +599,17 @@ object ExploreLocationTracker {
         _trackerInfo.value = _trackerInfo.value.copy(isEnabled = false)
     }
 
-    fun onServiceDestroyed() {
+    fun onServiceDestroyed(context: Context) {
         scope.cancel()
-        val appCtx = serviceContext
-        if (appCtx != null) {
-            locationCallback?.let {
-                try {
-                    getClient(appCtx).removeLocationUpdates(it)
-                } catch (_: Exception) {
-                }
+        val appCtx = context.applicationContext
+        locationCallback?.let {
+            try {
+                getClient(appCtx).removeLocationUpdates(it)
+            } catch (_: Exception) {
             }
-            stopActivityRecognitionUpdates(appCtx)
-            ExploreWorker.cancel(appCtx)
         }
+        stopActivityRecognitionUpdates(appCtx)
+        ExploreWorker.cancel(appCtx)
         locationCallback = null
         lastLocation = null
         currentMode = "UNKNOWN"
@@ -621,7 +617,6 @@ object ExploreLocationTracker {
         lastConfidentMode = "UNKNOWN"
         lastConfidentAt = 0L
         _currentActivity.value = ExploreActivityInfo()
-        serviceContext = null
     }
 
     fun stop(context: Context) {

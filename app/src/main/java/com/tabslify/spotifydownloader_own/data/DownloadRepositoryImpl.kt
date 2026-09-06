@@ -128,7 +128,7 @@ class DownloadRepositoryImpl(
 
             val coverBytes: ByteArray? = coverUrl?.let {
                 try {
-                    withTimeout(30_000L) { URL(it).readBytes() }
+                    withTimeout(30_000L.milliseconds) { URL(it).readBytes() }
                 } catch (_: Exception) {
                     null
                 }

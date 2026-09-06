@@ -1585,6 +1585,7 @@ class QuietHoursNotificationService : Service() {
         }
     }
 
+    @SuppressLint("LaunchActivityFromNotification")
     private fun showPodcastRetryNotification() {
         try {
             val nm = getSystemService(NotificationManager::class.java)
@@ -1623,22 +1624,22 @@ class QuietHoursNotificationService : Service() {
 }
 
 class OverlayLifecycleOwner : LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
-    private val lifecycleRegistry = LifecycleRegistry(this)
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
-    override val lifecycle: Lifecycle get() = lifecycleRegistry
+    override val lifecycle: Lifecycle
+        field = LifecycleRegistry(this)
     override val viewModelStore = ViewModelStore()
     override val savedStateRegistry get() = savedStateRegistryController.savedStateRegistry
 
     fun onCreate() {
         savedStateRegistryController.performRestore(null)
-        lifecycleRegistry.currentState = Lifecycle.State.CREATED
+        lifecycle.currentState = Lifecycle.State.CREATED
     }
 
     fun onResume() {
-        lifecycleRegistry.currentState = Lifecycle.State.RESUMED
+        lifecycle.currentState = Lifecycle.State.RESUMED
     }
 
     fun onDestroy() {
-        lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
+        lifecycle.currentState = Lifecycle.State.DESTROYED
     }
 }

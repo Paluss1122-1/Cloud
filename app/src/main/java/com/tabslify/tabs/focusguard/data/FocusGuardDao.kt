@@ -29,12 +29,6 @@ interface AppUsageLogDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(logs: List<AppUsageLog>)
 
-    @Query("SELECT * FROM app_usage_logs WHERE date = :date")
-    suspend fun forDate(date: String): List<AppUsageLog>
-
-    @Query("SELECT * FROM app_usage_logs WHERE sessionEndMs >= :from AND sessionEndMs < :to")
-    suspend fun between(from: Long, to: Long): List<AppUsageLog>
-
     @Query("SELECT * FROM app_usage_logs WHERE synced = 0")
     suspend fun unsynced(): List<AppUsageLog>
 
@@ -49,12 +43,6 @@ interface AppUsageLogDao {
 
     @Query("SELECT date, category, SUM(durationMs) AS total FROM app_usage_logs WHERE date >= :fromDate GROUP BY date, category ORDER BY date")
     suspend fun dailyTotals(fromDate: String): List<DailyCategoryTotal>
-
-    @Query("SELECT COALESCE(SUM(durationMs), 0) FROM app_usage_logs WHERE date = :date AND packageName = :packageName")
-    suspend fun packageDuration(date: String, packageName: String): Long
-
-    @Query("DELETE FROM app_usage_logs WHERE date < :cutoffDate")
-    suspend fun deleteBefore(cutoffDate: String)
 
     @Query("DELETE FROM app_usage_logs WHERE synced = 1 AND sessionEndMs < :cutoff")
     suspend fun deleteSyncedBefore(cutoff: Long)
@@ -93,11 +81,11 @@ interface SleepRecordDao {
     suspend fun markSynced(ids: List<String>)
 
     @Query(
-        "DELETE FROM sleep_records AS s WHERE EXISTS (" +
-            "SELECT 1 FROM sleep_records AS o WHERE o.date = s.date AND (" +
-            "o.wakeMs > s.wakeMs OR " +
-            "(o.wakeMs = s.wakeMs AND o.bedtimeMs > s.bedtimeMs) OR " +
-            "(o.wakeMs = s.wakeMs AND o.bedtimeMs = s.bedtimeMs AND o.id > s.id)))"
+        "DELETE FROM sleep_records WHERE EXISTS (" +
+            "SELECT 1 FROM sleep_records AS o WHERE o.date = sleep_records.date AND (" +
+            "o.wakeMs > sleep_records.wakeMs OR " +
+            "(o.wakeMs = sleep_records.wakeMs AND o.bedtimeMs > sleep_records.bedtimeMs) OR " +
+            "(o.wakeMs = sleep_records.wakeMs AND o.bedtimeMs = sleep_records.bedtimeMs AND o.id > sleep_records.id)))"
     )
     suspend fun deleteDuplicates()
 }

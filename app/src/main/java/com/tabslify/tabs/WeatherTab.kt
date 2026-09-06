@@ -1,6 +1,7 @@
 package com.tabslify.tabs
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -275,6 +276,7 @@ private suspend fun <T> awaitLocationTask(task: Task<T>): T? =
         }
     }
 
+@SuppressLint("MissingPermission")
 suspend fun getCurrentLocation(context: Context): Location? {
     return withContext(Dispatchers.IO) {
         try {
@@ -289,6 +291,7 @@ suspend fun getCurrentLocation(context: Context): Location? {
     }
 }
 
+@SuppressLint("MissingPermission")
 suspend fun getLastKnownLocation(context: Context): Location? {
     return withContext(Dispatchers.IO) {
         try {

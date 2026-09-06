@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tabslify.R
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +24,7 @@ import kotlin.time.Duration.Companion.milliseconds
 private const val EARTH_AREA_KM2 = 510_000_000.0
 private const val TILE_AREA_KM2 = (TILE_SIZE * 111.32) * (TILE_SIZE * 111.32)
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class ExploreViewModel(app: Application) : AndroidViewModel(app) {
     val repo = ExploreRepository(app)
 

@@ -36,8 +36,6 @@ data class BikeRide(
     val durationMs: Long get() = endTime - startTime
     val durationMinutes: Int get() = (durationMs / 60_000L).toInt()
     val isEbike: Boolean get() = mode == ExploreBikeClassifier.MODE_EBIKE
-    val movingShare: Float
-        get() = if (durationMs <= 0L) 0f else (movingSeconds * 1000f / durationMs).coerceIn(0f, 1f)
 }
 
 data class BikeStats(

@@ -1459,6 +1459,4 @@ object ExerciseRepository {
 
     fun findById(id: String): Exercise? = byId[id]
 
-    fun groupByMuscle(): Map<MuscleGroup, List<Exercise>> =
-        all().groupBy { it.muscleGroup }.toSortedMap(compareBy { it.ordinal })
 }

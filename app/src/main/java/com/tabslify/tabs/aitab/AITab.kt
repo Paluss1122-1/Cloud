@@ -456,9 +456,9 @@ fun AITabContent(
                                 val bottomStop = (1f - fadePx / size.height).coerceIn(0f, 1f)
                                 drawRect(
                                     brush = Brush.verticalGradient(
-                                        0f to Color.Black,
-                                        bottomStop to Color.Black,
-                                        1f to Color.Transparent
+                                        0f to Black,
+                                        bottomStop to Black,
+                                        1f to Transparent
                                     ),
                                     blendMode = BlendMode.DstIn
                                 )

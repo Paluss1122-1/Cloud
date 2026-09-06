@@ -472,11 +472,11 @@ private fun loadArticlesFromPrefs(context: Context): Pair<List<HeiseNewsItem>, L
                     title = jsonObj.getString("title"),
                     summary = jsonObj.getString("summary"),
                     link = jsonObj.getString("link"),
-                    imageUrl = jsonObj.optString("imageUrl", null),
+                    imageUrl = jsonObj.optString("imageUrl", ""),
                     publishedAt = jsonObj.getString("publishedAt"),
                     rawTimestamp = jsonObj.getLong("rawTimestamp"),
                     source = jsonObj.optString("source", ""),
-                    emailBody = jsonObj.optString("emailBody", null)
+                    emailBody = jsonObj.optString("emailBody", "")
                 )
             )
         }

@@ -329,22 +329,6 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
         null
     }
 
-    private fun encodeAudio(ctx: Context, uri: Uri): String? = try {
-        ctx.contentResolver.openInputStream(uri)?.use { input ->
-            val output = ByteArrayOutputStream()
-            android.util.Base64OutputStream(output, Base64.NO_WRAP).use { base64Out ->
-                val buffer = ByteArray(8192)
-                var bytesRead: Int
-                while (input.read(buffer).also { bytesRead = it } != -1) {
-                    base64Out.write(buffer, 0, bytesRead)
-                }
-            }
-            output.toString("UTF-8")
-        }
-    } catch (_: Exception) {
-        null
-    }
-
     suspend fun animateAlpha(alpha: Animatable<Float, AnimationVector1D>) {
         delay(100.milliseconds)
         alpha.animateTo(

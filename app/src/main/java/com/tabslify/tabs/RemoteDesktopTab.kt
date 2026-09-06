@@ -140,12 +140,7 @@ sealed class RemoteDesktopState {
     data class HostList(val hosts: List<RemoteHost>) : RemoteDesktopState()
     data class Connecting(val host: RemoteHost) : RemoteDesktopState()
     data class Connected(val host: RemoteHost, val latencyMs: Int = 0) : RemoteDesktopState()
-    data class Hosting(
-        val ip: String,
-        val pin: String,
-        val connected: Boolean = false,
-        val clientIp: String = ""
-    ) : RemoteDesktopState()
+    object Hosting : RemoteDesktopState()
 
     data class Error(val message: String, val canRetry: Boolean = true) : RemoteDesktopState()
 }
@@ -340,13 +335,13 @@ class RemoteDesktopViewModel : ViewModel() {
                 val request = Request.Builder().url("ws://${host.ip}:${host.port}").build()
 
                 val listener = object : WebSocketListener() {
-                    override fun onOpen(ws: WebSocket, response: Response) {
+                    override fun onOpen(webSocket: WebSocket, response: Response) {
                         Log.i(TAG, "[WS] Geöffnet")
-                        ws.send(JSONObject().apply { put("type", "hello"); put("pin", pin) }
+                        webSocket.send(JSONObject().apply { put("type", "hello"); put("pin", pin) }
                             .toString())
                     }
 
-                    override fun onMessage(ws: WebSocket, text: String) {
+                    override fun onMessage(webSocket: WebSocket, text: String) {
                         Log.d(TAG, "[WS-TEXT] $text")
                         try {
                             val json = JSONObject(text)
@@ -355,7 +350,7 @@ class RemoteDesktopViewModel : ViewModel() {
                                     // Lese pipeline_depth vom Server (Fallback: 2)
                                     pipelineDepth = json.optInt("pipeline_depth", 2)
                                     pendingDecodes.set(0)
-                                    activeWebSocket = ws
+                                    activeWebSocket = webSocket
                                     Log.i(TAG, "[AUTH] ✓ Pipeline-Depth=$pipelineDepth")
 
                                     viewModelScope.launch(Dispatchers.Main) {
@@ -363,7 +358,7 @@ class RemoteDesktopViewModel : ViewModel() {
                                         lastFrameTime = System.currentTimeMillis()
                                     }
                                     // Initialisiere Pipeline: sende pipelineDepth ready-Signale
-                                    repeat(pipelineDepth) { sendReadySignal(ws) }
+                                    repeat(pipelineDepth) { sendReadySignal(webSocket) }
                                 }
 
                                 "denied" -> {
@@ -373,7 +368,7 @@ class RemoteDesktopViewModel : ViewModel() {
                                             canRetry = true
                                         )
                                     }
-                                    ws.close(1000, "Denied")
+                                    webSocket.close(1000, "Denied")
                                 }
                             }
                         } catch (e: Exception) {
@@ -381,14 +376,14 @@ class RemoteDesktopViewModel : ViewModel() {
                         }
                     }
 
-                    override fun onMessage(ws: WebSocket, bytes: ByteString) {
+                    override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
                         val receiveTime = System.currentTimeMillis()
                         val byteArray = bytes.toByteArray()
                         Log.d(TAG, "[WS-BIN] Frame empfangen: ${byteArray.size} bytes")
 
                         if (pendingDecodes.get() >= pipelineDepth) {
                             Log.w(TAG, "[FLOW] Übersprungen – $pendingDecodes laufende Decodes")
-                            sendReadySignal(ws)
+                            sendReadySignal(webSocket)
                             return
                         }
                         pendingDecodes.incrementAndGet()
@@ -468,7 +463,7 @@ class RemoteDesktopViewModel : ViewModel() {
                         }
                     }
 
-                    override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                    override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                         Log.e(TAG, "[WS] Verbindung fehlgeschlagen", t)
                         viewModelScope.launch(Dispatchers.Main) {
                             _state.value = RemoteDesktopState.Error(
@@ -478,11 +473,11 @@ class RemoteDesktopViewModel : ViewModel() {
                         }
                     }
 
-                    override fun onClosing(ws: WebSocket, code: Int, reason: String) {
+                    override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
                         Log.d(TAG, "[WS] Schließt: [$code] $reason")
                     }
 
-                    override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                    override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                         Log.i(TAG, "[WS] Geschlossen: [$code] $reason")
                         viewModelScope.launch(Dispatchers.Main) {
                             if (_state.value is RemoteDesktopState.Connected) {
@@ -506,9 +501,9 @@ class RemoteDesktopViewModel : ViewModel() {
         }
     }
 
-    private fun sendReadySignal(ws: WebSocket) {
+    private fun sendReadySignal(webSocket: WebSocket) {
         try {
-            val sent = ws.send(JSONObject().apply { put("type", "ready") }.toString())
+            val sent = webSocket.send(JSONObject().apply { put("type", "ready") }.toString())
             Log.d(TAG, "[FLOW] Ready-Signal gesendet: $sent")
         } catch (e: Exception) {
             Log.e(TAG, "[FLOW] Ready-Signal fehlgeschlagen", e)
@@ -632,11 +627,7 @@ fun RemoteDesktopTabContent() {
             )
 
             is RemoteDesktopState.Hosting -> HostingScreen(
-                ip = s.ip,
-                pin = s.pin,
-                connected = s.connected,
-                clientIp = s.clientIp,
-                onStop = leaveTab)
+            )
 
             is RemoteDesktopState.Error -> ErrorScreen(
                 message = s.message,
@@ -1002,7 +993,7 @@ fun ConnectedScreen(
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT
             ).apply { gravity = Gravity.CENTER }
             wm.addView(overlay, params)
@@ -1149,11 +1140,6 @@ fun ConnectedScreen(
 
 @Composable
 fun HostingScreen(
-    ip: String,
-    pin: String,
-    connected: Boolean,
-    clientIp: String,
-    onStop: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(stringResource(R.string.host_modus_nicht_verfugbar), color = Color.White, fontSize = 18.sp)

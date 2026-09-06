@@ -33,10 +33,6 @@ class FitnessStorage(context: Context) {
         }.getOrDefault(emptyList())
     }
 
-    fun loadSessionsForDay(ymd: String): List<WorkoutSession> {
-        return loadAllSessions().filter { ymdOf(it.dateStartMs) == ymd }
-    }
-
     fun mergeWithStored(extraSessions: List<WorkoutSession>): List<WorkoutSession> {
         val stored = loadAllSessions()
         if (extraSessions.isEmpty()) return stored
@@ -102,11 +98,7 @@ class FitnessStorage(context: Context) {
 
     fun getDailyGoalMinutes(): Int = prefs.getInt(KEY_GOAL_MINUTES, 30)
 
-    fun setDailyGoalMinutes(min: Int) = prefs.edit { putInt(KEY_GOAL_MINUTES, min) }
-
     fun getDailyGoalCalories(): Int = prefs.getInt(KEY_GOAL_CALORIES, 300)
-
-    fun setDailyGoalCalories(kcal: Int) = prefs.edit { putInt(KEY_GOAL_CALORIES, kcal) }
 
     // ----- private helpers -----
 

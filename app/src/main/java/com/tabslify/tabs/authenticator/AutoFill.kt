@@ -170,8 +170,8 @@ class TabslifyAutofillService : AutofillService() {
         val domain = extractRequestDomain(structure)
         val targetPackageName = structure.activityComponent.packageName
         val tokens = packageTokens(targetPackageName)
-        val label = if (domain.isNotEmpty()) domain else tokens.firstOrNull() ?: targetPackageName
-        val urlValue = if (domain.isNotEmpty()) domain else targetPackageName
+        val label = domain.ifEmpty { tokens.firstOrNull() ?: targetPackageName }
+        val urlValue = domain.ifEmpty { targetPackageName }
 
         runBlocking(Dispatchers.IO) {
             val dao = PasswordDatabase.getDatabase(applicationContext).passwordDao()

@@ -79,7 +79,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
@@ -111,8 +110,6 @@ data class EmailItem(
     val summary: String?,
     val hasSummary: Boolean,
 )
-
-private val emailJson = Json { ignoreUnknownKeys = true }
 
 private const val EMAIL_COLUMNS = "account,uid,subject,from_addr,date_str,timestamp,body,summary,has_summary"
 
@@ -722,21 +719,6 @@ fun EmptyPlaceholder(onRefresh: () -> Unit) {
     }
 }
 
-@Composable
-fun GmailLogoText() {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        listOf(
-            'G' to Color(0xFF4285F4),
-            'm' to Color(0xFFEA4335),
-            'a' to Color(0xFFFBBC05),
-            'i' to Color(0xFF4285F4),
-            'l' to Color(0xFF34A853)
-        ).forEach { (char, clr) ->
-            Text(char.toString(), color = clr, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-        }
-    }
-}
-
 private fun extractDisplayName(from: String): String {
     val match = Regex("""^"?([^"<]+)"?\s*<""").find(from.trim())
     return match?.groupValues?.get(1)?.trim()?.takeIf { it.isNotBlank() }
@@ -852,4 +834,4 @@ private fun inlineToPlain(text: String): String =
     text.replace(htmlTagRegex, " ").trim()
 
 private fun decodeEntities(text: String): String =
-    android.text.Html.fromHtml(text, Html.FROM_HTML_MODE_LEGACY).toString()
+    Html.fromHtml(text, Html.FROM_HTML_MODE_LEGACY).toString()

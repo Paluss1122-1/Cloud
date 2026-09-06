@@ -3017,18 +3017,18 @@ object MediaAnalyticsManager {
     }
 
     fun setAnalyticsEnabled(enabled: Boolean) {
-        prefs?.edit()?.putBoolean(KEY_ANALYTICS_ENABLED, enabled)?.apply()
+        prefs?.edit { putBoolean(KEY_ANALYTICS_ENABLED, enabled) }
     }
 
     fun clearAllSessions() {
-        prefs?.edit()?.remove(KEY_SESSIONS)?.apply()
+        prefs?.edit { remove(KEY_SESSIONS) }
     }
 
     fun addSession(session: ListenSession) {
         if (!isAnalyticsEnabled()) return
         val list = getSessions().toMutableList()
         list.add(session)
-        prefs?.edit()?.putString(KEY_SESSIONS, gson.toJson(list))?.apply()
+        prefs?.edit { putString(KEY_SESSIONS, gson.toJson(list)) }
     }
 
     fun getSessions(): List<ListenSession> {
@@ -3042,7 +3042,7 @@ object MediaAnalyticsManager {
     }
 
     fun clearAll() {
-        prefs?.edit { remove(KEY_SESSIONS)?.apply() }
+        prefs?.edit { remove(KEY_SESSIONS) }
     }
 
     data class GlobalStats(
@@ -3084,7 +3084,7 @@ object MediaAnalyticsManager {
             .sumOf { it.listenedMs }
 
     fun rebuildSessions(sessions: List<ListenSession>) {
-        prefs?.edit()?.putString(KEY_SESSIONS, gson.toJson(sessions))?.apply()
+        prefs?.edit { putString(KEY_SESSIONS, gson.toJson(sessions)) }
     }
 
     fun mergeSessions(incoming: List<ListenSession>): Int {
@@ -3100,7 +3100,7 @@ object MediaAnalyticsManager {
             }
         }
         if (added > 0) {
-            prefs?.edit()?.putString(KEY_SESSIONS, gson.toJson(existing))?.apply()
+            prefs?.edit { putString(KEY_SESSIONS, gson.toJson(existing)) }
         }
         return added
     }
@@ -3223,7 +3223,7 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
             }
 
             val algPlaylists = AlgorithmicPlaylistRegistry.all.map { source ->
-                source to source.getSongs(songs, emptyMap())
+                source to source.getSongs(songs)
             }.filter { (_, songs) -> songs.isNotEmpty() }
 
             _uiState.value = _uiState.value.copy(
@@ -3487,8 +3487,7 @@ interface PlaylistSource {
     val icon: String
     val accentColor: Color
     fun getSongs(
-        allSongs: List<MediaPlayerService.Song>,
-        analytics: Map<String, SongAnalytics>
+        allSongs: List<MediaPlayerService.Song>
     ): List<MediaPlayerService.Song>
 }
 
@@ -3500,18 +3499,14 @@ object RecentlyPlayedPlaylist : PlaylistSource {
     override val type = PlaylistSourceType.ALGORITHMIC
     override val icon = "🕐"
     override val accentColor = Color(0xFF7C4DFF)
-
-    override fun getSongs(
-        allSongs: List<MediaPlayerService.Song>,
-        analytics: Map<String, SongAnalytics>
-    ): List<MediaPlayerService.Song> {
-        val lastPlayed = MediaAnalyticsManager.getSessions()
+    override fun getSongs(allSongs: List<MediaPlayerService.Song>): List<MediaPlayerService.Song> {
+        val lastPlayedMap = MediaAnalyticsManager.getSessions()
             .filter { it.type == "music" }
             .groupBy { it.label }
             .mapValues { (_, s) -> s.maxOf { it.startedAt } }
         return allSongs
-            .filter { lastPlayed.containsKey(it.name) }
-            .sortedByDescending { lastPlayed[it.name] ?: 0L }
+            .filter { lastPlayedMap.containsKey(it.name) }
+            .sortedByDescending { lastPlayedMap[it.name] ?: 0L }
             .take(20)
     }
 }
@@ -3525,8 +3520,7 @@ object NeverPlayedPlaylist : PlaylistSource {
     override val accentColor = Color(0xFF00BFA5)
 
     override fun getSongs(
-        allSongs: List<MediaPlayerService.Song>,
-        analytics: Map<String, SongAnalytics>
+        allSongs: List<MediaPlayerService.Song>
     ): List<MediaPlayerService.Song> {
         val playedLabels = MediaAnalyticsManager.getSessions()
             .filter { it.type == "music" }
@@ -3545,8 +3539,7 @@ object MostPlayedPlaylist : PlaylistSource {
     override val accentColor = Color(0xFFE53935)
 
     override fun getSongs(
-        allSongs: List<MediaPlayerService.Song>,
-        analytics: Map<String, SongAnalytics>
+        allSongs: List<MediaPlayerService.Song>
     ): List<MediaPlayerService.Song> {
         val playCounts = MediaAnalyticsManager.getSessions()
             .filter { it.type == "music" }
@@ -3568,8 +3561,7 @@ object RecentlyAddedPlaylist : PlaylistSource {
     override val accentColor = Color(0xFF00BCD4)
 
     override fun getSongs(
-        allSongs: List<MediaPlayerService.Song>,
-        analytics: Map<String, SongAnalytics>
+        allSongs: List<MediaPlayerService.Song>
     ): List<MediaPlayerService.Song> {
         val cutoff = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
         return allSongs
@@ -3619,8 +3611,7 @@ object FavoritesPlaylist : PlaylistSource {
     }
 
     override fun getSongs(
-        allSongs: List<MediaPlayerService.Song>,
-        analytics: Map<String, SongAnalytics>
+        allSongs: List<MediaPlayerService.Song>
     ): List<MediaPlayerService.Song> {
         val prefs =
             _appContext?.getSharedPreferences("music_player_prefs", Context.MODE_PRIVATE)
@@ -3632,8 +3623,8 @@ object FavoritesPlaylist : PlaylistSource {
                 raw.split("|").filter { it.isNotBlank() }.toSet()
             else
                 emptySet()
-            prefs?.edit()?.remove("favorite_songs")?.apply()
-            prefs?.edit()?.putStringSet("favorite_songs", migrated)?.apply()
+            prefs?.edit { remove("favorite_songs") }
+            prefs?.edit { putStringSet("favorite_songs", migrated) }
             migrated
         }
 
@@ -3643,7 +3634,7 @@ object FavoritesPlaylist : PlaylistSource {
                 validPaths.contains(it)
             }
             if (pruned.size != favPaths.size) {
-                prefs?.edit()?.putStringSet("favorite_songs", pruned)?.apply()
+                prefs?.edit { putStringSet("favorite_songs", pruned) }
                 return allSongs.filter { pruned.contains(it.path) }
             }
         }

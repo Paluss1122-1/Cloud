@@ -1,7 +1,7 @@
 package com.tabslify.tabs.focusguard.data
 
 import android.content.Context
-import android.content.Context.MODE_PRIVATE
+import android.content.SharedPreferences
 import androidx.core.content.edit
 import kotlinx.serialization.json.Json
 
@@ -23,18 +23,20 @@ object FocusGuardConfig {
     private const val KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
     private const val KEY_EXCESSIVE_USAGE_THRESHOLD_MIN = "excessive_usage_threshold_min"
 
-    private lateinit var context: Context
+    private lateinit var sharedPrefs: SharedPreferences
     private val json = Json { ignoreUnknownKeys = true }
 
     @Volatile
     private var restrictedAppsCache: Map<String, String> = emptyMap()
 
     fun init(ctx: Context) {
-        context = ctx.applicationContext
+        if (!::sharedPrefs.isInitialized) {
+            sharedPrefs = ctx.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        }
         restrictedAppsCache = loadRestrictedApps()
     }
 
-    private fun prefs() = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+    private fun prefs() = sharedPrefs
 
     fun restrictedApps(): Map<String, String> = restrictedAppsCache
 

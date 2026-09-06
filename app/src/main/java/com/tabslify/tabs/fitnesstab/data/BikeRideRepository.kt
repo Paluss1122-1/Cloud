@@ -131,12 +131,12 @@ object BikeRideRepository {
 
             if (previous != null) {
                 seconds = (current.timestamp - previous.timestamp) / 1000.0
-                if (mps < 0.0 || mps > MAX_PLAUSIBLE_SPEED_MPS) {
+                if (mps !in 0.0..MAX_PLAUSIBLE_SPEED_MPS) {
                     Location.distanceBetween(previous.lat, previous.lon, current.lat, current.lon, distance)
                     mps = if (seconds > 0.0) distance[0] / seconds else 0.0
                 }
             }
-            if (mps < 0.0 || mps > MAX_PLAUSIBLE_SPEED_MPS) mps = 0.0
+            if (mps !in 0.0..MAX_PLAUSIBLE_SPEED_MPS) mps = 0.0
 
             speeds += (mps * 3.6).toFloat()
             if (seconds in 0.0..MAX_SAMPLE_GAP_S && mps >= MOVING_SPEED_MPS) movingSeconds += seconds

@@ -3,7 +3,7 @@
 
     <style name="Theme.Tabslify" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#1A1A2E</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/app_icon_foreground</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/app_icon_foreground_inset</item>
         <item name="postSplashScreenTheme">@style/Theme.Tabslify.Base</item>
     </style>
 

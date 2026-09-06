@@ -1,5 +1,6 @@
 package com.tabslify.tabs
 
+import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -56,12 +57,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -85,6 +85,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlin.time.Duration.Companion.milliseconds
 import androidx.compose.foundation.Image as ImageComposable
 
 var pendingApkmUri: Uri? by mutableStateOf(null)
@@ -137,7 +138,7 @@ fun ApkmInstallerTabContent(uri: Uri, onDone: () -> Unit) {
         ActivityResultContracts.StartActivityForResult()
     ) { recomputePermission() }
 
-    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) recomputePermission()
@@ -200,23 +201,24 @@ fun ApkmInstallerTabContent(uri: Uri, onDone: () -> Unit) {
         scope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 try {
-                    withTimeout(10 * 60_000L) {
+                    withTimeout((10 * 60_000L).milliseconds) {
                         installer.install(current, selected) { confirmIntent ->
                             installStatusText = bitteBestaetiigenMsg
                             runCatching { context.startActivity(confirmIntent) }
                         }
                     }
-                } catch (e: TimeoutCancellationException) {
+                } catch (_: TimeoutCancellationException) {
                     installer.log("❌ Timeout: Kein Installationsstatus empfangen (10 Min).")
                     InstallOutcome.Failure(Int.MIN_VALUE, "Timeout: Kein Installationsstatus empfangen", false)
                 }
             }
             when (outcome) {
-                is InstallOutcome.Success -> phase = ApkmPhase.SUCCESS
                 is InstallOutcome.Failure -> {
                     failure = outcome
                     phase = ApkmPhase.FAILURE
                 }
+
+                else -> {}
             }
         }
     }
@@ -810,7 +812,8 @@ private fun Tag(text: String, color: Color) {
 
 @Composable
 private fun LogView(installer: ApkmInstaller) {
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     Column(modifier = Modifier.padding(12.dp)) {
         Box(
             modifier = Modifier
@@ -845,7 +848,11 @@ private fun LogView(installer: ApkmInstaller) {
             fontWeight = FontWeight.Bold,
             modifier = Modifier
                 .clip(RoundedCornerShape(4.dp))
-                .clickable { clipboard.setText(AnnotatedString(installer.logs.joinToString("\n"))) }
+                .clickable {
+                    scope.launch {
+                        clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("logs", installer.logs.joinToString("\n"))))
+                    }
+                }
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }

@@ -17,7 +17,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 object FocusGuardRepository {
-    private lateinit var context: Context
     private lateinit var db: FocusGuardDatabase
 
     private val _todayUsage = MutableStateFlow<Map<String, Long>>(emptyMap())
@@ -41,11 +40,11 @@ object FocusGuardRepository {
     private var initialized = false
 
     fun init(ctx: Context) {
-        context = ctx.applicationContext
+        val appContext = ctx.applicationContext
         if (initialized) return
         initialized = true
-        db = FocusGuardDatabase.get(context)
-        FocusGuardConfig.init(context)
+        db = FocusGuardDatabase.get(appContext)
+        FocusGuardConfig.init(appContext)
         refresh()
     }
 
