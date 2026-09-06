@@ -24,3 +24,5 @@ CLAUDE.md
 .mcp.json
 opencode.json
 .claude/
+memory_leak_audit/
+supabase/
