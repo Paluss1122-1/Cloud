@@ -173,7 +173,7 @@ private suspend fun sendNvidiaChatMessageAITab(
     model: String,
     pic: String? = null,
     onToken: ((String) -> Unit)? = null
-): String? {
+): String {
     val messages = buildNvidiaAITabMessages(history, userMessage, pic)
 
     val payload = JSONObject().apply {
@@ -199,7 +199,7 @@ private suspend fun sendNvidiaChatMessageAITab(
             if (connection.responseCode != 200) {
                 val errorText =
                     connection.errorStream?.bufferedReader()?.readText() ?: "No error body"
-                android.util.Log.e(
+                Log.e(
                     "AI",
                     "Nvidia proxy failed with code ${connection.responseCode}: $errorText"
                 )
@@ -233,11 +233,7 @@ private suspend fun sendNvidiaChatMessageAITab(
                                 val err = jsonObj.get("error")
                                 apiError = if (err is JSONObject && err.has("message")) {
                                     err.getString("message")
-                                } else if (err is String) {
-                                    err
-                                } else {
-                                    err.toString()
-                                }
+                                } else err as? String ?: err.toString()
                                 break
                             }
                             
