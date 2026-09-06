@@ -142,7 +142,6 @@ dependencies {
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.osmdroid.android)
     implementation(libs.androidx.core.splashscreen)
-    runtimeOnly(libs.android.mail)
     implementation(libs.androidx.autofill)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.ai)
